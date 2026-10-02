@@ -4,7 +4,7 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 
 ## Architecture
 - host/ (.NET 8): Worker Service + Kestrel API (mTLS), WinForms tray app, Core library
-  - Hyper-V via CIM/WMI (rootirtualization2); PowerShell Direct through Windows PowerShell (powershell.exe)
+  - Hyper-V via CIM/WMI (root\virtualization\v2); PowerShell Direct through Windows PowerShell (powershell.exe)
     with an encoded script and secrets on stdin (PowerShellDirectAccountManager)
 - client/ (Tauri v2, Rust + TypeScript): discovery, pairing, VM dashboard, RDP launcher
 - Discovery: mDNS _hyperharbor._tcp on LAN; manual add by IP/hostname otherwise
