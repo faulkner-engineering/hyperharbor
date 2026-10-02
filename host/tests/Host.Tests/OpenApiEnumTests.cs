@@ -32,15 +32,26 @@ public class OpenApiEnumTests
         Assert.Equal(expected, actual);
     }
 
+    [Fact]
+    public void ApiVersion_MatchesOpenApiInfoVersion()
+    {
+        var info = (YamlMappingNode)LoadRoot()["info"];
+
+        Assert.Equal(ContractInfo.ApiVersion, ((YamlScalarNode)info["version"]).Value);
+    }
+
     private static YamlMappingNode LoadSchemas()
+    {
+        var components = (YamlMappingNode)LoadRoot()["components"];
+        return (YamlMappingNode)components["schemas"];
+    }
+
+    private static YamlMappingNode LoadRoot()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "api.yaml");
         using var reader = new StreamReader(path);
         var stream = new YamlStream();
         stream.Load(reader);
-
-        var root = (YamlMappingNode)stream.Documents[0].RootNode;
-        var components = (YamlMappingNode)root["components"];
-        return (YamlMappingNode)components["schemas"];
+        return (YamlMappingNode)stream.Documents[0].RootNode;
     }
 }

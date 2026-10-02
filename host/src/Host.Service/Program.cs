@@ -1,6 +1,9 @@
 using HyperHarbor.Host.Core;
+using HyperHarbor.Host.Core.Discovery;
+using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
+using HyperHarbor.Host.Service.Discovery;
 using HyperHarbor.Shared.Contracts;
 using Microsoft.Extensions.Options;
 
@@ -22,6 +25,12 @@ builder.Services.AddWindowsService(options =>
     options.ServiceName = "HyperHarbor Host";
 });
 builder.Services.AddHostedService<VmInventoryStartupLogger>();
+
+builder.Services.AddSingleton(new HostIdentityStore(
+    builder.Configuration["DataDirectory"] is { Length: > 0 } dataDirectory ? dataDirectory : HostIdentityStore.DefaultDataDirectory));
+builder.Services.AddOptions<DiscoveryOptions>().Bind(builder.Configuration.GetSection(DiscoveryOptions.SectionName));
+builder.Services.AddSingleton<IServiceAdvertiser, WindowsDnsServiceAdvertiser>();
+builder.Services.AddHostedService<DiscoveryAdvertisementService>();
 
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))

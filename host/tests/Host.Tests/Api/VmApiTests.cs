@@ -24,8 +24,9 @@ public sealed class VmApiTests : IDisposable
     public VmApiTests()
     {
         _invoker = new FakePowerInvoker(_inventory);
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services =>
+        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+            .UseSetting("Discovery:Enabled", "false")
+            .ConfigureTestServices(services =>
             {
                 services.AddSingleton<IVmInventory>(_inventory);
                 services.AddSingleton<IHyperVPowerInvoker>(_invoker);

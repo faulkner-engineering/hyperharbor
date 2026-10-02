@@ -1,5 +1,6 @@
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Power;
+using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -10,7 +11,7 @@ namespace HyperHarbor.Host.Service.Api;
 /// </summary>
 public static class VmEndpoints
 {
-    public const string BasePath = "/api/v1/vms";
+    public const string BasePath = ContractInfo.BasePath + "/vms";
 
     public static IEndpointRouteBuilder MapVmEndpoints(this IEndpointRouteBuilder endpoints)
     {
