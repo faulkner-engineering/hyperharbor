@@ -1,10 +1,13 @@
+using System.Text.Json;
 using HyperHarbor.Host.Core.Wake;
 
 namespace HyperHarbor.Host.Service.Wake;
 
 /// <summary>
-/// The elevated helper: HyperHarbor.Host.Service.exe --apply-wake-fixes id1,id2. The tray starts it
-/// with a UAC prompt after the user approves. Exit code 0 means every fix applied.
+/// The elevated helper: HyperHarbor.Host.Service.exe --apply-wake-fixes id1,id2 [result-file].
+/// The tray starts it with a UAC prompt after the user approves. An elevated process started with
+/// ShellExecute cannot share the tray's console, so per-check results are written as JSON to the
+/// optional result file. Exit code 0 means every fix applied.
 /// </summary>
 internal static class WakeFixCommand
 {
@@ -13,7 +16,7 @@ internal static class WakeFixCommand
     public const int ExitNotElevated = 2;
     public const int ExitInvalid = 3;
 
-    public static async Task<int> RunAsync(string checkIdList)
+    public static async Task<int> RunAsync(string checkIdList, string? resultFile)
     {
         var checkIds = checkIdList.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (checkIds.Length == 0 || checkIds.Any(id => !WakeCheckIds.Fixable.Contains(id)))
@@ -33,6 +36,11 @@ internal static class WakeFixCommand
         foreach (var result in results)
         {
             Console.WriteLine($"{result.CheckId}: {(result.Applied ? "applied" : "failed")} - {result.Detail}");
+        }
+
+        if (resultFile is not null)
+        {
+            await File.WriteAllTextAsync(resultFile, JsonSerializer.Serialize(results));
         }
 
         return results.All(result => result.Applied) ? ExitApplied : ExitPartial;

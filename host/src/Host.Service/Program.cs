@@ -19,9 +19,9 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Options;
 
 // Elevated helper started by the tray after the user approves Wake-on-LAN fixes.
-if (args.Length == 2 && args[0] == WakeFixHelper.Switch)
+if (args.Length is 2 or 3 && args[0] == WakeFixHelper.Switch)
 {
-    return await WakeFixCommand.RunAsync(args[1]);
+    return await WakeFixCommand.RunAsync(args[1], args.Length == 3 ? args[2] : null);
 }
 
 var builder = WebApplication.CreateBuilder(args);

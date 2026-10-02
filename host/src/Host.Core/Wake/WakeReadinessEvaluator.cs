@@ -87,14 +87,31 @@ public static class WakeReadinessEvaluator
         }
 
         var notArmed = wired.Where(adapter => !environment.WakeArmedDevices.Contains(adapter.Description)).ToList();
-        return notArmed.Count == 0
-            ? new WakeCheck(WakeCheckIds.NicAllowWake, title, WakeCheckStatus.Pass, "Windows allows the adapter to wake the computer.", false)
-            : new WakeCheck(
+        if (notArmed.Count == 0)
+        {
+            return new WakeCheck(WakeCheckIds.NicAllowWake, title, WakeCheckStatus.Pass, "Windows allows the adapter to wake the computer.", false);
+        }
+
+        // powercfg /deviceenablewake only works on devices Windows lists as wake-programmable.
+        var programmable = notArmed.Where(adapter => environment.WakeProgrammableDevices.Contains(adapter.Description)).ToList();
+        if (programmable.Count == notArmed.Count)
+        {
+            return new WakeCheck(
                 WakeCheckIds.NicAllowWake,
                 title,
                 WakeCheckStatus.Fail,
                 $"Windows does not allow {Names(notArmed)} to wake the computer.",
                 true);
+        }
+
+        return new WakeCheck(
+            WakeCheckIds.NicAllowWake,
+            title,
+            WakeCheckStatus.Fail,
+            $"Windows does not allow {Names(notArmed)} to wake the computer, and the setting cannot be changed right now. " +
+            "This usually means the adapter is disconnected or its driver does not support waking from the current sleep mode. " +
+            "Connect the cable, then check the adapter's Power Management tab in Device Manager.",
+            false);
     }
 
     private static WakeCheck SleepKeepsNetwork(PowerState power)
@@ -115,6 +132,19 @@ public static class WakeReadinessEvaluator
                 WakeCheckStatus.Fail,
                 "This PC uses Modern Standby without network connectivity, so the adapter is off while asleep. Wake from hibernate may work if the firmware supports it.",
                 false);
+        }
+
+        if (power.StandbyConnectivityPolicyAc is { } policy)
+        {
+            return policy == 0
+                ? new WakeCheck(
+                    WakeCheckIds.SleepKeepsNetwork,
+                    title,
+                    WakeCheckStatus.Fail,
+                    "Group Policy turns the network off while asleep. Change \"Allow network connectivity during connected-standby (plugged in)\" " +
+                    "under Computer Configuration > Administrative Templates > System > Power Management > Sleep Settings.",
+                    false)
+                : new WakeCheck(WakeCheckIds.SleepKeepsNetwork, title, WakeCheckStatus.Pass, "Group Policy keeps the network connected in Modern Standby on AC power.", false);
         }
 
         return power.StandbyConnectivityAc is null or 0

@@ -31,11 +31,57 @@ public class WakeReadinessTests
 
         Assert.Equal(WakeCheckStatus.Fail, checks[WakeCheckIds.NicWakeOnMagicPacket].Status);
         Assert.True(checks[WakeCheckIds.NicWakeOnMagicPacket].AutoFixAvailable);
+
+        // Not wake-programmable, so powercfg cannot change it; offering a fix would fail.
         Assert.Equal(WakeCheckStatus.Fail, checks[WakeCheckIds.NicAllowWake].Status);
-        Assert.True(checks[WakeCheckIds.NicAllowWake].AutoFixAvailable);
+        Assert.False(checks[WakeCheckIds.NicAllowWake].AutoFixAvailable);
+
+        // Forced off by Group Policy.
         Assert.Equal(WakeCheckStatus.Fail, checks[WakeCheckIds.SleepKeepsNetwork].Status);
-        Assert.True(checks[WakeCheckIds.SleepKeepsNetwork].AutoFixAvailable);
+        Assert.False(checks[WakeCheckIds.SleepKeepsNetwork].AutoFixAvailable);
+        Assert.Contains("Group Policy", checks[WakeCheckIds.SleepKeepsNetwork].Detail);
+
         Assert.Equal(WakeCheckStatus.Pass, checks[WakeCheckIds.FastStartupDisabled].Status);
+    }
+
+    [Fact]
+    public void AdapterProgrammableButNotArmed_IsFixable()
+    {
+        var environment = WakeScenarios.ReadyDesktop() with
+        {
+            WakeArmedDevices = new HashSet<string>(),
+        };
+
+        var check = Check(environment, WakeCheckIds.NicAllowWake);
+
+        Assert.Equal(WakeCheckStatus.Fail, check.Status);
+        Assert.True(check.AutoFixAvailable);
+    }
+
+    [Theory]
+    [InlineData(1u, WakeCheckStatus.Pass)]
+    [InlineData(0u, WakeCheckStatus.Fail)]
+    public void GroupPolicy_OverridesSchemeValue(uint policy, WakeCheckStatus expected)
+    {
+        var environment = WakeScenarios.ReadyDesktop() with
+        {
+            Power = new PowerState(false, ModernStandby: true, StandbyConnectivitySupported: true, StandbyConnectivityAc: 1 - policy, false, policy),
+        };
+
+        var check = Check(environment, WakeCheckIds.SleepKeepsNetwork);
+
+        Assert.Equal(expected, check.Status);
+        Assert.False(check.AutoFixAvailable);
+    }
+
+    [Fact]
+    public void Fixer_RefusesChecksThatCannotSucceed()
+    {
+        // Runs without elevation: both checks are rejected before any command executes.
+        var results = WakeFixer.Apply(WakeScenarios.WifiLaptop(), [WakeCheckIds.NicAllowWake, WakeCheckIds.SleepKeepsNetwork]);
+
+        Assert.All(results, result => Assert.False(result.Applied));
+        Assert.Contains("Group Policy", results.Single(r => r.CheckId == WakeCheckIds.SleepKeepsNetwork).Detail);
     }
 
     [Fact]

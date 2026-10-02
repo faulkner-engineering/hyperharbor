@@ -33,7 +33,7 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
         Task.Run(Read, cancellationToken);
 
     private static WakeEnvironment Read() =>
-        new(ReadAdapters(), ReadWakeArmedDevices(), PowerSettings.Read());
+        new(ReadAdapters(), QueryDevices("wake_armed"), QueryDevices("wake_programmable"), PowerSettings.Read());
 
     private static List<NetworkAdapterState> ReadAdapters()
     {
@@ -124,10 +124,10 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
         return result;
     }
 
-    /// <summary>Device names from "powercfg /devicequery wake_armed".</summary>
-    private static HashSet<string> ReadWakeArmedDevices()
+    /// <summary>Device names from "powercfg /devicequery &lt;query&gt;".</summary>
+    private static HashSet<string> QueryDevices(string query)
     {
-        var start = new ProcessStartInfo("powercfg.exe", "/devicequery wake_armed")
+        var start = new ProcessStartInfo("powercfg.exe", $"/devicequery {query}")
         {
             RedirectStandardOutput = true,
             UseShellExecute = false,
@@ -150,6 +150,7 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
         private static readonly Guid NoSubgroup = new("fea3413e-7e05-4911-9a71-700331f1c294");
         private static readonly Guid ConnectivityInStandby = new("f15576e8-98b7-4186-b944-eafa664402d9");
         private const int SystemPowerCapabilitiesLevel = 4;
+        private const string PolicyPowerSettingsKey = @"SOFTWARE\Policies\Microsoft\Power\PowerSettings";
 
         public static PowerState Read()
         {
@@ -183,9 +184,13 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
             using var powerKey = Registry.LocalMachine.OpenSubKey(PowerKey);
             bool? fastStartup = powerKey?.GetValue("HiberbootEnabled") is int hiberboot ? hiberboot != 0 : null;
 
+            // Group Policy ("Allow network connectivity during connected-standby") overrides the scheme value.
+            using var policyKey = Registry.LocalMachine.OpenSubKey($@"{PolicyPowerSettingsKey}\{ConnectivityInStandby:D}");
+            uint? policy = policyKey?.GetValue("ACSettingIndex") is int policyValue ? (uint)policyValue : null;
+
             return status == 0
-                ? new PowerState(capabilities.SystemS3, capabilities.AoAc, capabilities.AoAcConnectivitySupported, connectivity, fastStartup)
-                : new PowerState(false, false, false, connectivity, fastStartup);
+                ? new PowerState(capabilities.SystemS3, capabilities.AoAc, capabilities.AoAcConnectivitySupported, connectivity, fastStartup, policy)
+                : new PowerState(false, false, false, connectivity, fastStartup, policy);
         }
 
         /// <summary>SYSTEM_POWER_CAPABILITIES (76 bytes). Only the leading fields are read.</summary>

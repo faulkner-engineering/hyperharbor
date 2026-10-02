@@ -6,9 +6,12 @@ namespace HyperHarbor.Host.Core.Wake;
 /// Everything the Wake-on-LAN checks need, read in one pass. Evaluated by
 /// <see cref="WakeReadinessEvaluator"/> and <see cref="WakeInfoBuilder"/>.
 /// </summary>
+/// <param name="WakeArmedDevices">Devices currently allowed to wake the computer (powercfg wake_armed).</param>
+/// <param name="WakeProgrammableDevices">Devices whose wake permission can be changed (powercfg wake_programmable).</param>
 public sealed record WakeEnvironment(
     IReadOnlyList<NetworkAdapterState> Adapters,
     IReadOnlySet<string> WakeArmedDevices,
+    IReadOnlySet<string> WakeProgrammableDevices,
     PowerState Power);
 
 /// <param name="Name">Interface alias, for example "Ethernet".</param>
@@ -49,9 +52,11 @@ public sealed record Ipv4Assignment(IPAddress Address, int PrefixLength)
 /// <param name="StandbyConnectivitySupported">The platform can keep the network up in Modern Standby.</param>
 /// <param name="StandbyConnectivityAc">Power policy CONNECTIVITYINSTANDBY on AC: 0 disabled, 1 enabled, 2 managed by Windows.</param>
 /// <param name="FastStartupEnabled">HiberbootEnabled. Only affects waking from shutdown.</param>
+/// <param name="StandbyConnectivityPolicyAc">A Group Policy value that overrides StandbyConnectivityAc, when set.</param>
 public sealed record PowerState(
     bool S3Supported,
     bool ModernStandby,
     bool StandbyConnectivitySupported,
     uint? StandbyConnectivityAc,
-    bool? FastStartupEnabled);
+    bool? FastStartupEnabled,
+    uint? StandbyConnectivityPolicyAc = null);

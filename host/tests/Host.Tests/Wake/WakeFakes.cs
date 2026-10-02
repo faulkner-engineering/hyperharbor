@@ -29,11 +29,13 @@ internal static class WakeScenarios
             Ethernet(connected: true, address: "192.168.1.20", wakeOnMagicPacket: true),
         ],
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { EthernetDescription },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { EthernetDescription },
         new PowerState(S3Supported: true, ModernStandby: false, StandbyConnectivitySupported: false, StandbyConnectivityAc: null, FastStartupEnabled: false));
 
     /// <summary>
     /// The development laptop as measured on 2026-10-02: Wi-Fi only, Ethernet unplugged with
-    /// magic packet disabled, no network device wake-armed, Modern Standby with connectivity off.
+    /// magic packet disabled, Ethernet neither wake-armed nor wake-programmable, Modern Standby with
+    /// connectivity in standby forced off by Group Policy.
     /// </summary>
     public static WakeEnvironment WifiLaptop() => new(
         [
@@ -49,7 +51,8 @@ internal static class WakeScenarios
                 WakeOnMagicPacket: true),
         ],
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "HID Keyboard Device (003)" },
-        new PowerState(S3Supported: false, ModernStandby: true, StandbyConnectivitySupported: true, StandbyConnectivityAc: 0, FastStartupEnabled: false));
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "HID Keyboard Device (003)" },
+        new PowerState(S3Supported: false, ModernStandby: true, StandbyConnectivitySupported: true, StandbyConnectivityAc: 0, FastStartupEnabled: false, StandbyConnectivityPolicyAc: 0));
 
     public static NetworkAdapterState Ethernet(bool connected, string address, bool? wakeOnMagicPacket, int prefix = 24) => new(
         "Ethernet",

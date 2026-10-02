@@ -28,8 +28,12 @@ public static class WakeFixer
             {
                 WakeCheckIds.NicWakeOnMagicPacket => ForEachAdapter(checkId, wired.Where(a => a.WakeOnMagicPacket == false), adapter =>
                     RunPowerShell($"Set-NetAdapterPowerManagement -Name '{EscapeSingleQuotes(adapter.Name)}' -WakeOnMagicPacket Enabled")),
-                WakeCheckIds.NicAllowWake => ForEachAdapter(checkId, wired.Where(a => !environment.WakeArmedDevices.Contains(a.Description)), adapter =>
-                    Run("powercfg.exe", "/deviceenablewake", adapter.Description)),
+                WakeCheckIds.NicAllowWake => wired.Any(a => !environment.WakeArmedDevices.Contains(a.Description) && !environment.WakeProgrammableDevices.Contains(a.Description))
+                    ? new WakeFixResult(checkId, false, "Windows does not allow changing the wake setting for this adapter right now.")
+                    : ForEachAdapter(checkId, wired.Where(a => !environment.WakeArmedDevices.Contains(a.Description)), adapter =>
+                        Run("powercfg.exe", "/deviceenablewake", adapter.Description)),
+                WakeCheckIds.SleepKeepsNetwork when environment.Power.StandbyConnectivityPolicyAc is not null =>
+                    new WakeFixResult(checkId, false, "This setting is controlled by Group Policy."),
                 WakeCheckIds.SleepKeepsNetwork => Single(checkId, () =>
                 {
                     Run("powercfg.exe", "/setacvalueindex", "SCHEME_CURRENT", ConnectivityInStandbySubgroup, ConnectivityInStandbySetting, "1");
