@@ -87,11 +87,16 @@ public sealed class CimHyperVReader : IHyperVReader
                     continue;
                 }
 
+                var operationalStatus = instance.CimInstanceProperties["OperationalStatus"]?.Value as ushort[];
+
                 rows.Add(new ComputerSystemRow(
                     id,
                     GetString(instance, "ElementName") ?? id.ToString(),
                     GetNullable<ushort>(instance, "EnabledState") ?? 0,
-                    GetNullable<ulong>(instance, "OnTimeInMilliseconds") ?? 0));
+                    GetNullable<ulong>(instance, "OnTimeInMilliseconds") ?? 0,
+                    operationalStatus is { Length: > 0 } ? operationalStatus[0] : null,
+                    GetNullable<ushort>(instance, "RequestedState") ?? ComputerSystemRow.RequestedStateNoChange,
+                    GetString(instance, "OtherEnabledState")));
             }
         }
 

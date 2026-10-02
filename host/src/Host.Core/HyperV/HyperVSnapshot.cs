@@ -12,7 +12,20 @@ public sealed record HyperVSnapshot(
 /// <summary>Values from Msvm_ComputerSystem.</summary>
 /// <param name="Id">The Name property, which holds the virtual machine GUID.</param>
 /// <param name="Name">The ElementName property, shown as the virtual machine name.</param>
-public sealed record ComputerSystemRow(Guid Id, string Name, ushort EnabledState, ulong OnTimeMilliseconds);
+/// <param name="OperationalStatus">First OperationalStatus element. 11 (In Service) indicates a transition.</param>
+/// <param name="RequestedState">Target state of an in-progress transition. 5 (No Change) when idle.</param>
+/// <param name="OtherEnabledState">Describes the state when EnabledState is 1 (Other), for example "Saving".</param>
+public sealed record ComputerSystemRow(
+    Guid Id,
+    string Name,
+    ushort EnabledState,
+    ulong OnTimeMilliseconds,
+    ushort? OperationalStatus = null,
+    ushort RequestedState = ComputerSystemRow.RequestedStateNoChange,
+    string? OtherEnabledState = null)
+{
+    public const ushort RequestedStateNoChange = 5;
+}
 
 /// <summary>Values from the realized Msvm_VirtualSystemSettingData.</summary>
 /// <param name="SubType">VirtualSystemSubType, for example Microsoft:Hyper-V:SubType:2.</param>

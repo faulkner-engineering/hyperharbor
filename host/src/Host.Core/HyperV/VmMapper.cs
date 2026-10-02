@@ -36,6 +36,52 @@ public static class VmMapper
             .ToList();
     }
 
+    private const ushort EnabledStateOther = 1;
+    private const ushort OperationalStatusInService = 11;
+
+    /// <summary>
+    /// Maps a virtual machine's state, including transitions. Observed on Hyper-V:
+    /// saving reports EnabledState 1 with OtherEnabledState "Saving"; starting reports
+    /// OperationalStatus 11 (In Service) with RequestedState 2 before EnabledState becomes 10.
+    /// </summary>
+    public static VmState MapState(ComputerSystemRow system)
+    {
+        ArgumentNullException.ThrowIfNull(system);
+
+        if (system.EnabledState == EnabledStateOther && MapOtherEnabledState(system.OtherEnabledState) is { } described)
+        {
+            return described;
+        }
+
+        if (system.OperationalStatus == OperationalStatusInService
+            && MapRequestedState(system.RequestedState, system.EnabledState) is { } target)
+        {
+            return target;
+        }
+
+        return MapState(system.EnabledState);
+    }
+
+    private static VmState? MapOtherEnabledState(string? otherEnabledState) => otherEnabledState?.Trim().ToUpperInvariant() switch
+    {
+        "SAVING" => VmState.Saving,
+        "PAUSING" => VmState.Pausing,
+        "RESUMING" => VmState.Resuming,
+        "STARTING" => VmState.Starting,
+        "STOPPING" or "SHUTTING DOWN" => VmState.Stopping,
+        _ => null,
+    };
+
+    /// <summary>Maps the target of an in-progress RequestStateChange to the transitional state.</summary>
+    private static VmState? MapRequestedState(ushort requestedState, ushort enabledState) => requestedState switch
+    {
+        2 => enabledState == 9 ? VmState.Resuming : VmState.Starting,
+        3 or 4 => VmState.Stopping,
+        6 => VmState.Saving,
+        9 => VmState.Pausing,
+        _ => null,
+    };
+
     /// <summary>
     /// Maps Msvm_ComputerSystem.EnabledState. Values 2 through 10 are the CIM values used by
     /// root\virtualization\v2. Values from 32768 are Hyper-V transitional states.
@@ -64,7 +110,7 @@ public static class VmMapper
         SummaryRow? summary,
         IReadOnlyList<string> rawAddresses)
     {
-        var state = MapState(system.EnabledState);
+        var state = MapState(system);
         var isActive = state is VmState.Running or VmState.Paused;
         var ipAddresses = isActive ? NormalizeAddresses(rawAddresses) : [];
 

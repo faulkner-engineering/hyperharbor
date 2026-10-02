@@ -29,6 +29,26 @@ public class VmMapperTests
         Assert.Equal(expected, VmMapper.MapState((ushort)enabledState));
     }
 
+    // Sequences recorded from Hyper-V on Windows 11: EnabledState / OperationalStatus / RequestedState / OtherEnabledState.
+    [Theory]
+    [InlineData(1, 11, 6, "Saving", VmState.Saving)]
+    [InlineData(6, 11, 2, "", VmState.Starting)]
+    [InlineData(10, 11, 2, "", VmState.Starting)]
+    [InlineData(3, 11, 2, "", VmState.Starting)]
+    [InlineData(9, 11, 2, "", VmState.Resuming)]
+    [InlineData(2, 11, 9, "", VmState.Pausing)]
+    [InlineData(2, 11, 3, "", VmState.Stopping)]
+    [InlineData(6, 11, 5, "", VmState.Saved)]
+    [InlineData(3, 11, 5, "", VmState.Off)]
+    [InlineData(2, 2, 5, "", VmState.Running)]
+    [InlineData(1, 2, 5, "Unrecognized", VmState.Other)]
+    public void MapState_DetectsTransitions(int enabledState, int operationalStatus, int requestedState, string other, VmState expected)
+    {
+        var row = new ComputerSystemRow(VmA, "VM", (ushort)enabledState, 0, (ushort)operationalStatus, (ushort)requestedState, other);
+
+        Assert.Equal(expected, VmMapper.MapState(row));
+    }
+
     [Fact]
     public void Map_RunningVm_IncludesMetricsAddressesAndRdp()
     {

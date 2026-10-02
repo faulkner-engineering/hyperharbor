@@ -23,7 +23,10 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
     // Common Hyper-V method return codes.
     private const uint ReturnCompleted = 0;
     private const uint ReturnJobStarted = 4096;
+    private const uint ReturnNotSupported = 32770;
     private const uint ReturnInvalidState = 32775;
+
+    private const ushort OperationalStatusOk = 2;
 
     public Task InvokeAsync(Guid vmId, VmAction action, CancellationToken cancellationToken)
     {
@@ -91,6 +94,16 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
                 null,
                 "The guest shutdown integration service is not available. Use turnOff to force the virtual machine off.");
 
+        // OperationalStatus 2 (OK) means the guest is responding. Without a running guest OS it reports 12 (No Contact).
+        var status = component.CimInstanceProperties["OperationalStatus"]?.Value as ushort[];
+        if (status is not { Length: > 0 } || status[0] != OperationalStatusOk)
+        {
+            throw new VmActionNotAllowedException(
+                action,
+                null,
+                "The guest is not responding to the shutdown integration service. Wait for the guest OS to finish starting, or use turnOff.");
+        }
+
         var parameters = new CimMethodParametersCollection
         {
             CimMethodParameter.Create("Force", false, CimType.Boolean, CimFlags.In),
@@ -98,12 +111,17 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
         };
 
         using var result = session.InvokeMethod(Namespace, component, methodName, parameters);
+        if (GetReturnCode(result) == ReturnNotSupported)
+        {
+            throw new VmActionNotAllowedException(action, null, $"The guest does not support {action} through integration services.");
+        }
+
         EnsureAccepted(action, methodName, result);
     }
 
     private static void EnsureAccepted(VmAction action, string operation, CimMethodResult result)
     {
-        var returnCode = Convert.ToUInt32(result.ReturnValue?.Value ?? uint.MaxValue, System.Globalization.CultureInfo.InvariantCulture);
+        var returnCode = GetReturnCode(result);
         switch (returnCode)
         {
             case ReturnCompleted:
@@ -114,6 +132,11 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
             default:
                 throw new HyperVOperationException(operation, returnCode);
         }
+    }
+
+    private static uint GetReturnCode(CimMethodResult result)
+    {
+        return Convert.ToUInt32(result.ReturnValue?.Value ?? uint.MaxValue, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static CimInstance? QuerySingle(CimSession session, string query)
