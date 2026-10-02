@@ -53,8 +53,11 @@ public sealed class CimHyperVReader : IHyperVReader
             cancellationToken.ThrowIfCancellationRequested();
 
             var guestNetworks = ReadGuestNetworks(session);
+            cancellationToken.ThrowIfCancellationRequested();
 
-            return new HyperVSnapshot(systems, settings, summaries, guestNetworks);
+            var guestOperatingSystems = ReadGuestOperatingSystems(session);
+
+            return new HyperVSnapshot(systems, settings, summaries, guestNetworks, guestOperatingSystems);
         }
         catch (CimException ex) when (ex.NativeErrorCode is NativeErrorCode.InvalidNamespace)
         {
@@ -177,6 +180,36 @@ public sealed class CimHyperVReader : IHyperVReader
                 var addresses = instance.CimInstanceProperties["IPAddresses"]?.Value as string[] ?? [];
                 rows.Add(new GuestNetworkRow(vmId, addresses));
             }
+        }
+
+        return rows;
+    }
+
+    private List<GuestOsRow> ReadGuestOperatingSystems(CimSession session)
+    {
+        var rows = new List<GuestOsRow>();
+        try
+        {
+            foreach (var instance in Query(session, "SELECT SystemName, GuestIntrinsicExchangeItems FROM Msvm_KvpExchangeComponent"))
+            {
+                using (instance)
+                {
+                    if (TryParseGuid(GetString(instance, "SystemName")) is not { } vmId)
+                    {
+                        continue;
+                    }
+
+                    var items = instance.CimInstanceProperties["GuestIntrinsicExchangeItems"]?.Value as string[] ?? [];
+                    if (items.Length > 0)
+                    {
+                        rows.Add(KvpItems.ToGuestOsRow(vmId, items));
+                    }
+                }
+            }
+        }
+        catch (CimException ex) when (ex.NativeErrorCode is not (NativeErrorCode.InvalidNamespace or NativeErrorCode.AccessDenied))
+        {
+            _logger.LogWarning(ex, "Reading guest data exchange items failed; guest operating systems are unknown.");
         }
 
         return rows;

@@ -7,7 +7,8 @@ public sealed record HyperVSnapshot(
     IReadOnlyList<ComputerSystemRow> ComputerSystems,
     IReadOnlyList<SettingsRow> Settings,
     IReadOnlyList<SummaryRow> Summaries,
-    IReadOnlyList<GuestNetworkRow> GuestNetworks);
+    IReadOnlyList<GuestNetworkRow> GuestNetworks,
+    IReadOnlyList<GuestOsRow>? GuestOperatingSystems = null);
 
 /// <summary>Values from Msvm_ComputerSystem.</summary>
 /// <param name="Id">The Name property, which holds the virtual machine GUID.</param>
@@ -36,3 +37,12 @@ public sealed record SummaryRow(Guid VmId, ushort? ProcessorLoad, ulong? MemoryU
 
 /// <summary>Values from Msvm_GuestNetworkAdapterConfiguration. Requires the guest data exchange integration service.</summary>
 public sealed record GuestNetworkRow(Guid VmId, IReadOnlyList<string> IpAddresses);
+
+/// <summary>
+/// Operating system values from Msvm_KvpExchangeComponent.GuestIntrinsicExchangeItems. Requires the
+/// guest data exchange integration service (Windows) or hv_kvp_daemon (Linux).
+/// </summary>
+/// <param name="OsName">OSName, for example "Windows 11 Pro" or "Ubuntu".</param>
+/// <param name="OsMajorVersion">OSMajorVersion; Linux guests report the distribution version, for example "24.04".</param>
+/// <param name="OsPlatformId">OSPlatformId; Windows guests report 2 (VER_PLATFORM_WIN32_NT).</param>
+public sealed record GuestOsRow(Guid VmId, string? OsName, string? OsMajorVersion, int? OsPlatformId);

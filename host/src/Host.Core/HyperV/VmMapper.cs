@@ -24,13 +24,17 @@ public static class VmMapper
         var addresses = snapshot.GuestNetworks
             .GroupBy(row => row.VmId)
             .ToDictionary(group => group.Key, group => group.SelectMany(row => row.IpAddresses).ToList());
+        var operatingSystems = (snapshot.GuestOperatingSystems ?? [])
+            .GroupBy(row => row.VmId)
+            .ToDictionary(group => group.Key, group => group.First());
 
         return snapshot.ComputerSystems
             .Select(system => MapVm(
                 system,
                 settings.GetValueOrDefault(system.Id),
                 summaries.GetValueOrDefault(system.Id),
-                addresses.GetValueOrDefault(system.Id) ?? []))
+                addresses.GetValueOrDefault(system.Id) ?? [],
+                operatingSystems.GetValueOrDefault(system.Id)))
             .OrderBy(vm => vm.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(vm => vm.Id)
             .ToList();
@@ -108,7 +112,8 @@ public static class VmMapper
         ComputerSystemRow system,
         SettingsRow? settings,
         SummaryRow? summary,
-        IReadOnlyList<string> rawAddresses)
+        IReadOnlyList<string> rawAddresses,
+        GuestOsRow? guestOs)
     {
         var state = MapState(system);
         var isActive = state is VmState.Running or VmState.Paused;
@@ -125,7 +130,38 @@ public static class VmMapper
             // Set by VmInventory after probing port 3389; the mapper only picks the address.
             RdpAvailable: false,
             IpAddresses: ipAddresses,
-            RemoteDesktop: new VmRemoteDesktop(ipAddresses.FirstOrDefault(), false));
+            RemoteDesktop: new VmRemoteDesktop(ipAddresses.FirstOrDefault(), false),
+            GuestOs: isActive ? MapGuestOs(guestOs) : VmGuestOs.Unknown);
+    }
+
+    private const int PlatformWindowsNt = 2;
+
+    /// <summary>
+    /// Classifies the guest from its data exchange values. Windows guests report OSPlatformId 2 and
+    /// an OSName starting with "Windows". Linux guests (hv_kvp_daemon) report the distribution name,
+    /// for example "Ubuntu", with its version in OSMajorVersion. BSD guests are left unknown.
+    /// </summary>
+    public static VmGuestOs MapGuestOs(GuestOsRow? row)
+    {
+        if (row?.OsName is not { Length: > 0 } name)
+        {
+            return VmGuestOs.Unknown;
+        }
+
+        if (row.OsPlatformId == PlatformWindowsNt || name.StartsWith("Windows", StringComparison.OrdinalIgnoreCase))
+        {
+            return new VmGuestOs(GuestOsFamily.Windows, name);
+        }
+
+        if (name.Contains("BSD", StringComparison.OrdinalIgnoreCase))
+        {
+            return new VmGuestOs(GuestOsFamily.Unknown, name);
+        }
+
+        var version = row.OsMajorVersion;
+        return new VmGuestOs(
+            GuestOsFamily.Linux,
+            version is { Length: > 0 } && !name.Contains(version, StringComparison.Ordinal) ? $"{name} {version}" : name);
     }
 
     /// <summary>

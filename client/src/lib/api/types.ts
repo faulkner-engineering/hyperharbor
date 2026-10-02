@@ -99,11 +99,18 @@ export interface paths {
         put?: never;
         /**
          * Create the calling User's local account in a VM.
-         * @description One-time setup for one-click Remote Desktop. Uses PowerShell Direct with the given
-         *     guest administrator credential to create (or reuse) the User's local account, for
-         *     example `hh-owner`, add it to Remote Desktop Users, and optionally enable Remote
-         *     Desktop. The VM is marked provisioned only after the account is verified. Requires a
-         *     running Windows guest (Windows 10 / Server 2016 or later).
+         * @description One-time setup for one-click Remote Desktop. Creates (or reuses) the User's local
+         *     account, for example `hh-owner`, with the given guest administrator credential, and
+         *     optionally enables Remote Desktop. The VM is marked provisioned only after the account
+         *     is verified.
+         *
+         *     - Windows (10 / Server 2016 or later): PowerShell Direct; the account is added to
+         *       Remote Desktop Users.
+         *     - Linux: SSH with password authentication to the VM's address, then sudo; Remote
+         *       Desktop is xrdp. The guest's SSH host key is pinned on first use and checked on
+         *       every later connection. Installing packages can take several minutes.
+         *
+         *     The guest OS comes from `Vm.guestOs`; a VM whose family is `unknown` cannot be provisioned.
          */
         post: operations["provisionVm"];
         delete?: never;
@@ -330,6 +337,18 @@ export interface components {
         /** @enum {string} */
         VmState: "running" | "off" | "saved" | "paused" | "starting" | "stopping" | "saving" | "pausing" | "resuming" | "other";
         /**
+         * @description Operating system family the guest reports through Hyper-V data exchange (KVP).
+         *     `unknown` when the guest is not running, has not finished starting, or does not run
+         *     the data exchange integration service.
+         * @enum {string}
+         */
+        GuestOsFamily: "unknown" | "windows" | "linux";
+        VmGuestOs: {
+            family: components["schemas"]["GuestOsFamily"];
+            /** @description Name and version the guest reports, for example "Windows 11 Pro" or "Ubuntu 24.04". */
+            name: string | null;
+        };
+        /**
          * @description - `start`: power on or resume from saved state.
          *     - `shutdown`: graceful guest shutdown via integration services.
          *     - `turnOff`: immediate power off. Can lose unsaved guest data.
@@ -355,6 +374,10 @@ export interface components {
          *       "remoteDesktop": {
          *         "address": "192.168.1.50",
          *         "reachableFromHost": true
+         *       },
+         *       "guestOs": {
+         *         "family": "windows",
+         *         "name": "Windows 11 Pro"
          *       }
          *     }
          */
@@ -385,6 +408,7 @@ export interface components {
              */
             provisioned: boolean;
             remoteDesktop: components["schemas"]["VmRemoteDesktop"];
+            guestOs: components["schemas"]["VmGuestOs"];
         };
         VmRemoteDesktop: {
             /** @description The guest address clients connect to, or null when the guest reports none. */
@@ -393,15 +417,25 @@ export interface components {
             reachableFromHost: boolean;
         };
         ProvisionVmRequest: {
-            /** @description A local administrator in the guest, for example "Administrator" or ".\\admin". */
+            /**
+             * @description Windows: a local administrator, for example "Administrator" or ".\\admin".
+             *     Linux: an account that can sign in over SSH with a password and use sudo.
+             */
             adminUserName: string;
             /** @description Stored on the host with DPAPI for later password rotation. Never logged. */
             adminPassword: string;
             /**
-             * @description Also enable Remote Desktop and its firewall rule in the guest.
+             * @description Windows: also enable Remote Desktop and its firewall rule. Linux: also install, enable,
+             *     and open the firewall for xrdp.
              * @default true
              */
             enableRemoteDesktop: boolean;
+            /**
+             * @description Linux only: install a lightweight desktop (Xfce) when the guest has none. Remote Desktop
+             *     on Linux needs a desktop environment. Ignored for Windows guests.
+             * @default false
+             */
+            installDesktop: boolean;
         };
         VmProvisioning: {
             /** Format: uuid */
@@ -412,7 +446,7 @@ export interface components {
             provisionedAt: string;
         };
         VmConnection: {
-            /** @description Account to sign in with, for example ".\\hh-owner". */
+            /** @description Account to sign in with, for example ".\\hh-owner" (Windows) or "hh-owner" (Linux). */
             userName: string;
             /**
              * @description Current password for the account. Valid until the next rotation; requests within
@@ -427,6 +461,8 @@ export interface components {
              * @description End of the reuse window. The password stays valid until the next connect after it.
              */
             expiresAt: string;
+            /** @description Linux guests use xrdp, which signs in over TLS instead of CredSSP (NLA). */
+            guestOs: components["schemas"]["GuestOsFamily"];
         };
         VmActionRequest: {
             action: components["schemas"]["VmAction"];
@@ -607,7 +643,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
-        /** @description A PowerShell Direct operation in the guest failed. */
+        /** @description An operation in the guest (PowerShell Direct or SSH) failed. */
         GuestOperationFailed: {
             headers: {
                 [name: string]: unknown;
@@ -616,7 +652,10 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
-        /** @description The guest is not ready for PowerShell Direct (still starting, or integration services are off). */
+        /**
+         * @description The guest is not ready: PowerShell Direct cannot reach it (still starting, or integration
+         *     services are off), or SSH on port 22 does not answer (Linux).
+         */
         GuestUnavailable: {
             headers: {
                 [name: string]: unknown;
@@ -791,7 +830,10 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            /** @description The VM is not running, is not a Windows guest, or an existing account with the same name is not a local account. */
+            /**
+             * @description The VM is not running, its guest OS is unknown or has no address (Linux), or an
+             *     existing account with the same name is not a local account.
+             */
             409: {
                 headers: {
                     [name: string]: unknown;

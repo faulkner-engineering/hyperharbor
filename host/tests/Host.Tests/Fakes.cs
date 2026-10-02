@@ -33,8 +33,8 @@ internal sealed class FakeVmInventory : IVmInventory
         Vms[index] = Vms[index] with { State = state };
     }
 
-    public static Vm CreateVm(Guid id, string name, VmState state) =>
-        new(id, name, state, null, null, null, 2, false, []);
+    public static Vm CreateVm(Guid id, string name, VmState state, GuestOsFamily guestOs = GuestOsFamily.Windows, string? address = null) =>
+        new(id, name, state, null, null, null, 2, false, address is null ? [] : [address], GuestOs: new VmGuestOs(guestOs, null));
 }
 
 /// <summary>Records power requests and optionally applies a resulting state to a <see cref="FakeVmInventory"/>.</summary>

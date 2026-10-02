@@ -40,7 +40,7 @@ public sealed class ProvisioningService
     /// <exception cref="VmNotFoundException">No VM has this ID.</exception>
     /// <exception cref="GuestAccountConflictException">The VM is not running, or the account exists and is not local.</exception>
     /// <exception cref="GuestCredentialRejectedException">The guest rejected the administrator credential.</exception>
-    /// <exception cref="GuestUnavailableException">PowerShell Direct could not reach the guest.</exception>
+    /// <exception cref="GuestUnavailableException">PowerShell Direct or SSH could not reach the guest.</exception>
     /// <exception cref="GuestOperationException">A guest command failed or verification failed.</exception>
     public async Task<VmProvisioning> ProvisionAsync(Guid vmId, Guid userId, ProvisionVmRequest request, CancellationToken cancellationToken)
     {
@@ -49,27 +49,52 @@ public sealed class ProvisioningService
         var vm = await _inventory.GetAsync(vmId, cancellationToken) ?? throw new VmNotFoundException(vmId);
         if (vm.State != VmState.Running)
         {
-            throw new GuestAccountConflictException($"Start {vm.Name} and wait for Windows to finish starting before provisioning it.");
+            throw new GuestAccountConflictException($"Start {vm.Name} and wait for its operating system to finish starting before setting it up.");
+        }
+
+        var os = vm.GuestOs?.Family ?? GuestOsFamily.Unknown;
+        if (os == GuestOsFamily.Unknown)
+        {
+            throw new GuestAccountConflictException(
+                $"HyperHarbor cannot tell which operating system {vm.Name} runs yet. Wait for it to finish starting; " +
+                "the guest must run the Hyper-V data exchange service (built into Windows; hv_kvp_daemon on Linux).");
+        }
+
+        var address = ConnectService.PreferredAddress(vm);
+        if (os == GuestOsFamily.Linux && address is null)
+        {
+            throw new GuestAccountConflictException($"{vm.Name} has not reported a network address yet. Wait for it to finish starting.");
         }
 
         var user = _users.Find(userId) ?? throw new InvalidOperationException($"User {userId} does not exist.");
         var admin = new GuestCredential(request.AdminUserName.Trim(), request.AdminPassword);
 
-        // The initial password is never stored; each connect rotates it.
-        await _guest.ProvisionAsync(vmId, admin, user.VmAccountName, PasswordGenerator.Generate(), request.EnableRemoteDesktop, cancellationToken);
+        // Setting a VM up again trusts the SSH host key presented now, so a reinstalled guest can be set up again.
+        var target = new GuestTarget(vmId, os, address);
+        var options = new GuestProvisionOptions(request.EnableRemoteDesktop, request.InstallDesktop);
 
-        var state = await _guest.InspectAsync(vmId, admin, user.VmAccountName, cancellationToken);
+        // The initial password is never stored; each connect rotates it.
+        target = await _guest.ProvisionAsync(target, admin, user.VmAccountName, PasswordGenerator.Generate(), options, cancellationToken);
+
+        var state = await _guest.InspectAsync(target, admin, user.VmAccountName, cancellationToken);
         if (!state.IsReadyForRemoteDesktop)
         {
+            var remoteDesktop = os == GuestOsFamily.Linux ? "xrdp running with a desktop installed" : "in Remote Desktop Users";
             throw new GuestOperationException(
                 $"The account {user.VmAccountName} could not be verified in {vm.Name} " +
-                $"(exists: {state.Exists}, local: {state.IsLocal}, enabled: {state.Enabled}, Remote Desktop Users: {state.InRemoteDesktopUsers}).");
+                $"(exists: {state.Exists}, local: {state.IsLocal}, enabled: {state.Enabled}, {remoteDesktop}: {state.RemoteDesktopAllowed}).");
         }
 
         var now = _time.GetUtcNow();
         _credentials.Save(vmId, admin);
-        _provisioning.Save(new ProvisionedAccount(vmId, userId, user.VmAccountName, now, now));
-        _logger.LogInformation("Provisioned {Account} on VM {Name} ({VmId}) for user {UserId}.", user.VmAccountName, vm.Name, vmId, userId);
+        _provisioning.Save(new ProvisionedAccount(vmId, userId, user.VmAccountName, now, now, os, target.SshHostKey));
+        _logger.LogInformation(
+            "Provisioned {Account} on {Os} VM {Name} ({VmId}) for user {UserId}.",
+            user.VmAccountName,
+            os,
+            vm.Name,
+            vmId,
+            userId);
 
         return new VmProvisioning(vmId, user.VmAccountName, now);
     }

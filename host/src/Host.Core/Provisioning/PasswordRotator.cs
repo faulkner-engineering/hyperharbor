@@ -42,8 +42,10 @@ public sealed class PasswordRotator : IDisposable
     }
 
     /// <exception cref="GuestAccountConflictException">No administrator credential is stored for the VM.</exception>
-    public async Task<RotatedPassword> GetPasswordAsync(Guid vmId, Guid userId, string accountName, CancellationToken cancellationToken)
+    public async Task<RotatedPassword> GetPasswordAsync(GuestTarget target, Guid userId, string accountName, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(target);
+        var vmId = target.VmId;
         var entry = _entries.GetOrAdd((vmId, userId), _ => new Entry());
         await entry.Gate.WaitAsync(cancellationToken);
         try
@@ -58,7 +60,7 @@ public sealed class PasswordRotator : IDisposable
                 ?? throw new GuestAccountConflictException("This VM has no stored administrator credential. Provision it again.");
 
             var password = PasswordGenerator.Generate();
-            await _guest.SetPasswordAsync(vmId, admin, accountName, password, cancellationToken);
+            await _guest.SetPasswordAsync(target, admin, accountName, password, cancellationToken);
 
             entry.Clear();
             entry.Password = password.ToCharArray();

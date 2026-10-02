@@ -165,11 +165,18 @@ paths:
       operationId: provisionVm
       summary: Create the calling User's local account in a VM.
       description: |
-        One-time setup for one-click Remote Desktop. Uses PowerShell Direct with the given
-        guest administrator credential to create (or reuse) the User's local account, for
-        example `hh-owner`, add it to Remote Desktop Users, and optionally enable Remote
-        Desktop. The VM is marked provisioned only after the account is verified. Requires a
-        running Windows guest (Windows 10 / Server 2016 or later).
+        One-time setup for one-click Remote Desktop. Creates (or reuses) the User's local
+        account, for example `hh-owner`, with the given guest administrator credential, and
+        optionally enables Remote Desktop. The VM is marked provisioned only after the account
+        is verified.
+
+        - Windows (10 / Server 2016 or later): PowerShell Direct; the account is added to
+          Remote Desktop Users.
+        - Linux: SSH with password authentication to the VM's address, then sudo; Remote
+          Desktop is xrdp. The guest's SSH host key is pinned on first use and checked on
+          every later connection. Installing packages can take several minutes.
+
+        The guest OS comes from `Vm.guestOs`; a VM whose family is `unknown` cannot be provisioned.
       requestBody:
         required: true
         content:
@@ -190,7 +197,9 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: The VM is not running, is not a Windows guest, or an existing account with the same name is not a local account.
+          description: |
+            The VM is not running, its guest OS is unknown or has no address (Linux), or an
+            existing account with the same name is not a local account.
           content:
             application/problem+json:
               schema:
@@ -496,13 +505,15 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
     GuestOperationFailed:
-      description: A PowerShell Direct operation in the guest failed.
+      description: An operation in the guest (PowerShell Direct or SSH) failed.
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
     GuestUnavailable:
-      description: The guest is not ready for PowerShell Direct (still starting, or integration services are off).
+      description: |
+        The guest is not ready: PowerShell Direct cannot reach it (still starting, or integration
+        services are off), or SSH on port 22 does not answer (Linux).
       content:
         application/problem+json:
           schema:
@@ -568,6 +579,24 @@ components:
       type: string
       enum: [running, off, saved, paused, starting, stopping, saving, pausing, resuming, other]
 
+    GuestOsFamily:
+      type: string
+      description: |
+        Operating system family the guest reports through Hyper-V data exchange (KVP).
+        `unknown` when the guest is not running, has not finished starting, or does not run
+        the data exchange integration service.
+      enum: [unknown, windows, linux]
+
+    VmGuestOs:
+      type: object
+      required: [family, name]
+      properties:
+        family:
+          $ref: "#/components/schemas/GuestOsFamily"
+        name:
+          type: [string, "null"]
+          description: Name and version the guest reports, for example "Windows 11 Pro" or "Ubuntu 24.04".
+
     VmAction:
       type: string
       description: |
@@ -580,7 +609,7 @@ components:
 
     Vm:
       type: object
-      required: [id, name, state, generation, rdpAvailable, ipAddresses, provisioned, remoteDesktop]
+      required: [id, name, state, generation, rdpAvailable, ipAddresses, provisioned, remoteDesktop, guestOs]
       properties:
         id:
           type: string
@@ -621,6 +650,8 @@ components:
             `POST /vms/{vmId}/connect` can be used.
         remoteDesktop:
           $ref: "#/components/schemas/VmRemoteDesktop"
+        guestOs:
+          $ref: "#/components/schemas/VmGuestOs"
       example:
         id: 0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b
         name: Dev Workstation
@@ -635,6 +666,9 @@ components:
         remoteDesktop:
           address: 192.168.1.50
           reachableFromHost: true
+        guestOs:
+          family: windows
+          name: Windows 11 Pro
 
     VmRemoteDesktop:
       type: object
@@ -654,7 +688,9 @@ components:
         adminUserName:
           type: string
           minLength: 1
-          description: A local administrator in the guest, for example "Administrator" or ".\\admin".
+          description: |
+            Windows: a local administrator, for example "Administrator" or ".\\admin".
+            Linux: an account that can sign in over SSH with a password and use sudo.
         adminPassword:
           type: string
           minLength: 1
@@ -662,7 +698,15 @@ components:
         enableRemoteDesktop:
           type: boolean
           default: true
-          description: Also enable Remote Desktop and its firewall rule in the guest.
+          description: |
+            Windows: also enable Remote Desktop and its firewall rule. Linux: also install, enable,
+            and open the firewall for xrdp.
+        installDesktop:
+          type: boolean
+          default: false
+          description: |
+            Linux only: install a lightweight desktop (Xfce) when the guest has none. Remote Desktop
+            on Linux needs a desktop environment. Ignored for Windows guests.
 
     VmProvisioning:
       type: object
@@ -680,11 +724,11 @@ components:
 
     VmConnection:
       type: object
-      required: [userName, password, address, port, expiresAt]
+      required: [userName, password, address, port, expiresAt, guestOs]
       properties:
         userName:
           type: string
-          description: Account to sign in with, for example ".\\hh-owner".
+          description: Account to sign in with, for example ".\\hh-owner" (Windows) or "hh-owner" (Linux).
         password:
           type: string
           description: |
@@ -699,6 +743,9 @@ components:
           type: string
           format: date-time
           description: End of the reuse window. The password stays valid until the next connect after it.
+        guestOs:
+          $ref: "#/components/schemas/GuestOsFamily"
+          description: Linux guests use xrdp, which signs in over TLS instead of CredSSP (NLA).
 
     VmActionRequest:
       type: object

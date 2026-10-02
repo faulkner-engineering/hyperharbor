@@ -40,9 +40,9 @@ public sealed class ConnectService
         }
 
         var address = PreferredAddress(vm)
-            ?? throw new GuestAccountConflictException($"{vm.Name} has not reported a network address yet. Wait for Windows to finish starting.");
+            ?? throw new GuestAccountConflictException($"{vm.Name} has not reported a network address yet. Wait for it to finish starting.");
 
-        var rotated = await _rotator.GetPasswordAsync(vmId, userId, account.AccountName, cancellationToken);
+        var rotated = await _rotator.GetPasswordAsync(account.ToTarget(address), userId, account.AccountName, cancellationToken);
         _logger.LogInformation(
             "Issued Remote Desktop credentials for {Account} on {Name} ({VmId}) to {Device}.",
             account.AccountName,
@@ -50,7 +50,9 @@ public sealed class ConnectService
             vmId,
             deviceName);
 
-        return new VmConnection($@".\{account.AccountName}", rotated.Password, address, RemoteDesktopPort, rotated.ExpiresAt);
+        // Windows needs ".\" to select the local account; xrdp expects the plain Linux user name.
+        var userName = account.GuestOs == GuestOsFamily.Linux ? account.AccountName : $@".\{account.AccountName}";
+        return new VmConnection(userName, rotated.Password, address, RemoteDesktopPort, rotated.ExpiresAt, account.GuestOs);
     }
 
     /// <summary>The Remote Desktop address reported for the VM, else its first IPv4 address.</summary>

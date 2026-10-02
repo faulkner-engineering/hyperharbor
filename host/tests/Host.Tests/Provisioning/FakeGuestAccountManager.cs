@@ -1,10 +1,13 @@
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Shared.Contracts.Vms;
 
 namespace HyperHarbor.Host.Tests;
 
 /// <summary>An in-memory guest: tracks one account per VM and records passwords it was given.</summary>
 internal sealed class FakeGuestAccountManager : IGuestAccountManager
 {
+    public const string FakeHostKey = "SHA256:fake-host-key";
+
     private readonly object _gate = new();
 
     public Dictionary<Guid, GuestAccountState> Accounts { get; } = [];
@@ -13,48 +16,63 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
 
     public List<GuestCredential> AdminCredentialsUsed { get; } = [];
 
+    public List<GuestTarget> TargetsUsed { get; } = [];
+
+    public List<GuestProvisionOptions> ProvisionOptions { get; } = [];
+
     /// <summary>Thrown by every call when set.</summary>
     public Exception? Failure { get; set; }
 
-    /// <summary>When true, provisioning "succeeds" but the account is left out of Remote Desktop Users.</summary>
+    /// <summary>When true, provisioning "succeeds" but the account is not allowed to sign in remotely.</summary>
     public bool SkipGroupMembership { get; set; }
 
     /// <summary>Simulated time for a guest call, to exercise concurrency.</summary>
     public TimeSpan Delay { get; set; }
 
-    public async Task<GuestAccountState> InspectAsync(Guid vmId, GuestCredential admin, string accountName, CancellationToken cancellationToken)
+    public async Task<GuestAccountState> InspectAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken)
     {
-        await Enter(admin);
+        await Enter(target, admin);
         lock (_gate)
         {
-            return Accounts.GetValueOrDefault(vmId, new GuestAccountState(false, false, false, false));
+            return Accounts.GetValueOrDefault(target.VmId, new GuestAccountState(false, false, false, false));
         }
     }
 
-    public async Task ProvisionAsync(Guid vmId, GuestCredential admin, string accountName, string password, bool enableRemoteDesktop, CancellationToken cancellationToken)
+    public async Task<GuestTarget> ProvisionAsync(
+        GuestTarget target,
+        GuestCredential admin,
+        string accountName,
+        string password,
+        GuestProvisionOptions options,
+        CancellationToken cancellationToken)
     {
-        await Enter(admin);
+        await Enter(target, admin);
         lock (_gate)
         {
-            Accounts[vmId] = new GuestAccountState(true, true, true, !SkipGroupMembership);
-            PasswordsSet.Add((vmId, accountName, password));
+            Accounts[target.VmId] = new GuestAccountState(true, true, true, !SkipGroupMembership);
+            PasswordsSet.Add((target.VmId, accountName, password));
+            ProvisionOptions.Add(options);
+        }
+
+        // Like the SSH manager, Linux targets come back with the host key pinned.
+        return target.Os == GuestOsFamily.Linux ? target with { SshHostKey = FakeHostKey } : target;
+    }
+
+    public async Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
+    {
+        await Enter(target, admin);
+        lock (_gate)
+        {
+            PasswordsSet.Add((target.VmId, accountName, password));
         }
     }
 
-    public async Task SetPasswordAsync(Guid vmId, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
-    {
-        await Enter(admin);
-        lock (_gate)
-        {
-            PasswordsSet.Add((vmId, accountName, password));
-        }
-    }
-
-    private async Task Enter(GuestCredential admin)
+    private async Task Enter(GuestTarget target, GuestCredential admin)
     {
         lock (_gate)
         {
             AdminCredentialsUsed.Add(admin);
+            TargetsUsed.Add(target);
         }
 
         if (Delay > TimeSpan.Zero)

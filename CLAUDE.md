@@ -24,7 +24,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 4. mDNS discovery + client VM list (done)
 5. PIN pairing + mTLS (done)
 6. Wake-on-LAN (done)
-7. One-click RDP with a per-User VM account
+7. One-click RDP with a per-User VM account (Windows guests via PowerShell Direct; Linux guests via SSH
+   and xrdp, added at the user's request)
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -106,6 +107,16 @@ Mark required request properties [JsonRequired] (an empty body must not default 
     credential"; startup cleanup removes only tagged entries (users may have their own TERMSRV entries).
   - Secrets: ProvisionVmRequest, VmConnection, GuestCredential, RotatedPassword, and the Rust VmConnection
     override ToString or Debug to hide passwords. Keep it that way for any new type that holds one.
+- Linux guests (SshAccountManager, SSH.NET):
+  - Guest OS comes from KVP (Msvm_KvpExchangeComponent.GuestIntrinsicExchangeItems). Ubuntu reports
+    OSName "Ubuntu", OSMajorVersion "24.04", OSPlatformId 129; Windows reports OSPlatformId 2.
+  - The admin account needs SSH password authentication and sudo. Sudo is checked first with
+    `sudo -S -k true`; the script then reads the account password from the stdin line starting "HH:".
+  - The bash script lives in a C# raw string; it is sent with LF line endings (ReplaceLineEndings).
+    Check syntax in the guest with `bash -n` after editing it.
+  - The SSH host key is pinned at setup (ProvisionedAccount.SshHostKey); setting up again re-pins.
+  - xrdp has no NLA, so Linux .rdp files set enablecredsspsupport:i:0 and mstsc sends the stored
+    credential in the TLS logon packet. Remote Desktop needs a desktop session; setup can install Xfce.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 
@@ -128,7 +139,9 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 
 ## Live testing
 - Live tests skip themselves when Hyper-V is unreachable ([HyperVFact]); the account must be in Hyper-V Administrators.
-- Test VM HyperHarbor-Linux: Ubuntu 24.04, user hhadmin, SSH key ~/.ssh/hyperharbor_linux_ed25519.
+- Test VM HyperHarbor-Linux: Ubuntu 24.04 server (no desktop), user hhadmin, SSH key
+  ~/.ssh/hyperharbor_linux_ed25519; sudo needs hhadmin's password. Dynamic memory 768 MB startup, because
+  this PC often has little free RAM.
 - For throwaway VMs, create HyperHarbor-Test (Gen 2, no disk) and delete it afterwards. Ask before changing any other VM.
 - VM console automation: Msvm_Keyboard.TypeText can drop characters, so send TypeKey one key at a time.
   Read the screen with GetVirtualSystemThumbnailImage (RGB565) and confirm a prompt is gone before moving on.

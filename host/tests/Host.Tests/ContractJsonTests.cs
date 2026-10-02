@@ -90,10 +90,12 @@ public class ContractJsonTests
     [Fact]
     public void VmConnection_HidesPasswordInToString()
     {
-        var connection = new VmConnection(@".\hh-owner", "Rotated-Pass1!", "192.168.1.50", 3389, DateTimeOffset.UtcNow);
+        var connection = new VmConnection(@".\hh-owner", "Rotated-Pass1!", "192.168.1.50", 3389, DateTimeOffset.UtcNow, GuestOsFamily.Linux);
 
         Assert.DoesNotContain("Rotated-Pass1!", connection.ToString());
-        Assert.Equal(".\\hh-owner", (string?)JsonSerializer.SerializeToNode(connection, ContractJson.Options)!["userName"]);
+        var json = JsonSerializer.SerializeToNode(connection, ContractJson.Options)!;
+        Assert.Equal(".\\hh-owner", (string?)json["userName"]);
+        Assert.Equal("linux", (string?)json["guestOs"]);
     }
 
     [Fact]

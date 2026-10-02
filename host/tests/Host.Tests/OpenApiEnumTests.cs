@@ -16,6 +16,7 @@ public class OpenApiEnumTests
     [Theory]
     [InlineData("VmState", typeof(VmState))]
     [InlineData("VmAction", typeof(VmAction))]
+    [InlineData("GuestOsFamily", typeof(GuestOsFamily))]
     [InlineData("WakeCheckStatus", typeof(WakeCheckStatus))]
     public void EnumWireValues_MatchOpenApiSchema(string schemaName, Type enumType)
     {

@@ -75,7 +75,7 @@ builder.Services.AddSingleton<WakeFixCoordinator>();
 
 builder.Services.AddSingleton(new VmCredentialStore(dataDirectory));
 builder.Services.AddSingleton(new ProvisioningStore(dataDirectory));
-builder.Services.AddSingleton<IGuestAccountManager, PowerShellDirectAccountManager>();
+builder.Services.AddSingleton<IGuestAccountManager>(new GuestAccountRouter(new PowerShellDirectAccountManager(), new SshAccountManager()));
 builder.Services.AddSingleton<ProvisioningService>();
 builder.Services.AddSingleton(services => new PasswordRotator(
     services.GetRequiredService<IGuestAccountManager>(),

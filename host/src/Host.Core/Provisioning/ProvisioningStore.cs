@@ -1,16 +1,35 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Shared.Contracts.Vms;
 
 namespace HyperHarbor.Host.Core.Provisioning;
 
 /// <summary>A User's verified local account on a VM.</summary>
-public sealed record ProvisionedAccount(Guid VmId, Guid UserId, string AccountName, DateTimeOffset ProvisionedAt, DateTimeOffset VerifiedAt);
+/// <param name="GuestOs">Records written before Linux support have no value and are Windows guests.</param>
+/// <param name="SshHostKey">Linux: the pinned SHA-256 fingerprint of the guest's SSH host key.</param>
+public sealed record ProvisionedAccount(
+    Guid VmId,
+    Guid UserId,
+    string AccountName,
+    DateTimeOffset ProvisionedAt,
+    DateTimeOffset VerifiedAt,
+    GuestOsFamily GuestOs = GuestOsFamily.Windows,
+    string? SshHostKey = null)
+{
+    /// <summary>How to reach the guest; Linux guests are reached over SSH at <paramref name="address"/>.</summary>
+    public GuestTarget ToTarget(string? address) => new(VmId, GuestOs, address, SshHostKey);
+}
 
 /// <summary>Records which (VM, User) pairs have a verified account. Contains no secrets.</summary>
 public sealed class ProvisioningStore
 {
     private const string FileName = "vm-provisioning.json";
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+    };
 
     private readonly string _path;
     private readonly object _gate = new();

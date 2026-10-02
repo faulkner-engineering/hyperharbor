@@ -1,4 +1,5 @@
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
@@ -8,6 +9,7 @@ public sealed class PasswordRotatorTests : IDisposable
 {
     private static readonly Guid VmId = Guid.NewGuid();
     private static readonly Guid UserId = Guid.NewGuid();
+    private static readonly GuestTarget Target = new(VmId, GuestOsFamily.Windows);
 
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "hyperharbor-tests", Guid.NewGuid().ToString("N"));
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);
@@ -34,7 +36,7 @@ public sealed class PasswordRotatorTests : IDisposable
     [Fact]
     public async Task FirstRequest_RotatesInGuest()
     {
-        var result = await _rotator.GetPasswordAsync(VmId, UserId, "hh-owner", CancellationToken.None);
+        var result = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
 
         var (vmId, account, password) = Assert.Single(_guest.PasswordsSet);
         Assert.Equal((VmId, "hh-owner", result.Password), (vmId, account, password));
@@ -45,10 +47,10 @@ public sealed class PasswordRotatorTests : IDisposable
     [Fact]
     public async Task RequestsWithinWindow_ReuseThePassword()
     {
-        var first = await _rotator.GetPasswordAsync(VmId, UserId, "hh-owner", CancellationToken.None);
+        var first = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
         _time.Advance(TimeSpan.FromSeconds(59));
 
-        var second = await _rotator.GetPasswordAsync(VmId, UserId, "hh-owner", CancellationToken.None);
+        var second = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
 
         Assert.Equal(first.Password, second.Password);
         Assert.Single(_guest.PasswordsSet);
@@ -57,13 +59,13 @@ public sealed class PasswordRotatorTests : IDisposable
     [Fact]
     public async Task RequestAfterWindow_RotatesAgain_AndCacheIsCleared()
     {
-        var first = await _rotator.GetPasswordAsync(VmId, UserId, "hh-owner", CancellationToken.None);
+        var first = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
         Assert.True(_rotator.HasCachedPassword(VmId, UserId));
 
         _time.Advance(TimeSpan.FromSeconds(60));
         Assert.False(_rotator.HasCachedPassword(VmId, UserId));
 
-        var second = await _rotator.GetPasswordAsync(VmId, UserId, "hh-owner", CancellationToken.None);
+        var second = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
         Assert.NotEqual(first.Password, second.Password);
         Assert.Equal(2, _guest.PasswordsSet.Count);
     }
@@ -74,7 +76,7 @@ public sealed class PasswordRotatorTests : IDisposable
         _guest.Delay = TimeSpan.FromMilliseconds(50);
 
         var results = await Task.WhenAll(Enumerable.Range(0, 10)
-            .Select(_ => _rotator.GetPasswordAsync(VmId, UserId, "hh-owner", CancellationToken.None)));
+            .Select(_ => _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None)));
 
         Assert.Single(_guest.PasswordsSet);
         Assert.Single(results.Select(r => r.Password).Distinct());
@@ -83,8 +85,8 @@ public sealed class PasswordRotatorTests : IDisposable
     [Fact]
     public async Task DifferentUsers_RotateIndependently()
     {
-        await _rotator.GetPasswordAsync(VmId, UserId, "hh-owner", CancellationToken.None);
-        await _rotator.GetPasswordAsync(VmId, Guid.NewGuid(), "hh-other", CancellationToken.None);
+        await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+        await _rotator.GetPasswordAsync(Target, Guid.NewGuid(), "hh-other", CancellationToken.None);
 
         Assert.Equal(["hh-owner", "hh-other"], _guest.PasswordsSet.Select(p => p.Account));
     }
@@ -93,7 +95,7 @@ public sealed class PasswordRotatorTests : IDisposable
     public async Task FailedRotation_IsNotCached()
     {
         _guest.Failure = new GuestUnavailableException("starting");
-        await Assert.ThrowsAsync<GuestUnavailableException>(() => _rotator.GetPasswordAsync(VmId, UserId, "hh-owner", CancellationToken.None));
+        await Assert.ThrowsAsync<GuestUnavailableException>(() => _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None));
 
         Assert.False(_rotator.HasCachedPassword(VmId, UserId));
     }
@@ -101,7 +103,7 @@ public sealed class PasswordRotatorTests : IDisposable
     [Fact]
     public async Task MissingAdminCredential_IsConflict()
     {
-        await Assert.ThrowsAsync<GuestAccountConflictException>(() => _rotator.GetPasswordAsync(Guid.NewGuid(), UserId, "hh-owner", CancellationToken.None));
+        await Assert.ThrowsAsync<GuestAccountConflictException>(() => _rotator.GetPasswordAsync(Target with { VmId = Guid.NewGuid() }, UserId, "hh-owner", CancellationToken.None));
     }
 
     [Fact]

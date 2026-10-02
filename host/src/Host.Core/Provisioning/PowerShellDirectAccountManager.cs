@@ -15,9 +15,9 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(120);
 
-    public async Task<GuestAccountState> InspectAsync(Guid vmId, GuestCredential admin, string accountName, CancellationToken cancellationToken)
+    public async Task<GuestAccountState> InspectAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken)
     {
-        var result = await RunAsync(new { operation = "inspect", vmId, admin.UserName, admin.Password, accountName }, cancellationToken);
+        var result = await RunAsync(new { operation = "inspect", vmId = target.VmId, admin.UserName, admin.Password, accountName }, cancellationToken);
         return new GuestAccountState(
             (bool?)result?["exists"] ?? false,
             (bool?)result?["isLocal"] ?? false,
@@ -25,16 +25,23 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
             (bool?)result?["inRemoteDesktopUsers"] ?? false);
     }
 
-    public async Task ProvisionAsync(Guid vmId, GuestCredential admin, string accountName, string password, bool enableRemoteDesktop, CancellationToken cancellationToken)
+    public async Task<GuestTarget> ProvisionAsync(
+        GuestTarget target,
+        GuestCredential admin,
+        string accountName,
+        string password,
+        GuestProvisionOptions options,
+        CancellationToken cancellationToken)
     {
         await RunAsync(
-            new { operation = "provision", vmId, admin.UserName, admin.Password, accountName, accountPassword = password, enableRemoteDesktop },
+            new { operation = "provision", vmId = target.VmId, admin.UserName, admin.Password, accountName, accountPassword = password, options.EnableRemoteDesktop },
             cancellationToken);
+        return target;
     }
 
-    public async Task SetPasswordAsync(Guid vmId, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
+    public async Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
     {
-        await RunAsync(new { operation = "setPassword", vmId, admin.UserName, admin.Password, accountName, accountPassword = password }, cancellationToken);
+        await RunAsync(new { operation = "setPassword", vmId = target.VmId, admin.UserName, admin.Password, accountName, accountPassword = password }, cancellationToken);
     }
 
     private static async Task<JsonNode?> RunAsync(object payload, CancellationToken cancellationToken)
