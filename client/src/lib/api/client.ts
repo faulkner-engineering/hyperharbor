@@ -16,6 +16,7 @@ export interface HostEntry {
   apiVersion: string | null;
   source: "discovered" | "manual";
   isLocal: boolean;
+  paired: boolean;
 }
 
 /** Error returned by Tauri commands. Mirrors ClientError in src-tauri/src/error.rs. */
@@ -24,11 +25,20 @@ export interface ClientError {
     | "unknownHost"
     | "invalidAddress"
     | "pairingRequired"
+    | "noPendingPairing"
+    | "pairingVerificationFailed"
     | "unreachable"
     | "api"
     | "invalidResponse"
     | "storage";
   message: string;
+  /** HTTP status when code is "api". */
+  status: number | null;
+}
+
+export interface PairingStarted {
+  pairingId: string;
+  expiresAt: string;
 }
 
 export function isClientError(value: unknown): value is ClientError {
@@ -55,6 +65,16 @@ export const removeManualHost = (key: string) =>
   invoke<void>("remove_manual_host", { key });
 
 export const listVms = (key: string) => invoke<Vm[]>("list_vms", { key });
+
+export const startPairing = (key: string) =>
+  invoke<PairingStarted>("start_pairing", { key });
+
+export const completePairing = (key: string, pin: string) =>
+  invoke<HostEntry>("complete_pairing", { key, pin });
+
+export const cancelPairing = (key: string) => invoke<void>("cancel_pairing", { key });
+
+export const unpair = (key: string) => invoke<void>("unpair", { key });
 
 export const onHostsChanged = (handler: () => void): Promise<UnlistenFn> =>
   listen("hosts-changed", handler);

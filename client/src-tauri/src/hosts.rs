@@ -39,6 +39,8 @@ pub struct HostEntry {
     pub source: HostSource,
     /// True when the host runs on this machine and can be reached over loopback.
     pub is_local: bool,
+    /// True when this client has paired with the host.
+    pub paired: bool,
 }
 
 /// A manually added host as stored on disk.
@@ -109,6 +111,7 @@ impl ManualHost {
             api_version: None,
             source: HostSource::Manual,
             is_local: is_local_address(&self.address, local_host_name),
+            paired: false,
         }
     }
 }

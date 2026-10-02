@@ -5,11 +5,13 @@
     listHosts,
     listVms,
     onHostsChanged,
+    unpair,
     type HostEntry,
     type Vm,
   } from "$lib/api/client";
   import { onMount } from "svelte";
   import HostList from "$lib/components/HostList.svelte";
+  import PairingPanel from "$lib/components/PairingPanel.svelte";
   import VmList from "$lib/components/VmList.svelte";
 
   const REFRESH_INTERVAL_MS = 5000;
@@ -17,10 +19,13 @@
   let hosts = $state<HostEntry[]>([]);
   let selectedKey = $state<string | null>(null);
   let vms = $state<Vm[] | null>(null);
-  let vmError = $state<{ pairing: boolean; message: string } | null>(null);
+  let vmError = $state<string | null>(null);
   let loading = $state(false);
+  let unpairing = $state(false);
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
+  // VMs are only fetched from paired hosts; others show the pairing panel instead.
+  const pairedKey = $derived(selectedHost?.paired ? selectedHost.key : null);
 
   function selectHost(key: string | null) {
     if (key === selectedKey) return;
@@ -46,12 +51,28 @@
     } catch (error) {
       if (key !== selectedKey) return;
       vms = null;
-      vmError = {
-        pairing: isClientError(error) && error.code === "pairingRequired",
-        message: errorMessage(error),
-      };
+      vmError = errorMessage(error);
+      // The host forgot this device (for example, it was removed in the tray).
+      if (isClientError(error) && error.code === "api" && error.status === 401) {
+        vmError = "The host no longer recognizes this device. Unpair and pair again.";
+      }
     } finally {
       loading = false;
+    }
+  }
+
+  async function unpairSelected() {
+    if (selectedKey === null) return;
+    unpairing = true;
+    try {
+      await unpair(selectedKey);
+    } catch (error) {
+      // The local pairing is removed even when the host cannot be reached.
+      vmError = errorMessage(error);
+    } finally {
+      unpairing = false;
+      vms = null;
+      await refreshHosts();
     }
   }
 
@@ -63,9 +84,9 @@
     };
   });
 
-  // Poll the selected host's VM list while it is selected.
+  // Poll the selected host's VM list while it is selected and paired.
   $effect(() => {
-    const key = selectedKey;
+    const key = pairedKey;
     if (key === null) return;
 
     refreshVms(key);
@@ -92,17 +113,24 @@
             · port {selectedHost.port}
           </p>
         </div>
-        <button
-          type="button"
-          onclick={() => selectedKey && refreshVms(selectedKey)}
-          disabled={loading}>Refresh</button
-        >
+        {#if selectedHost.paired}
+          <div class="header-actions">
+            <button type="button" onclick={unpairSelected} disabled={unpairing}>Unpair</button>
+            <button
+              type="button"
+              onclick={() => pairedKey && refreshVms(pairedKey)}
+              disabled={loading}>Refresh</button
+            >
+          </div>
+        {/if}
       </header>
 
-      {#if vmError}
-        <div class={vmError.pairing ? "notice" : "notice error"} role="status">
-          {vmError.message}
-        </div>
+      {#if !selectedHost.paired}
+        {#key selectedHost.key}
+          <PairingPanel host={selectedHost} onpaired={refreshHosts} />
+        {/key}
+      {:else if vmError}
+        <div class="notice error" role="status">{vmError}</div>
       {:else if vms === null}
         <p class="placeholder">Loading…</p>
       {:else}
@@ -131,6 +159,8 @@
     --busy-fg: #0550ae;
     --notice-bg: #ddf4ff;
     --error-bg: #ffebe9;
+    --accent: #0969da;
+    --accent-fg: #ffffff;
     font-family: "Segoe UI", system-ui, sans-serif;
     font-size: 14px;
     color: var(--text);
@@ -156,6 +186,8 @@
       --busy-fg: #79c0ff;
       --notice-bg: #0c2d4b;
       --error-bg: #3c1618;
+      --accent: #1f6feb;
+      --accent-fg: #ffffff;
     }
   }
 
@@ -205,6 +237,11 @@
   .subtitle {
     margin: 0.2rem 0 0;
     color: var(--muted);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.5rem;
   }
 
   header button {

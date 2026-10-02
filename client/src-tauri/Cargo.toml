@@ -30,6 +30,11 @@ hmac = "0.13.0"
 subtle = "2.6.1"
 hex = "0.4.3"
 getrandom = "0.4.3"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+rcgen = "0.14.10"
+tokio = { version = "1.53.1", features = ["sync"] }
+keyring = { version = "3", features = ["windows-native"] }
+base64 = "0.23.1"
 
 [profile.release]
 codegen-units = 1
@@ -37,3 +42,6 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+[dev-dependencies]
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }

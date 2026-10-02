@@ -44,7 +44,13 @@ fn group() -> &'static Group {
         let q = (&p - BigUint::one()) >> 1;
         let m = hash_to_group(&p, "HyperHarbor SPAKE2 MODP-3072 M");
         let n = hash_to_group(&p, "HyperHarbor SPAKE2 MODP-3072 N");
-        Group { p, q, g: BigUint::from(2u32), m, n }
+        Group {
+            p,
+            q,
+            g: BigUint::from(2u32),
+            m,
+            n,
+        }
     })
 }
 
@@ -82,7 +88,10 @@ fn random_scalar() -> BigUint {
 /// Encodes an integer as a 384-byte unsigned big-endian value.
 pub fn encode(value: &BigUint) -> Vec<u8> {
     let raw = value.to_bytes_be();
-    assert!(raw.len() <= ELEMENT_LENGTH, "value does not fit in 384 bytes");
+    assert!(
+        raw.len() <= ELEMENT_LENGTH,
+        "value does not fit in 384 bytes"
+    );
     let mut encoded = vec![0u8; ELEMENT_LENGTH - raw.len()];
     encoded.extend_from_slice(&raw);
     encoded
@@ -96,14 +105,16 @@ fn decode_share(encoded: &[u8]) -> Option<BigUint> {
     let group = group();
     let value = BigUint::from_bytes_be(encoded);
     let p_minus_one = &group.p - BigUint::one();
-    if value <= BigUint::one() || value >= p_minus_one || !value.modpow(&group.q, &group.p).is_one() {
+    if value <= BigUint::one() || value >= p_minus_one || !value.modpow(&group.q, &group.p).is_one()
+    {
         return None;
     }
     Some(value)
 }
 
 fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
-    let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(key).expect("HMAC accepts any key length");
+    let mut mac =
+        <Hmac<Sha256> as KeyInit>::new_from_slice(key).expect("HMAC accepts any key length");
     mac.update(data);
     mac.finalize().into_bytes().into()
 }
@@ -127,7 +138,10 @@ struct TranscriptInputs<'a> {
 fn confirmations(inputs: &TranscriptInputs<'_>) -> ([u8; 32], [u8; 32]) {
     let mut transcript = Vec::new();
     append_field(&mut transcript, TRANSCRIPT_LABEL.as_bytes());
-    append_field(&mut transcript, inputs.pairing_id.to_ascii_lowercase().as_bytes());
+    append_field(
+        &mut transcript,
+        inputs.pairing_id.to_ascii_lowercase().as_bytes(),
+    );
     append_field(&mut transcript, inputs.client_certificate_hash);
     append_field(&mut transcript, inputs.host_certificate_hash);
     append_field(&mut transcript, &encode(inputs.client_share));
@@ -138,7 +152,10 @@ fn confirmations(inputs: &TranscriptInputs<'_>) -> ([u8; 32], [u8; 32]) {
     let ka = Sha256::digest(&transcript);
     let kc_a = hmac_sha256(&ka, b"client confirmation");
     let kc_b = hmac_sha256(&ka, b"host confirmation");
-    (hmac_sha256(&kc_a, &transcript), hmac_sha256(&kc_b, &transcript))
+    (
+        hmac_sha256(&kc_a, &transcript),
+        hmac_sha256(&kc_b, &transcript),
+    )
 }
 
 /// Client side of the exchange.
@@ -234,7 +251,10 @@ mod tests {
     #[test]
     fn password_scalar_matches_dotnet() {
         let v = vectors();
-        assert_eq!(upper_hex(&encode(&password_scalar(&v["pairingId"], &v["pin"]))), v["w"]);
+        assert_eq!(
+            upper_hex(&encode(&password_scalar(&v["pairingId"], &v["pin"]))),
+            v["w"]
+        );
     }
 
     #[test]
@@ -252,7 +272,10 @@ mod tests {
         .expect("valid host share");
 
         assert_eq!(upper_hex(&exchange.client_share), v["X"]);
-        assert_eq!(upper_hex(&exchange.client_confirmation), v["clientConfirmation"]);
+        assert_eq!(
+            upper_hex(&exchange.client_confirmation),
+            v["clientConfirmation"]
+        );
         assert!(exchange.verify_host_confirmation(&hex::decode(&v["hostConfirmation"]).unwrap()));
     }
 
@@ -268,20 +291,22 @@ mod tests {
         )
         .unwrap();
         assert!(!exchange.verify_host_confirmation(&hex::decode(&v["hostConfirmation"]).unwrap()));
-        assert_ne!(upper_hex(&exchange.client_confirmation), v["clientConfirmation"]);
+        assert_ne!(
+            upper_hex(&exchange.client_confirmation),
+            v["clientConfirmation"]
+        );
     }
 
     #[test]
     fn invalid_host_shares_are_rejected() {
         let p = &group().p;
-        for bad in [
-            BigUint::from(0u32),
-            BigUint::one(),
-            p - BigUint::one(),
-        ] {
+        for bad in [BigUint::from(0u32), BigUint::one(), p - BigUint::one()] {
             assert!(decode_share(&encode(&bad)).is_none());
         }
         assert!(decode_share(&[1u8; 10]).is_none());
-        assert!(ClientExchange::new("id", "123456", &[0u8; ELEMENT_LENGTH], &[0; 32], &[0; 32]).is_none());
+        assert!(
+            ClientExchange::new("id", "123456", &[0u8; ELEMENT_LENGTH], &[0; 32], &[0; 32])
+                .is_none()
+        );
     }
 }

@@ -55,7 +55,7 @@
             <span class="name">{host.displayName}</span>
             <span class="meta">
               {#if host.isLocal}This PC{:else}{host.addresses[0] ?? ""}{/if}
-              · {host.source === "discovered" ? "Discovered" : "Added"}
+              · {host.paired ? "Paired" : host.source === "discovered" ? "Discovered" : "Added"}
             </span>
           </button>
           {#if host.source === "manual"}
