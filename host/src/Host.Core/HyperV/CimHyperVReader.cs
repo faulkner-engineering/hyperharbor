@@ -12,6 +12,8 @@ public sealed class CimHyperVReader : IHyperVReader
     private const string QueryDialect = "WQL";
 
     // RequestedInformation codes for Msvm_VirtualSystemManagementService.GetSummaryInformation.
+    // Only requested fields are populated, so Name is required to match rows to virtual machines.
+    private const uint NameCode = 0;
     private const uint ProcessorLoadCode = 101;
     private const uint MemoryUsageCode = 103;
 
@@ -120,7 +122,7 @@ public sealed class CimHyperVReader : IHyperVReader
             var parameters = new CimMethodParametersCollection
             {
                 CimMethodParameter.Create("SettingData", settingInstances.ToArray(), CimType.ReferenceArray, CimFlags.In),
-                CimMethodParameter.Create("RequestedInformation", new[] { ProcessorLoadCode, MemoryUsageCode }, CimType.UInt32Array, CimFlags.In),
+                CimMethodParameter.Create("RequestedInformation", new[] { NameCode, ProcessorLoadCode, MemoryUsageCode }, CimType.UInt32Array, CimFlags.In),
             };
 
             using var result = session.InvokeMethod(Namespace, service, "GetSummaryInformation", parameters);
