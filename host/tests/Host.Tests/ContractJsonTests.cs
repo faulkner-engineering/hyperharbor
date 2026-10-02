@@ -61,7 +61,9 @@ public class ContractJsonTests
               "memoryAssignedMb": 8192,
               "generation": 2,
               "rdpAvailable": true,
-              "ipAddresses": ["192.168.1.50"]
+              "ipAddresses": ["192.168.1.50"],
+              "provisioned": true,
+              "remoteDesktop": { "address": "192.168.1.50", "reachableFromHost": true }
             }
             """;
 
@@ -70,6 +72,28 @@ public class ContractJsonTests
 
         Assert.Equal(VmState.Running, vm.State);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(example), roundTrip));
+    }
+
+    [Fact]
+    public void ProvisionVmRequest_DefaultsEnableRemoteDesktop_AndHidesPasswordInToString()
+    {
+        var request = JsonSerializer.Deserialize<ProvisionVmRequest>(
+            """{"adminUserName":"Administrator","adminPassword":"S3cret!"}""",
+            ContractJson.Options)!;
+
+        Assert.True(request.EnableRemoteDesktop);
+        Assert.DoesNotContain("S3cret!", request.ToString());
+        Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize<ProvisionVmRequest>("""{"adminUserName":"Administrator"}""", ContractJson.Options));
+    }
+
+    [Fact]
+    public void VmConnection_HidesPasswordInToString()
+    {
+        var connection = new VmConnection(@".\hh-owner", "Rotated-Pass1!", "192.168.1.50", 3389, DateTimeOffset.UtcNow);
+
+        Assert.DoesNotContain("Rotated-Pass1!", connection.ToString());
+        Assert.Equal(".\\hh-owner", (string?)JsonSerializer.SerializeToNode(connection, ContractJson.Options)!["userName"]);
     }
 
     [Fact]

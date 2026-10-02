@@ -85,6 +85,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/provision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create the calling User's local account in a VM.
+         * @description One-time setup for one-click Remote Desktop. Uses PowerShell Direct with the given
+         *     guest administrator credential to create (or reuse) the User's local account, for
+         *     example `hh-owner`, add it to Remote Desktop Users, and optionally enable Remote
+         *     Desktop. The VM is marked provisioned only after the account is verified. Requires a
+         *     running Windows guest (Windows 10 / Server 2016 or later).
+         */
+        post: operations["provisionVm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Remote Desktop credentials for the calling User's account.
+         * @description Rotates the User's account password in the guest through PowerShell Direct and
+         *     returns it. Rotations are serialized per VM and User; requests within the reuse
+         *     window (60 seconds by default) receive the same password. The response is sent
+         *     with `Cache-Control: no-store`.
+         */
+        post: operations["connectVm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pairing/requests": {
         parameters: {
             query?: never;
@@ -297,7 +350,12 @@ export interface components {
          *       "rdpAvailable": true,
          *       "ipAddresses": [
          *         "192.168.1.50"
-         *       ]
+         *       ],
+         *       "provisioned": true,
+         *       "remoteDesktop": {
+         *         "address": "192.168.1.50",
+         *         "reachableFromHost": true
+         *       }
          *     }
          */
         Vm: {
@@ -315,9 +373,60 @@ export interface components {
             memoryAssignedMb?: number | null;
             /** @enum {integer} */
             generation: 1 | 2;
-            /** @description True when the guest reports an address reachable for RDP. */
+            /**
+             * @description True when the VM accepted a TCP connection on port 3389 from the host. A VM on an
+             *     internal or NAT switch can be available to the host but unreachable from other devices.
+             */
             rdpAvailable: boolean;
             ipAddresses: string[];
+            /**
+             * @description True when the calling device's User has a verified local account on this VM, so
+             *     `POST /vms/{vmId}/connect` can be used.
+             */
+            provisioned: boolean;
+            remoteDesktop: components["schemas"]["VmRemoteDesktop"];
+        };
+        VmRemoteDesktop: {
+            /** @description The guest address clients connect to, or null when the guest reports none. */
+            address: string | null;
+            /** @description Same as Vm.rdpAvailable. */
+            reachableFromHost: boolean;
+        };
+        ProvisionVmRequest: {
+            /** @description A local administrator in the guest, for example "Administrator" or ".\\admin". */
+            adminUserName: string;
+            /** @description Stored on the host with DPAPI for later password rotation. Never logged. */
+            adminPassword: string;
+            /**
+             * @description Also enable Remote Desktop and its firewall rule in the guest.
+             * @default true
+             */
+            enableRemoteDesktop: boolean;
+        };
+        VmProvisioning: {
+            /** Format: uuid */
+            vmId: string;
+            /** @description The User's local account in the guest, for example hh-owner. */
+            accountName: string;
+            /** Format: date-time */
+            provisionedAt: string;
+        };
+        VmConnection: {
+            /** @description Account to sign in with, for example ".\\hh-owner". */
+            userName: string;
+            /**
+             * @description Current password for the account. Valid until the next rotation; requests within
+             *     the reuse window receive the same password. Clients must not persist it.
+             */
+            password: string;
+            address: string;
+            /** @default 3389 */
+            port: number;
+            /**
+             * Format: date-time
+             * @description End of the reuse window. The password stays valid until the next connect after it.
+             */
+            expiresAt: string;
         };
         VmActionRequest: {
             action: components["schemas"]["VmAction"];
@@ -498,6 +607,24 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /** @description A PowerShell Direct operation in the guest failed. */
+        GuestOperationFailed: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description The guest is not ready for PowerShell Direct (still starting, or integration services are off). */
+        GuestUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
         /** @description Hyper-V is not enabled or the host service cannot access it. */
         HyperVUnavailable: {
             headers: {
@@ -634,6 +761,93 @@ export interface operations {
             409: components["responses"]["Conflict"];
             502: components["responses"]["HyperVOperationFailed"];
             503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    provisionVm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProvisionVmRequest"];
+            };
+        };
+        responses: {
+            /** @description The account exists and was verified. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmProvisioning"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The VM is not running, is not a Windows guest, or an existing account with the same name is not a local account. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The guest rejected the administrator credential. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+            503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    connectVm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credentials for Remote Desktop. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmConnection"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The VM is not provisioned for this User, is not running, or has no address. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+            503: components["responses"]["GuestUnavailable"];
         };
     };
     createPairingRequest: {
