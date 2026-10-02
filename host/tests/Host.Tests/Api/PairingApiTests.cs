@@ -46,6 +46,7 @@ public sealed class PairingApiTests : IDisposable
         var result = await PairAsync(client, pinOverride: null);
 
         Assert.Equal(_host.Services.GetRequiredService<HostCertificateStore>().GetOrCreate().ExportCertificatePem(), result.HostCertificatePem);
+        Assert.Equal(_host.Services.GetRequiredService<Core.Users.UserStore>().GetOrCreateDefault().UserId, result.UserId);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/vms")).StatusCode);
 
         var info = await client.GetFromJsonAsync<JsonObject>("/api/v1/host");

@@ -1,10 +1,12 @@
 using System.Text.Json;
+using HyperHarbor.Host.Core.Users;
 
 namespace HyperHarbor.Host.Core.Security;
 
-/// <summary>A client device allowed to call the API with mTLS.</summary>
+/// <summary>A client device allowed to call the API with mTLS. Every device belongs to a User.</summary>
+/// <param name="UserId">The User the device acts for. Guid.Empty only in files written before Users existed.</param>
 /// <param name="CertificateFingerprint">SHA-256 of the client certificate DER, uppercase hex.</param>
-public sealed record PairedDevice(Guid DeviceId, string Name, string CertificateFingerprint, DateTimeOffset PairedAt);
+public sealed record PairedDevice(Guid DeviceId, Guid UserId, string Name, string CertificateFingerprint, DateTimeOffset PairedAt);
 
 /// <summary>
 /// Persists paired devices. Any change grants or revokes API access, so the file is written
@@ -16,13 +18,16 @@ public sealed class PairedDeviceStore
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     private readonly string _path;
+    private readonly UserStore _users;
     private readonly object _gate = new();
     private List<PairedDevice>? _devices;
 
-    public PairedDeviceStore(string dataDirectory)
+    public PairedDeviceStore(string dataDirectory, UserStore users)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
+        ArgumentNullException.ThrowIfNull(users);
         _path = Path.Combine(dataDirectory, FileName);
+        _users = users;
     }
 
     /// <summary>Raised after a device is added or removed.</summary>
@@ -46,15 +51,20 @@ public sealed class PairedDeviceStore
     }
 
     /// <summary>Adds a device. A device re-pairing with the same certificate replaces its old entry.</summary>
-    public PairedDevice Add(string name, string fingerprint, DateTimeOffset pairedAt)
+    public PairedDevice Add(Guid userId, string name, string fingerprint, DateTimeOffset pairedAt)
     {
+        if (userId == Guid.Empty)
+        {
+            throw new ArgumentException("A device must belong to a User.", nameof(userId));
+        }
+
         PairedDevice device;
         lock (_gate)
         {
             var devices = Devices();
             devices.RemoveAll(existing =>
                 string.Equals(existing.CertificateFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase));
-            device = new PairedDevice(Guid.NewGuid(), name, fingerprint.ToUpperInvariant(), pairedAt);
+            device = new PairedDevice(Guid.NewGuid(), userId, name, fingerprint.ToUpperInvariant(), pairedAt);
             devices.Add(device);
             Save(devices);
         }
@@ -88,9 +98,33 @@ public sealed class PairedDeviceStore
                 ? JsonSerializer.Deserialize<List<PairedDevice>>(File.ReadAllText(_path), JsonOptions)
                     ?? throw new InvalidDataException($"The paired device file '{_path}' is invalid.")
                 : [];
+            MigrateLegacyDevices(_devices);
         }
 
         return _devices;
+    }
+
+    /// <summary>
+    /// Devices paired before Users existed have no UserId. They are assigned to the default User once,
+    /// so existing clients keep working without pairing again.
+    /// </summary>
+    private void MigrateLegacyDevices(List<PairedDevice> devices)
+    {
+        if (!devices.Any(device => device.UserId == Guid.Empty))
+        {
+            return;
+        }
+
+        var defaultUser = _users.GetOrCreateDefault().UserId;
+        for (var i = 0; i < devices.Count; i++)
+        {
+            if (devices[i].UserId == Guid.Empty)
+            {
+                devices[i] = devices[i] with { UserId = defaultUser };
+            }
+        }
+
+        Save(devices);
     }
 
     private void Save(List<PairedDevice> devices)

@@ -592,11 +592,17 @@ components:
 
     PairingResult:
       type: object
-      required: [deviceId, hostId, hostCertificatePem, hostConfirmation]
+      required: [deviceId, userId, hostId, hostCertificatePem, hostConfirmation]
       properties:
         deviceId:
           type: string
           format: uuid
+        userId:
+          type: string
+          format: uuid
+          description: |
+            The User the new device belongs to. A User owns many devices and has one local
+            account on each provisioned VM.
         hostId:
           type: string
           format: uuid

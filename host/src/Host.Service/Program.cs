@@ -4,6 +4,7 @@ using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
@@ -49,7 +50,10 @@ var dataDirectory = builder.Configuration["DataDirectory"] is { Length: > 0 } co
     : HostIdentityStore.DefaultDataDirectory;
 builder.Services.AddSingleton(new HostIdentityStore(dataDirectory));
 builder.Services.AddSingleton(new HostCertificateStore(dataDirectory, Environment.MachineName));
-builder.Services.AddSingleton(new PairedDeviceStore(dataDirectory));
+var users = new UserStore(dataDirectory);
+users.GetOrCreateDefault();
+builder.Services.AddSingleton(users);
+builder.Services.AddSingleton(new PairedDeviceStore(dataDirectory, users));
 
 builder.Services.AddOptions<DiscoveryOptions>().Bind(builder.Configuration.GetSection(DiscoveryOptions.SectionName));
 builder.Services.AddSingleton<IServiceAdvertiser, WindowsDnsServiceAdvertiser>();

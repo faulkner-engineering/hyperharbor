@@ -369,6 +369,12 @@ export interface components {
         PairingResult: {
             /** Format: uuid */
             deviceId: string;
+            /**
+             * Format: uuid
+             * @description The User the new device belongs to. A User owns many devices and has one local
+             *     account on each provisioned VM.
+             */
+            userId: string;
             /** Format: uuid */
             hostId: string;
             /** @description PEM-encoded host certificate to pin. */

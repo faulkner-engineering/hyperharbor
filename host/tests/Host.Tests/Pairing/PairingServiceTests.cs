@@ -2,6 +2,7 @@ using System.Security.Cryptography.X509Certificates;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Shared.Contracts.Pairing;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -16,16 +17,19 @@ public sealed class PairingServiceTests : IDisposable
     private readonly X509Certificate2 _clientCertificate = TestHost.CreateClientCertificate();
     private readonly HostCertificateStore _hostCertificate;
     private readonly PairedDeviceStore _devices;
+    private readonly UserStore _users;
     private readonly PairingService _service;
 
     public PairingServiceTests()
     {
         _hostCertificate = new HostCertificateStore(_directory, "TEST-HOST");
-        _devices = new PairedDeviceStore(_directory);
+        _users = new UserStore(_directory);
+        _devices = new PairedDeviceStore(_directory, _users);
         _service = new PairingService(
             _hostCertificate,
             _devices,
             new HostIdentityStore(_directory),
+            _users,
             _tray,
             _time,
             NullLogger<PairingService>.Instance);
@@ -60,6 +64,8 @@ public sealed class PairingServiceTests : IDisposable
 
         var device = Assert.Single(_devices.List());
         Assert.Equal(result.DeviceId, device.DeviceId);
+        Assert.Equal(_users.GetOrCreateDefault().UserId, device.UserId);
+        Assert.Equal(device.UserId, result.UserId);
         Assert.Equal("Laptop", device.Name);
         Assert.Equal(CertificateFingerprint.Of(_clientCertificate), device.CertificateFingerprint);
         Assert.Equal([PairingOutcome.Paired], _tray.Outcomes);

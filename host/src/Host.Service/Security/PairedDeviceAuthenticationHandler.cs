@@ -15,6 +15,7 @@ public sealed class PairedDeviceAuthenticationHandler : AuthenticationHandler<Au
 {
     public const string SchemeName = "PairedDevice";
     public const string DeviceIdClaim = "hyperharbor:device_id";
+    public const string UserIdClaim = "hyperharbor:user_id";
 
     private readonly PairedDeviceStore _devices;
 
@@ -45,6 +46,7 @@ public sealed class PairedDeviceAuthenticationHandler : AuthenticationHandler<Au
         var identity = new ClaimsIdentity(
             [
                 new Claim(DeviceIdClaim, device.DeviceId.ToString("D")),
+                new Claim(UserIdClaim, device.UserId.ToString("D")),
                 new Claim(ClaimTypes.Name, device.Name),
             ],
             SchemeName);

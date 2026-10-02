@@ -2,6 +2,7 @@ using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Users;
 
 namespace HyperHarbor.Host.Tests.Security;
 
@@ -60,29 +61,99 @@ public sealed class SecurityStoreTests : IDisposable
     [Fact]
     public void PairedDevices_PersistAndRemove()
     {
-        var store = new PairedDeviceStore(_directory);
+        var store = new PairedDeviceStore(_directory, Users());
+        var userId = Users().GetOrCreateDefault().UserId;
         var changes = 0;
         store.Changed += (_, _) => changes++;
 
-        var device = store.Add("Laptop", "abc123", DateTimeOffset.UtcNow);
-        var reloaded = new PairedDeviceStore(_directory);
+        var device = store.Add(userId, "Laptop", "abc123", DateTimeOffset.UtcNow);
+        var reloaded = new PairedDeviceStore(_directory, Users());
 
         Assert.Equal(device, reloaded.FindByFingerprint("ABC123"));
+        Assert.Equal(userId, device.UserId);
         Assert.True(reloaded.Remove(device.DeviceId));
         Assert.False(reloaded.Remove(device.DeviceId));
-        Assert.Empty(new PairedDeviceStore(_directory).List());
+        Assert.Empty(new PairedDeviceStore(_directory, Users()).List());
         Assert.Equal(1, changes);
     }
 
     [Fact]
     public void PairedDevices_RepairingSameCertificate_ReplacesEntry()
     {
-        var store = new PairedDeviceStore(_directory);
-        var first = store.Add("Old name", "ABC", DateTimeOffset.UtcNow);
+        var store = new PairedDeviceStore(_directory, Users());
+        var userId = Users().GetOrCreateDefault().UserId;
+        var first = store.Add(userId, "Old name", "ABC", DateTimeOffset.UtcNow);
 
-        var second = store.Add("New name", "abc", DateTimeOffset.UtcNow);
+        var second = store.Add(userId, "New name", "abc", DateTimeOffset.UtcNow);
 
         Assert.NotEqual(first.DeviceId, second.DeviceId);
         Assert.Equal("New name", Assert.Single(store.List()).Name);
     }
+
+    [Fact]
+    public void PairedDevices_RequireAUser()
+    {
+        var store = new PairedDeviceStore(_directory, Users());
+
+        Assert.Throws<ArgumentException>(() => store.Add(Guid.Empty, "Laptop", "ABC", DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void PairedDevices_LegacyRecordsWithoutUser_AreAssignedToDefaultUserAndRewritten()
+    {
+        // The format written before Users existed (Phase 5 and 6).
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(Path.Combine(_directory, "paired-devices.json"), """
+            [
+              {
+                "DeviceId": "33481bb5-915b-4851-8cbe-1f9810d304a5",
+                "Name": "DESKTOP-65QRD0H",
+                "CertificateFingerprint": "A13F9360FF3C4BF44D2234E36C7326512CBFF19C50539B0CB37B166D53BF2C5A",
+                "PairedAt": "2026-10-02T13:31:18.8910841+00:00"
+              }
+            ]
+            """);
+
+        var device = new PairedDeviceStore(_directory, Users())
+            .FindByFingerprint("A13F9360FF3C4BF44D2234E36C7326512CBFF19C50539B0CB37B166D53BF2C5A");
+
+        var defaultUser = Users().GetOrCreateDefault();
+        Assert.NotNull(device);
+        Assert.Equal(defaultUser.UserId, device.UserId);
+        Assert.Contains(defaultUser.UserId.ToString(), File.ReadAllText(Path.Combine(_directory, "paired-devices.json")));
+    }
+
+    [Fact]
+    public void Users_DefaultUserIsCreatedOnceAndPersisted()
+    {
+        var first = Users().GetOrCreateDefault();
+        var second = Users().GetOrCreateDefault();
+
+        Assert.Equal(first, second);
+        Assert.Equal("owner", first.Name);
+        Assert.Equal("hh-owner", first.VmAccountName);
+        Assert.Single(Users().List());
+    }
+
+    [Theory]
+    [InlineData("owner", "hh-owner")]
+    [InlineData("Tyler Faulkner", "hh-tylerfaulkner")]
+    [InlineData("very-long-user-name-here", "hh-very-long-user-na")]
+    [InlineData("name-", "hh-name")]
+    [InlineData("a.b_c!", "hh-abc")]
+    public void VmAccountName_IsSanitizedAndLimitedTo20Characters(string userName, string expected)
+    {
+        var name = VmAccountName.For(userName);
+
+        Assert.Equal(expected, name);
+        Assert.InRange(name.Length, 4, VmAccountName.MaxLength);
+    }
+
+    [Fact]
+    public void VmAccountName_RejectsNamesWithNoValidCharacters()
+    {
+        Assert.Throws<ArgumentException>(() => VmAccountName.For("!!!"));
+    }
+
+    private UserStore Users() => new(_directory);
 }

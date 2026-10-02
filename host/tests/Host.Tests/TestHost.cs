@@ -5,6 +5,7 @@ using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Shared.Contracts.Ipc;
@@ -75,7 +76,11 @@ internal sealed class TestHost : IDisposable
 
     /// <summary>Adds <paramref name="certificate"/> to the paired device store directly.</summary>
     public PairedDevice Pair(X509Certificate2 certificate, string name = "Test Device") =>
-        Services.GetRequiredService<PairedDeviceStore>().Add(name, CertificateFingerprint.Of(certificate), DateTimeOffset.UtcNow);
+        Services.GetRequiredService<PairedDeviceStore>().Add(
+            Services.GetRequiredService<UserStore>().GetOrCreateDefault().UserId,
+            name,
+            CertificateFingerprint.Of(certificate),
+            DateTimeOffset.UtcNow);
 
     public void Dispose()
     {

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Shared.Contracts.Pairing;
 using Microsoft.Extensions.Logging;
 
@@ -21,6 +22,7 @@ public sealed class PairingService : IDisposable
     private readonly HostCertificateStore _hostCertificate;
     private readonly PairedDeviceStore _devices;
     private readonly HostIdentityStore _identity;
+    private readonly UserStore _users;
     private readonly IPairingNotifier _notifier;
     private readonly TimeProvider _time;
     private readonly ILogger<PairingService> _logger;
@@ -34,6 +36,7 @@ public sealed class PairingService : IDisposable
         HostCertificateStore hostCertificate,
         PairedDeviceStore devices,
         HostIdentityStore identity,
+        UserStore users,
         IPairingNotifier notifier,
         TimeProvider time,
         ILogger<PairingService> logger)
@@ -41,6 +44,7 @@ public sealed class PairingService : IDisposable
         _hostCertificate = hostCertificate;
         _devices = devices;
         _identity = identity;
+        _users = users;
         _notifier = notifier;
         _time = time;
         _logger = logger;
@@ -152,7 +156,12 @@ public sealed class PairingService : IDisposable
                     $"The PIN is incorrect. {MaxAttempts - pending.Attempts} attempt(s) remaining.");
             }
 
-            device = _devices.Add(pending.DeviceName, Convert.ToHexString(pending.ClientCertificateHash), _time.GetUtcNow());
+            // The MVP has one User; pairing always creates the device under the default User.
+            device = _devices.Add(
+                _users.GetOrCreateDefault().UserId,
+                pending.DeviceName,
+                Convert.ToHexString(pending.ClientCertificateHash),
+                _time.GetUtcNow());
             hostConfirmation = expected.Host;
             EndPending(PairingOutcome.Paired);
         }
@@ -160,6 +169,7 @@ public sealed class PairingService : IDisposable
         _logger.LogInformation("Paired device {DeviceName} ({DeviceId}).", device.Name, device.DeviceId);
         return new PairingResult(
             device.DeviceId,
+            device.UserId,
             _identity.GetOrCreateHostId(),
             _hostCertificate.GetOrCreate().ExportCertificatePem(),
             hostConfirmation);
