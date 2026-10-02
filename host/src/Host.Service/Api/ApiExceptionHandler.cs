@@ -1,4 +1,5 @@
 using HyperHarbor.Host.Core.HyperV;
+using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
 using Microsoft.AspNetCore.Diagnostics;
 
@@ -27,6 +28,16 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             VmActionNotAllowedException => (StatusCodes.Status409Conflict, "Action not allowed"),
             HyperVUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Hyper-V unavailable"),
             HyperVOperationException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
+            PairingException pairing => pairing.Error switch
+            {
+                PairingError.InvalidRequest => (StatusCodes.Status400BadRequest, "Invalid pairing request"),
+                PairingError.NoDisplay => (StatusCodes.Status503ServiceUnavailable, "Tray app not running"),
+                PairingError.RequestPending => (StatusCodes.Status429TooManyRequests, "Pairing in progress"),
+                PairingError.NotFound => (StatusCodes.Status404NotFound, "Pairing request not found"),
+                PairingError.Gone => (StatusCodes.Status410Gone, "Pairing request ended"),
+                PairingError.ConfirmationMismatch => (StatusCodes.Status401Unauthorized, "Incorrect PIN"),
+                _ => (StatusCodes.Status500InternalServerError, "Pairing failed"),
+            },
             _ => (0, string.Empty),
         };
 

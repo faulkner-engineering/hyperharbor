@@ -1,10 +1,18 @@
+using System.Security.Authentication;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Identity;
+using HyperHarbor.Host.Core.Pairing;
+using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
 using HyperHarbor.Host.Service.Discovery;
+using HyperHarbor.Host.Service.Security;
+using HyperHarbor.Host.Service.Tray;
 using HyperHarbor.Shared.Contracts;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,22 +34,57 @@ builder.Services.AddWindowsService(options =>
 });
 builder.Services.AddHostedService<VmInventoryStartupLogger>();
 
-builder.Services.AddSingleton(new HostIdentityStore(
-    builder.Configuration["DataDirectory"] is { Length: > 0 } dataDirectory ? dataDirectory : HostIdentityStore.DefaultDataDirectory));
+// Identity, certificate, and paired devices live under %ProgramData%\HyperHarbor unless DataDirectory is set.
+var dataDirectory = builder.Configuration["DataDirectory"] is { Length: > 0 } configured
+    ? configured
+    : HostIdentityStore.DefaultDataDirectory;
+builder.Services.AddSingleton(new HostIdentityStore(dataDirectory));
+builder.Services.AddSingleton(new HostCertificateStore(dataDirectory, Environment.MachineName));
+builder.Services.AddSingleton(new PairedDeviceStore(dataDirectory));
+
 builder.Services.AddOptions<DiscoveryOptions>().Bind(builder.Configuration.GetSection(DiscoveryOptions.SectionName));
 builder.Services.AddSingleton<IServiceAdvertiser, WindowsDnsServiceAdvertiser>();
 builder.Services.AddHostedService<DiscoveryAdvertisementService>();
+
+// The tray pipe server shows pairing PINs, so it is also the pairing notifier.
+builder.Services.AddSingleton<TrayPipeServer>();
+builder.Services.AddSingleton<IPairingNotifier>(services => services.GetRequiredService<TrayPipeServer>());
+builder.Services.AddHostedService(services => services.GetRequiredService<TrayPipeServer>());
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<PairingService>();
 
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// Loopback only. Binding to other interfaces must wait for mTLS (see CLAUDE.md).
+// All interfaces, HTTPS only. Every endpoint except pairing requires a paired client certificate,
+// which satisfies the CLAUDE.md rule against binding without mTLS.
 builder.WebHost.ConfigureKestrel((context, kestrel) =>
 {
     var api = kestrel.ApplicationServices.GetRequiredService<IOptions<ApiOptions>>().Value;
-    kestrel.ListenLocalhost(api.Port);
+    var certificate = kestrel.ApplicationServices.GetRequiredService<HostCertificateStore>().GetOrCreate();
+
+    kestrel.ListenAnyIP(api.Port, listen => listen.UseHttps(https =>
+    {
+        https.ServerCertificate = certificate;
+        https.SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13;
+
+        // Request a certificate but let unpaired clients connect so they can pair. Client
+        // certificates are self-signed; PairedDeviceAuthenticationHandler checks the pinned fingerprint.
+        https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
+        https.AllowAnyClientCertificate();
+    }));
+});
+
+builder.Services
+    .AddAuthentication(PairedDeviceAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, PairedDeviceAuthenticationHandler>(PairedDeviceAuthenticationHandler.SchemeName, null);
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder(PairedDeviceAuthenticationHandler.SchemeName)
+        .RequireAuthenticatedUser()
+        .Build();
 });
 
 builder.Services.ConfigureHttpJsonOptions(options => ContractJson.Configure(options.SerializerOptions));
@@ -52,7 +95,12 @@ await using var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapHostEndpoints();
 app.MapVmEndpoints();
+app.MapPairingEndpoints();
 
 await app.RunAsync();
 return 0;

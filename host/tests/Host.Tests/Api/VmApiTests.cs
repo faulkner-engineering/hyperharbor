@@ -2,13 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
-using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Shared.Contracts.Vms;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace HyperHarbor.Host.Tests.Api;
 
@@ -16,28 +12,24 @@ public sealed class VmApiTests : IDisposable
 {
     private static readonly Guid VmId = Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b");
 
-    private readonly FakeVmInventory _inventory = new();
+    private readonly TestHost _host = new();
+    private readonly FakeVmInventory _inventory;
     private readonly FakePowerInvoker _invoker;
-    private readonly WebApplicationFactory<Program> _factory;
     private readonly HttpClient _client;
 
     public VmApiTests()
     {
-        _invoker = new FakePowerInvoker(_inventory);
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
-            .UseSetting("Discovery:Enabled", "false")
-            .ConfigureTestServices(services =>
-            {
-                services.AddSingleton<IVmInventory>(_inventory);
-                services.AddSingleton<IHyperVPowerInvoker>(_invoker);
-            }));
-        _client = _factory.CreateClient();
+        _inventory = _host.Inventory;
+        _invoker = _host.Invoker;
+        using var certificate = TestHost.CreateClientCertificate();
+        _host.Pair(certificate);
+        _client = _host.CreateClient(certificate);
     }
 
     public void Dispose()
     {
         _client.Dispose();
-        _factory.Dispose();
+        _host.Dispose();
     }
 
     [Fact]

@@ -1,4 +1,3 @@
-using System.Reflection;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Service.Api;
@@ -47,7 +46,7 @@ public sealed class DiscoveryAdvertisementService : IHostedService
             (ushort)_apiOptions.Value.Port,
             _identity.GetOrCreateHostId(),
             ContractInfo.ApiVersion,
-            HostVersion);
+            HostEndpoints.HostVersion);
 
         try
         {
@@ -67,9 +66,4 @@ public sealed class DiscoveryAdvertisementService : IHostedService
             _registration = null;
         }
     }
-
-    private static string HostVersion =>
-        typeof(DiscoveryAdvertisementService).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
-        ?? "0.0.0";
 }

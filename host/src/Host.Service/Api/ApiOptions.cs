@@ -10,7 +10,7 @@ public sealed class ApiOptions
     public const string SectionName = "Api";
 
     /// <summary>
-    /// TCP port for the API. The listener is bound to the loopback interface only until mTLS is in place.
+    /// TCP port for the HTTPS API, bound on all interfaces.
     /// </summary>
     [Range(1024, 65535)]
     public int Port { get; set; } = 48443;
