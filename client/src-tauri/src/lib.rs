@@ -142,10 +142,14 @@ async fn complete_pairing(
     }
 }
 
+/// Forgets the pending exchange locally and asks the host to end the request.
 #[tauri::command]
 async fn cancel_pairing(state: State<'_, AppState>, key: String) -> Result<(), ClientError> {
-    state.pending.lock().await.remove(&key);
-    Ok(())
+    let pending = state.pending.lock().await.remove(&key);
+    match pending {
+        Some(pending) => state.api.cancel_pairing(&pending).await,
+        None => Ok(()),
+    }
 }
 
 /// Removes the pairing on the host when reachable, and always forgets it locally.

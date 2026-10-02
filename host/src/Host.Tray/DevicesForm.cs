@@ -18,6 +18,7 @@ internal sealed class DevicesForm : Form
 
         Text = "HyperHarbor paired devices";
         StartPosition = FormStartPosition.CenterScreen;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
         ClientSize = new Size(560, 320);
         MinimumSize = new Size(420, 240);

@@ -64,7 +64,13 @@ public sealed class PairingService : IDisposable
             ExpireIfDue();
             if (_pending is not null)
             {
-                throw new PairingException(PairingError.RequestPending, "Another pairing request is in progress. Try again when it finishes.");
+                // The same client retrying (for example after a restart) replaces its own request.
+                if (!CryptographicOperations.FixedTimeEquals(_pending.ClientCertificateHash, clientCertificateHash))
+                {
+                    throw new PairingException(PairingError.RequestPending, "Another device is pairing with this host. Try again when it finishes.");
+                }
+
+                EndPending(PairingOutcome.Cancelled);
             }
 
             var pairingId = Guid.NewGuid();
@@ -168,6 +174,22 @@ public sealed class PairingService : IDisposable
             {
                 EndPending(PairingOutcome.Cancelled);
             }
+        }
+    }
+
+    /// <summary>Cancels a specific pending request on behalf of the client that created it.</summary>
+    /// <exception cref="PairingException">No pending request has this ID.</exception>
+    public void Cancel(Guid pairingId)
+    {
+        lock (_gate)
+        {
+            ExpireIfDue();
+            if (_pending?.PairingId != pairingId)
+            {
+                throw new PairingException(PairingError.NotFound, "No pending pairing request has this ID.");
+            }
+
+            EndPending(PairingOutcome.Cancelled);
         }
     }
 

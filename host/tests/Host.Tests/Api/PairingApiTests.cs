@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
+using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Pairing;
@@ -77,14 +78,58 @@ public sealed class PairingApiTests : IDisposable
     }
 
     [Fact]
-    public async Task SecondRequestWhilePending_Returns429()
+    public async Task RequestFromAnotherDeviceWhilePending_Returns429()
+    {
+        using var client = _host.CreateClient();
+        await CreateAsync(client);
+        using var other = TestHost.CreateClientCertificate("Other");
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/pairing/requests",
+            new PairingRequest("Other", other.ExportCertificatePem()));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RequestFromSameDeviceWhilePending_ReplacesIt()
+    {
+        using var client = _host.CreateClient();
+        var first = await CreateAsync(client);
+
+        var second = await CreateAsync(client);
+
+        Assert.NotEqual(first.PairingId, second.PairingId);
+        Assert.Equal([PairingOutcome.Cancelled], _host.Tray.Outcomes);
+        var stale = TestPairingClient.Compute(first.PairingId, _host.Tray.Pin!, first.HostShare, _clientCertificate, HostCertificateDer());
+        Assert.Equal(HttpStatusCode.Gone, (await ConfirmAsync(client, first.PairingId, stale.Confirmation)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Cancel_EndsRequest_AndFreesHostForOtherDevices()
+    {
+        using var client = _host.CreateClient();
+        var created = await CreateAsync(client);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/v1/pairing/requests/{created.PairingId}")).StatusCode);
+        Assert.Equal([PairingOutcome.Cancelled], _host.Tray.Outcomes);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/v1/pairing/requests/{created.PairingId}")).StatusCode);
+
+        using var other = TestHost.CreateClientCertificate("Other");
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/pairing/requests",
+            new PairingRequest("Other", other.ExportCertificatePem()));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cancel_UnknownId_Returns404()
     {
         using var client = _host.CreateClient();
         await CreateAsync(client);
 
-        var response = await client.PostAsJsonAsync("/api/v1/pairing/requests", Request());
-
-        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/v1/pairing/requests/{Guid.NewGuid()}")).StatusCode);
+        Assert.Empty(_host.Tray.Outcomes);
     }
 
     [Fact]

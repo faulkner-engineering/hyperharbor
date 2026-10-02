@@ -53,6 +53,13 @@ if (-not $version) {
 
 New-Item -ItemType Directory -Force $dist | Out-Null
 
+# Files in dist/ cannot be replaced while running. Check now rather than after a long build.
+$running = Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($dist, [StringComparison]::OrdinalIgnoreCase) }
+if ($running) {
+    $names = ($running | ForEach-Object { Split-Path -Leaf $_.Path } | Sort-Object -Unique) -join ', '
+    throw "Close these programs running from dist\ first: $names"
+}
+
 if (-not $SkipTests) {
     if (-not $ClientOnly) {
         Invoke-Step 'Host tests' { dotnet test (Join-Path $repo 'HyperHarbor.sln') -c Release }

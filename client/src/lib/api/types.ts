@@ -102,6 +102,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pairing/requests/{pairingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pairingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel a pending pairing request.
+         * @description Ends the request and closes the PIN window on the host. The pairing ID is only
+         *     known to the client that created the request.
+         */
+        delete: operations["cancelPairingRequest"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pairing/requests/{pairingId}/confirm": {
         parameters: {
             query?: never;
@@ -633,6 +656,27 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+        };
+    };
+    cancelPairingRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pairingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request was cancelled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     confirmPairing: {

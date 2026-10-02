@@ -28,8 +28,10 @@ the presented certificate matches the pinned one.
    then pins it.
 
 A request expires 120 seconds after creation or after 5 failed confirmations. Only one
-request can be pending at a time. The host rejects pairing while no tray app is connected,
-because the user could not see the PIN.
+request can be pending at a time; a new request with the same client certificate replaces
+it, and the client can cancel with `DELETE /pairing/requests/{pairingId}`. Every request
+gets a new PIN, so replacing a request gives no extra guesses against an earlier PIN. The
+host rejects pairing while no tray app is connected, because the user could not see the PIN.
 
 ## Group
 

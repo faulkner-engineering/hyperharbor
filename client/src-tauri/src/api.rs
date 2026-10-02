@@ -133,6 +133,25 @@ impl ApiClient {
         Err(unreachable(last_error))
     }
 
+    /// Ends a pending request on the host so its PIN window closes and other devices can pair.
+    /// A request the host no longer knows about (404) is already gone, which is the goal.
+    pub async fn cancel_pairing(&self, pending: &PendingPairing) -> Result<(), ClientError> {
+        let response = pending
+            .http
+            .delete(format!(
+                "{}{API_BASE_PATH}/pairing/requests/{}",
+                pending.base_url, pending.pairing_id
+            ))
+            .send()
+            .await
+            .map_err(|e| unreachable(Some(e)))?;
+
+        match check(response).await {
+            Ok(_) | Err(ClientError::Api { status: 404, .. }) => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+
     /// Step 2: proves knowledge of the PIN, verifies the host, and returns the pairing to store.
     pub async fn complete_pairing(
         &self,

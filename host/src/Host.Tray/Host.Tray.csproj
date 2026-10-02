@@ -4,6 +4,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <RootNamespace>HyperHarbor.Host.Tray</RootNamespace>
     <AssemblyName>HyperHarbor.Host.Tray</AssemblyName>
   </PropertyGroup>

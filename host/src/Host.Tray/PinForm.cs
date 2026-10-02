@@ -1,7 +1,8 @@
 namespace HyperHarbor.Host.Tray;
 
 /// <summary>
-/// Shows the pairing PIN with a countdown until the request expires.
+/// Shows the pairing PIN with a countdown until the request expires. The layout sizes itself
+/// from its contents so it stays readable at any display scaling.
 /// </summary>
 internal sealed class PinForm : Form
 {
@@ -13,6 +14,12 @@ internal sealed class PinForm : Form
     {
         _expiresAt = expiresAt;
 
+        // Design at 96 DPI; WinForms scales fonts and padding to the monitor's DPI.
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+
         Text = "HyperHarbor pairing";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -20,38 +27,52 @@ internal sealed class PinForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
         ShowInTaskbar = true;
-        AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(380, 230);
-        Font = new Font("Segoe UI", 10f);
+        Font = new Font("Segoe UI", 11f);
+        Padding = new Padding(24);
 
         var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(20),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
-            RowCount = 4,
+            Dock = DockStyle.Fill,
         };
 
         layout.Controls.Add(new Label
         {
-            Text = $"Enter this PIN on \"{deviceName}\" to pair it with this PC.",
+            Text = $"Enter this PIN on \"{deviceName}\" to pair it with this PC:",
             AutoSize = true,
-            MaximumSize = new Size(340, 0),
+            MaximumSize = new Size(420, 0),
+            Margin = new Padding(0, 0, 0, 8),
         });
 
         layout.Controls.Add(new Label
         {
             Text = $"{pin[..3]} {pin[3..]}",
-            Font = new Font("Segoe UI", 32f, FontStyle.Bold),
+            Font = new Font("Consolas", 44f, FontStyle.Bold),
             AutoSize = true,
             Anchor = AnchorStyles.None,
-            Margin = new Padding(0, 12, 0, 8),
+            Margin = new Padding(0, 8, 0, 8),
         });
 
-        _countdown = new Label { AutoSize = true, ForeColor = SystemColors.GrayText };
+        _countdown = new Label
+        {
+            AutoSize = true,
+            ForeColor = SystemColors.GrayText,
+            Anchor = AnchorStyles.None,
+            Margin = new Padding(0, 0, 0, 16),
+        };
         layout.Controls.Add(_countdown);
 
-        var cancel = new Button { Text = "Cancel", AutoSize = true, Anchor = AnchorStyles.Right, DialogResult = DialogResult.Cancel };
+        var cancel = new Button
+        {
+            Text = "Cancel",
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12, 2, 12, 2),
+            Anchor = AnchorStyles.Right,
+            DialogResult = DialogResult.Cancel,
+        };
         cancel.Click += (_, _) => onCancel();
         layout.Controls.Add(cancel);
         CancelButton = cancel;

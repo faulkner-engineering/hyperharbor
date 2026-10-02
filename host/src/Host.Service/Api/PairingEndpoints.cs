@@ -20,6 +20,7 @@ public static class PairingEndpoints
         var pairing = endpoints.MapGroup(BasePath);
 
         pairing.MapPost("/requests", CreateRequest).AllowAnonymous().WithName("createPairingRequest");
+        pairing.MapDelete("/requests/{pairingId:guid}", CancelRequest).AllowAnonymous().WithName("cancelPairingRequest");
         pairing.MapPost("/requests/{pairingId:guid}/confirm", Confirm).AllowAnonymous().WithName("confirmPairing");
         pairing.MapDelete("/devices/self", UnpairSelf).WithName("unpairSelf");
 
@@ -30,6 +31,12 @@ public static class PairingEndpoints
     {
         var created = pairing.CreateRequest(request);
         return TypedResults.Created((string?)null, created);
+    }
+
+    private static NoContent CancelRequest(Guid pairingId, PairingService pairing)
+    {
+        pairing.Cancel(pairingId);
+        return TypedResults.NoContent();
     }
 
     private static Ok<PairingResult> Confirm(Guid pairingId, PairingConfirmation confirmation, PairingService pairing)
