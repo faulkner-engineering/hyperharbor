@@ -138,7 +138,7 @@
       test = {
         kind: "failed",
         message:
-          "The host did not wake within 2 minutes. Wake it by hand, then check the readiness items above and the Wake-on-LAN option in the PC's BIOS or UEFI settings.",
+          "The host did not wake within 2 minutes. Wake it by hand. If the checks above pass, the usual cause is a BIOS or UEFI setting: see \"Also check the host's BIOS or UEFI settings\" above.",
       };
     } catch (error) {
       test = { kind: "failed", message: errorMessage(error) };
@@ -197,6 +197,19 @@
       </div>
     {/if}
     {#if fixMessage}<p class="muted">{fixMessage}</p>{/if}
+
+    <div class="firmware" role="note">
+      <p class="firmware-title">Also check the host's BIOS or UEFI settings</p>
+      <p class="muted">
+        Windows cannot read these, so the checks above can all pass while waking still fails.
+        Setting names vary by manufacturer:
+      </p>
+      <ul>
+        <li>Turn <strong>on</strong> "Wake on LAN", "Power On By PCI-E", or "Resume by PCI-E Device".</li>
+        <li>Turn <strong>off</strong> "ErP", "ErP Ready", or "Deep Sleep".</li>
+      </ul>
+      <p class="muted">Run Test wake after changing them to confirm.</p>
+    </div>
   {/if}
 
   <h4>Test wake</h4>
@@ -353,5 +366,25 @@
 
   .error {
     color: var(--danger);
+  }
+
+  .firmware {
+    margin: 1rem 0 0;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    background: var(--notice-bg);
+  }
+
+  .firmware p {
+    margin: 0 0 0.4rem;
+  }
+
+  .firmware-title {
+    font-weight: 600;
+  }
+
+  .firmware ul {
+    margin: 0 0 0.4rem;
+    padding-left: 1.2rem;
   }
 </style>

@@ -158,4 +158,5 @@ Get-WinEvent -FilterHashtable $filter -MaxEvents 30 -ErrorAction SilentlyContinu
 
 Write-Output ''
 Write-Output 'Notes: Windows cannot read BIOS/UEFI settings. If everything above looks right, check the'
-Write-Output 'firmware for "Wake on LAN", "Power On By PCI-E", and "ErP" or "Deep Sleep" (which must be off).'
+Write-Output 'firmware for "Wake on LAN", "Power On By PCI-E", or "Resume by PCI-E Device" (must be on)'
+Write-Output 'and "ErP", "ErP Ready", or "Deep Sleep" (must be off).'

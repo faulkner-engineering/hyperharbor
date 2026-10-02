@@ -87,6 +87,16 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 - ASP.NET Core 8 logs every handled exception; that category is off in appsettings.json and ApiExceptionHandler logs instead.
 - Svelte: run the svelte-autofixer MCP tool on every .svelte file you change.
 
+## Wake-on-LAN lessons (from real hosts)
+- Readiness checks can all pass while waking fails. Seen on TC-PC (2026-10-02): BIOS "PCI-E wake" was
+  disabled. Firmware settings are not readable from Windows; the client shows a firmware checklist instead.
+- A Hyper-V external switch bound to the wired NIC is a known Wake-on-LAN breaker, not yet a readiness check.
+- Group Policy can force "connectivity in standby" off, and NICs missing from powercfg wake_programmable
+  cannot be armed; both are reported as not fixable.
+- Windows sends 255.255.255.255 out of the lowest-metric interface (often a virtual adapter); the client
+  binds each magic packet to the local address on the host's subnet.
+- packaging/host/Diagnose-Wake.ps1 collects what the checks cannot see; -Listen proves packet delivery.
+
 ## Open issues (not yet scheduled)
 - rdpAvailable is true for any running VM with an address, even with nothing on port 3389. Fix in Phase 7 with a probe.
 - Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray
