@@ -4,6 +4,7 @@ mod error;
 mod hosts;
 mod identity;
 mod paired;
+mod rdp;
 mod spake2;
 mod tls;
 mod wake;
@@ -154,6 +155,57 @@ async fn list_vms(
     Ok(vms)
 }
 
+/// One-time setup of this User's account on a VM, using a guest administrator credential.
+#[tauri::command]
+async fn provision_vm(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    admin_user_name: String,
+    mut admin_password: String,
+    enable_remote_desktop: bool,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let result = state
+        .api
+        .provision_vm(
+            &host,
+            &paired,
+            &vm_id,
+            &admin_user_name,
+            &admin_password,
+            enable_remote_desktop,
+        )
+        .await;
+    zeroize::Zeroize::zeroize(&mut admin_password);
+    result
+}
+
+/// Opens Remote Desktop to a provisioned VM: checks reachability first (so no password is rotated
+/// for a VM this device cannot reach), requests credentials, and launches mstsc. The credential is
+/// removed from the OS store once the session opens.
+#[tauri::command]
+async fn connect_vm(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    address: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+
+    let probe_address = address.clone();
+    let reachable =
+        tauri::async_runtime::spawn_blocking(move || rdp::is_reachable(&probe_address, 3389))
+            .await
+            .unwrap_or(false);
+    if !reachable {
+        return Err(ClientError::VmUnreachable(address));
+    }
+
+    let connection = state.api.connect_vm(&host, &paired, &vm_id).await?;
+    rdp::launch(&connection, &rdp::file_directory())
+}
+
 /// Sends Wake-on-LAN magic packets using the cached adapter details. Returns datagrams sent.
 #[tauri::command]
 fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
@@ -289,6 +341,9 @@ async fn unpair(
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            // Remove any temporary Remote Desktop credential left by a previous run.
+            rdp::remove_stale_credentials();
+
             let config_dir = app.path().app_config_dir()?;
             let local_host_name = gethostname::gethostname().to_string_lossy().into_owned();
 
@@ -333,7 +388,9 @@ pub fn run() {
             wake_host,
             get_wake_readiness,
             fix_wake,
-            start_wake_test
+            start_wake_test,
+            provision_vm,
+            connect_vm
         ])
         .run(tauri::generate_context!())
         .expect("error while running HyperHarbor client");

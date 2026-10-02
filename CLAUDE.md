@@ -4,7 +4,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 
 ## Architecture
 - host/ (.NET 8): Worker Service + Kestrel API (mTLS), WinForms tray app, Core library
-  - Hyper-V via CIM/WMI (root\virtualization\v2) and PowerShell SDK (PowerShell Direct)
+  - Hyper-V via CIM/WMI (rootirtualization2); PowerShell Direct through Windows PowerShell (powershell.exe)
+    with an encoded script and secrets on stdin (PowerShellDirectAccountManager)
 - client/ (Tauri v2, Rust + TypeScript): discovery, pairing, VM dashboard, RDP launcher
 - Discovery: mDNS _hyperharbor._tcp on LAN; manual add by IP/hostname otherwise
 - Pairing: PIN shown in tray, certificate exchange and pinning, mTLS afterward
@@ -96,6 +97,17 @@ Mark required request properties [JsonRequired] (an empty body must not default 
   - The shutdown component reports OperationalStatus 12 (No Contact) when no guest OS is running; the API returns 409.
 - ASP.NET Core 8 logs every handled exception; that category is off in appsettings.json and ApiExceptionHandler logs instead.
 - Svelte: run the svelte-autofixer MCP tool on every .svelte file you change.
+- Remote Desktop (Phase 7):
+  - PowerShell Direct needs a running Windows guest; Linux guests fail fast with GuestUnavailable (503).
+    Provision and connect take tens of seconds, so the client uses 180 s and 90 s request timeouts.
+  - The client only retries another host address on a connection error, never after a timeout, so a
+    provision or rotation is not repeated.
+  - TERMSRV credentials the client writes are Generic, session-scoped, and tagged "HyperHarbor temporary
+    credential"; startup cleanup removes only tagged entries (users may have their own TERMSRV entries).
+  - Secrets: ProvisionVmRequest, VmConnection, GuestCredential, RotatedPassword, and the Rust VmConnection
+    override ToString or Debug to hide passwords. Keep it that way for any new type that holds one.
+- UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
+  values with UI Automation ValuePattern instead.
 
 ## Wake-on-LAN lessons (from real hosts)
 - Readiness checks can all pass while waking fails. Seen on TC-PC (2026-10-02): BIOS "PCI-E wake" was

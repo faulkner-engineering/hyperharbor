@@ -1585,6 +1585,8 @@ dependencies = [
  "tauri-build",
  "thiserror 2.0.21",
  "tokio",
+ "windows-sys 0.60.2",
+ "zeroize",
 ]
 
 [[package]]

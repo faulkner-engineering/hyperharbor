@@ -8,6 +8,7 @@
     onHostsChanged,
     unpair,
     wakeHost,
+    connectVm,
     type HostEntry,
     type Vm,
   } from "$lib/api/client";
@@ -16,6 +17,7 @@
   import PairingPanel from "$lib/components/PairingPanel.svelte";
   import VmList from "$lib/components/VmList.svelte";
   import WakePanel from "$lib/components/WakePanel.svelte";
+  import ProvisionDialog from "$lib/components/ProvisionDialog.svelte";
 
   const REFRESH_INTERVAL_MS = 5000;
 
@@ -28,6 +30,9 @@
   let offline = $state(false);
   let showWake = $state(false);
   let wakeStatus = $state<string | null>(null);
+  let provisioning = $state<Vm | null>(null);
+  let connectingVmId = $state<string | null>(null);
+  let connectStatus = $state<{ ok: boolean; message: string } | null>(null);
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
   // VMs are only fetched from paired hosts; others show the pairing panel instead.
@@ -41,6 +46,8 @@
     offline = false;
     showWake = false;
     wakeStatus = null;
+    provisioning = null;
+    connectStatus = null;
   }
 
   async function refreshHosts() {
@@ -70,6 +77,29 @@
       }
     } finally {
       loading = false;
+    }
+  }
+
+  async function connect(vm: Vm) {
+    if (selectedKey === null || !vm.remoteDesktop.address) return;
+    connectingVmId = vm.id;
+    connectStatus = null;
+    try {
+      await connectVm(selectedKey, vm.id, vm.remoteDesktop.address);
+      connectStatus = { ok: true, message: `Opening Remote Desktop to ${vm.name}…` };
+    } catch (error) {
+      connectStatus = { ok: false, message: errorMessage(error) };
+    } finally {
+      connectingVmId = null;
+    }
+  }
+
+  function provisioned(done: boolean) {
+    const vm = provisioning;
+    provisioning = null;
+    if (done && vm && selectedKey) {
+      connectStatus = { ok: true, message: `${vm.name} is set up. Press Connect to open Remote Desktop.` };
+      refreshVms(selectedKey);
     }
   }
 
@@ -169,7 +199,18 @@
       {:else if vms === null}
         <p class="placeholder">Loading…</p>
       {:else}
-        <VmList {vms} />
+        {#if connectStatus}
+          <div class={connectStatus.ok ? "notice" : "notice error"} role="status">{connectStatus.message}</div>
+        {/if}
+        <VmList
+          {vms}
+          busyVmId={connectingVmId}
+          onconnect={connect}
+          onprovision={(vm) => (provisioning = vm)}
+        />
+        {#if provisioning}
+          <ProvisionDialog host={selectedHost} vm={provisioning} onclose={provisioned} />
+        {/if}
       {/if}
 
       {#if selectedHost.paired && showWake}

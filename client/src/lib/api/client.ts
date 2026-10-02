@@ -40,6 +40,8 @@ export interface ClientError {
     | "pairingVerificationFailed"
     | "noWakeInfo"
     | "wakeFailed"
+    | "rdpFailed"
+    | "vmUnreachable"
     | "unreachable"
     | "api"
     | "invalidResponse"
@@ -101,7 +103,27 @@ export const fixWake = (key: string, checkIds: string[]) =>
 export const startWakeTest = (key: string, delaySeconds: number) =>
   invoke<WakeTestScheduled>("start_wake_test", { key, delaySeconds });
 
-export const isOffline = (error: unknown) => isClientError(error) && error.code === "unreachable";
+/** One-time setup of this User's account on a VM. The admin password is sent to the host over mTLS. */
+export const provisionVm = (
+  key: string,
+  vmId: string,
+  adminUserName: string,
+  adminPassword: string,
+  enableRemoteDesktop: boolean,
+) =>
+  invoke<components["schemas"]["VmProvisioning"]>("provision_vm", {
+    key,
+    vmId,
+    adminUserName,
+    adminPassword,
+    enableRemoteDesktop,
+  });
+
+/** Opens Remote Desktop to a provisioned VM. Resolves once mstsc has been launched. */
+export const connectVm = (key: string, vmId: string, address: string) =>
+  invoke<void>("connect_vm", { key, vmId, address });
+
+export const isOffline =(error: unknown) => isClientError(error) && error.code === "unreachable";
 
 export const onHostsChanged = (handler: () => void): Promise<UnlistenFn> =>
   listen("hosts-changed", handler);

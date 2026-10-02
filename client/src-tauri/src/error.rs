@@ -24,6 +24,12 @@ pub enum ClientError {
     #[error("The wake signal could not be sent: {0}")]
     WakeFailed(String),
 
+    #[error("Remote Desktop could not be started: {0}")]
+    RdpFailed(String),
+
+    #[error("This device cannot reach {0} on the Remote Desktop port. VMs on an internal or NAT switch are only reachable from the host; use an External switch to connect from other devices.")]
+    VmUnreachable(String),
+
     #[error("The host could not be reached: {0}")]
     Unreachable(String),
 
@@ -47,6 +53,8 @@ impl ClientError {
             ClientError::PairingVerificationFailed => "pairingVerificationFailed",
             ClientError::NoWakeInfo => "noWakeInfo",
             ClientError::WakeFailed(_) => "wakeFailed",
+            ClientError::RdpFailed(_) => "rdpFailed",
+            ClientError::VmUnreachable(_) => "vmUnreachable",
             ClientError::Unreachable(_) => "unreachable",
             ClientError::Api { .. } => "api",
             ClientError::InvalidResponse(_) => "invalidResponse",

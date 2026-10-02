@@ -17,6 +17,9 @@ use crate::wake::WakeAdapter;
 const API_BASE_PATH: &str = "/api/v1";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// PowerShell Direct calls in the guest take tens of seconds.
+const PROVISION_TIMEOUT: Duration = Duration::from_secs(180);
+const VM_CONNECT_TIMEOUT: Duration = Duration::from_secs(90);
 
 #[derive(Deserialize)]
 struct ProblemDetails {
@@ -222,6 +225,54 @@ impl ApiClient {
         })
     }
 
+    /// POST /vms/{vmId}/provision. The admin password goes to the host over mTLS and is not kept here.
+    pub async fn provision_vm(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        admin_user_name: &str,
+        admin_password: &str,
+        enable_remote_desktop: bool,
+    ) -> Result<serde_json::Value, ClientError> {
+        let body = json!({
+            "adminUserName": admin_user_name,
+            "adminPassword": admin_password,
+            "enableRemoteDesktop": enable_remote_desktop,
+        });
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &format!("/vms/{vm_id}/provision"),
+                Some(&body),
+                Some(PROVISION_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// POST /vms/{vmId}/connect: Remote Desktop credentials for this User's account.
+    pub async fn connect_vm(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<crate::rdp::VmConnection, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &format!("/vms/{vm_id}/connect"),
+                None,
+                Some(VM_CONNECT_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
     /// GET /wake/info: the adapters to send magic packets to.
     pub async fn wake_info(
         &self,
@@ -266,6 +317,7 @@ impl ApiClient {
                 reqwest::Method::POST,
                 "/wake/readiness/fix",
                 Some(&body),
+                None,
             )
             .await?;
         if response.status() == reqwest::StatusCode::ACCEPTED {
@@ -289,6 +341,7 @@ impl ApiClient {
                 reqwest::Method::POST,
                 "/wake/test",
                 Some(&body),
+                None,
             )
             .await?;
         parse(response).await
@@ -301,7 +354,7 @@ impl ApiClient {
         method: reqwest::Method,
         path: &str,
     ) -> Result<reqwest::Response, ClientError> {
-        self.send_paired_with(host, paired, method, path, None)
+        self.send_paired_with(host, paired, method, path, None, None)
             .await
     }
 
@@ -312,6 +365,7 @@ impl ApiClient {
         method: reqwest::Method,
         path: &str,
         body: Option<&serde_json::Value>,
+        timeout: Option<Duration>,
     ) -> Result<reqwest::Response, ClientError> {
         let http = self.pinned_client(paired)?;
 
@@ -328,6 +382,9 @@ impl ApiClient {
             if let Some(body) = body {
                 request = request.json(body);
             }
+            if let Some(timeout) = timeout {
+                request = request.timeout(timeout);
+            }
             match request.send().await {
                 Ok(response) => {
                     self.last_good
@@ -336,7 +393,11 @@ impl ApiClient {
                         .insert(paired.host_id.clone(), base_url);
                     return check(response).await;
                 }
-                Err(error) => last_error = Some(error),
+                // Only a failed connection proves the request never reached the host. After a
+                // timeout the host may still be working (provisioning, rotating), so retrying at
+                // another address could repeat a non-idempotent request.
+                Err(error) if error.is_connect() => last_error = Some(error),
+                Err(error) => return Err(unreachable(Some(error))),
             }
         }
 

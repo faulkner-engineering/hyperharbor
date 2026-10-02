@@ -3,9 +3,13 @@
 
   interface Props {
     vms: Vm[];
+    /** VM whose Connect or Provision request is in progress. */
+    busyVmId?: string | null;
+    onconnect?: (vm: Vm) => void;
+    onprovision?: (vm: Vm) => void;
   }
 
-  let { vms }: Props = $props();
+  let { vms, busyVmId = null, onconnect, onprovision }: Props = $props();
 
   const stateLabels: Record<VmState, string> = {
     running: "Running",
@@ -62,6 +66,7 @@
         <th scope="col" class="num">Memory</th>
         <th scope="col" class="num">Uptime</th>
         <th scope="col">Address</th>
+        <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
       </tr>
     </thead>
     <tbody>
@@ -75,6 +80,19 @@
           <td class="num">{formatMemory(vm.memoryAssignedMb)}</td>
           <td class="num">{formatUptime(vm.uptimeSeconds)}</td>
           <td class="address">{vm.ipAddresses[0] ?? ""}</td>
+          <td class="actions">
+            {#if vm.provisioned}
+              <button
+                type="button"
+                class="primary"
+                disabled={vm.state !== "running" || !vm.remoteDesktop.address || busyVmId !== null}
+                title={vm.state !== "running" ? "Start the VM to connect" : !vm.remoteDesktop.address ? "Waiting for the VM to report an address" : ""}
+                onclick={() => onconnect?.(vm)}>{busyVmId === vm.id ? "Connecting…" : "Connect"}</button
+              >
+            {:else if vm.state === "running"}
+              <button type="button" disabled={busyVmId !== null} onclick={() => onprovision?.(vm)}>Set up…</button>
+            {/if}
+          </td>
         </tr>
       {/each}
     </tbody>
@@ -143,6 +161,39 @@
   .busy {
     background: var(--busy-bg);
     color: var(--busy-fg);
+  }
+
+  .actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .actions button {
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .actions button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+  }
+
+  .actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
   }
 
   .empty {

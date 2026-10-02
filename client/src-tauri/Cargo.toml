@@ -36,6 +36,8 @@ tokio = { version = "1.53.1", features = ["sync"] }
 keyring = { version = "3", features = ["windows-native"] }
 base64 = "0.23.1"
 if-addrs = "0.15"
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_UI_WindowsAndMessaging"] }
+zeroize = "1.9.0"
 
 [profile.release]
 codegen-units = 1
