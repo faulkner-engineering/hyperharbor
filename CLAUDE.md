@@ -8,7 +8,12 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 - client/ (Tauri v2, Rust + TypeScript): discovery, pairing, VM dashboard, RDP launcher
 - Discovery: mDNS _hyperharbor._tcp on LAN; manual add by IP/hostname otherwise
 - Pairing: PIN shown in tray, certificate exchange and pinning, mTLS afterward
-- Credentials: per-device local VM account, password rotated via PowerShell Direct on each connect, pushed to client cred store, removed after connect
+- Users and devices: a User owns many Devices; pairing creates a Device under the current User. The MVP has
+  exactly one User (default "owner"), but no schema or API may assume a single User.
+- Credentials: each User has one local VM account hh-<username> (local, never a Microsoft account), created
+  by a one-time Provision VM flow. On each connect the host rotates its password via PowerShell Direct
+  (serialized per VM and User, short reuse window), returns it to the requesting paired Device over mTLS,
+  and the client removes it from the OS credential store after launching RDP.
 - Wake-on-LAN: readiness check with auto-fix, Test Wake, relay mode later
 
 ## Roadmap (one phase per session, read-only first)
@@ -17,14 +22,19 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 3. Start/stop + Kestrel API on localhost (done)
 4. mDNS discovery + client VM list (done)
 5. PIN pairing + mTLS (done)
-6. Wake-on-LAN
-7. One-click RDP with ephemeral credentials
+6. Wake-on-LAN (done)
+7. One-click RDP with a per-User VM account
+
+v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
+per-device VM accounts and a user management UI.
 
 ## Rules
 - MVP scope only. Do not implement later phases early.
 - Professional code and comments. No slang. No em dashes.
 - Small commits with clear messages. Run tests before committing.
 - Never store VM passwords in plaintext. Never bind the API to 0.0.0.0 without mTLS.
+- Rotated VM passwords live in host memory only for the reuse window and are never logged or persisted.
+  VM admin credentials for provisioning are stored only with DPAPI through ProtectedFile.
 - Ask before any destructive Hyper-V operation.
 
 ## Layout
