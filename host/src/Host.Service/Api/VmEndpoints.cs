@@ -24,6 +24,7 @@ public static class VmEndpoints
         vms.MapGet("/{vmId:guid}", GetVmAsync).WithName("getVm");
         vms.MapPost("/{vmId:guid}/actions", PerformVmActionAsync).WithName("performVmAction");
         vms.MapPost("/{vmId:guid}/provision", ProvisionAsync).WithName("provisionVm");
+        vms.MapPost("/{vmId:guid}/connect", ConnectAsync).WithName("connectVm");
 
         return endpoints;
     }
@@ -70,6 +71,20 @@ public static class VmEndpoints
         CancellationToken cancellationToken)
     {
         return TypedResults.Ok(await provisioning.ProvisionAsync(vmId, user.UserId(), request, cancellationToken));
+    }
+
+    private static async Task<Ok<VmConnection>> ConnectAsync(
+        Guid vmId,
+        ConnectService connect,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var connection = await connect.ConnectAsync(vmId, context.User.UserId(), context.User.Identity?.Name ?? "unknown device", cancellationToken);
+
+        // The body carries a password; no cache may keep it.
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.Pragma = "no-cache";
+        return TypedResults.Ok(connection);
     }
 
     /// <summary>Adds the per-User fields; the inventory itself is shared by all Users.</summary>
