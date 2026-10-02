@@ -42,6 +42,13 @@ public class ContractJsonTests
     }
 
     [Fact]
+    public void VmActionRequest_RejectsMissingAction()
+    {
+        Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<VmActionRequest>("{}", ContractJson.Options));
+    }
+
+    [Fact]
     public void Vm_RoundTripsContractExample()
     {
         const string example = """
