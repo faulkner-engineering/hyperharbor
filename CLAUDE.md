@@ -16,7 +16,7 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 2. List VMs and state (read-only) (done)
 3. Start/stop + Kestrel API on localhost (done)
 4. mDNS discovery + client VM list (done)
-5. PIN pairing + mTLS
+5. PIN pairing + mTLS (done)
 6. Wake-on-LAN
 7. One-click RDP with ephemeral credentials
 
@@ -30,20 +30,26 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 ## Layout
 - docs/api.yaml: OpenAPI 3.1 contract, the source of truth for host and client
 - host/src/Shared.Contracts: DTOs mirroring api.yaml; ContractJson holds the wire JSON options
-- host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/
-- host/src/Host.Service: Kestrel API (Api/), mDNS advertisement (Discovery/), --list-vms diagnostic
-- host/tests/Host.Tests: xUnit; Api tests use WebApplicationFactory with fakes from Fakes.cs
-- client/src-tauri/src: hosts.rs (registry), discovery.rs (mdns-sd), api.rs (reqwest); client/src: SvelteKit SPA
+- host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/,
+  Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile)
+- host/src/Host.Service: Kestrel API (Api/), device auth (Security/), tray pipe server (Tray/), mDNS (Discovery/)
+- host/src/Host.Tray: WinForms tray; shows pairing PINs and paired devices over the named pipe
+- host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
+- client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
+  identity.rs (key in Credential Manager), paired.rs; client/src: SvelteKit SPA
+- docs/pairing.md: the SPAKE2 pairing protocol; both implementations must match it and Spake2Vectors.json
 
 ## Commands
 Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotnet:/c/Program Files/nodejs:$HOME/.cargo/bin:$PATH"
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
-- Run host API (http://127.0.0.1:48443): dotnet run --project host/src/Host.Service
+- Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service; pairing needs Host.Tray running
 - Print VM inventory JSON: dotnet run --project host/src/Host.Service -- --list-vms
 - Lint contract: npx @redocly/cli lint docs/api.yaml
 - Client (from client/): npm run check | npm run gen:api | npm run tauri dev
 - Rust (from client/src-tauri, in PowerShell): cargo fmt; cargo clippy --all-targets -- -D warnings; cargo test
 - Live mDNS browse (host service running): cargo test live_browse -- --ignored --nocapture
+- Live pairing over LAN (service running, something writing the PIN to the file):
+  HH_LIVE_HOST=<lan ip> HH_PIN_FILE=pin.txt cargo test live_pairing -- --ignored --nocapture
 
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
@@ -53,7 +59,12 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 ## Gotchas
 - Build Rust from PowerShell, not Git Bash: Git Bash's /usr/bin/link shadows MSVC link.exe.
 - Do not run cargo fetch; it downloads every target platform's dependencies (Android, iOS, macOS).
-- The API is loopback-only until Phase 5. The client calls only hosts where isLocal is true; others return pairingRequired.
+- All endpoints except pairing require a paired client certificate (PairedDeviceAuthenticationHandler).
+  Kestrel accepts any client cert in the handshake; the fingerprint check is in the handler.
+- Pairing secrets (PIN, w, x, y, K) must never be logged or persisted. Change the protocol only via docs/pairing.md,
+  regenerate vectors with HH_WRITE_SPAKE2_VECTORS=1, and confirm the Rust tests still pass.
+- Files under %ProgramData%\HyperHarbor that grant access (certificate, paired devices) go through ProtectedFile.
+- Other LAN devices need an inbound firewall rule for TCP 48443 (not created automatically yet).
 - mDNS on the host goes through DnsServiceRegister (dnsapi.dll). Do not bind UDP 5353 in the host.
 - Hyper-V (verified on a live host):
   - GetSummaryInformation fills only the requested fields; always request Name (code 0).
