@@ -51,6 +51,16 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Live pairing over LAN (service running, something writing the PIN to the file):
   HH_LIVE_HOST=<lan ip> HH_PIN_FILE=pin.txt cargo test live_pairing -- --ignored --nocapture
 
+## Packaging (multi-machine testing)
+- powershell -ExecutionPolicy Bypass -File scripts\package.ps1 [-Fast] [-SkipTests] [-HostOnly|-ClientOnly]
+- Output in dist/ (git-ignored): HyperHarbor-Host-<ver>-portable.zip, client NSIS setup exe, portable client exe.
+- -Fast uses thin LTO for test builds (about 3 min total vs about 10). Switching between fast and full recompiles once.
+- Version comes from Directory.Build.props (host) and client/src-tauri/tauri.conf.json (client); keep them equal.
+- The script refuses to run while anything is running from dist/ (Windows locks the exe).
+- The host zip's Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
+  Hyper-V Administrators membership), then starts the service console and tray. Builds are unsigned.
+- Verified on 2026-10-02: packaged host plus client paired and listed VMs across machines.
+
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
 run npm run gen:api, and lint. OpenApiEnumTests fail if C# enums or the API version drift from api.yaml.
@@ -64,7 +74,10 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 - Pairing secrets (PIN, w, x, y, K) must never be logged or persisted. Change the protocol only via docs/pairing.md,
   regenerate vectors with HH_WRITE_SPAKE2_VECTORS=1, and confirm the Rust tests still pass.
 - Files under %ProgramData%\HyperHarbor that grant access (certificate, paired devices) go through ProtectedFile.
-- Other LAN devices need an inbound firewall rule for TCP 48443 (not created automatically yet).
+- Other LAN devices need an inbound firewall rule for TCP 48443. The packaged host's start script creates it;
+  a dev run from source does not.
+- Tray (WinForms) windows must set AutoScaleDimensions = 96x96 with AutoScaleMode.Dpi and size from content;
+  the tray runs PerMonitorV2. Fixed pixel layouts were unreadable at higher display scaling.
 - mDNS on the host goes through DnsServiceRegister (dnsapi.dll). Do not bind UDP 5353 in the host.
 - Hyper-V (verified on a live host):
   - GetSummaryInformation fills only the requested fields; always request Name (code 0).
@@ -73,6 +86,14 @@ Mark required request properties [JsonRequired] (an empty body must not default 
   - The shutdown component reports OperationalStatus 12 (No Contact) when no guest OS is running; the API returns 409.
 - ASP.NET Core 8 logs every handled exception; that category is off in appsettings.json and ApiExceptionHandler logs instead.
 - Svelte: run the svelte-autofixer MCP tool on every .svelte file you change.
+
+## Open issues (not yet scheduled)
+- rdpAvailable is true for any running VM with an address, even with nothing on port 3389. Fix in Phase 7 with a probe.
+- Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray
+  should verify the pipe server process.
+- Anyone on the LAN can repeatedly start pairing requests (PIN window spam). Consider rate limiting.
+- No real installer yet: the service runs as a console app, not a Windows service. An MSI (service as
+  LocalSystem, tray at logon) needs the data-file ACLs and pipe ACL retested under LocalSystem.
 
 ## Live testing
 - Live tests skip themselves when Hyper-V is unreachable ([HyperVFact]); the account must be in Hyper-V Administrators.
