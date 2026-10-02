@@ -10,7 +10,7 @@ info:
     - All endpoints are served over HTTPS using the host's self-signed certificate.
     - Every operation requires mutual TLS with a client certificate issued during
       pairing, except the pairing request and confirm operations, which are
-      authenticated by the PIN proof described under the Pairing tag.
+      authenticated by the PIN-based key exchange described under the Pairing tag.
     - JSON property names are camelCase. Enumerations are serialized as strings.
     - Errors use RFC 7807 problem details (`application/problem+json`).
   license:
@@ -35,20 +35,19 @@ tags:
     description: Virtual machine inventory and power actions.
   - name: Pairing
     description: |
-      PIN-based pairing that exchanges and pins certificates.
+      PIN-based pairing that exchanges and pins certificates using SPAKE2 over the
+      RFC 3526 3072-bit group. The full construction, transcript, and test vectors are
+      in docs/pairing.md.
 
-      1. The client generates a key pair and self-signed certificate, then calls
-         `POST /pairing/requests`. The host shows a 6-digit PIN in the tray.
+      1. The client calls `POST /pairing/requests` with its self-signed certificate.
+         The host shows a 6-digit PIN in the tray and returns its SPAKE2 share.
       2. The user enters the PIN on the client. The client calls
-         `POST /pairing/requests/{pairingId}/confirm` with
-         `proof = Base64(HMAC-SHA256(key = UTF8(PIN), data = clientNonce || hostNonce || SHA256(clientCertDer) || SHA256(hostCertDer)))`,
-         where nonces are the raw decoded bytes and `hostCertDer` is the certificate
-         presented in the TLS handshake.
-      3. The host verifies the proof, stores the client certificate, and returns
-         `hostProof`, computed the same way with the byte prefix `host` prepended to
-         the data. The client verifies `hostProof` before pinning the host certificate.
+         `POST /pairing/requests/{pairingId}/confirm` with its share and confirmation.
+      3. The host verifies the confirmation, stores the client certificate, and returns
+         its own confirmation and certificate. The client verifies both before pinning.
 
       A pairing request expires after 120 seconds or after 5 failed confirm attempts.
+      Only one request can be pending at a time.
   - name: Wake
     description: |
       Wake-on-LAN support. A sleeping host cannot wake itself, so clients cache the
@@ -179,6 +178,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+        "503":
+          description: No tray app is connected to show the PIN.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /pairing/requests/{pairingId}/confirm:
     parameters:
@@ -209,7 +214,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
-          description: The proof did not match the PIN.
+          description: The confirmation did not match; the PIN was wrong or the exchange was tampered with.
           content:
             application/problem+json:
               schema:
@@ -504,7 +509,7 @@ components:
 
     PairingRequest:
       type: object
-      required: [deviceName, clientCertificatePem, clientNonce]
+      required: [deviceName, clientCertificatePem]
       properties:
         deviceName:
           type: string
@@ -514,38 +519,38 @@ components:
         clientCertificatePem:
           type: string
           description: PEM-encoded self-signed client certificate.
-        clientNonce:
-          type: string
-          format: byte
-          description: 32 random bytes, Base64 encoded.
 
     PairingRequestCreated:
       type: object
-      required: [pairingId, hostNonce, expiresAt]
+      required: [pairingId, hostShare, expiresAt]
       properties:
         pairingId:
           type: string
           format: uuid
-        hostNonce:
+        hostShare:
           type: string
           format: byte
-          description: 32 random bytes, Base64 encoded.
+          description: SPAKE2 share Y, 384 bytes big-endian, Base64 encoded.
         expiresAt:
           type: string
           format: date-time
 
     PairingConfirmation:
       type: object
-      required: [proof]
+      required: [clientShare, clientConfirmation]
       properties:
-        proof:
+        clientShare:
           type: string
           format: byte
-          description: Base64 HMAC-SHA256 proof of PIN knowledge.
+          description: SPAKE2 share X, 384 bytes big-endian, Base64 encoded.
+        clientConfirmation:
+          type: string
+          format: byte
+          description: Confirmation cA (HMAC-SHA256), Base64 encoded.
 
     PairingResult:
       type: object
-      required: [deviceId, hostId, hostCertificatePem, hostProof]
+      required: [deviceId, hostId, hostCertificatePem, hostConfirmation]
       properties:
         deviceId:
           type: string
@@ -556,10 +561,10 @@ components:
         hostCertificatePem:
           type: string
           description: PEM-encoded host certificate to pin.
-        hostProof:
+        hostConfirmation:
           type: string
           format: byte
-          description: Base64 HMAC-SHA256 proof that the host knows the PIN.
+          description: Confirmation cB (HMAC-SHA256), Base64 encoded.
 
     WakeAdapter:
       type: object

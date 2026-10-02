@@ -85,13 +85,14 @@ public class ContractJsonTests
     }
 
     [Fact]
-    public void PairingConfirmation_EncodesProofAsBase64()
+    public void PairingConfirmation_EncodesBytesAsBase64()
     {
-        var confirmation = new PairingConfirmation([0x01, 0x02, 0xFF]);
+        var confirmation = new PairingConfirmation([0x01, 0x02, 0xFF], [0xFF]);
 
         var json = JsonSerializer.SerializeToNode(confirmation, ContractJson.Options)!.AsObject();
 
-        Assert.Equal("AQL/", (string?)json["proof"]);
+        Assert.Equal("AQL/", (string?)json["clientShare"]);
+        Assert.Equal("/w==", (string?)json["clientConfirmation"]);
     }
 
     [Fact]

@@ -313,29 +313,29 @@ export interface components {
             deviceName: string;
             /** @description PEM-encoded self-signed client certificate. */
             clientCertificatePem: string;
-            /**
-             * Format: byte
-             * @description 32 random bytes, Base64 encoded.
-             */
-            clientNonce: string;
         };
         PairingRequestCreated: {
             /** Format: uuid */
             pairingId: string;
             /**
              * Format: byte
-             * @description 32 random bytes, Base64 encoded.
+             * @description SPAKE2 share Y, 384 bytes big-endian, Base64 encoded.
              */
-            hostNonce: string;
+            hostShare: string;
             /** Format: date-time */
             expiresAt: string;
         };
         PairingConfirmation: {
             /**
              * Format: byte
-             * @description Base64 HMAC-SHA256 proof of PIN knowledge.
+             * @description SPAKE2 share X, 384 bytes big-endian, Base64 encoded.
              */
-            proof: string;
+            clientShare: string;
+            /**
+             * Format: byte
+             * @description Confirmation cA (HMAC-SHA256), Base64 encoded.
+             */
+            clientConfirmation: string;
         };
         PairingResult: {
             /** Format: uuid */
@@ -346,9 +346,9 @@ export interface components {
             hostCertificatePem: string;
             /**
              * Format: byte
-             * @description Base64 HMAC-SHA256 proof that the host knows the PIN.
+             * @description Confirmation cB (HMAC-SHA256), Base64 encoded.
              */
-            hostProof: string;
+            hostConfirmation: string;
         };
         WakeAdapter: {
             name: string;
@@ -624,6 +624,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             429: components["responses"]["TooManyRequests"];
+            /** @description No tray app is connected to show the PIN. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     confirmPairing: {
@@ -651,7 +660,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            /** @description The proof did not match the PIN. */
+            /** @description The confirmation did not match; the PIN was wrong or the exchange was tampered with. */
             401: {
                 headers: {
                     [name: string]: unknown;

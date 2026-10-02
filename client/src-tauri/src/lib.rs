@@ -2,6 +2,7 @@ mod api;
 mod discovery;
 mod error;
 mod hosts;
+mod spake2;
 
 use std::sync::Arc;
 
