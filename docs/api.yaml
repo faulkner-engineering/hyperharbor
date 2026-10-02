@@ -1,0 +1,642 @@
+openapi: 3.1.0
+info:
+  title: HyperHarbor Host API
+  version: 1.0.0
+  summary: Manage Hyper-V virtual machines on a HyperHarbor host.
+  description: |
+    Contract between the HyperHarbor host service and HyperHarbor clients.
+
+    Transport and security:
+    - All endpoints are served over HTTPS using the host's self-signed certificate.
+    - Every operation requires mutual TLS with a client certificate issued during
+      pairing, except the pairing request and confirm operations, which are
+      authenticated by the PIN proof described under the Pairing tag.
+    - JSON property names are camelCase. Enumerations are serialized as strings.
+    - Errors use RFC 7807 problem details (`application/problem+json`).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://{host}:{port}/api/v1
+    description: HyperHarbor host
+    variables:
+      host:
+        default: hyperharbor.local
+        description: Host name or IP address discovered via mDNS or entered manually.
+      port:
+        default: "48443"
+        description: API port advertised in the mDNS TXT record.
+security:
+  - mutualTLS: []
+tags:
+  - name: Host
+    description: Host identity and version.
+  - name: VMs
+    description: Virtual machine inventory and power actions.
+  - name: Pairing
+    description: |
+      PIN-based pairing that exchanges and pins certificates.
+
+      1. The client generates a key pair and self-signed certificate, then calls
+         `POST /pairing/requests`. The host shows a 6-digit PIN in the tray.
+      2. The user enters the PIN on the client. The client calls
+         `POST /pairing/requests/{pairingId}/confirm` with
+         `proof = Base64(HMAC-SHA256(key = UTF8(PIN), data = clientNonce || hostNonce || SHA256(clientCertDer) || SHA256(hostCertDer)))`,
+         where nonces are the raw decoded bytes and `hostCertDer` is the certificate
+         presented in the TLS handshake.
+      3. The host verifies the proof, stores the client certificate, and returns
+         `hostProof`, computed the same way with the byte prefix `host` prepended to
+         the data. The client verifies `hostProof` before pinning the host certificate.
+
+      A pairing request expires after 120 seconds or after 5 failed confirm attempts.
+  - name: Wake
+    description: |
+      Wake-on-LAN support. A sleeping host cannot wake itself, so clients cache the
+      adapter details from `GET /wake/info` and send the magic packet directly.
+      Relay mode is not part of this version.
+paths:
+  /host:
+    get:
+      tags: [Host]
+      operationId: getHostInfo
+      summary: Get host identity and version.
+      responses:
+        "200":
+          description: Host information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /vms:
+    get:
+      tags: [VMs]
+      operationId: listVms
+      summary: List virtual machines on the host.
+      responses:
+        "200":
+          description: All virtual machines visible to the host service.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vm"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /vms/{vmId}:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [VMs]
+      operationId: getVm
+      summary: Get a single virtual machine.
+      responses:
+        "200":
+          description: The virtual machine.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vm"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /vms/{vmId}/actions:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [VMs]
+      operationId: performVmAction
+      summary: Request a power action on a virtual machine.
+      description: |
+        Starts an asynchronous state change. Poll `GET /vms/{vmId}` (the `Location`
+        header) to observe the resulting state.
+
+        `turnOff` is equivalent to pulling the power cord and can lose unsaved data
+        in the guest. Clients must confirm with the user before sending it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VmActionRequest"
+            example:
+              action: start
+      responses:
+        "202":
+          description: The action was accepted.
+          headers:
+            Location:
+              description: URL of the virtual machine resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /pairing/requests:
+    post:
+      tags: [Pairing]
+      operationId: createPairingRequest
+      summary: Begin pairing and display a PIN on the host.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PairingRequest"
+      responses:
+        "201":
+          description: Pairing request created; the PIN is shown in the host tray.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairingRequestCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /pairing/requests/{pairingId}/confirm:
+    parameters:
+      - name: pairingId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Pairing]
+      operationId: confirmPairing
+      summary: Prove knowledge of the PIN and complete pairing.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PairingConfirmation"
+      responses:
+        "200":
+          description: Pairing completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairingResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: The proof did not match the PIN.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          description: The pairing request expired or the attempt limit was reached.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /pairing/devices/self:
+    delete:
+      tags: [Pairing]
+      operationId: unpairSelf
+      summary: Remove the calling device's pairing.
+      description: Revokes the client certificate used for this request.
+      responses:
+        "204":
+          description: The device was unpaired.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /wake/info:
+    get:
+      tags: [Wake]
+      operationId: getWakeInfo
+      summary: Get network adapter details needed to wake the host.
+      responses:
+        "200":
+          description: Wake-capable adapters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WakeInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /wake/readiness:
+    get:
+      tags: [Wake]
+      operationId: getWakeReadiness
+      summary: Check whether the host is configured to wake on LAN.
+      responses:
+        "200":
+          description: Readiness check results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WakeReadiness"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /wake/readiness/fix:
+    post:
+      tags: [Wake]
+      operationId: fixWakeReadiness
+      summary: Apply automatic fixes for failed readiness checks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WakeFixRequest"
+      responses:
+        "200":
+          description: Readiness check results after applying fixes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WakeReadiness"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /wake/test:
+    post:
+      tags: [Wake]
+      operationId: startWakeTest
+      summary: Put the host to sleep after a delay so the client can test waking it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WakeTestRequest"
+      responses:
+        "202":
+          description: The host will sleep at the indicated time.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WakeTestScheduled"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+components:
+  securitySchemes:
+    mutualTLS:
+      type: mutualTLS
+      description: Client certificate issued to the device during pairing.
+
+  parameters:
+    VmId:
+      name: vmId
+      in: path
+      required: true
+      description: Hyper-V virtual machine ID.
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: The request was malformed or failed validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: The client certificate is missing or not paired with this host.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    NotFound:
+      description: The resource does not exist.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Conflict:
+      description: The operation is not valid in the current state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    TooManyRequests:
+      description: Another pairing request is already pending.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+  schemas:
+    ProblemDetails:
+      type: object
+      description: RFC 7807 problem details.
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+
+    HostInfo:
+      type: object
+      required: [hostId, hostName, version, apiVersion, certificateFingerprint]
+      properties:
+        hostId:
+          type: string
+          format: uuid
+          description: Stable identifier generated at first run.
+        hostName:
+          type: string
+          description: Windows computer name.
+        version:
+          type: string
+          description: Host service version.
+        apiVersion:
+          type: string
+          description: Contract version implemented by the host.
+        certificateFingerprint:
+          type: string
+          pattern: "^[0-9A-F]{64}$"
+          description: SHA-256 fingerprint of the host TLS certificate, uppercase hex.
+      example:
+        hostId: 6f1c2b8e-3a4d-4c55-9e1f-2b7a9d0c4e11
+        hostName: GAMING-PC
+        version: 0.1.0
+        apiVersion: 1.0.0
+        certificateFingerprint: 3F2A9C1D4B5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D6E7F8
+
+    VmState:
+      type: string
+      enum: [running, off, saved, paused, starting, stopping, saving, pausing, resuming, other]
+
+    VmAction:
+      type: string
+      description: |
+        - `start`: power on or resume from saved state.
+        - `shutdown`: graceful guest shutdown via integration services.
+        - `turnOff`: immediate power off. Can lose unsaved guest data.
+        - `save`: save memory state to disk and stop.
+        - `restart`: graceful guest restart.
+      enum: [start, shutdown, turnOff, save, restart]
+
+    Vm:
+      type: object
+      required: [id, name, state, generation, rdpAvailable, ipAddresses]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Hyper-V virtual machine ID.
+        name:
+          type: string
+        state:
+          $ref: "#/components/schemas/VmState"
+        uptimeSeconds:
+          type: integer
+          format: int64
+          minimum: 0
+        cpuUsagePercent:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+        memoryAssignedMb:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+        generation:
+          type: integer
+          enum: [1, 2]
+        rdpAvailable:
+          type: boolean
+          description: True when the guest reports an address reachable for RDP.
+        ipAddresses:
+          type: array
+          items:
+            type: string
+      example:
+        id: 0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b
+        name: Dev Workstation
+        state: running
+        uptimeSeconds: 3600
+        cpuUsagePercent: 12
+        memoryAssignedMb: 8192
+        generation: 2
+        rdpAvailable: true
+        ipAddresses: [192.168.1.50]
+
+    VmActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          $ref: "#/components/schemas/VmAction"
+
+    VmActionResult:
+      type: object
+      required: [vmId, action, accepted, state]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        action:
+          $ref: "#/components/schemas/VmAction"
+        accepted:
+          type: boolean
+        state:
+          $ref: "#/components/schemas/VmState"
+      example:
+        vmId: 0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b
+        action: turnOff
+        accepted: true
+        state: stopping
+
+    PairingRequest:
+      type: object
+      required: [deviceName, clientCertificatePem, clientNonce]
+      properties:
+        deviceName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Name shown in the host tray.
+        clientCertificatePem:
+          type: string
+          description: PEM-encoded self-signed client certificate.
+        clientNonce:
+          type: string
+          format: byte
+          description: 32 random bytes, Base64 encoded.
+
+    PairingRequestCreated:
+      type: object
+      required: [pairingId, hostNonce, expiresAt]
+      properties:
+        pairingId:
+          type: string
+          format: uuid
+        hostNonce:
+          type: string
+          format: byte
+          description: 32 random bytes, Base64 encoded.
+        expiresAt:
+          type: string
+          format: date-time
+
+    PairingConfirmation:
+      type: object
+      required: [proof]
+      properties:
+        proof:
+          type: string
+          format: byte
+          description: Base64 HMAC-SHA256 proof of PIN knowledge.
+
+    PairingResult:
+      type: object
+      required: [deviceId, hostId, hostCertificatePem, hostProof]
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        hostId:
+          type: string
+          format: uuid
+        hostCertificatePem:
+          type: string
+          description: PEM-encoded host certificate to pin.
+        hostProof:
+          type: string
+          format: byte
+          description: Base64 HMAC-SHA256 proof that the host knows the PIN.
+
+    WakeAdapter:
+      type: object
+      required: [name, macAddress, ipv4Address, broadcastAddress]
+      properties:
+        name:
+          type: string
+        macAddress:
+          type: string
+          pattern: "^([0-9A-F]{2}-){5}[0-9A-F]{2}$"
+        ipv4Address:
+          type: string
+          format: ipv4
+        broadcastAddress:
+          type: string
+          format: ipv4
+
+    WakeInfo:
+      type: object
+      required: [adapters]
+      properties:
+        adapters:
+          type: array
+          items:
+            $ref: "#/components/schemas/WakeAdapter"
+      example:
+        adapters:
+          - name: Ethernet
+            macAddress: 00-1A-2B-3C-4D-5E
+            ipv4Address: 192.168.1.10
+            broadcastAddress: 192.168.1.255
+
+    WakeCheckStatus:
+      type: string
+      enum: [pass, warn, fail]
+
+    WakeCheck:
+      type: object
+      required: [id, title, status, autoFixAvailable]
+      properties:
+        id:
+          type: string
+          description: |
+            Stable check identifier, for example `nicWakeOnMagicPacket`,
+            `nicAllowWake`, `fastStartupDisabled`, or `wakeTimersAllowed`.
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/WakeCheckStatus"
+        detail:
+          type: string
+        autoFixAvailable:
+          type: boolean
+
+    WakeReadiness:
+      type: object
+      required: [ready, checks]
+      properties:
+        ready:
+          type: boolean
+          description: True when no check has status `fail`.
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WakeCheck"
+      example:
+        ready: false
+        checks:
+          - id: nicWakeOnMagicPacket
+            title: Network adapter wakes on magic packet
+            status: fail
+            detail: Wake on Magic Packet is disabled on adapter Ethernet.
+            autoFixAvailable: true
+
+    WakeFixRequest:
+      type: object
+      required: [checkIds]
+      properties:
+        checkIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+
+    WakeTestRequest:
+      type: object
+      required: [delaySeconds]
+      properties:
+        delaySeconds:
+          type: integer
+          minimum: 5
+          maximum: 300
+
+    WakeTestScheduled:
+      type: object
+      required: [sleepAt]
+      properties:
+        sleepAt:
+          type: string
+          format: date-time
