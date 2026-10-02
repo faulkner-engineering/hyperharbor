@@ -299,6 +299,11 @@ paths:
       tags: [Wake]
       operationId: fixWakeReadiness
       summary: Apply automatic fixes for failed readiness checks.
+      description: |
+        Fixes change system settings and need administrator rights. When the host service
+        has them, the fixes are applied immediately (200). Otherwise the host tray asks the
+        user to approve them with a UAC prompt (202); poll `GET /wake/readiness` to see the
+        result. Only checks with `autoFixAvailable` can be fixed.
       requestBody:
         required: true
         content:
@@ -312,10 +317,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WakeReadiness"
+        "202":
+          description: The user at the host has been asked to approve the fixes.
+          headers:
+            Location:
+              description: URL of the readiness resource to poll.
+              schema:
+                type: string
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Approval is needed and no tray app is running on the host to ask.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /wake/test:
     post:
@@ -632,8 +650,9 @@ components:
         id:
           type: string
           description: |
-            Stable check identifier, for example `nicWakeOnMagicPacket`,
-            `nicAllowWake`, `fastStartupDisabled`, or `wakeTimersAllowed`.
+            Stable check identifier: `wiredAdapter`, `nicWakeOnMagicPacket`,
+            `nicAllowWake`, `sleepKeepsNetwork`, or `fastStartupDisabled`. Clients should
+            show unknown identifiers using `title` and `detail`.
         title:
           type: string
         status:

@@ -79,6 +79,26 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 _devices = list.Devices;
                 _devicesForm?.ShowDevices(_devices);
                 break;
+            case WakeFixRequestedMessage wakeFix:
+                _ = ApproveWakeFixAsync(wakeFix);
+                break;
+        }
+    }
+
+    private async Task ApproveWakeFixAsync(WakeFixRequestedMessage request)
+    {
+        var result = await WakeFixApproval.HandleAsync(request, _pipe.ServerExecutablePath());
+        await _pipe.SendAsync(result);
+
+        var (title, icon) = result.Outcome switch
+        {
+            "applied" => ("Wake-on-LAN settings updated", ToolTipIcon.Info),
+            "failed" => ("Wake-on-LAN settings not updated", ToolTipIcon.Warning),
+            _ => (string.Empty, ToolTipIcon.None),
+        };
+        if (title.Length > 0)
+        {
+            _notifyIcon.ShowBalloonTip(5000, title, result.Detail ?? "Check the settings again from the client.", icon);
         }
     }
 

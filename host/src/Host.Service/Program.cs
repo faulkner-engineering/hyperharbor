@@ -4,16 +4,25 @@ using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
 using HyperHarbor.Host.Service.Discovery;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Host.Service.Tray;
+using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Ipc;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Options;
+
+// Elevated helper started by the tray after the user approves Wake-on-LAN fixes.
+if (args.Length == 2 && args[0] == WakeFixHelper.Switch)
+{
+    return await WakeFixCommand.RunAsync(args[1]);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,6 +61,12 @@ builder.Services.AddSingleton<IPairingNotifier>(services => services.GetRequired
 builder.Services.AddHostedService(services => services.GetRequiredService<TrayPipeServer>());
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<PairingService>();
+
+builder.Services.AddSingleton<IWakeEnvironmentReader, WindowsWakeEnvironmentReader>();
+builder.Services.AddSingleton<ISleepController, WindowsSleepController>();
+builder.Services.AddSingleton<WakeTestScheduler>();
+builder.Services.AddSingleton<IWakeFixApprover>(services => services.GetRequiredService<TrayPipeServer>());
+builder.Services.AddSingleton<WakeFixCoordinator>();
 
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))
@@ -101,6 +116,7 @@ app.UseAuthorization();
 app.MapHostEndpoints();
 app.MapVmEndpoints();
 app.MapPairingEndpoints();
+app.MapWakeEndpoints();
 
 await app.RunAsync();
 return 0;

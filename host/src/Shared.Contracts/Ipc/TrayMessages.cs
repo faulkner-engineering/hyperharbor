@@ -14,6 +14,8 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(ListDevicesMessage), "listDevices")]
 [JsonDerivedType(typeof(RemoveDeviceMessage), "removeDevice")]
 [JsonDerivedType(typeof(CancelPairingMessage), "cancelPairing")]
+[JsonDerivedType(typeof(WakeFixRequestedMessage), "wakeFixRequested")]
+[JsonDerivedType(typeof(WakeFixCompletedMessage), "wakeFixCompleted")]
 public abstract record TrayMessage;
 
 // Service to tray.
@@ -29,6 +31,14 @@ public sealed record DeviceListMessage(IReadOnlyList<TrayDevice> Devices) : Tray
 
 public sealed record TrayDevice(Guid DeviceId, string Name, string CertificateFingerprint, DateTimeOffset PairedAt);
 
+/// <summary>
+/// A paired device asked to fix Wake-on-LAN settings and the service lacks administrator rights.
+/// The tray asks the user, then runs the service executable elevated with --apply-wake-fixes.
+/// </summary>
+public sealed record WakeFixRequestedMessage(Guid RequestId, string RequestedBy, IReadOnlyList<WakeFixItem> Fixes) : TrayMessage;
+
+public sealed record WakeFixItem(string CheckId, string Title);
+
 // Tray to service.
 
 public sealed record ListDevicesMessage : TrayMessage;
@@ -36,6 +46,15 @@ public sealed record ListDevicesMessage : TrayMessage;
 public sealed record RemoveDeviceMessage(Guid DeviceId) : TrayMessage;
 
 public sealed record CancelPairingMessage : TrayMessage;
+
+/// <param name="Outcome">applied, declined, or failed.</param>
+public sealed record WakeFixCompletedMessage(Guid RequestId, string Outcome, string? Detail) : TrayMessage;
+
+/// <summary>Command-line switch for the elevated fix helper: --apply-wake-fixes id1,id2.</summary>
+public static class WakeFixHelper
+{
+    public const string Switch = "--apply-wake-fixes";
+}
 
 public static class TrayPipe
 {

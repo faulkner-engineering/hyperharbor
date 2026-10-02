@@ -207,7 +207,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Apply automatic fixes for failed readiness checks. */
+        /**
+         * Apply automatic fixes for failed readiness checks.
+         * @description Fixes change system settings and need administrator rights. When the host service
+         *     has them, the fixes are applied immediately (200). Otherwise the host tray asks the
+         *     user to approve them with a UAC prompt (202); poll `GET /wake/readiness` to see the
+         *     result. Only checks with `autoFixAvailable` can be fixed.
+         */
         post: operations["fixWakeReadiness"];
         delete?: never;
         options?: never;
@@ -400,8 +406,9 @@ export interface components {
         WakeCheckStatus: "pass" | "warn" | "fail";
         WakeCheck: {
             /**
-             * @description Stable check identifier, for example `nicWakeOnMagicPacket`,
-             *     `nicAllowWake`, `fastStartupDisabled`, or `wakeTimersAllowed`.
+             * @description Stable check identifier: `wiredAdapter`, `nicWakeOnMagicPacket`,
+             *     `nicAllowWake`, `sleepKeepsNetwork`, or `fastStartupDisabled`. Clients should
+             *     show unknown identifiers using `title` and `detail`.
              */
             id: string;
             title: string;
@@ -808,8 +815,26 @@ export interface operations {
                     "application/json": components["schemas"]["WakeReadiness"];
                 };
             };
+            /** @description The user at the host has been asked to approve the fixes. */
+            202: {
+                headers: {
+                    /** @description URL of the readiness resource to poll. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Approval is needed and no tray app is running on the host to ask. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     startWakeTest: {

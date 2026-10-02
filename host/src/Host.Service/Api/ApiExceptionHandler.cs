@@ -1,5 +1,7 @@
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Pairing;
+using HyperHarbor.Host.Core.Wake;
+using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Host.Core.Power;
 using Microsoft.AspNetCore.Diagnostics;
 
@@ -28,6 +30,9 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             VmActionNotAllowedException => (StatusCodes.Status409Conflict, "Action not allowed"),
             HyperVUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Hyper-V unavailable"),
             HyperVOperationException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
+            WakeTestAlreadyScheduledException => (StatusCodes.Status409Conflict, "Wake test already scheduled"),
+            WakeFixUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Approval unavailable"),
+            InvalidWakeRequestException => (StatusCodes.Status400BadRequest, "Invalid request"),
             PairingException pairing => pairing.Error switch
             {
                 PairingError.InvalidRequest => (StatusCodes.Status400BadRequest, "Invalid pairing request"),

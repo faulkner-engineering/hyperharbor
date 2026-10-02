@@ -14,7 +14,7 @@ namespace HyperHarbor.Host.Service.Tray;
 /// paired devices. The pipe ACL admits SYSTEM, Administrators, the service account, and
 /// interactively logged-on users.
 /// </summary>
-public sealed class TrayPipeServer : BackgroundService, IPairingNotifier
+public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.IWakeFixApprover
 {
     private readonly PairedDeviceStore _devices;
     private readonly IServiceProvider _services;
@@ -31,11 +31,22 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier
 
     public bool CanDisplayPin => !_connections.IsEmpty;
 
+    public bool CanRequestApproval => !_connections.IsEmpty;
+
     public void PairingStarted(Guid pairingId, string deviceName, string pin, DateTimeOffset expiresAt) =>
         Broadcast(new PairingStartedMessage(pairingId, deviceName, pin, expiresAt));
 
     public void PairingEnded(Guid pairingId, string deviceName, PairingOutcome outcome) =>
         Broadcast(new PairingEndedMessage(pairingId, deviceName, JsonNamingPolicyCamel(outcome)));
+
+    /// <summary>Sends a fix approval request to one tray, so the user sees a single UAC prompt.</summary>
+    public void RequestApproval(WakeFixRequestedMessage request)
+    {
+        if (_connections.Values.FirstOrDefault() is { } connection)
+        {
+            _ = connection.SendAsync(request);
+        }
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -129,6 +140,9 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier
                 break;
             case CancelPairingMessage:
                 _services.GetRequiredService<PairingService>().Cancel();
+                break;
+            case WakeFixCompletedMessage completed:
+                _services.GetRequiredService<Wake.WakeFixCoordinator>().OnCompleted(completed);
                 break;
         }
     }

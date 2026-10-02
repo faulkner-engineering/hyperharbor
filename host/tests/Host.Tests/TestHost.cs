@@ -5,6 +5,9 @@ using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Wake;
+using HyperHarbor.Host.Service.Wake;
+using HyperHarbor.Shared.Contracts.Ipc;
 using HyperHarbor.Shared.Contracts.Pairing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -38,6 +41,9 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IVmInventory>(Inventory);
                 services.AddSingleton<IHyperVPowerInvoker>(Invoker);
                 services.AddSingleton<IPairingNotifier>(Tray);
+                services.AddSingleton<IWakeFixApprover>(Tray);
+                services.AddSingleton<IWakeEnvironmentReader>(Wake);
+                services.AddSingleton<ISleepController>(Sleep);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
             }));
     }
@@ -49,6 +55,10 @@ internal sealed class TestHost : IDisposable
     public FakePowerInvoker Invoker { get; }
 
     public FakeTray Tray { get; } = new();
+
+    public FakeWakeEnvironment Wake { get; } = new();
+
+    public FakeSleepController Sleep { get; } = new();
 
     public IServiceProvider Services => _factory.Services;
 
@@ -102,7 +112,7 @@ internal sealed class TestHost : IDisposable
 }
 
 /// <summary>Captures what the tray would display.</summary>
-internal sealed class FakeTray : IPairingNotifier
+internal sealed class FakeTray : IPairingNotifier, IWakeFixApprover
 {
     public bool CanDisplayPin { get; set; } = true;
 
@@ -113,6 +123,12 @@ internal sealed class FakeTray : IPairingNotifier
     public void PairingStarted(Guid pairingId, string deviceName, string pin, DateTimeOffset expiresAt) => Pin = pin;
 
     public void PairingEnded(Guid pairingId, string deviceName, PairingOutcome outcome) => Outcomes.Add(outcome);
+
+    public bool CanRequestApproval => CanDisplayPin;
+
+    public List<WakeFixRequestedMessage> WakeFixRequests { get; } = [];
+
+    public void RequestApproval(WakeFixRequestedMessage request) => WakeFixRequests.Add(request);
 }
 
 /// <summary>Client side of SPAKE2, used by tests to act as a pairing client.</summary>
