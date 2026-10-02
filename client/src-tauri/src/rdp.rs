@@ -21,6 +21,16 @@ pub const CREDENTIAL_COMMENT: &str = "HyperHarbor temporary credential";
 const SESSION_WAIT: Duration = Duration::from_secs(120);
 const REACHABILITY_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Mirrors the GuestOsFamily schema.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GuestOs {
+    #[default]
+    Unknown,
+    Windows,
+    Linux,
+}
+
 /// Mirrors the VmConnection schema. Debug never prints the password.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +39,8 @@ pub struct VmConnection {
     pub password: String,
     pub address: String,
     pub port: u16,
+    #[serde(default)]
+    pub guest_os: GuestOs,
 }
 
 impl std::fmt::Debug for VmConnection {
@@ -37,6 +49,7 @@ impl std::fmt::Debug for VmConnection {
             .field("user_name", &self.user_name)
             .field("address", &self.address)
             .field("port", &self.port)
+            .field("guest_os", &self.guest_os)
             .finish_non_exhaustive()
     }
 }
@@ -47,23 +60,28 @@ impl Drop for VmConnection {
     }
 }
 
-/// The .rdp file for a connection. Signs in with the stored TERMSRV credential and enables WebAuthn
-/// redirection, microphone, and camera redirection by default.
-pub fn rdp_file(address: &str, port: u16, user_name: &str) -> String {
-    [
+/// The .rdp file for a connection. Signs in with the stored TERMSRV credential.
+///
+/// Windows guests use CredSSP (NLA) and get WebAuthn, microphone, and camera redirection. Linux
+/// guests run xrdp, which does not support CredSSP or WebAuthn and camera redirection; with CredSSP
+/// off, mstsc sends the stored credential in the TLS logon packet, which xrdp uses to sign in.
+pub fn rdp_file(address: &str, port: u16, user_name: &str, guest_os: GuestOs) -> String {
+    let linux = guest_os == GuestOs::Linux;
+    let mut lines = vec![
         format!("full address:s:{address}:{port}"),
         format!("username:s:{user_name}"),
         "prompt for credentials:i:0".to_string(),
         "promptcredentialonce:i:0".to_string(),
-        "enablecredsspsupport:i:1".to_string(),
+        format!("enablecredsspsupport:i:{}", if linux { 0 } else { 1 }),
         "authentication level:i:2".to_string(),
-        "redirectwebauthn:i:1".to_string(),
         "audiomode:i:0".to_string(),
         "audiocapturemode:i:1".to_string(),
-        "camerastoredirect:s:*".to_string(),
-    ]
-    .join("\r\n")
-        + "\r\n"
+    ];
+    if !linux {
+        lines.push("redirectwebauthn:i:1".to_string());
+        lines.push("camerastoredirect:s:*".to_string());
+    }
+    lines.join("\r\n") + "\r\n"
 }
 
 /// True when this device can open a TCP connection to the Remote Desktop port.
@@ -89,7 +107,12 @@ pub fn launch(connection: &VmConnection, file_directory: &Path) -> Result<(), Cl
     ));
     let started = std::fs::write(
         &file,
-        rdp_file(&connection.address, connection.port, &connection.user_name),
+        rdp_file(
+            &connection.address,
+            connection.port,
+            &connection.user_name,
+            connection.guest_os,
+        ),
     )
     .map_err(|e| ClientError::RdpFailed(e.to_string()))
     .and_then(|_| {
@@ -297,7 +320,7 @@ mod tests {
 
     #[test]
     fn rdp_file_signs_in_and_enables_redirection() {
-        let file = rdp_file("192.168.0.50", 3389, r".\hh-owner");
+        let file = rdp_file("192.168.0.50", 3389, r".\hh-owner", GuestOs::Windows);
         let lines: Vec<&str> = file.lines().collect();
 
         for expected in [
@@ -312,6 +335,28 @@ mod tests {
         }
         assert!(file.ends_with("\r\n"));
         assert!(!file.contains("password"));
+    }
+
+    #[test]
+    fn rdp_file_for_linux_uses_tls_sign_in_without_windows_redirection() {
+        let file = rdp_file("172.25.190.7", 3389, "hh-owner", GuestOs::Linux);
+        let lines: Vec<&str> = file.lines().collect();
+
+        assert!(lines.contains(&"username:s:hh-owner"));
+        assert!(lines.contains(&"enablecredsspsupport:i:0"));
+        assert!(lines.contains(&"audiocapturemode:i:1"));
+        assert!(!file.contains("redirectwebauthn"));
+        assert!(!file.contains("camerastoredirect"));
+    }
+
+    #[test]
+    fn connection_reads_guest_os_from_json() {
+        let connection: VmConnection = serde_json::from_str(
+            r#"{"userName":"hh-owner","password":"x","address":"10.0.0.5","port":3389,
+                "expiresAt":"2026-10-02T12:00:00Z","guestOs":"linux"}"#,
+        )
+        .unwrap();
+        assert_eq!(connection.guest_os, GuestOs::Linux);
     }
 
     #[test]
@@ -333,6 +378,7 @@ mod tests {
             password: "Secret-Pass1!".into(),
             address: "192.168.0.50".into(),
             port: 3389,
+            guest_os: GuestOs::Windows,
         };
         assert!(!format!("{connection:?}").contains("Secret-Pass1!"));
     }

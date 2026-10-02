@@ -72,7 +72,10 @@
     <tbody>
       {#each vms as vm (vm.id)}
         <tr>
-          <td class="name">{vm.name}</td>
+          <td class="name">
+            {vm.name}
+            {#if vm.guestOs.name}<span class="os">{vm.guestOs.name}</span>{/if}
+          </td>
           <td>
             <span class="badge {stateTone(vm.state)}">{stateLabels[vm.state]}</span>
           </td>
@@ -89,8 +92,12 @@
                 title={vm.state !== "running" ? "Start the VM to connect" : !vm.remoteDesktop.address ? "Waiting for the VM to report an address" : ""}
                 onclick={() => onconnect?.(vm)}>{busyVmId === vm.id ? "Connecting…" : "Connect"}</button
               >
-            {:else if vm.state === "running"}
+            {:else if vm.state === "running" && vm.guestOs.family !== "unknown"}
               <button type="button" disabled={busyVmId !== null} onclick={() => onprovision?.(vm)}>Set up…</button>
+            {:else if vm.state === "running"}
+              <span class="hint" title="The VM has not reported its operating system through Hyper-V data exchange yet.">
+                Detecting OS…
+              </span>
             {/if}
           </td>
         </tr>
@@ -128,6 +135,18 @@
 
   .name {
     font-weight: 600;
+  }
+
+  .os {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .hint {
+    font-size: 0.8rem;
+    color: var(--muted);
   }
 
   .address {

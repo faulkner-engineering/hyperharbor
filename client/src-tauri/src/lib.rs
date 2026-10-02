@@ -163,7 +163,7 @@ async fn provision_vm(
     vm_id: String,
     admin_user_name: String,
     mut admin_password: String,
-    enable_remote_desktop: bool,
+    options: api::ProvisionOptions,
 ) -> Result<serde_json::Value, ClientError> {
     let (host, paired) = state.paired_host(&key)?;
     let result = state
@@ -174,7 +174,7 @@ async fn provision_vm(
             &vm_id,
             &admin_user_name,
             &admin_password,
-            enable_remote_desktop,
+            options,
         )
         .await;
     zeroize::Zeroize::zeroize(&mut admin_password);

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { errorMessage, provisionVm, type HostEntry, type Vm } from "$lib/api/client";
 
   interface Props {
@@ -9,9 +10,13 @@
 
   let { host, vm, onclose }: Props = $props();
 
-  let adminUserName = $state("Administrator");
+  const linux = $derived(vm.guestOs.family === "linux");
+
+  // Prefilled once when the dialog opens; Linux has no common default administrator name.
+  let adminUserName = $state(untrack(() => (vm.guestOs.family === "linux" ? "" : "Administrator")));
   let adminPassword = $state("");
   let enableRemoteDesktop = $state(true);
+  let installDesktop = $state(false);
   let busy = $state(false);
   let error = $state<string | null>(null);
 
@@ -22,7 +27,10 @@
     busy = true;
     error = null;
     try {
-      await provisionVm(host.key, vm.id, adminUserName.trim(), adminPassword, enableRemoteDesktop);
+      await provisionVm(host.key, vm.id, adminUserName.trim(), adminPassword, {
+        enableRemoteDesktop,
+        installDesktop: linux && enableRemoteDesktop && installDesktop,
+      });
       adminPassword = "";
       onclose(true);
     } catch (e) {
@@ -42,25 +50,45 @@
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="provision-title">
     <form onsubmit={submit}>
       <h3 id="provision-title">Set up Remote Desktop for {vm.name}</h3>
-      <p class="muted">
-        HyperHarbor creates a local account in the VM for one-click sign-in and changes its password
-        on every connect. Enter an administrator account of the VM to do this once. It is stored
-        encrypted on {host.displayName} and used only to manage that account.
-      </p>
-  
-      <label for="admin-user">Administrator user name</label>
+      {#if linux}
+        <p class="muted">
+          HyperHarbor signs in to {vm.guestOs.name ?? "this Linux VM"} over SSH to create a local account
+          for one-click sign-in, and changes its password on every connect. Enter an account that can sign
+          in over SSH with a password and use sudo. It is stored encrypted on {host.displayName} and used
+          only to manage that account.
+        </p>
+      {:else}
+        <p class="muted">
+          HyperHarbor creates a local account in the VM for one-click sign-in and changes its password
+          on every connect. Enter an administrator account of the VM to do this once. It is stored
+          encrypted on {host.displayName} and used only to manage that account.
+        </p>
+      {/if}
+
+      <label for="admin-user">{linux ? "User name (with sudo)" : "Administrator user name"}</label>
       <input id="admin-user" bind:value={adminUserName} autocomplete="off" spellcheck="false" disabled={busy} />
-  
+
       <label for="admin-password">Password</label>
       <input id="admin-password" type="password" bind:value={adminPassword} autocomplete="off" disabled={busy} />
-  
+
       <label class="check">
         <input type="checkbox" bind:checked={enableRemoteDesktop} disabled={busy} />
-        Turn on Remote Desktop in the VM
+        {linux ? "Install and turn on Remote Desktop (xrdp)" : "Turn on Remote Desktop in the VM"}
       </label>
-  
+
+      {#if linux}
+        <label class="check">
+          <input type="checkbox" bind:checked={installDesktop} disabled={busy || !enableRemoteDesktop} />
+          Install a lightweight desktop (Xfce) if the VM has none
+        </label>
+      {/if}
+
+      {#if busy && linux}
+        <p class="muted" role="status">Installing packages can take several minutes. Keep this window open.</p>
+      {/if}
+
       {#if error}<p class="error" role="alert">{error}</p>{/if}
-  
+
       <div class="actions">
         <button type="button" onclick={cancel} disabled={busy}>Cancel</button>
         <button type="submit" class="primary" disabled={!canSubmit}>{busy ? "Setting up…" : "Set up"}</button>

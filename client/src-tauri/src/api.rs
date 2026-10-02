@@ -18,8 +18,17 @@ const API_BASE_PATH: &str = "/api/v1";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// PowerShell Direct calls in the guest take tens of seconds.
-const PROVISION_TIMEOUT: Duration = Duration::from_secs(180);
+/// Linux setup can install xrdp and a desktop; the host allows 20 minutes for that.
+const PROVISION_TIMEOUT: Duration = Duration::from_secs(25 * 60);
 const VM_CONNECT_TIMEOUT: Duration = Duration::from_secs(90);
+
+/// Options for POST /vms/{vmId}/provision. `install_desktop` applies to Linux guests only.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProvisionOptions {
+    pub enable_remote_desktop: bool,
+    pub install_desktop: bool,
+}
 
 #[derive(Deserialize)]
 struct ProblemDetails {
@@ -233,12 +242,13 @@ impl ApiClient {
         vm_id: &str,
         admin_user_name: &str,
         admin_password: &str,
-        enable_remote_desktop: bool,
+        options: ProvisionOptions,
     ) -> Result<serde_json::Value, ClientError> {
         let body = json!({
             "adminUserName": admin_user_name,
             "adminPassword": admin_password,
-            "enableRemoteDesktop": enable_remote_desktop,
+            "enableRemoteDesktop": options.enable_remote_desktop,
+            "installDesktop": options.install_desktop,
         });
         let response = self
             .send_paired_with(

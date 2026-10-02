@@ -103,20 +103,26 @@ export const fixWake = (key: string, checkIds: string[]) =>
 export const startWakeTest = (key: string, delaySeconds: number) =>
   invoke<WakeTestScheduled>("start_wake_test", { key, delaySeconds });
 
+export interface ProvisionOptions {
+  enableRemoteDesktop: boolean;
+  /** Linux only: install Xfce when the guest has no desktop environment. */
+  installDesktop: boolean;
+}
+
 /** One-time setup of this User's account on a VM. The admin password is sent to the host over mTLS. */
 export const provisionVm = (
   key: string,
   vmId: string,
   adminUserName: string,
   adminPassword: string,
-  enableRemoteDesktop: boolean,
+  options: ProvisionOptions,
 ) =>
   invoke<components["schemas"]["VmProvisioning"]>("provision_vm", {
     key,
     vmId,
     adminUserName,
     adminPassword,
-    enableRemoteDesktop,
+    options,
   });
 
 /** Opens Remote Desktop to a provisioned VM. Resolves once mstsc has been launched. */
