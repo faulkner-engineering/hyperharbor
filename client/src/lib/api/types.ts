@@ -453,6 +453,24 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /** @description Hyper-V rejected the request with an unexpected return code. */
+        HyperVOperationFailed: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description Hyper-V is not enabled or the host service cannot access it. */
+        HyperVUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
         /** @description Another pairing request is already pending. */
         TooManyRequests: {
             headers: {
@@ -513,6 +531,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            503: components["responses"]["HyperVUnavailable"];
         };
     };
     getVm: {
@@ -538,6 +557,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["HyperVUnavailable"];
         };
     };
     performVmAction: {
@@ -576,6 +596,8 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            502: components["responses"]["HyperVOperationFailed"];
+            503: components["responses"]["HyperVUnavailable"];
         };
     };
     createPairingRequest: {

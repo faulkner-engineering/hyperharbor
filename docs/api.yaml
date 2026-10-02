@@ -86,6 +86,8 @@ paths:
                   $ref: "#/components/schemas/Vm"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
 
   /vms/{vmId}:
     parameters:
@@ -105,6 +107,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
 
   /vms/{vmId}/actions:
     parameters:
@@ -147,6 +151,10 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "502":
+          $ref: "#/components/responses/HyperVOperationFailed"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
 
   /pairing/requests:
     post:
@@ -342,6 +350,18 @@ components:
             $ref: "#/components/schemas/ProblemDetails"
     Conflict:
       description: The operation is not valid in the current state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    HyperVOperationFailed:
+      description: Hyper-V rejected the request with an unexpected return code.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    HyperVUnavailable:
+      description: Hyper-V is not enabled or the host service cannot access it.
       content:
         application/problem+json:
           schema:
