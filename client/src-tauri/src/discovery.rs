@@ -73,6 +73,7 @@ fn to_entry(service: &ResolvedService, local_host_name: &str) -> HostEntry {
         source: HostSource::Discovered,
         is_local: is_local_host_name(service.get_hostname(), local_host_name),
         paired: false,
+        can_wake: false,
     }
 }
 

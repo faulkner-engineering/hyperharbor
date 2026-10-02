@@ -4,8 +4,10 @@
     isClientError,
     listHosts,
     listVms,
+    isOffline,
     onHostsChanged,
     unpair,
+    wakeHost,
     type HostEntry,
     type Vm,
   } from "$lib/api/client";
@@ -13,6 +15,7 @@
   import HostList from "$lib/components/HostList.svelte";
   import PairingPanel from "$lib/components/PairingPanel.svelte";
   import VmList from "$lib/components/VmList.svelte";
+  import WakePanel from "$lib/components/WakePanel.svelte";
 
   const REFRESH_INTERVAL_MS = 5000;
 
@@ -22,6 +25,9 @@
   let vmError = $state<string | null>(null);
   let loading = $state(false);
   let unpairing = $state(false);
+  let offline = $state(false);
+  let showWake = $state(false);
+  let wakeStatus = $state<string | null>(null);
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
   // VMs are only fetched from paired hosts; others show the pairing panel instead.
@@ -32,6 +38,9 @@
     selectedKey = key;
     vms = null;
     vmError = null;
+    offline = false;
+    showWake = false;
+    wakeStatus = null;
   }
 
   async function refreshHosts() {
@@ -48,9 +57,12 @@
       if (key !== selectedKey) return;
       vms = result;
       vmError = null;
+      offline = false;
+      wakeStatus = null;
     } catch (error) {
       if (key !== selectedKey) return;
       vms = null;
+      offline = isOffline(error);
       vmError = errorMessage(error);
       // The host forgot this device (for example, it was removed in the tray).
       if (isClientError(error) && error.code === "api" && error.status === 401) {
@@ -58,6 +70,16 @@
       }
     } finally {
       loading = false;
+    }
+  }
+
+  async function wakeSelected() {
+    if (selectedKey === null) return;
+    try {
+      await wakeHost(selectedKey);
+      wakeStatus = "Wake signal sent. The host usually responds within a minute.";
+    } catch (error) {
+      wakeStatus = errorMessage(error);
     }
   }
 
@@ -115,6 +137,9 @@
         </div>
         {#if selectedHost.paired}
           <div class="header-actions">
+            <button type="button" onclick={() => (showWake = !showWake)}>
+              Wake-on-LAN
+            </button>
             <button type="button" onclick={unpairSelected} disabled={unpairing}>Unpair</button>
             <button
               type="button"
@@ -129,12 +154,28 @@
         {#key selectedHost.key}
           <PairingPanel host={selectedHost} onpaired={refreshHosts} />
         {/key}
+      {:else if offline}
+        <div class="notice" role="status">
+          <p class="notice-title">{selectedHost.displayName} is offline or asleep.</p>
+          {#if selectedHost.canWake}
+            <button type="button" class="primary" onclick={wakeSelected}>Wake</button>
+          {:else}
+            <p>It has not shared Wake-on-LAN details, so it cannot be woken from here.</p>
+          {/if}
+          {#if wakeStatus}<p>{wakeStatus}</p>{/if}
+        </div>
       {:else if vmError}
         <div class="notice error" role="status">{vmError}</div>
       {:else if vms === null}
         <p class="placeholder">Loading…</p>
       {:else}
         <VmList {vms} />
+      {/if}
+
+      {#if selectedHost.paired && showWake}
+        {#key selectedHost.key}
+          <WakePanel host={selectedHost} />
+        {/key}
       {/if}
     {/if}
   </main>
@@ -266,6 +307,24 @@
     padding: 0.75rem 1rem;
     border-radius: 6px;
     background: var(--notice-bg);
+  }
+
+  .notice-title {
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+  }
+
+  .notice p:last-child {
+    margin-bottom: 0;
+  }
+
+  .notice button.primary {
+    padding: 0.45rem 1rem;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    cursor: pointer;
   }
 
   .notice.error {

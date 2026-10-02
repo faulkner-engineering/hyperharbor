@@ -41,6 +41,8 @@ pub struct HostEntry {
     pub is_local: bool,
     /// True when this client has paired with the host.
     pub paired: bool,
+    /// True when Wake-on-LAN details are cached, so a wake signal can be sent.
+    pub can_wake: bool,
 }
 
 /// A manually added host as stored on disk.
@@ -112,6 +114,7 @@ impl ManualHost {
             source: HostSource::Manual,
             is_local: is_local_address(&self.address, local_host_name),
             paired: false,
+            can_wake: false,
         }
     }
 }

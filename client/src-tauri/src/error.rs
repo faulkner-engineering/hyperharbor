@@ -18,6 +18,12 @@ pub enum ClientError {
     #[error("The host's identity could not be verified. Pairing was not saved. Try again, and check that you are on a trusted network.")]
     PairingVerificationFailed,
 
+    #[error("This host has not shared its Wake-on-LAN details yet. Connect to it once while it is awake.")]
+    NoWakeInfo,
+
+    #[error("The wake signal could not be sent: {0}")]
+    WakeFailed(String),
+
     #[error("The host could not be reached: {0}")]
     Unreachable(String),
 
@@ -39,6 +45,8 @@ impl ClientError {
             ClientError::PairingRequired => "pairingRequired",
             ClientError::NoPendingPairing => "noPendingPairing",
             ClientError::PairingVerificationFailed => "pairingVerificationFailed",
+            ClientError::NoWakeInfo => "noWakeInfo",
+            ClientError::WakeFailed(_) => "wakeFailed",
             ClientError::Unreachable(_) => "unreachable",
             ClientError::Api { .. } => "api",
             ClientError::InvalidResponse(_) => "invalidResponse",

@@ -12,6 +12,7 @@ use crate::identity::{pem_to_der, ClientIdentity};
 use crate::paired::PairedHost;
 use crate::spake2::ClientExchange;
 use crate::tls;
+use crate::wake::WakeAdapter;
 
 const API_BASE_PATH: &str = "/api/v1";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -213,7 +214,81 @@ impl ApiClient {
             host_certificate_fingerprint: hex::encode_upper(host_certificate_hash),
             display_name: host.display_name.clone(),
             entry_keys: vec![host.key.clone()],
+            wake_adapters: Vec::new(),
+            wake_refreshed_at: None,
         })
+    }
+
+    /// GET /wake/info: the adapters to send magic packets to.
+    pub async fn wake_info(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<Vec<WakeAdapter>, ClientError> {
+        #[derive(Deserialize)]
+        struct WakeInfo {
+            adapters: Vec<WakeAdapter>,
+        }
+
+        let response = self
+            .send_paired(host, paired, reqwest::Method::GET, "/wake/info")
+            .await?;
+        Ok(parse::<WakeInfo>(response).await?.adapters)
+    }
+
+    pub async fn wake_readiness(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired(host, paired, reqwest::Method::GET, "/wake/readiness")
+            .await?;
+        parse(response).await
+    }
+
+    /// POST /wake/readiness/fix. Returns the new readiness when the host applied the fixes (200),
+    /// or None when it is waiting for the user at the host to approve them (202).
+    pub async fn fix_wake(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        check_ids: &[String],
+    ) -> Result<Option<serde_json::Value>, ClientError> {
+        let body = json!({ "checkIds": check_ids });
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/wake/readiness/fix",
+                Some(&body),
+            )
+            .await?;
+        if response.status() == reqwest::StatusCode::ACCEPTED {
+            return Ok(None);
+        }
+        Ok(Some(parse(response).await?))
+    }
+
+    /// POST /wake/test. The host sleeps after the delay; returns the WakeTestScheduled body.
+    pub async fn start_wake_test(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        delay_seconds: u32,
+    ) -> Result<serde_json::Value, ClientError> {
+        let body = json!({ "delaySeconds": delay_seconds });
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/wake/test",
+                Some(&body),
+            )
+            .await?;
+        parse(response).await
     }
 
     async fn send_paired(
@@ -222,6 +297,18 @@ impl ApiClient {
         paired: &PairedHost,
         method: reqwest::Method,
         path: &str,
+    ) -> Result<reqwest::Response, ClientError> {
+        self.send_paired_with(host, paired, method, path, None)
+            .await
+    }
+
+    async fn send_paired_with(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
     ) -> Result<reqwest::Response, ClientError> {
         let http = self.pinned_client(paired)?;
 
@@ -233,11 +320,12 @@ impl ApiClient {
 
         let mut last_error = None;
         for base_url in candidates {
-            match http
-                .request(method.clone(), format!("{base_url}{API_BASE_PATH}{path}"))
-                .send()
-                .await
-            {
+            let mut request =
+                http.request(method.clone(), format!("{base_url}{API_BASE_PATH}{path}"));
+            if let Some(body) = body {
+                request = request.json(body);
+            }
+            match request.send().await {
                 Ok(response) => {
                     self.last_good
                         .lock()
@@ -422,6 +510,24 @@ mod tests {
             .expect("list VMs over mTLS");
         println!("VMs: {vms}");
         assert!(vms.is_array());
+
+        // Wake endpoints. The test never calls /wake/test, which would put the host to sleep.
+        let adapters = api.wake_info(&host, &paired).await.expect("wake info");
+        println!("wake adapters: {adapters:?}");
+        let readiness = api
+            .wake_readiness(&host, &paired)
+            .await
+            .expect("wake readiness");
+        println!("wake readiness: {readiness}");
+        assert!(readiness["checks"].is_array());
+        let fix = api
+            .fix_wake(&host, &paired, &["nicAllowWake".to_string()])
+            .await
+            .expect("fix request");
+        assert!(
+            fix.is_none(),
+            "an unelevated host must ask for approval instead of applying fixes"
+        );
 
         let mut wrong_pin_host = paired.clone();
         wrong_pin_host.host_id = "different".into();

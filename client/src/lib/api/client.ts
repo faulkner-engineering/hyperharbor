@@ -4,6 +4,14 @@ import type { components } from "./types";
 
 export type Vm = components["schemas"]["Vm"];
 export type VmState = components["schemas"]["VmState"];
+export type WakeReadiness = components["schemas"]["WakeReadiness"];
+export type WakeCheck = components["schemas"]["WakeCheck"];
+export type WakeTestScheduled = components["schemas"]["WakeTestScheduled"];
+
+export interface WakeFixOutcome {
+  status: "applied" | "awaitingApproval";
+  readiness: WakeReadiness | null;
+}
 
 /** A host known to the client. Mirrors HostEntry in src-tauri/src/hosts.rs. */
 export interface HostEntry {
@@ -17,6 +25,8 @@ export interface HostEntry {
   source: "discovered" | "manual";
   isLocal: boolean;
   paired: boolean;
+  /** Wake-on-LAN details are cached, so a wake signal can be sent while the host is asleep. */
+  canWake: boolean;
 }
 
 /** Error returned by Tauri commands. Mirrors ClientError in src-tauri/src/error.rs. */
@@ -27,6 +37,8 @@ export interface ClientError {
     | "pairingRequired"
     | "noPendingPairing"
     | "pairingVerificationFailed"
+    | "noWakeInfo"
+    | "wakeFailed"
     | "unreachable"
     | "api"
     | "invalidResponse"
@@ -75,6 +87,20 @@ export const completePairing = (key: string, pin: string) =>
 export const cancelPairing = (key: string) => invoke<void>("cancel_pairing", { key });
 
 export const unpair = (key: string) => invoke<void>("unpair", { key });
+
+/** Sends Wake-on-LAN magic packets. Resolves to the number of datagrams sent. */
+export const wakeHost = (key: string) => invoke<number>("wake_host", { key });
+
+export const getWakeReadiness = (key: string) =>
+  invoke<WakeReadiness>("get_wake_readiness", { key });
+
+export const fixWake = (key: string, checkIds: string[]) =>
+  invoke<WakeFixOutcome>("fix_wake", { key, checkIds });
+
+export const startWakeTest = (key: string, delaySeconds: number) =>
+  invoke<WakeTestScheduled>("start_wake_test", { key, delaySeconds });
+
+export const isOffline = (error: unknown) => isClientError(error) && error.code === "unreachable";
 
 export const onHostsChanged = (handler: () => void): Promise<UnlistenFn> =>
   listen("hosts-changed", handler);

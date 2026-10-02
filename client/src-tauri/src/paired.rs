@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::error::ClientError;
+use crate::wake::WakeAdapter;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,6 +19,12 @@ pub struct PairedHost {
     pub display_name: String,
     /// Host list keys that refer to this host (a discovered entry and any manual entries).
     pub entry_keys: Vec<String>,
+    /// Last known Wake-on-LAN adapters, kept so the host can be woken while it is unreachable.
+    #[serde(default)]
+    pub wake_adapters: Vec<WakeAdapter>,
+    /// When wake_adapters was last refreshed, in seconds since the Unix epoch.
+    #[serde(default)]
+    pub wake_refreshed_at: Option<u64>,
 }
 
 impl PairedHost {
@@ -70,6 +77,27 @@ impl PairedHostStore {
         self.persist()
     }
 
+    /// Stores fresh Wake-on-LAN adapters for a paired host.
+    pub fn update_wake(
+        &self,
+        host_id: &str,
+        adapters: Vec<WakeAdapter>,
+        now: u64,
+    ) -> Result<(), ClientError> {
+        {
+            let mut hosts = self.hosts.lock().unwrap();
+            let Some(host) = hosts
+                .iter_mut()
+                .find(|h| h.host_id.eq_ignore_ascii_case(host_id))
+            else {
+                return Ok(());
+            };
+            host.wake_adapters = adapters;
+            host.wake_refreshed_at = Some(now);
+        }
+        self.persist()
+    }
+
     pub fn remove(&self, host_id: &str) -> Result<(), ClientError> {
         self.hosts
             .lock()
@@ -102,6 +130,8 @@ mod tests {
             host_certificate_fingerprint: "AB".repeat(32),
             display_name: "PC".into(),
             entry_keys: keys.iter().map(|k| k.to_string()).collect(),
+            wake_adapters: Vec::new(),
+            wake_refreshed_at: None,
         }
     }
 

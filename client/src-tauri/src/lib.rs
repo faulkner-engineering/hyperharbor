@@ -6,6 +6,7 @@ mod identity;
 mod paired;
 mod spake2;
 mod tls;
+mod wake;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,16 +32,39 @@ struct AppState {
     _mdns: Option<mdns_sd::ServiceDaemon>,
 }
 
+/// Wake details are refreshed at most this often while a host is reachable.
+const WAKE_REFRESH_SECONDS: u64 = 60 * 60;
+
 impl AppState {
     fn host(&self, key: &str) -> Result<HostEntry, ClientError> {
         let mut host = self.hosts.get(key).ok_or(ClientError::UnknownHost)?;
-        host.paired = self.pairing_for(&host).is_some();
+        self.annotate(&mut host);
         Ok(host)
+    }
+
+    fn annotate(&self, host: &mut HostEntry) {
+        let paired = self.pairing_for(host);
+        host.paired = paired.is_some();
+        host.can_wake = paired.is_some_and(|p| !p.wake_adapters.is_empty());
     }
 
     fn pairing_for(&self, host: &HostEntry) -> Option<PairedHost> {
         self.paired.find(host.host_id.as_deref(), &host.key)
     }
+
+    fn paired_host(&self, key: &str) -> Result<(HostEntry, PairedHost), ClientError> {
+        let host = self.host(key)?;
+        let paired = self
+            .pairing_for(&host)
+            .ok_or(ClientError::PairingRequired)?;
+        Ok((host, paired))
+    }
+}
+
+fn now_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs())
 }
 
 #[derive(Serialize)]
@@ -54,7 +78,7 @@ struct PairingStarted {
 fn list_hosts(state: State<'_, AppState>) -> Vec<HostEntry> {
     let mut hosts = state.hosts.list();
     for host in &mut hosts {
-        host.paired = state.pairing_for(host).is_some();
+        state.annotate(host);
     }
     hosts
 }
@@ -81,16 +105,88 @@ fn remove_manual_host(
     Ok(())
 }
 
+/// Lists VMs and, while the host is reachable, keeps its Wake-on-LAN details fresh so it can be
+/// woken later.
 #[tauri::command]
 async fn list_vms(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     key: String,
 ) -> Result<serde_json::Value, ClientError> {
-    let host = state.host(&key)?;
-    let paired = state
-        .pairing_for(&host)
-        .ok_or(ClientError::PairingRequired)?;
-    state.api.list_vms(&host, &paired).await
+    let (host, paired) = state.paired_host(&key)?;
+    let vms = state.api.list_vms(&host, &paired).await?;
+
+    let stale = paired
+        .wake_refreshed_at
+        .is_none_or(|at| now_seconds().saturating_sub(at) > WAKE_REFRESH_SECONDS);
+    if stale {
+        if let Ok(adapters) = state.api.wake_info(&host, &paired).await {
+            let first_time = paired.wake_adapters.is_empty() && !adapters.is_empty();
+            state
+                .paired
+                .update_wake(&paired.host_id, adapters, now_seconds())?;
+            if first_time {
+                let _ = app.emit(HOSTS_CHANGED_EVENT, ());
+            }
+        }
+    }
+
+    Ok(vms)
+}
+
+/// Sends Wake-on-LAN magic packets using the cached adapter details. Returns datagrams sent.
+#[tauri::command]
+fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
+    let (_, paired) = state.paired_host(&key)?;
+    wake::wake(&paired.wake_adapters)
+}
+
+#[tauri::command]
+async fn get_wake_readiness(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.wake_readiness(&host, &paired).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WakeFixOutcome {
+    /// "applied" or "awaitingApproval".
+    status: &'static str,
+    readiness: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn fix_wake(
+    state: State<'_, AppState>,
+    key: String,
+    check_ids: Vec<String>,
+) -> Result<WakeFixOutcome, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let readiness = state.api.fix_wake(&host, &paired, &check_ids).await?;
+    Ok(WakeFixOutcome {
+        status: if readiness.is_some() {
+            "applied"
+        } else {
+            "awaitingApproval"
+        },
+        readiness,
+    })
+}
+
+#[tauri::command]
+async fn start_wake_test(
+    state: State<'_, AppState>,
+    key: String,
+    delay_seconds: u32,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .start_wake_test(&host, &paired, delay_seconds)
+        .await
 }
 
 /// Asks the host to show a PIN. The pending exchange is kept until `complete_pairing`.
@@ -213,7 +309,11 @@ pub fn run() {
             start_pairing,
             complete_pairing,
             cancel_pairing,
-            unpair
+            unpair,
+            wake_host,
+            get_wake_readiness,
+            fix_wake,
+            start_wake_test
         ])
         .run(tauri::generate_context!())
         .expect("error while running HyperHarbor client");
