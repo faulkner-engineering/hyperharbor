@@ -16,7 +16,7 @@ use tauri::{Emitter, Manager, State};
 
 use crate::api::{ApiClient, PendingPairing};
 use crate::error::ClientError;
-use crate::hosts::{HostEntry, HostRegistry};
+use crate::hosts::{HostEntry, HostRegistry, HostSource};
 use crate::identity::ClientIdentity;
 use crate::paired::{PairedHost, PairedHostStore};
 
@@ -36,10 +36,29 @@ struct AppState {
 const WAKE_REFRESH_SECONDS: u64 = 60 * 60;
 
 impl AppState {
+    /// Discovered and manual hosts, plus paired hosts that are not currently discovered.
+    /// Also records the latest discovered address of each paired host, so a host that goes to
+    /// sleep before it was ever selected is still listed with a usable address.
+    fn all_hosts(&self) -> Vec<HostEntry> {
+        let mut hosts = self.hosts.list();
+        for host in &mut hosts {
+            self.annotate(host);
+            if host.paired && host.source == HostSource::Discovered {
+                if let Some(paired) = self.pairing_for(host) {
+                    // Best effort: a failed write only means the stored address is older.
+                    let _ = self.paired.update_endpoint(&paired.host_id, host);
+                }
+            }
+        }
+        paired::add_remembered(&mut hosts, &self.paired.all(), self.hosts.local_host_name());
+        hosts
+    }
+
     fn host(&self, key: &str) -> Result<HostEntry, ClientError> {
-        let mut host = self.hosts.get(key).ok_or(ClientError::UnknownHost)?;
-        self.annotate(&mut host);
-        Ok(host)
+        self.all_hosts()
+            .into_iter()
+            .find(|host| host.key == key)
+            .ok_or(ClientError::UnknownHost)
     }
 
     fn annotate(&self, host: &mut HostEntry) {
@@ -76,11 +95,7 @@ struct PairingStarted {
 
 #[tauri::command]
 fn list_hosts(state: State<'_, AppState>) -> Vec<HostEntry> {
-    let mut hosts = state.hosts.list();
-    for host in &mut hosts {
-        state.annotate(host);
-    }
-    hosts
+    state.all_hosts()
 }
 
 #[tauri::command]
@@ -115,6 +130,11 @@ async fn list_vms(
 ) -> Result<serde_json::Value, ClientError> {
     let (host, paired) = state.paired_host(&key)?;
     let vms = state.api.list_vms(&host, &paired).await?;
+
+    // Remember where the host was found so it stays listed while asleep.
+    if host.source != HostSource::Remembered {
+        state.paired.update_endpoint(&paired.host_id, &host)?;
+    }
 
     let stale = paired
         .wake_refreshed_at

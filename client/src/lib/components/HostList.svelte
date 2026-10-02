@@ -33,6 +33,12 @@
     }
   }
 
+  function statusLabel(host: HostEntry): string {
+    if (host.source === "remembered") return "Paired · Not on network";
+    if (host.paired) return "Paired";
+    return host.source === "discovered" ? "Discovered" : "Added";
+  }
+
   async function remove(key: string) {
     try {
       await removeManualHost(key);
@@ -55,7 +61,7 @@
             <span class="name">{host.displayName}</span>
             <span class="meta">
               {#if host.isLocal}This PC{:else}{host.addresses[0] ?? ""}{/if}
-              · {host.paired ? "Paired" : host.source === "discovered" ? "Discovered" : "Added"}
+              · {statusLabel(host)}
             </span>
           </button>
           {#if host.source === "manual"}

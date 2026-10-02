@@ -22,7 +22,8 @@ export interface HostEntry {
   addresses: string[];
   port: number;
   apiVersion: string | null;
-  source: "discovered" | "manual";
+  /** "remembered": a paired host that is not announcing itself, for example while asleep. */
+  source: "discovered" | "manual" | "remembered";
   isLocal: boolean;
   paired: boolean;
   /** Wake-on-LAN details are cached, so a wake signal can be sent while the host is asleep. */

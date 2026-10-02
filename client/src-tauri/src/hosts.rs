@@ -22,6 +22,8 @@ pub const TXT_API_VERSION: &str = "api";
 pub enum HostSource {
     Discovered,
     Manual,
+    /// A paired host that is not currently announcing itself, for example because it is asleep.
+    Remembered,
 }
 
 /// A host shown in the client, either discovered over mDNS or added manually.
@@ -147,6 +149,17 @@ pub fn is_local_address(address: &str, local_host_name: &str) -> bool {
     }
 }
 
+/// Local host first, then by name.
+pub fn sort_hosts(hosts: &mut [HostEntry]) {
+    hosts.sort_by(|a, b| {
+        b.is_local.cmp(&a.is_local).then_with(|| {
+            a.display_name
+                .to_lowercase()
+                .cmp(&b.display_name.to_lowercase())
+        })
+    });
+}
+
 /// Builds the display label for a discovered instance, for example "GAMING-PC" from
 /// "GAMING-PC._hyperharbor._tcp.local.".
 pub fn instance_label(full_name: &str) -> String {
@@ -196,18 +209,8 @@ impl HostRegistry {
                 .iter()
                 .map(|m| m.to_entry(&self.local_host_name)),
         );
-        hosts.sort_by(|a, b| {
-            b.is_local.cmp(&a.is_local).then_with(|| {
-                a.display_name
-                    .to_lowercase()
-                    .cmp(&b.display_name.to_lowercase())
-            })
-        });
+        sort_hosts(&mut hosts);
         hosts
-    }
-
-    pub fn get(&self, key: &str) -> Option<HostEntry> {
-        self.list().into_iter().find(|host| host.key == key)
     }
 
     /// Records a discovered host. Returns true when the visible list changed.

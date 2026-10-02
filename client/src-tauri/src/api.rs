@@ -216,6 +216,9 @@ impl ApiClient {
             entry_keys: vec![host.key.clone()],
             wake_adapters: Vec::new(),
             wake_refreshed_at: None,
+            addresses: host.addresses.clone(),
+            port: host.port,
+            host_name: host.host_name.clone(),
         })
     }
 
