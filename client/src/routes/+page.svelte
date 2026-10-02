@@ -1,41 +1,238 @@
 <script lang="ts">
-  // Placeholder view. Host discovery and the VM list arrive in Phase 4.
+  import {
+    errorMessage,
+    isClientError,
+    listHosts,
+    listVms,
+    onHostsChanged,
+    type HostEntry,
+    type Vm,
+  } from "$lib/api/client";
+  import { onMount } from "svelte";
+  import HostList from "$lib/components/HostList.svelte";
+  import VmList from "$lib/components/VmList.svelte";
+
+  const REFRESH_INTERVAL_MS = 5000;
+
+  let hosts = $state<HostEntry[]>([]);
+  let selectedKey = $state<string | null>(null);
+  let vms = $state<Vm[] | null>(null);
+  let vmError = $state<{ pairing: boolean; message: string } | null>(null);
+  let loading = $state(false);
+
+  const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
+
+  function selectHost(key: string | null) {
+    if (key === selectedKey) return;
+    selectedKey = key;
+    vms = null;
+    vmError = null;
+  }
+
+  async function refreshHosts() {
+    hosts = await listHosts();
+    if (selectedKey === null || !hosts.some((host) => host.key === selectedKey)) {
+      selectHost(hosts[0]?.key ?? null);
+    }
+  }
+
+  async function refreshVms(key: string) {
+    loading = true;
+    try {
+      const result = await listVms(key);
+      if (key !== selectedKey) return;
+      vms = result;
+      vmError = null;
+    } catch (error) {
+      if (key !== selectedKey) return;
+      vms = null;
+      vmError = {
+        pairing: isClientError(error) && error.code === "pairingRequired",
+        message: errorMessage(error),
+      };
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(() => {
+    refreshHosts();
+    const unlisten = onHostsChanged(refreshHosts);
+    return () => {
+      unlisten.then((stop) => stop());
+    };
+  });
+
+  // Poll the selected host's VM list while it is selected.
+  $effect(() => {
+    const key = selectedKey;
+    if (key === null) return;
+
+    refreshVms(key);
+    const timer = setInterval(() => refreshVms(key), REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  });
 </script>
 
-<main>
-  <h1>HyperHarbor</h1>
-  <p>No hosts yet.</p>
-</main>
+<div class="app">
+  <aside>
+    <h1>HyperHarbor</h1>
+    <HostList {hosts} {selectedKey} onselect={selectHost} />
+  </aside>
+
+  <main>
+    {#if selectedHost === null}
+      <p class="placeholder">Select a host to see its virtual machines.</p>
+    {:else}
+      <header>
+        <div>
+          <h2>{selectedHost.displayName}</h2>
+          <p class="subtitle">
+            {selectedHost.isLocal ? "This PC" : selectedHost.addresses.join(", ")}
+            · port {selectedHost.port}
+          </p>
+        </div>
+        <button
+          type="button"
+          onclick={() => selectedKey && refreshVms(selectedKey)}
+          disabled={loading}>Refresh</button
+        >
+      </header>
+
+      {#if vmError}
+        <div class={vmError.pairing ? "notice" : "notice error"} role="status">
+          {vmError.message}
+        </div>
+      {:else if vms === null}
+        <p class="placeholder">Loading…</p>
+      {:else}
+        <VmList {vms} />
+      {/if}
+    {/if}
+  </main>
+</div>
 
 <style>
-  :root {
+  :global(:root) {
+    --bg: #f6f8fa;
+    --surface: #ffffff;
+    --text: #1f2328;
+    --muted: #59636e;
+    --border: #d1d9e0;
+    --hover: #eef1f4;
+    --selected: #dde7f3;
+    --danger: #cf222e;
+    --ok-bg: #dafbe1;
+    --ok-fg: #116329;
+    --idle-bg: #eef1f4;
+    --warn-bg: #fff8c5;
+    --warn-fg: #7d4e00;
+    --busy-bg: #ddf4ff;
+    --busy-fg: #0550ae;
+    --notice-bg: #ddf4ff;
+    --error-bg: #ffebe9;
     font-family: "Segoe UI", system-ui, sans-serif;
-    color: #1f2328;
-    background-color: #f6f8fa;
-  }
-
-  main {
-    padding: 2rem;
-  }
-
-  h1 {
-    margin: 0 0 0.5rem;
-    font-size: 1.5rem;
-  }
-
-  p {
-    margin: 0;
-    color: #59636e;
+    font-size: 14px;
+    color: var(--text);
+    background-color: var(--bg);
   }
 
   @media (prefers-color-scheme: dark) {
-    :root {
-      color: #e6edf3;
-      background-color: #0d1117;
+    :global(:root) {
+      --bg: #0d1117;
+      --surface: #151b23;
+      --text: #e6edf3;
+      --muted: #9198a1;
+      --border: #30363d;
+      --hover: #1c232c;
+      --selected: #1f2d3d;
+      --danger: #ff7b72;
+      --ok-bg: #12261e;
+      --ok-fg: #56d364;
+      --idle-bg: #21262d;
+      --warn-bg: #2e2410;
+      --warn-fg: #e3b341;
+      --busy-bg: #0c2d4b;
+      --busy-fg: #79c0ff;
+      --notice-bg: #0c2d4b;
+      --error-bg: #3c1618;
     }
+  }
 
-    p {
-      color: #9198a1;
-    }
+  :global(body) {
+    margin: 0;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    height: 100vh;
+  }
+
+  aside {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.25rem 1rem;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  main {
+    padding: 1.25rem 1.5rem;
+    overflow-y: auto;
+  }
+
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .subtitle {
+    margin: 0.2rem 0 0;
+    color: var(--muted);
+  }
+
+  header button {
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: inherit;
+    cursor: pointer;
+  }
+
+  header button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .placeholder {
+    color: var(--muted);
+  }
+
+  .notice {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    background: var(--notice-bg);
+  }
+
+  .notice.error {
+    background: var(--error-bg);
+    color: var(--danger);
   }
 </style>
