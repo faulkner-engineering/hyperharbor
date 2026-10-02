@@ -13,7 +13,7 @@ public class CimHyperVReaderLiveTests
     [HyperVFact]
     public async Task ListAsync_ReturnsVmsWithDistinctIdsAndNames()
     {
-        var inventory = new VmInventory(new CimHyperVReader(NullLogger<CimHyperVReader>.Instance));
+        var inventory = new VmInventory(new CimHyperVReader(NullLogger<CimHyperVReader>.Instance), new TcpRdpProbe(TimeProvider.System));
 
         var vms = await inventory.ListAsync(CancellationToken.None);
 
@@ -29,7 +29,7 @@ public class CimHyperVReaderLiveTests
     [HyperVFact]
     public async Task ListAsync_RunningVmsReportSummaryMetrics()
     {
-        var inventory = new VmInventory(new CimHyperVReader(NullLogger<CimHyperVReader>.Instance));
+        var inventory = new VmInventory(new CimHyperVReader(NullLogger<CimHyperVReader>.Instance), new TcpRdpProbe(TimeProvider.System));
 
         var vms = await inventory.ListAsync(CancellationToken.None);
 

@@ -108,7 +108,6 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 - packaging/host/Diagnose-Wake.ps1 collects what the checks cannot see; -Listen proves packet delivery.
 
 ## Open issues (not yet scheduled)
-- rdpAvailable is true for any running VM with an address, even with nothing on port 3389. Fix in Phase 7 with a probe.
 - Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray
   should verify the pipe server process.
 - Anyone on the LAN can repeatedly start pairing requests (PIN window spam). Consider rate limiting.

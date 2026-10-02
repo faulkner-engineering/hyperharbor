@@ -70,3 +70,21 @@ internal sealed class FakePowerInvoker : IHyperVPowerInvoker
         return Task.CompletedTask;
     }
 }
+
+/// <summary>Reports a fixed Remote Desktop reachability and records probed addresses.</summary>
+internal sealed class FakeRdpProbe : HyperHarbor.Host.Core.HyperV.IRdpProbe
+{
+    public bool Reachable { get; set; } = true;
+
+    public List<string> Probed { get; } = [];
+
+    public Task<bool> IsReachableAsync(string address, CancellationToken cancellationToken)
+    {
+        lock (Probed)
+        {
+            Probed.Add(address);
+        }
+
+        return Task.FromResult(Reachable);
+    }
+}

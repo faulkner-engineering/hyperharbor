@@ -12,6 +12,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddVmInventory(this IServiceCollection services)
     {
         services.AddSingleton<IHyperVReader, CimHyperVReader>();
+        services.AddSingleton<IRdpProbe>(provider => new TcpRdpProbe(provider.GetService<TimeProvider>() ?? TimeProvider.System));
         services.AddSingleton<IVmInventory, VmInventory>();
         return services;
     }

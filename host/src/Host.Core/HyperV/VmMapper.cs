@@ -122,8 +122,10 @@ public static class VmMapper
             CpuUsagePercent: state == VmState.Running && summary?.ProcessorLoad is { } load ? Math.Min((int)load, 100) : null,
             MemoryAssignedMb: isActive && summary?.MemoryUsageMb is { } memory ? (long)memory : null,
             Generation: string.Equals(settings?.SubType, Generation2SubType, StringComparison.OrdinalIgnoreCase) ? 2 : 1,
-            RdpAvailable: state == VmState.Running && ipAddresses.Count > 0,
-            IpAddresses: ipAddresses);
+            // Set by VmInventory after probing port 3389; the mapper only picks the address.
+            RdpAvailable: false,
+            IpAddresses: ipAddresses,
+            RemoteDesktop: new VmRemoteDesktop(ipAddresses.FirstOrDefault(), false));
     }
 
     /// <summary>

@@ -67,7 +67,8 @@ public class VmMapperTests
         Assert.Equal(12, vm.CpuUsagePercent);
         Assert.Equal(8192, vm.MemoryAssignedMb);
         Assert.Equal(2, vm.Generation);
-        Assert.True(vm.RdpAvailable);
+        Assert.False(vm.RdpAvailable); // Set by VmInventory after probing.
+        Assert.Equal(new VmRemoteDesktop("192.168.1.50", false), vm.RemoteDesktop);
         Assert.Equal(["192.168.1.50", "2001:db8::5"], vm.IpAddresses);
     }
 
@@ -109,7 +110,7 @@ public class VmMapperTests
     }
 
     [Fact]
-    public void Map_RunningVmWithoutGuestAddresses_IsNotRdpAvailable()
+    public void Map_RunningVmWithoutGuestAddresses_HasNoRemoteDesktopAddress()
     {
         var snapshot = Snapshot(
             systems: [new ComputerSystemRow(VmA, "No KVP", 2, 1000)],
@@ -118,7 +119,7 @@ public class VmMapperTests
         var vm = Assert.Single(VmMapper.Map(snapshot));
 
         Assert.Empty(vm.IpAddresses);
-        Assert.False(vm.RdpAvailable);
+        Assert.Null(vm.RemoteDesktop?.Address);
     }
 
     [Fact]
