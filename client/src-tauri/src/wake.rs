@@ -38,17 +38,16 @@ pub fn parse_mac(text: &str) -> Option<[u8; 6]> {
 
 /// Sends magic packets for every adapter to its subnet broadcast address and to the limited
 /// broadcast address. Returns how many datagrams were sent.
+///
+/// Each packet is sent from the local address on the host's subnet. Windows sends
+/// 255.255.255.255 out of a single interface chosen by metric, which on a machine with virtual
+/// adapters (Hyper-V, VMware, VPN) is often not the LAN, so an unbound socket can miss the host.
 pub fn wake(adapters: &[WakeAdapter]) -> Result<usize, ClientError> {
     if adapters.is_empty() {
         return Err(ClientError::NoWakeInfo);
     }
 
-    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
-        .map_err(|e| ClientError::WakeFailed(e.to_string()))?;
-    socket
-        .set_broadcast(true)
-        .map_err(|e| ClientError::WakeFailed(e.to_string()))?;
-
+    let locals = local_ipv4_networks();
     let mut sent = 0;
     let mut last_error = None;
     for adapter in adapters {
@@ -56,6 +55,23 @@ pub fn wake(adapters: &[WakeAdapter]) -> Result<usize, ClientError> {
             continue;
         };
         let packet = magic_packet(mac);
+
+        let source = adapter
+            .ipv4_address
+            .parse::<Ipv4Addr>()
+            .ok()
+            .and_then(|host| source_for(&locals, host))
+            .unwrap_or(Ipv4Addr::UNSPECIFIED);
+        let socket = match UdpSocket::bind((source, 0)).and_then(|socket| {
+            socket.set_broadcast(true)?;
+            Ok(socket)
+        }) {
+            Ok(socket) => socket,
+            Err(error) => {
+                last_error = Some(error);
+                continue;
+            }
+        };
 
         let mut targets = vec![Ipv4Addr::BROADCAST];
         if let Ok(subnet) = adapter.broadcast_address.parse::<Ipv4Addr>() {
@@ -78,6 +94,29 @@ pub fn wake(adapters: &[WakeAdapter]) -> Result<usize, ClientError> {
         ));
     }
     Ok(sent)
+}
+
+/// Local IPv4 addresses with their netmasks, excluding loopback.
+fn local_ipv4_networks() -> Vec<(Ipv4Addr, Ipv4Addr)> {
+    if_addrs::get_if_addrs()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|interface| match interface.addr {
+            if_addrs::IfAddr::V4(v4) if !v4.ip.is_loopback() => Some((v4.ip, v4.netmask)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The local address on the same subnet as `host`, if this machine has one.
+fn source_for(locals: &[(Ipv4Addr, Ipv4Addr)], host: Ipv4Addr) -> Option<Ipv4Addr> {
+    locals
+        .iter()
+        .find(|(ip, mask)| {
+            let mask = u32::from(*mask);
+            mask != 0 && u32::from(*ip) & mask == u32::from(host) & mask
+        })
+        .map(|(ip, _)| *ip)
 }
 
 #[cfg(test)]
@@ -103,6 +142,26 @@ mod tests {
         assert_eq!(parse_mac("902E1666C5AE"), expected);
         assert_eq!(parse_mac("90-2E-16"), None);
         assert_eq!(parse_mac("not a mac"), None);
+    }
+
+    #[test]
+    fn source_is_the_local_address_on_the_hosts_subnet() {
+        // This laptop on 2026-10-02: VMware and Hyper-V adapters plus Wi-Fi on the LAN.
+        let mask24: Ipv4Addr = "255.255.255.0".parse().unwrap();
+        let locals = vec![
+            ("192.168.249.1".parse().unwrap(), mask24),
+            (
+                "172.25.176.1".parse().unwrap(),
+                "255.255.240.0".parse().unwrap(),
+            ),
+            ("192.168.0.70".parse().unwrap(), mask24),
+        ];
+
+        assert_eq!(
+            source_for(&locals, "192.168.0.235".parse().unwrap()),
+            Some("192.168.0.70".parse().unwrap())
+        );
+        assert_eq!(source_for(&locals, "10.1.2.3".parse().unwrap()), None);
     }
 
     #[test]

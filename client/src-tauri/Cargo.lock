@@ -1569,6 +1569,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hex",
  "hmac",
+ "if-addrs",
  "keyring",
  "mdns-sd",
  "num-bigint 0.5.1",
