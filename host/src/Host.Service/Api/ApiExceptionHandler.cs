@@ -1,5 +1,6 @@
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Pairing;
+using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Host.Core.Power;
@@ -33,6 +34,10 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             WakeTestAlreadyScheduledException => (StatusCodes.Status409Conflict, "Wake test already scheduled"),
             WakeFixUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Approval unavailable"),
             InvalidWakeRequestException => (StatusCodes.Status400BadRequest, "Invalid request"),
+            GuestCredentialRejectedException => (StatusCodes.Status422UnprocessableEntity, "Administrator credential rejected"),
+            GuestAccountConflictException => (StatusCodes.Status409Conflict, "Cannot provision"),
+            GuestUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Guest unavailable"),
+            GuestOperationException => (StatusCodes.Status502BadGateway, "Guest operation failed"),
             PairingException pairing => pairing.Error switch
             {
                 PairingError.InvalidRequest => (StatusCodes.Status400BadRequest, "Invalid pairing request"),

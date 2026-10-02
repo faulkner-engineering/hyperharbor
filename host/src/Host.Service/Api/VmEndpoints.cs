@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Power;
+using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -20,24 +23,33 @@ public static class VmEndpoints
         vms.MapGet("/", ListVmsAsync).WithName("listVms");
         vms.MapGet("/{vmId:guid}", GetVmAsync).WithName("getVm");
         vms.MapPost("/{vmId:guid}/actions", PerformVmActionAsync).WithName("performVmAction");
+        vms.MapPost("/{vmId:guid}/provision", ProvisionAsync).WithName("provisionVm");
 
         return endpoints;
     }
 
-    private static async Task<Ok<IReadOnlyList<Vm>>> ListVmsAsync(IVmInventory inventory, CancellationToken cancellationToken)
+    private static async Task<Ok<IReadOnlyList<Vm>>> ListVmsAsync(
+        IVmInventory inventory,
+        ProvisioningStore provisioning,
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
     {
-        return TypedResults.Ok(await inventory.ListAsync(cancellationToken));
+        var userId = user.UserId();
+        var vms = await inventory.ListAsync(cancellationToken);
+        return TypedResults.Ok<IReadOnlyList<Vm>>(vms.Select(vm => ForUser(vm, userId, provisioning)).ToList());
     }
 
     private static async Task<Results<Ok<Vm>, ProblemHttpResult>> GetVmAsync(
         Guid vmId,
         IVmInventory inventory,
+        ProvisioningStore provisioning,
+        ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var vm = await inventory.GetAsync(vmId, cancellationToken);
         return vm is null
             ? TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: "Virtual machine not found", detail: $"Virtual machine {vmId} was not found.")
-            : TypedResults.Ok(vm);
+            : TypedResults.Ok(ForUser(vm, user.UserId(), provisioning));
     }
 
     private static async Task<Accepted<VmActionResult>> PerformVmActionAsync(
@@ -49,4 +61,21 @@ public static class VmEndpoints
         var result = await powerService.PerformAsync(vmId, request.Action, cancellationToken);
         return TypedResults.Accepted($"{BasePath}/{vmId}", result);
     }
+
+    private static async Task<Ok<VmProvisioning>> ProvisionAsync(
+        Guid vmId,
+        ProvisionVmRequest request,
+        ProvisioningService provisioning,
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
+    {
+        return TypedResults.Ok(await provisioning.ProvisionAsync(vmId, user.UserId(), request, cancellationToken));
+    }
+
+    /// <summary>Adds the per-User fields; the inventory itself is shared by all Users.</summary>
+    private static Vm ForUser(Vm vm, Guid userId, ProvisioningStore provisioning) => vm with
+    {
+        Provisioned = provisioning.Find(vm.Id, userId) is not null,
+        RemoteDesktop = vm.RemoteDesktop ?? new VmRemoteDesktop(vm.IpAddresses.FirstOrDefault(), vm.RdpAvailable),
+    };
 }

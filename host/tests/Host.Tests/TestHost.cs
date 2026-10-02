@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
+using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Core.Wake;
@@ -45,6 +46,7 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IWakeFixApprover>(Tray);
                 services.AddSingleton<IWakeEnvironmentReader>(Wake);
                 services.AddSingleton<ISleepController>(Sleep);
+                services.AddSingleton<IGuestAccountManager>(Guest);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
             }));
     }
@@ -60,6 +62,8 @@ internal sealed class TestHost : IDisposable
     public FakeWakeEnvironment Wake { get; } = new();
 
     public FakeSleepController Sleep { get; } = new();
+
+    public FakeGuestAccountManager Guest { get; } = new();
 
     public IServiceProvider Services => _factory.Services;
 

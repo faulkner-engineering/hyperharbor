@@ -3,6 +3,7 @@ using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Pairing;
+using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Core.Wake;
@@ -71,6 +72,11 @@ builder.Services.AddSingleton<ISleepController, WindowsSleepController>();
 builder.Services.AddSingleton<WakeTestScheduler>();
 builder.Services.AddSingleton<IWakeFixApprover>(services => services.GetRequiredService<TrayPipeServer>());
 builder.Services.AddSingleton<WakeFixCoordinator>();
+
+builder.Services.AddSingleton(new VmCredentialStore(dataDirectory));
+builder.Services.AddSingleton(new ProvisioningStore(dataDirectory));
+builder.Services.AddSingleton<IGuestAccountManager, PowerShellDirectAccountManager>();
+builder.Services.AddSingleton<ProvisioningService>();
 
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))
