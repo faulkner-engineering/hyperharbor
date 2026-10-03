@@ -143,7 +143,9 @@ impl ApiClient {
                         captured_certificate,
                     });
                 }
-                Err(error) => last_error = Some(error),
+                // A request that may have reached the host (timeout) would create a second request.
+                Err(error) if tries_next_address(&error) => last_error = Some(error),
+                Err(error) => return Err(unreachable(Some(error))),
             }
         }
 
@@ -260,7 +262,7 @@ impl ApiClient {
                 host,
                 paired,
                 reqwest::Method::POST,
-                &format!("/vms/{vm_id}/provision"),
+                &vm_path(vm_id, "provision")?,
                 Some(&body),
                 Some(PROVISION_TIMEOUT),
             )
@@ -280,7 +282,7 @@ impl ApiClient {
                 host,
                 paired,
                 reqwest::Method::POST,
-                &format!("/vms/{vm_id}/connect"),
+                &vm_path(vm_id, "connect")?,
                 None,
                 Some(VM_CONNECT_TIMEOUT),
             )
@@ -411,7 +413,7 @@ impl ApiClient {
                 // Only a failed connection proves the request never reached the host. After a
                 // timeout the host may still be working (provisioning, rotating), so retrying at
                 // another address could repeat a non-idempotent request.
-                Err(error) if error.is_connect() => last_error = Some(error),
+                Err(error) if tries_next_address(&error) => last_error = Some(error),
                 Err(error) => return Err(unreachable(Some(error))),
             }
         }
@@ -430,6 +432,26 @@ impl ApiClient {
         let client = build_client(tls::pinned(&self.identity, hash));
         clients.insert(paired.host_id.clone(), client.clone());
         Ok(client)
+    }
+}
+
+/// Only a failed connection proves a request never reached the host, so only then is the next
+/// address tried.
+fn tries_next_address(error: &reqwest::Error) -> bool {
+    error.is_connect()
+}
+
+/// "/vms/{vmId}/{action}". The ID comes from the frontend; only a GUID may become part of a path.
+fn vm_path(vm_id: &str, action: &str) -> Result<String, ClientError> {
+    let is_guid = vm_id.len() == 36
+        && vm_id.char_indices().all(|(index, c)| match index {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_hexdigit(),
+        });
+    if is_guid {
+        Ok(format!("/vms/{vm_id}/{action}"))
+    } else {
+        Err(ClientError::InvalidVmId)
     }
 }
 
@@ -641,5 +663,315 @@ mod tests {
     fn candidates_use_advertised_addresses_for_remote_hosts() {
         let host = ManualHost::parse("pc.lan").unwrap().to_entry("other");
         assert_eq!(candidate_base_urls(&host), vec!["https://pc.lan:48443"]);
+    }
+}
+
+/// Requests against an in-process HTTPS server: certificate pinning, which errors move on to the
+/// next address, error mapping, and pairing verification.
+#[cfg(test)]
+mod server_tests {
+    use super::*;
+    use crate::hosts::HostSource;
+    use crate::identity::ClientIdentity;
+    use crate::test_server::{closed_address, Reply, Request, TestServer};
+
+    const VM_ID: &str = "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b";
+
+    fn api() -> ApiClient {
+        let (identity, _) = ClientIdentity::generate("test").unwrap();
+        ApiClient::new(Arc::new(identity), "Test Device".into())
+    }
+
+    fn host(addresses: &[&str], port: u16) -> HostEntry {
+        HostEntry {
+            key: "test".into(),
+            display_name: "Test Host".into(),
+            host_id: Some("host-1".into()),
+            host_name: None,
+            addresses: addresses.iter().map(|a| a.to_string()).collect(),
+            port,
+            api_version: None,
+            source: HostSource::Manual,
+            is_local: false,
+            paired: true,
+            can_wake: false,
+        }
+    }
+
+    fn paired(certificate_hash: [u8; 32]) -> PairedHost {
+        PairedHost {
+            host_id: "host-1".into(),
+            device_id: "device-1".into(),
+            host_certificate_fingerprint: hex::encode_upper(certificate_hash),
+            display_name: "Test Host".into(),
+            entry_keys: vec!["test".into()],
+            wake_adapters: Vec::new(),
+            wake_refreshed_at: None,
+            addresses: Vec::new(),
+            port: 0,
+            host_name: None,
+        }
+    }
+
+    fn ok_list(_: &Request) -> Reply {
+        Reply::json(200, "[]")
+    }
+
+    #[tokio::test]
+    async fn pinned_certificate_is_accepted() {
+        let server = TestServer::start("127.0.0.1:0", ok_list);
+        let target = host(&["127.0.0.1"], server.address.port());
+
+        let vms = api()
+            .list_vms(&target, &paired(server.certificate_hash()))
+            .await;
+
+        assert_eq!(vms.unwrap(), json!([]));
+        assert_eq!(server.requests().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn different_certificate_is_rejected_before_any_request() {
+        let server = TestServer::start("127.0.0.1:0", ok_list);
+        let target = host(&["127.0.0.1"], server.address.port());
+
+        let result = api().list_vms(&target, &paired([0xAB; 32])).await;
+
+        assert!(
+            matches!(result, Err(ClientError::Unreachable(_))),
+            "{result:?}"
+        );
+        assert!(server.requests().is_empty(), "a request reached the host");
+    }
+
+    #[test]
+    fn capturing_config_records_the_presented_certificate() {
+        let server = TestServer::start("127.0.0.1:0", ok_list);
+        let (identity, _) = ClientIdentity::generate("test").unwrap();
+        let (config, slot) = tls::capturing(&identity);
+        let mut connection = rustls::ClientConnection::new(
+            Arc::new(config),
+            rustls::pki_types::ServerName::try_from("localhost").unwrap(),
+        )
+        .unwrap();
+        let mut socket = std::net::TcpStream::connect(server.address).unwrap();
+
+        while connection.is_handshaking() {
+            connection.complete_io(&mut socket).unwrap();
+        }
+
+        assert_eq!(
+            slot.lock().unwrap().as_deref(),
+            Some(server.certificate_der.as_slice())
+        );
+    }
+
+    #[tokio::test]
+    async fn refused_connection_moves_on_to_the_next_address() {
+        // Two loopback addresses share one port: nothing listens on 127.0.0.2.
+        let server = TestServer::start("127.0.0.1:0", ok_list);
+        let target = host(&["127.0.0.2", "127.0.0.1"], server.address.port());
+        let api = api();
+
+        api.list_vms(&target, &paired(server.certificate_hash()))
+            .await
+            .unwrap();
+
+        let last_good = api.last_good.lock().unwrap().get("host-1").cloned();
+        assert_eq!(
+            last_good,
+            Some(format!("https://127.0.0.1:{}", server.address.port()))
+        );
+    }
+
+    #[tokio::test]
+    async fn timeout_does_not_retry_at_another_address() {
+        let slow = TestServer::start("127.0.0.1:0", |_| {
+            Reply::json(200, "{}").after(Duration::from_secs(5))
+        });
+        let port = slow.address.port();
+        // Same certificate, so a repeated request would pass pinning and be recorded.
+        let other = slow
+            .start_sharing_certificate(&format!("127.0.0.2:{port}"), |_| Reply::json(200, "{}"));
+        let target = host(&["127.0.0.1", "127.0.0.2"], port);
+
+        let result = api()
+            .send_paired_with(
+                &target,
+                &paired(slow.certificate_hash()),
+                reqwest::Method::POST,
+                &vm_path(VM_ID, "connect").unwrap(),
+                None,
+                // Long enough that the deadline falls after the request is sent even when tests
+                // run in parallel. A deadline during the handshake is a connect error, which is
+                // correctly retried because nothing reached the host.
+                Some(Duration::from_secs(2)),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(ClientError::Unreachable(_))),
+            "{result:?}"
+        );
+        assert_eq!(slow.requests().len(), 1);
+        assert!(other.requests().is_empty(), "the request was repeated");
+    }
+
+    #[tokio::test]
+    async fn problem_details_become_api_errors() {
+        let server = TestServer::start("127.0.0.1:0", |request| {
+            if request.path.ends_with("/connect") {
+                Reply::json(
+                    409,
+                    r#"{"title":"Cannot provision","status":409,"detail":"Start the VM first."}"#,
+                )
+            } else {
+                Reply::json(503, r#"{"title":"Hyper-V unavailable","status":503}"#)
+            }
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+
+        let connect = api.connect_vm(&target, &paired, VM_ID).await;
+        let list = api.list_vms(&target, &paired).await;
+
+        assert!(
+            matches!(&connect, Err(ClientError::Api { status: 409, message }) if message == "Start the VM first."),
+            "{connect:?}"
+        );
+        assert!(
+            matches!(&list, Err(ClientError::Api { status: 503, message }) if message == "Hyper-V unavailable"),
+            "{list:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn vm_ids_that_are_not_guids_never_reach_the_host() {
+        let server = TestServer::start("127.0.0.1:0", ok_list);
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+
+        for vm_id in [
+            "../pairing/devices/self",
+            "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b/../x",
+            "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8?",
+            "0b9a6f53x1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+            "",
+        ] {
+            let result = api.connect_vm(&target, &paired, vm_id).await;
+            assert!(
+                matches!(result, Err(ClientError::InvalidVmId)),
+                "{vm_id}: {result:?}"
+            );
+        }
+        assert!(server.requests().is_empty());
+    }
+
+    fn vector(name: &str) -> Vec<u8> {
+        let vectors: HashMap<String, String> = serde_json::from_str(include_str!(
+            "../../../host/tests/Host.Tests/Pairing/Spake2Vectors.json"
+        ))
+        .unwrap();
+        hex::decode(&vectors[name]).unwrap()
+    }
+
+    /// A pairing host whose confirm response returns `certificate_pem`, or its own certificate when
+    /// None. It never knows the PIN, so its confirmation is always wrong.
+    fn pairing_server(certificate_pem: Option<String>) -> TestServer {
+        let host_share = encode_base64(&vector("Y"));
+        let returned = Arc::new(Mutex::new(certificate_pem.clone().unwrap_or_default()));
+        let returned_in_handler = returned.clone();
+        let server = TestServer::start("127.0.0.1:0", move |request| {
+            match (request.method.as_str(), request.path.as_str()) {
+                ("POST", "/api/v1/pairing/requests") => Reply::json(
+                    201,
+                    json!({
+                        "pairingId": "3f2a9c1d-4b5e-4f70-8192-a3b4c5d6e7f8",
+                        "hostShare": host_share,
+                        "expiresAt": "2030-01-01T00:00:00Z",
+                    })
+                    .to_string(),
+                ),
+                ("POST", _) => Reply::json(
+                    200,
+                    json!({
+                        "deviceId": "device-1",
+                        "hostId": "host-1",
+                        "userId": "user-1",
+                        "hostCertificatePem": *returned_in_handler.lock().unwrap(),
+                        "hostConfirmation": encode_base64(&[0u8; 32]),
+                    })
+                    .to_string(),
+                ),
+                _ => Reply::json(404, r#"{"title":"Pairing request not found","status":404}"#),
+            }
+        });
+        if certificate_pem.is_none() {
+            *returned.lock().unwrap() = server.certificate_pem.clone();
+        }
+        server
+    }
+
+    #[tokio::test]
+    async fn pairing_rejects_a_host_that_returns_another_certificate() {
+        let other = TestServer::start("127.0.0.1:0", ok_list);
+        let server = pairing_server(Some(other.certificate_pem.clone()));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+
+        let pending = api.start_pairing(&target).await.unwrap();
+        let result = api.complete_pairing(&target, &pending, "482913").await;
+
+        assert!(
+            matches!(result, Err(ClientError::PairingVerificationFailed)),
+            "{result:?}"
+        );
+        let confirm = &server.requests()[1];
+        assert!(
+            confirm.body.contains("clientShare") && confirm.body.contains("clientConfirmation")
+        );
+        assert!(!confirm.body.contains("482913"), "the PIN was sent");
+    }
+
+    #[tokio::test]
+    async fn pairing_rejects_a_host_that_cannot_prove_the_pin() {
+        let server = pairing_server(None);
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+
+        let pending = api.start_pairing(&target).await.unwrap();
+        let result = api.complete_pairing(&target, &pending, "482913").await;
+
+        assert!(
+            matches!(result, Err(ClientError::PairingVerificationFailed)),
+            "{result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_treats_an_unknown_request_as_cancelled() {
+        let server = pairing_server(None);
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let pending = api.start_pairing(&target).await.unwrap();
+
+        api.cancel_pairing(&pending).await.unwrap();
+
+        assert_eq!(server.requests().last().unwrap().method, "DELETE");
+    }
+
+    #[tokio::test]
+    async fn pairing_with_nothing_listening_is_unreachable() {
+        let target = host(&["127.0.0.1"], closed_address().port());
+
+        let result = api().start_pairing(&target).await;
+
+        assert!(
+            matches!(result, Err(ClientError::Unreachable(_))),
+            "{:?}",
+            result.err()
+        );
     }
 }

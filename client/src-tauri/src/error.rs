@@ -9,6 +9,9 @@ pub enum ClientError {
     #[error("Enter a host name or IP address, optionally followed by :port.")]
     InvalidAddress,
 
+    #[error("The virtual machine ID is not valid.")]
+    InvalidVmId,
+
     #[error("Pair this device with the host to see its virtual machines.")]
     PairingRequired,
 
@@ -48,6 +51,7 @@ impl ClientError {
         match self {
             ClientError::UnknownHost => "unknownHost",
             ClientError::InvalidAddress => "invalidAddress",
+            ClientError::InvalidVmId => "invalidVmId",
             ClientError::PairingRequired => "pairingRequired",
             ClientError::NoPendingPairing => "noPendingPairing",
             ClientError::PairingVerificationFailed => "pairingVerificationFailed",

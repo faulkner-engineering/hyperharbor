@@ -35,6 +35,7 @@ export interface ClientError {
   code:
     | "unknownHost"
     | "invalidAddress"
+    | "invalidVmId"
     | "pairingRequired"
     | "noPendingPairing"
     | "pairingVerificationFailed"

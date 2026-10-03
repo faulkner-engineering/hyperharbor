@@ -6,6 +6,8 @@ mod identity;
 mod paired;
 mod rdp;
 mod spake2;
+#[cfg(test)]
+mod test_server;
 mod tls;
 mod wake;
 
