@@ -41,6 +41,22 @@ public static class ProtectedFile
         }
     }
 
+    /// <summary>
+    /// Opens <paramref name="path"/> for appending. A new file gets the restricted ACL; an existing
+    /// file keeps the ACL it was created with.
+    /// </summary>
+    public static FileStream OpenAppend(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        return new FileInfo(path).Create(
+            FileMode.Append,
+            FileSystemRights.AppendData,
+            FileShare.Read,
+            bufferSize: 4096,
+            FileOptions.WriteThrough,
+            CreateSecurity());
+    }
+
     private static FileSecurity CreateSecurity()
     {
         var security = new FileSecurity();

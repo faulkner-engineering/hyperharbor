@@ -1,3 +1,4 @@
+using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Provisioning;
@@ -24,32 +25,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
 
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        var (status, title) = exception switch
-        {
-            BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),
-            VmNotFoundException => (StatusCodes.Status404NotFound, "Virtual machine not found"),
-            VmActionNotAllowedException => (StatusCodes.Status409Conflict, "Action not allowed"),
-            HyperVUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Hyper-V unavailable"),
-            HyperVOperationException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
-            WakeTestAlreadyScheduledException => (StatusCodes.Status409Conflict, "Wake test already scheduled"),
-            WakeFixUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Approval unavailable"),
-            InvalidWakeRequestException => (StatusCodes.Status400BadRequest, "Invalid request"),
-            GuestCredentialRejectedException => (StatusCodes.Status422UnprocessableEntity, "Administrator credential rejected"),
-            GuestAccountConflictException => (StatusCodes.Status409Conflict, "Cannot provision"),
-            GuestUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Guest unavailable"),
-            GuestOperationException => (StatusCodes.Status502BadGateway, "Guest operation failed"),
-            PairingException pairing => pairing.Error switch
-            {
-                PairingError.InvalidRequest => (StatusCodes.Status400BadRequest, "Invalid pairing request"),
-                PairingError.NoDisplay => (StatusCodes.Status503ServiceUnavailable, "Tray app not running"),
-                PairingError.RequestPending => (StatusCodes.Status429TooManyRequests, "Pairing in progress"),
-                PairingError.NotFound => (StatusCodes.Status404NotFound, "Pairing request not found"),
-                PairingError.Gone => (StatusCodes.Status410Gone, "Pairing request ended"),
-                PairingError.ConfirmationMismatch => (StatusCodes.Status401Unauthorized, "Incorrect PIN"),
-                _ => (StatusCodes.Status500InternalServerError, "Pairing failed"),
-            },
-            _ => (0, string.Empty),
-        };
+        var (status, title) = Classify(exception);
 
         if (status == 0)
         {
@@ -75,5 +51,37 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
                 Detail = exception.Message,
             },
         });
+    }
+
+    /// <summary>The response status and title for a known exception, or status 0 for an unexpected one.</summary>
+    internal static (int Status, string Title) Classify(Exception exception)
+    {
+        return exception switch
+        {
+            AuditUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Audit log unavailable"),
+            BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),
+            VmNotFoundException => (StatusCodes.Status404NotFound, "Virtual machine not found"),
+            VmActionNotAllowedException => (StatusCodes.Status409Conflict, "Action not allowed"),
+            HyperVUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Hyper-V unavailable"),
+            HyperVOperationException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
+            WakeTestAlreadyScheduledException => (StatusCodes.Status409Conflict, "Wake test already scheduled"),
+            WakeFixUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Approval unavailable"),
+            InvalidWakeRequestException => (StatusCodes.Status400BadRequest, "Invalid request"),
+            GuestCredentialRejectedException => (StatusCodes.Status422UnprocessableEntity, "Administrator credential rejected"),
+            GuestAccountConflictException => (StatusCodes.Status409Conflict, "Cannot provision"),
+            GuestUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Guest unavailable"),
+            GuestOperationException => (StatusCodes.Status502BadGateway, "Guest operation failed"),
+            PairingException pairing => pairing.Error switch
+            {
+                PairingError.InvalidRequest => (StatusCodes.Status400BadRequest, "Invalid pairing request"),
+                PairingError.NoDisplay => (StatusCodes.Status503ServiceUnavailable, "Tray app not running"),
+                PairingError.RequestPending => (StatusCodes.Status429TooManyRequests, "Pairing in progress"),
+                PairingError.NotFound => (StatusCodes.Status404NotFound, "Pairing request not found"),
+                PairingError.Gone => (StatusCodes.Status410Gone, "Pairing request ended"),
+                PairingError.ConfirmationMismatch => (StatusCodes.Status401Unauthorized, "Incorrect PIN"),
+                _ => (StatusCodes.Status500InternalServerError, "Pairing failed"),
+            },
+            _ => (0, string.Empty),
+        };
     }
 }

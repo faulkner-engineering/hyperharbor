@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
@@ -22,9 +23,15 @@ public static class VmEndpoints
 
         vms.MapGet("/", ListVmsAsync).WithName("listVms");
         vms.MapGet("/{vmId:guid}", GetVmAsync).WithName("getVm");
-        vms.MapPost("/{vmId:guid}/actions", PerformVmActionAsync).WithName("performVmAction");
-        vms.MapPost("/{vmId:guid}/provision", ProvisionAsync).WithName("provisionVm");
-        vms.MapPost("/{vmId:guid}/connect", ConnectAsync).WithName("connectVm");
+        vms.MapPost("/{vmId:guid}/actions", PerformVmActionAsync).WithName("performVmAction")
+            .Audited<VmActionRequest>(request => $"action={request.Action}");
+
+        // The admin password is deliberately left out of the summary.
+        vms.MapPost("/{vmId:guid}/provision", ProvisionAsync).WithName("provisionVm")
+            .Audited<ProvisionVmRequest>(request =>
+                $"adminUserName={request.AdminUserName}, enableRemoteDesktop={request.EnableRemoteDesktop}, " +
+                $"installDesktop={request.InstallDesktop}, trustNewHostKey={request.TrustNewHostKey}");
+        vms.MapPost("/{vmId:guid}/connect", ConnectAsync).WithName("connectVm").Audited();
 
         return endpoints;
     }

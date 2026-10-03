@@ -13,6 +13,9 @@ info:
       authenticated by the PIN-based key exchange described under the Pairing tag.
     - JSON property names are camelCase. Enumerations are serialized as strings.
     - Errors use RFC 7807 problem details (`application/problem+json`).
+    - Every operation that changes state is recorded in the host's audit log with the User,
+      device, virtual machine, and outcome. If the entry cannot be written, the operation is
+      refused with 503.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary

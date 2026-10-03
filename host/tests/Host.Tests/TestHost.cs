@@ -31,7 +31,8 @@ internal sealed class TestHost : IDisposable
 
     private readonly WebApplicationFactory<Program> _factory;
 
-    public TestHost()
+    /// <param name="configureServices">Replaces further services after the defaults, for example a failing audit log.</param>
+    public TestHost(Action<IServiceCollection>? configureServices = null)
     {
         DataDirectory = Path.Combine(Path.GetTempPath(), "hyperharbor-tests", Guid.NewGuid().ToString("N"));
         Invoker = new FakePowerInvoker(Inventory);
@@ -53,6 +54,7 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<ISleepController>(Sleep);
                 services.AddSingleton<IGuestAccountManager>(Guest);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
+                configureServices?.Invoke(services);
             }));
     }
 
@@ -69,6 +71,23 @@ internal sealed class TestHost : IDisposable
     public FakeSleepController Sleep { get; } = new();
 
     public FakeGuestAccountManager Guest { get; } = new();
+
+    /// <summary>Entries in the host's audit.log, oldest first.</summary>
+    public IReadOnlyList<System.Text.Json.Nodes.JsonObject> AuditEntries()
+    {
+        var path = Path.Combine(DataDirectory, Core.Audit.FileAuditLog.FileName);
+        if (!File.Exists(path))
+        {
+            return [];
+        }
+
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd()
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => System.Text.Json.Nodes.JsonNode.Parse(line)!.AsObject())
+            .ToList();
+    }
 
     /// <summary>Every log entry the host wrote, at every level.</summary>
     public CapturingLoggerProvider Logs { get; } = new();

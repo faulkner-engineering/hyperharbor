@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
+using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Service.Tray;
@@ -27,7 +28,11 @@ public sealed class TrayPipeServerTests : IAsyncLifetime
         var users = new UserStore(_dataDirectory);
         users.GetOrCreateDefault();
         _devices = new PairedDeviceStore(_dataDirectory, users);
-        _server = new TrayPipeServer(_devices, new ServiceCollection().BuildServiceProvider(), NullLogger<TrayPipeServer>.Instance, _pipeName);
+        var services = new ServiceCollection()
+            .AddSingleton(users)
+            .AddSingleton<IAuditLog>(new FileAuditLog(_dataDirectory))
+            .BuildServiceProvider();
+        _server = new TrayPipeServer(_devices, services, NullLogger<TrayPipeServer>.Instance, _pipeName);
         await _server.StartAsync(_stop.Token);
     }
 
@@ -66,6 +71,26 @@ public sealed class TrayPipeServerTests : IAsyncLifetime
         var list = Assert.IsType<DeviceListMessage>(await tray.ReceiveAsync());
         Assert.Empty(list.Devices);
         Assert.Empty(_devices.List());
+    }
+
+    [Fact]
+    public async Task RemoveDevice_IsAudited()
+    {
+        var device = AddDevice("Laptop");
+        await using var tray = await ConnectAsync();
+        await tray.ReceiveAsync();
+
+        await tray.SendAsync(new RemoveDeviceMessage(device.DeviceId));
+
+        // The new device list is broadcast while the device is removed, before the entry is written.
+        var path = Path.Combine(_dataDirectory, FileAuditLog.FileName);
+        await WaitUntil(() => File.Exists(path) && new FileInfo(path).Length > 0);
+        var entry = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!;
+        Assert.Equal("trayRemoveDevice", (string?)entry["action"]);
+        Assert.Equal("succeeded", (string?)entry["outcome"]);
+        Assert.Equal(device.DeviceId.ToString(), (string?)entry["deviceId"]);
+        Assert.Equal("Laptop", (string?)entry["deviceName"]);
+        Assert.Equal(UserStore.DefaultUserName, (string?)entry["userName"]);
     }
 
     [Theory]

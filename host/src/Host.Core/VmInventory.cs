@@ -31,6 +31,12 @@ public sealed class VmInventory : IVmInventory
         return vms.FirstOrDefault(vm => vm.Id == vmId);
     }
 
+    public async Task<string?> FindNameAsync(Guid vmId, CancellationToken cancellationToken)
+    {
+        var snapshot = await _reader.ReadSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        return snapshot.ComputerSystems.FirstOrDefault(system => system.Id == vmId)?.Name;
+    }
+
     private async Task<Vm> WithRdpProbeAsync(Vm vm, CancellationToken cancellationToken)
     {
         if (vm.State != VmState.Running || vm.RemoteDesktop?.Address is not { } address)

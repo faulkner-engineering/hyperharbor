@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Authentication;
 using HyperHarbor.Host.Core;
+using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Pairing;
@@ -57,6 +58,7 @@ var users = new UserStore(dataDirectory);
 users.GetOrCreateDefault();
 builder.Services.AddSingleton(users);
 builder.Services.AddSingleton(new PairedDeviceStore(dataDirectory, users));
+builder.Services.AddSingleton<IAuditLog>(new FileAuditLog(dataDirectory));
 
 builder.Services.AddOptions<DiscoveryOptions>().Bind(builder.Configuration.GetSection(DiscoveryOptions.SectionName));
 builder.Services.AddSingleton<IServiceAdvertiser, WindowsDnsServiceAdvertiser>();

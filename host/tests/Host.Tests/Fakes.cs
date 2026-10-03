@@ -27,6 +27,9 @@ internal sealed class FakeVmInventory : IVmInventory
         return vms.FirstOrDefault(vm => vm.Id == vmId);
     }
 
+    public async Task<string?> FindNameAsync(Guid vmId, CancellationToken cancellationToken) =>
+        (await GetAsync(vmId, cancellationToken))?.Name;
+
     public void SetState(Guid vmId, VmState state)
     {
         var index = Vms.FindIndex(vm => vm.Id == vmId);

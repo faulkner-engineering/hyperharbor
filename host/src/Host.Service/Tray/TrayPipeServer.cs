@@ -3,8 +3,10 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
+using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Shared.Contracts.Ipc;
 
 namespace HyperHarbor.Host.Service.Tray;
@@ -146,9 +148,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 await connection.SendAsync(DeviceList());
                 break;
             case RemoveDeviceMessage remove:
+                var removed = _devices.List().FirstOrDefault(device => device.DeviceId == remove.DeviceId);
                 if (_devices.Remove(remove.DeviceId))
                 {
                     _logger.LogInformation("Device {DeviceId} was unpaired from the tray.", remove.DeviceId);
+                    AuditTrayAction("trayRemoveDevice", removed?.UserId, remove.DeviceId, removed?.Name);
                 }
 
                 break;
@@ -156,8 +160,51 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 _services.GetRequiredService<PairingService>().Cancel();
                 break;
             case WakeFixCompletedMessage completed:
+                AuditTrayAction(
+                    "trayWakeFix",
+                    null,
+                    null,
+                    null,
+                    $"requestId={completed.RequestId}, outcome={completed.Outcome}",
+                    completed.Outcome == "applied" ? AuditOutcome.Succeeded : AuditOutcome.Failed);
                 _services.GetRequiredService<Wake.WakeFixCoordinator>().OnCompleted(completed);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Records an action taken at the host. Tray actions already happened when this runs, and the
+    /// person at the host is trusted, so a failure is logged instead of undoing the action.
+    /// </summary>
+    private void AuditTrayAction(
+        string action,
+        Guid? userId,
+        Guid? deviceId,
+        string? deviceName,
+        string? detail = null,
+        AuditOutcome outcome = AuditOutcome.Succeeded)
+    {
+        if (_services.GetService<IAuditLog>() is not { } audit)
+        {
+            return;
+        }
+
+        var time = _services.GetService<TimeProvider>() ?? TimeProvider.System;
+        try
+        {
+            audit.Write(new AuditEntry(
+                time.GetUtcNow(),
+                action,
+                outcome,
+                userId,
+                userId is { } id ? _services.GetService<UserStore>()?.Find(id)?.Name : null,
+                deviceId,
+                deviceName,
+                Detail: detail ?? "Host tray"));
+        }
+        catch (AuditUnavailableException ex)
+        {
+            _logger.LogError(ex, "Could not write the audit entry for tray action {Action}.", action);
         }
     }
 

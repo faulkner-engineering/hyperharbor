@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Shared.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
@@ -45,6 +46,28 @@ public sealed partial class EndpointSecurityTests : IDisposable
 
         Assert.Equal(AnonymousOperations.Order(), anonymous);
         Assert.Equal(AnonymousOperations.Order(), contractAnonymous);
+    }
+
+    [Fact]
+    public void EveryStateChangingEndpoint_IsAudited()
+    {
+        var unaudited = Endpoints(_host)
+            .Where(endpoint => !endpoint.Key.StartsWith("GET ", StringComparison.Ordinal))
+            .Where(endpoint => endpoint.Value.Metadata.GetMetadata<AuditedMetadata>() is null)
+            .Select(endpoint => endpoint.Key);
+
+        Assert.Empty(unaudited);
+    }
+
+    [Fact]
+    public void ReadOnlyEndpoints_AreNotAudited()
+    {
+        var audited = Endpoints(_host)
+            .Where(endpoint => endpoint.Key.StartsWith("GET ", StringComparison.Ordinal))
+            .Where(endpoint => endpoint.Value.Metadata.GetMetadata<AuditedMetadata>() is not null)
+            .Select(endpoint => endpoint.Key);
+
+        Assert.Empty(audited);
     }
 
     public static TheoryData<string> ProtectedOperations()

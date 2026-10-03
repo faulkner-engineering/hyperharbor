@@ -48,6 +48,10 @@ public sealed class SecretLeakTests : IDisposable
 
         Assert.NotEmpty(_host.Logs.Entries);
         _host.Logs.AssertNoneContain(pin, wrongPin);
+        AssertAuditClean(pin, wrongPin);
+        var confirmed = _host.AuditEntries().Last(entry => (string?)entry["action"] == "confirmPairing");
+        Assert.Equal("Laptop", (string?)confirmed["deviceName"]);
+        Assert.NotNull((string?)confirmed["deviceId"]);
     }
 
     [Fact]
@@ -61,7 +65,9 @@ public sealed class SecretLeakTests : IDisposable
         var password = (string?)(await connect.Content.ReadFromJsonAsync<JsonObject>())!["password"];
 
         Assert.NotNull(password);
-        _host.Logs.AssertNoneContain([AdminPassword, password!, .. _host.Guest.PasswordsSet.Select(set => set.Password)]);
+        string[] secrets = [AdminPassword, password!, .. _host.Guest.PasswordsSet.Select(set => set.Password)];
+        _host.Logs.AssertNoneContain(secrets);
+        AssertAuditClean(secrets);
     }
 
     [Fact]
@@ -103,6 +109,18 @@ public sealed class SecretLeakTests : IDisposable
         }
 
         _host.Logs.AssertNoneContain(secrets);
+        AssertAuditClean(secrets);
+    }
+
+    private void AssertAuditClean(params string[] secrets)
+    {
+        var path = Path.Combine(_host.DataDirectory, Core.Audit.FileAuditLog.FileName);
+        Assert.True(File.Exists(path), "The flow should have written audit entries.");
+        var audit = File.ReadAllText(path);
+        foreach (var secret in secrets.Where(secret => secret.Length > 0))
+        {
+            Assert.DoesNotContain(secret, audit, StringComparison.Ordinal);
+        }
     }
 
     private HttpClient PairedClient()
