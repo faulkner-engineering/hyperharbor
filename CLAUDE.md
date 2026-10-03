@@ -53,15 +53,18 @@ per-device VM accounts and a user management UI.
 
 ## Commands
 Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotnet:/c/Program Files/nodejs:$HOME/.cargo/bin:$PATH"
+- Everything CI runs (build, tests, lint, type drift, audits): powershell -ExecutionPolicy Bypass -File scripts	est-all.ps1
+  [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service; pairing needs Host.Tray running
 - Print VM inventory JSON: dotnet run --project host/src/Host.Service -- --list-vms
 - Lint contract: npx @redocly/cli lint docs/api.yaml
-- Client (from client/): npm run check | npm run gen:api | npm run tauri dev
+- Client (from client/): npm run check | npm test (Vitest) | npm run gen:api | npm run tauri dev
 - Rust (from client/src-tauri, in PowerShell): cargo fmt; cargo clippy --all-targets -- -D warnings; cargo test
 - Live mDNS browse (host service running): cargo test live_browse -- --ignored --nocapture
 - Live pairing over LAN (service running, something writing the PIN to the file):
   HH_LIVE_HOST=<lan ip> HH_PIN_FILE=pin.txt cargo test live_pairing -- --ignored --nocapture
+- End to end on loopback (no LAN, no setup): powershell -ExecutionPolicy Bypass -File scriptse2e.ps1
 
 ## Packaging (multi-machine testing)
 - powershell -ExecutionPolicy Bypass -File scripts\package.ps1 [-Fast] [-SkipTests] [-HostOnly|-ClientOnly]
@@ -76,6 +79,10 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
 run npm run gen:api, and lint. OpenApiEnumTests fail if C# enums or the API version drift from api.yaml.
+EndpointSecurityTests fail if mapped routes differ from api.yaml or a route other than the pairing handshake
+is anonymous. ContractFixtureTests check one sample per DTO against api.yaml; regenerate the shared
+ContractFixtures.json with HH_WRITE_CONTRACT_FIXTURES=1 (the Rust tests parse it). Required nullable
+properties need [JsonIgnore(Condition = Never)], because ContractJson omits nulls.
 Mark required request properties [JsonRequired] (an empty body must not default to action=start).
 
 ## Gotchas
@@ -100,13 +107,17 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 - Svelte: run the svelte-autofixer MCP tool on every .svelte file you change.
 - Remote Desktop (Phase 7):
   - PowerShell Direct needs a running Windows guest; Linux guests fail fast with GuestUnavailable (503).
-    Provision and connect take tens of seconds, so the client uses 180 s and 90 s request timeouts.
+    Provision and connect take tens of seconds (Linux package installs take minutes), so the client uses
+    25 min and 90 s request timeouts.
   - The client only retries another host address on a connection error, never after a timeout, so a
     provision or rotation is not repeated.
   - TERMSRV credentials the client writes are Generic, session-scoped, and tagged "HyperHarbor temporary
     credential"; startup cleanup removes only tagged entries (users may have their own TERMSRV entries).
   - Secrets: ProvisionVmRequest, VmConnection, GuestCredential, RotatedPassword, and the Rust VmConnection
     override ToString or Debug to hide passwords. Keep it that way for any new type that holds one.
+  - Guest error text reaches logs and problem details. ProvisioningService and PasswordRotator pass it
+    through GuestErrors.Sanitize (secrets replaced, control characters removed, length capped).
+  - The client validates VmConnection (IP address, plain account name) before writing the .rdp file.
 - Linux guests (SshAccountManager, SSH.NET):
   - Guest OS comes from KVP (Msvm_KvpExchangeComponent.GuestIntrinsicExchangeItems). Ubuntu reports
     OSName "Ubuntu", OSMajorVersion "24.04", OSPlatformId 129; Windows reports OSPlatformId 2.
@@ -133,13 +144,18 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 
 ## Open issues (not yet scheduled)
 - Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray
-  should verify the pipe server process.
+  should verify the pipe server process. (The pipe ACL now admits only SYSTEM, Administrators, and the
+  service account; TrayPipeServerTests check it.)
 - Anyone on the LAN can repeatedly start pairing requests (PIN window spam). Consider rate limiting.
 - No real installer yet: the service runs as a console app, not a Windows service. An MSI (service as
-  LocalSystem, tray at logon) needs the data-file ACLs and pipe ACL retested under LocalSystem.
+  LocalSystem, tray at logon) needs the data-file ACLs and pipe ACL retested under LocalSystem; the pipe
+  must then grant the logged-on user explicitly, since the service account is no longer that user.
 
 ## Live testing
 - Live tests skip themselves when Hyper-V is unreachable ([HyperVFact]); the account must be in Hyper-V Administrators.
+  [EnvironmentFact("VAR", ...)] skips unless the variables are set; [LocalHardwareFact] skips when CI is set.
+- TestHost (in-memory API) captures logs at every level (Logs.AssertNoneContain) and uses a unique
+  Tray:PipeName. RealTlsTests starts the service exe on loopback via Api:ListenAddress.
 - Test VM HyperHarbor-Linux: Ubuntu 24.04 server (no desktop), user hhadmin, SSH key
   ~/.ssh/hyperharbor_linux_ed25519; sudo needs hhadmin's password. Dynamic memory 768 MB startup, because
   this PC often has little free RAM.
