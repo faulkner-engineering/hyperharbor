@@ -242,6 +242,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/compute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a VM's processor, memory, nested virtualization, and MAC spoofing settings.
+         * @description `requiresOff` lists the settings that can change only while the VM is off. Maximum memory
+         *     can change on a running VM while dynamic memory stays on; MAC address spoofing can change
+         *     at any time.
+         */
+        get: operations["getVmCompute"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a VM's processor, memory, nested virtualization, or MAC spoofing settings.
+         * @description Omitted settings stay as they are. Changes are applied at once when the VM is off, or
+         *     when it is running and no change needs it off (200 with `settings`). When a running VM
+         *     must be off for a change, the host returns 409 with `code: requiresShutdown`, unless
+         *     `shutDownToApply` is true: then a job shuts the guest down, applies the changes, and starts
+         *     it again (202 with `job`). The job never forces the VM off; if the guest does not shut down
+         *     in time, it fails and nothing changes. Saved and paused VMs cannot be changed.
+         *
+         *     Nested virtualization needs static memory. Resource warnings work as for `createVm`.
+         */
+        patch: operations["updateVmCompute"];
+        trace?: never;
+    };
     "/vms/{vmId}/delete-preview": {
         parameters: {
             query?: never;
@@ -933,6 +969,51 @@ export interface components {
             /** @default false */
             acknowledgeWarnings: boolean;
         };
+        /** @enum {string} */
+        ComputeSetting: "processorCount" | "startupMemoryMb" | "maximumMemoryMb" | "dynamicMemory" | "nestedVirtualization" | "macAddressSpoofing";
+        VmComputeSettings: {
+            /** Format: uuid */
+            vmId: string;
+            state: components["schemas"]["VmState"];
+            processorCount: number;
+            /** Format: int64 */
+            startupMemoryMb: number;
+            /**
+             * Format: int64
+             * @description Equal to the startup memory when dynamic memory is off.
+             */
+            maximumMemoryMb: number;
+            dynamicMemory: boolean;
+            nestedVirtualization: boolean;
+            /** @description True when every connected network adapter allows MAC address spoofing. */
+            macAddressSpoofing: boolean;
+            /** @description Network adapters connected to a switch. */
+            networkAdapterCount: number;
+            /** @description Settings that can change only while the VM is off. */
+            requiresOff: components["schemas"]["ComputeSetting"][];
+        };
+        UpdateVmComputeRequest: {
+            processorCount?: number | null;
+            /** Format: int64 */
+            startupMemoryMb?: number | null;
+            /** Format: int64 */
+            maximumMemoryMb?: number | null;
+            dynamicMemory?: boolean | null;
+            nestedVirtualization?: boolean | null;
+            macAddressSpoofing?: boolean | null;
+            /**
+             * @description For a running VM, shut it down, apply, and start it again as a job.
+             * @default false
+             */
+            shutDownToApply: boolean;
+            /** @default false */
+            acknowledgeWarnings: boolean;
+        };
+        /** @description Exactly one of `settings` (applied now) and `job` (shutting down to apply) is set. */
+        VmComputeUpdate: {
+            settings: components["schemas"]["VmComputeSettings"] | null;
+            job: components["schemas"]["VmJob"] | null;
+        };
     };
     responses: {
         /** @description The request was malformed or failed validation. */
@@ -1438,6 +1519,88 @@ export interface operations {
             };
             502: components["responses"]["GuestOperationFailed"];
             503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    getVmCompute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmComputeSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    updateVmCompute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVmComputeRequest"];
+            };
+        };
+        responses: {
+            /** @description The changes were applied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmComputeUpdate"];
+                };
+            };
+            /** @description A job is shutting the VM down to apply the changes. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmComputeUpdate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description A change needs the VM off (`code: requiresShutdown`), resource warnings to acknowledge,
+             *     the VM is saved or paused, or another operation is in progress on it.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["HyperVOperationFailed"];
+            503: components["responses"]["HyperVUnavailable"];
         };
     };
     getVmDeletePreview: {

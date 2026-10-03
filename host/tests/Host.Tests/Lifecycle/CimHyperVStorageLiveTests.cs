@@ -53,6 +53,23 @@ public sealed class CimHyperVStorageLiveTests(ITestOutputHelper output)
     }
 
     [HyperVFact]
+    public async Task Compute_ReadsEveryVmsSettings()
+    {
+        var inventory = new VmInventory(new CimHyperVReader(NullLogger<CimHyperVReader>.Instance), new TcpRdpProbe(TimeProvider.System));
+        var compute = new CimHyperVCompute();
+
+        foreach (var vm in await inventory.ListAsync(CancellationToken.None))
+        {
+            var state = await compute.ReadAsync(vm.Id, CancellationToken.None);
+
+            output.WriteLine($"{vm.Name}: {state}");
+            Assert.True(state.ProcessorCount >= 1);
+            Assert.True(state.StartupMemoryMb >= 32);
+            Assert.True(state.MaximumMemoryMb >= state.StartupMemoryMb || !state.DynamicMemory);
+        }
+    }
+
+    [HyperVFact]
     public async Task Preview_OfEveryVm_ResolvesBaseDisks()
     {
         var inventory = new VmInventory(new CimHyperVReader(NullLogger<CimHyperVReader>.Instance), new TcpRdpProbe(TimeProvider.System));

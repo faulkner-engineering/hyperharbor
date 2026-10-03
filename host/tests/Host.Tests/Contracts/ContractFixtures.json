@@ -79,6 +79,14 @@
     "installDesktop": true,
     "trustNewHostKey": true
   },
+  "UpdateVmComputeRequest": {
+    "processorCount": 4,
+    "dynamicMemory": false,
+    "nestedVirtualization": true,
+    "macAddressSpoofing": true,
+    "shutDownToApply": true,
+    "acknowledgeWarnings": false
+  },
   "ValidationIssue": {
     "field": "processorCount",
     "message": "Use at most 16 virtual processors."
@@ -119,6 +127,45 @@
     "action": "shutdown",
     "accepted": true,
     "state": "running"
+  },
+  "VmComputeSettings": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "state": "running",
+    "processorCount": 4,
+    "startupMemoryMb": 4096,
+    "maximumMemoryMb": 4096,
+    "dynamicMemory": false,
+    "nestedVirtualization": true,
+    "macAddressSpoofing": true,
+    "networkAdapterCount": 1,
+    "requiresOff": [
+      "processorCount",
+      "startupMemoryMb",
+      "maximumMemoryMb",
+      "dynamicMemory",
+      "nestedVirtualization"
+    ]
+  },
+  "VmComputeUpdate": {
+    "settings": {
+      "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+      "state": "running",
+      "processorCount": 4,
+      "startupMemoryMb": 4096,
+      "maximumMemoryMb": 4096,
+      "dynamicMemory": false,
+      "nestedVirtualization": true,
+      "macAddressSpoofing": true,
+      "networkAdapterCount": 1,
+      "requiresOff": [
+        "processorCount",
+        "startupMemoryMb",
+        "maximumMemoryMb",
+        "dynamicMemory",
+        "nestedVirtualization"
+      ]
+    },
+    "job": null
   },
   "VmConnection": {
     "userName": ".\\hh-owner",

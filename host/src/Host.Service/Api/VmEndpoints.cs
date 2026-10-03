@@ -42,6 +42,15 @@ public static class VmEndpoints
                 $"switchId={request.SwitchId ?? "default"}, tpm={request.EnableTpm}")
             .RequireElevation();
 
+        vms.MapGet("/{vmId:guid}/compute", GetComputeAsync).WithName("getVmCompute");
+        vms.MapPatch("/{vmId:guid}/compute", UpdateComputeAsync).WithName("updateVmCompute")
+            .Audited<UpdateVmComputeRequest>(request =>
+                $"processors={request.ProcessorCount?.ToString() ?? "-"}, startupMemoryMb={request.StartupMemoryMb?.ToString() ?? "-"}, " +
+                $"maximumMemoryMb={request.MaximumMemoryMb?.ToString() ?? "-"}, dynamicMemory={request.DynamicMemory?.ToString() ?? "-"}, " +
+                $"nested={request.NestedVirtualization?.ToString() ?? "-"}, macSpoofing={request.MacAddressSpoofing?.ToString() ?? "-"}, " +
+                $"shutDownToApply={request.ShutDownToApply}")
+            .RequireElevation();
+
         vms.MapGet("/{vmId:guid}/delete-preview", GetDeletePreviewAsync).WithName("getVmDeletePreview");
         vms.MapPost("/{vmId:guid}/delete", DeleteAsync).WithName("deleteVm")
             .Audited<VmDeleteRequest>(request => $"deleteDisks={request.DeleteDisks}, deleteCheckpoints={request.DeleteCheckpoints}")
@@ -119,6 +128,27 @@ public static class VmEndpoints
         var job = await creation.StartAsync(context.User.UserId(), request, context.CompletionAuditor(), cancellationToken);
         audit.JobId = job.Id;
         return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
+    }
+
+    private static async Task<Ok<VmComputeSettings>> GetComputeAsync(Guid vmId, VmComputeService compute, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await compute.GetAsync(vmId, cancellationToken));
+
+    /// <summary>200 with the new settings when applied at once; 202 with a job when the VM is shut down to apply them.</summary>
+    private static async Task<IResult> UpdateComputeAsync(
+        Guid vmId,
+        UpdateVmComputeRequest request,
+        VmComputeService compute,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var update = await compute.UpdateAsync(vmId, context.User.UserId(), request, JobEndpoints.ToContract, context.CompletionAuditor(), cancellationToken);
+        if (update.Job is { } job)
+        {
+            context.Audit()!.JobId = job.Id;
+            return TypedResults.Accepted(JobEndpoints.Location(job.Id), update);
+        }
+
+        return TypedResults.Ok(update);
     }
 
     private static async Task<Ok<VmDeletePreview>> GetDeletePreviewAsync(Guid vmId, VmDeletionService deletion, CancellationToken cancellationToken) =>

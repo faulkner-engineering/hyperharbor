@@ -448,6 +448,91 @@ paths:
         "503":
           $ref: "#/components/responses/GuestUnavailable"
 
+  /vms/{vmId}/compute:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [VMs]
+      operationId: getVmCompute
+      summary: Get a VM's processor, memory, nested virtualization, and MAC spoofing settings.
+      description: |
+        `requiresOff` lists the settings that can change only while the VM is off. Maximum memory
+        can change on a running VM while dynamic memory stays on; MAC address spoofing can change
+        at any time.
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmComputeSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+    patch:
+      tags: [VMs]
+      operationId: updateVmCompute
+      summary: Change a VM's processor, memory, nested virtualization, or MAC spoofing settings.
+      description: |
+        Omitted settings stay as they are. Changes are applied at once when the VM is off, or
+        when it is running and no change needs it off (200 with `settings`). When a running VM
+        must be off for a change, the host returns 409 with `code: requiresShutdown`, unless
+        `shutDownToApply` is true: then a job shuts the guest down, applies the changes, and starts
+        it again (202 with `job`). The job never forces the VM off; if the guest does not shut down
+        in time, it fails and nothing changes. Saved and paused VMs cannot be changed.
+
+        Nested virtualization needs static memory. Resource warnings work as for `createVm`.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVmComputeRequest"
+      responses:
+        "200":
+          description: The changes were applied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmComputeUpdate"
+        "202":
+          description: A job is shutting the VM down to apply the changes.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmComputeUpdate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            A change needs the VM off (`code: requiresShutdown`), resource warnings to acknowledge,
+            the VM is saved or paused, or another operation is in progress on it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "502":
+          $ref: "#/components/responses/HyperVOperationFailed"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
   /vms/{vmId}/delete-preview:
     parameters:
       - $ref: "#/components/parameters/VmId"
@@ -1540,3 +1625,80 @@ components:
         acknowledgeWarnings:
           type: boolean
           default: false
+
+    ComputeSetting:
+      type: string
+      enum: [processorCount, startupMemoryMb, maximumMemoryMb, dynamicMemory, nestedVirtualization, macAddressSpoofing]
+
+    VmComputeSettings:
+      type: object
+      required: [vmId, state, processorCount, startupMemoryMb, maximumMemoryMb, dynamicMemory, nestedVirtualization, macAddressSpoofing, networkAdapterCount, requiresOff]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        state:
+          $ref: "#/components/schemas/VmState"
+        processorCount:
+          type: integer
+        startupMemoryMb:
+          type: integer
+          format: int64
+        maximumMemoryMb:
+          type: integer
+          format: int64
+          description: Equal to the startup memory when dynamic memory is off.
+        dynamicMemory:
+          type: boolean
+        nestedVirtualization:
+          type: boolean
+        macAddressSpoofing:
+          type: boolean
+          description: True when every connected network adapter allows MAC address spoofing.
+        networkAdapterCount:
+          type: integer
+          description: Network adapters connected to a switch.
+        requiresOff:
+          type: array
+          description: Settings that can change only while the VM is off.
+          items:
+            $ref: "#/components/schemas/ComputeSetting"
+
+    UpdateVmComputeRequest:
+      type: object
+      properties:
+        processorCount:
+          type: [integer, "null"]
+        startupMemoryMb:
+          type: [integer, "null"]
+          format: int64
+        maximumMemoryMb:
+          type: [integer, "null"]
+          format: int64
+        dynamicMemory:
+          type: [boolean, "null"]
+        nestedVirtualization:
+          type: [boolean, "null"]
+        macAddressSpoofing:
+          type: [boolean, "null"]
+        shutDownToApply:
+          type: boolean
+          default: false
+          description: For a running VM, shut it down, apply, and start it again as a job.
+        acknowledgeWarnings:
+          type: boolean
+          default: false
+
+    VmComputeUpdate:
+      type: object
+      required: [settings, job]
+      description: Exactly one of `settings` (applied now) and `job` (shutting down to apply) is set.
+      properties:
+        settings:
+          oneOf:
+            - $ref: "#/components/schemas/VmComputeSettings"
+            - type: "null"
+        job:
+          oneOf:
+            - $ref: "#/components/schemas/VmJob"
+            - type: "null"

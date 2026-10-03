@@ -61,6 +61,7 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IHostCapacityReader>(Capacity);
                 services.AddSingleton<IHyperVHost>(HyperVHost);
                 services.AddSingleton<IHyperVBuilder>(Builder);
+                services.AddSingleton<IHyperVCompute>(Compute);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
             }));
@@ -89,6 +90,8 @@ internal sealed class TestHost : IDisposable
     public FakeHyperVHost HyperVHost { get; } = new();
 
     public FakeHyperVBuilder Builder { get; } = new();
+
+    public FakeHyperVCompute Compute { get; } = new();
 
     /// <summary>The ISO library folder, inside the data directory.</summary>
     public string IsoFolder => Path.Combine(DataDirectory, "isos");

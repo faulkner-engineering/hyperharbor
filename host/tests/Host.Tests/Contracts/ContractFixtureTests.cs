@@ -23,6 +23,10 @@ public class ContractFixtureTests
     private static readonly Guid VmId = Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b");
     private static readonly DateTimeOffset Time = new(2026, 10, 3, 12, 0, 0, TimeSpan.Zero);
 
+    private static readonly VmComputeSettings ComputeSample = new(
+        VmId, VmState.Running, 4, 4096, 4096, false, true, true, 1,
+        [ComputeSetting.ProcessorCount, ComputeSetting.StartupMemoryMb, ComputeSetting.MaximumMemoryMb, ComputeSetting.DynamicMemory, ComputeSetting.NestedVirtualization]);
+
     private static Dictionary<string, object> Samples() => new()
     {
         ["HostInfo"] = new HostInfo(Guid.Parse("6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f"), "TC-PC", "0.1.0", ContractInfo.ApiVersion, new string('A', 64)),
@@ -67,6 +71,9 @@ public class ContractFixtureTests
         ["ElevationGrant"] = new ElevationGrant("Zml4dHVyZS10b2tlbi1maXh0dXJlLXRva2VuLWZpeHR1cg", Time),
         // Null on purpose: expiresAt is required but nullable.
         ["ElevationStatus"] = new ElevationStatus(true, false, null),
+        ["VmComputeSettings"] = ComputeSample,
+        ["UpdateVmComputeRequest"] = new UpdateVmComputeRequest(4, null, null, false, true, true, ShutDownToApply: true),
+        ["VmComputeUpdate"] = new VmComputeUpdate(ComputeSample, null),
         ["CreateVmRequest"] = new CreateVmRequest("Win11 Dev", "Win11_24H2.iso", 64, 4, 4096, 8192, true, "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", true, false),
         ["ValidationIssue"] = new ValidationIssue("processorCount", "Use at most 16 virtual processors."),
         ["VmDeleteRequest"] = new VmDeleteRequest(true, true, "Ubuntu Dev"),

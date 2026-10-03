@@ -175,3 +175,25 @@ internal sealed class FakeHyperVBuilder : IHyperVBuilder
         }
     }
 }
+
+/// <summary>Compute settings per VM, with the applied changes recorded.</summary>
+internal sealed class FakeHyperVCompute : IHyperVCompute
+{
+    public Dictionary<Guid, ComputeState> States { get; } = [];
+
+    public List<(Guid VmId, ComputeChange Change)> Applied { get; } = [];
+
+    public Task<ComputeState> ReadAsync(Guid vmId, CancellationToken cancellationToken) =>
+        Task.FromResult(States.TryGetValue(vmId, out var state) ? state : throw new Core.Power.VmNotFoundException(vmId));
+
+    public Task ApplyAsync(Guid vmId, ComputeChange change, ComputeState desired, CancellationToken cancellationToken)
+    {
+        lock (Applied)
+        {
+            Applied.Add((vmId, change));
+        }
+
+        States[vmId] = desired;
+        return Task.CompletedTask;
+    }
+}

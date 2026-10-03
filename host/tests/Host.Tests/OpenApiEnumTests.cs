@@ -22,6 +22,7 @@ public class OpenApiEnumTests
     [InlineData("DeleteBlockerScope", typeof(DeleteBlockerScope))]
     [InlineData("VmJobKind", typeof(VmJobKind))]
     [InlineData("VmJobState", typeof(VmJobState))]
+    [InlineData("ComputeSetting", typeof(ComputeSetting))]
     public void EnumWireValues_MatchOpenApiSchema(string schemaName, Type enumType)
     {
         var schema = (YamlMappingNode)Schemas[schemaName];
