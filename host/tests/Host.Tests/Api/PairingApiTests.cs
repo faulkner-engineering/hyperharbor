@@ -78,6 +78,38 @@ public sealed class PairingApiTests : IDisposable
         Assert.Equal(HttpStatusCode.Gone, (await ConfirmAsync(client, created.PairingId, exchange.Confirmation)).StatusCode);
     }
 
+    /// <summary>
+    /// After the attempt limit, guessing continues only with a new request and a new PIN, and the old
+    /// request stays closed. This bounds online guessing to 5 attempts per 1,000,000-PIN request; each
+    /// new request also shows a new PIN in the tray. There is no rate limit across requests yet
+    /// (an open issue in CLAUDE.md).
+    /// </summary>
+    [Fact]
+    public async Task AfterAttemptLimit_ANewRequestIsNeeded_AndTheOldOneStaysGone()
+    {
+        using var client = _host.CreateClient();
+        var first = await CreateAsync(client);
+        var firstPin = _host.Tray.Pin!;
+        var wrongPin = firstPin == "000000" ? "000001" : "000000";
+        var wrong = TestPairingClient.Compute(first.PairingId, wrongPin, first.HostShare, _clientCertificate, HostCertificateDer());
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await ConfirmAsync(client, first.PairingId, wrong.Confirmation);
+        }
+
+        Assert.Contains(PairingOutcome.TooManyAttempts, _host.Tray.Outcomes);
+
+        var second = await CreateAsync(client);
+        Assert.NotEqual(first.PairingId, second.PairingId);
+
+        // The right PIN for the old request no longer works, even though it is now known.
+        var late = TestPairingClient.Compute(first.PairingId, firstPin, first.HostShare, _clientCertificate, HostCertificateDer());
+        Assert.Equal(HttpStatusCode.Gone, (await ConfirmAsync(client, first.PairingId, late.Confirmation)).StatusCode);
+
+        var right = TestPairingClient.Compute(second.PairingId, _host.Tray.Pin!, second.HostShare, _clientCertificate, HostCertificateDer());
+        Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(client, second.PairingId, right.Confirmation)).StatusCode);
+    }
+
     [Fact]
     public async Task RequestFromAnotherDeviceWhilePending_Returns429()
     {

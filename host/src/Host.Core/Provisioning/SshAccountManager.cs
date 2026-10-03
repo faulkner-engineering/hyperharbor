@@ -102,7 +102,7 @@ public sealed class SshAccountManager : IGuestAccountManager
         client.HostKeyReceived += (_, e) =>
         {
             presentedKey = "SHA256:" + e.FingerPrintSHA256;
-            e.CanTrust = target.SshHostKey is null || string.Equals(target.SshHostKey, presentedKey, StringComparison.Ordinal);
+            e.CanTrust = IsTrustedHostKey(target.SshHostKey, presentedKey);
         };
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -210,7 +210,12 @@ public sealed class SshAccountManager : IGuestAccountManager
         return asRoot ? bash : $"sudo -S -k -p '' {bash}";
     }
 
-    private static string Quote(string value) => "'" + value.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+    /// <summary>Trust on first use (nothing pinned); afterwards only the pinned key.</summary>
+    internal static bool IsTrustedHostKey(string? pinned, string presented) =>
+        pinned is null || string.Equals(pinned, presented, StringComparison.Ordinal);
+
+    /// <summary>Quotes one argument for a POSIX shell.</summary>
+    internal static string Quote(string value) => "'" + value.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 
     /// <summary>"Administrator" style names from the Windows form may arrive as ".\name".</summary>
     private static string StripLocalPrefix(string userName) =>

@@ -4,12 +4,12 @@ using Xunit.Abstractions;
 namespace HyperHarbor.Host.Tests.Wake;
 
 /// <summary>
-/// Read-only check of the real Windows reader. It changes nothing, so it always runs; the
-/// assertions hold on any Windows machine. Use --logger "console;verbosity=detailed" to see output.
+/// Read-only check of the real Windows reader. It changes nothing, so it runs everywhere except CI
+/// (whose VMs may lack a physical adapter). Use --logger "console;verbosity=detailed" to see output.
 /// </summary>
 public class WindowsWakeEnvironmentReaderLiveTests(ITestOutputHelper output)
 {
-    [Fact]
+    [LocalHardwareFact]
     public async Task ReadsAdaptersPowerStateAndReadiness()
     {
         var environment = await new WindowsWakeEnvironmentReader().ReadAsync(CancellationToken.None);

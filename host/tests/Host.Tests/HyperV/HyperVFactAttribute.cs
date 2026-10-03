@@ -29,5 +29,10 @@ public sealed class HyperVFactAttribute : FactAttribute
         {
             return $"Hyper-V is not available to this account ({ex.NativeErrorCode}).";
         }
+        catch (Exception ex)
+        {
+            // An attribute constructor that throws fails test discovery, so any probe error means skip.
+            return $"Hyper-V could not be probed ({ex.GetType().Name}: {ex.Message}).";
+        }
     }
 }
