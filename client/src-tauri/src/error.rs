@@ -1,6 +1,14 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-/// Errors returned to the frontend. Serialized as `{ "code": ..., "message": ..., "status": ... }`.
+/// One problem with a request field (api.yaml ValidationIssue).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Issue {
+    pub field: String,
+    pub message: String,
+}
+
+/// Errors returned to the frontend. Serialized as
+/// `{ "code", "message", "status", "problemCode", "issues" }`; the last three are set only for `api`.
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
     #[error("Unknown host.")]
@@ -37,7 +45,17 @@ pub enum ClientError {
     Unreachable(String),
 
     #[error("{message}")]
-    Api { status: u16, message: String },
+    Api {
+        status: u16,
+        message: String,
+        /// The problem details "code", for errors the frontend handles specially.
+        code: Option<String>,
+        /// Field-level errors (400) or resource warnings (409 with code resourceWarnings).
+        issues: Vec<Issue>,
+    },
+
+    #[error("The request is not valid: {0}")]
+    InvalidRequest(String),
 
     #[error("Unexpected response from the host: {0}")]
     InvalidResponse(String),
@@ -61,6 +79,7 @@ impl ClientError {
             ClientError::VmUnreachable(_) => "vmUnreachable",
             ClientError::Unreachable(_) => "unreachable",
             ClientError::Api { .. } => "api",
+            ClientError::InvalidRequest(_) => "invalidRequest",
             ClientError::InvalidResponse(_) => "invalidResponse",
             ClientError::Storage(_) => "storage",
         }
@@ -72,15 +91,29 @@ impl ClientError {
             _ => None,
         }
     }
+
+    /// The host's problem code, for example "elevationRequired".
+    pub fn problem_code(&self) -> Option<&str> {
+        match self {
+            ClientError::Api { code, .. } => code.as_deref(),
+            _ => None,
+        }
+    }
 }
 
 impl Serialize for ClientError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("ClientError", 3)?;
+        let issues: &[Issue] = match self {
+            ClientError::Api { issues, .. } => issues,
+            _ => &[],
+        };
+        let mut state = serializer.serialize_struct("ClientError", 5)?;
         state.serialize_field("code", self.code())?;
         state.serialize_field("message", &self.to_string())?;
         state.serialize_field("status", &self.status())?;
+        state.serialize_field("problemCode", &self.problem_code())?;
+        state.serialize_field("issues", issues)?;
         state.end()
     }
 }
@@ -107,7 +140,10 @@ mod tests {
             ClientError::Api {
                 status: 500,
                 message: String::new(),
+                code: None,
+                issues: Vec::new(),
             },
+            ClientError::InvalidRequest(String::new()),
             ClientError::InvalidResponse(String::new()),
             ClientError::Storage(String::new()),
         ];
@@ -125,6 +161,7 @@ mod tests {
                 | ClientError::VmUnreachable(_)
                 | ClientError::Unreachable(_)
                 | ClientError::Api { .. }
+                | ClientError::InvalidRequest(_)
                 | ClientError::InvalidResponse(_)
                 | ClientError::Storage(_) => {}
             }
@@ -149,24 +186,37 @@ mod tests {
 
     /// The frontend reads exactly these fields (ClientError in src/lib/api/client.ts).
     #[test]
-    fn serializes_code_message_and_status() {
+    fn serializes_code_message_status_and_problem_details() {
         let api = serde_json::to_value(ClientError::Api {
             status: 409,
-            message: "Start the VM first.".into(),
+            message: "Check these warnings.".into(),
+            code: Some("resourceWarnings".into()),
+            issues: vec![Issue {
+                field: "startupMemoryMb".into(),
+                message: "Low memory.".into(),
+            }],
         })
         .unwrap();
         let other = serde_json::to_value(ClientError::InvalidVmId).unwrap();
 
         assert_eq!(
             api,
-            serde_json::json!({ "code": "api", "message": "Start the VM first.", "status": 409 })
+            serde_json::json!({
+                "code": "api",
+                "message": "Check these warnings.",
+                "status": 409,
+                "problemCode": "resourceWarnings",
+                "issues": [{ "field": "startupMemoryMb", "message": "Low memory." }]
+            })
         );
         assert_eq!(
             other,
             serde_json::json!({
                 "code": "invalidVmId",
                 "message": "The virtual machine ID is not valid.",
-                "status": null
+                "status": null,
+                "problemCode": null,
+                "issues": []
             })
         );
     }

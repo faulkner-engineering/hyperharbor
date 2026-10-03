@@ -17,6 +17,8 @@ pub struct Request {
     pub method: String,
     pub path: String,
     pub body: String,
+    /// Header names in lowercase.
+    pub headers: Vec<(String, String)>,
 }
 
 /// What the server sends back, optionally after a delay.
@@ -158,6 +160,7 @@ fn serve(
     let path = parts.next().unwrap_or_default().to_string();
 
     let mut content_length = 0usize;
+    let mut headers = Vec::new();
     loop {
         let mut header = String::new();
         if reader.read_line(&mut header).unwrap_or(0) == 0 {
@@ -168,6 +171,7 @@ fn serve(
             break;
         }
         if let Some((name, value)) = header.split_once(':') {
+            headers.push((name.trim().to_ascii_lowercase(), value.trim().to_string()));
             if name.eq_ignore_ascii_case("content-length") {
                 content_length = value.trim().parse().unwrap_or(0);
             }
@@ -182,6 +186,7 @@ fn serve(
         method,
         path,
         body: String::from_utf8_lossy(&body).into_owned(),
+        headers,
     };
     recorded.lock().unwrap().push(request.clone());
 
@@ -203,4 +208,14 @@ fn serve(
 pub fn closed_address() -> SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.local_addr().unwrap()
+}
+
+impl Request {
+    /// The value of a header, by case-insensitive name.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+    }
 }

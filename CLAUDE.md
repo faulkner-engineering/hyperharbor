@@ -152,6 +152,24 @@ Mark required request properties [JsonRequired] (an empty body must not default 
     Tokens are random, kept as SHA-256 in memory, bound to device and User, and end on passphrase change,
     unpair, or restart. ElevateRequest, ElevationGrant, and SetAdminPassphraseMessage hide secrets in ToString.
   - Tests set the passphrase with AdminPassphrase.CreateHash(..., ElevationServiceTests.TestIterations).
+- VM lifecycle (Phase 8):
+  - Host.Core/Lifecycle: VmDeletionService, VmCreationService, VmComputeService, VmJobStore (in-memory jobs,
+    each holding its VM's VmOperationLocks lock), IsoLibrary. CIM goes through HyperVCim (waits on
+    Msvm_ConcreteJob), CimXml (embedded instances), and CimVmSettings; new devices are cloned from the
+    "...\Default" template instances. Interfaces (IHyperVStorage, IHyperVBuilder, IHyperVCompute, IDiskFiles,
+    IHyperVHost, IHostCapacityReader) have fakes in Host.Tests/Lifecycle/LifecycleFakes.cs.
+  - Delete follows checkpoint .avhdx parents to the base disk and never deletes a parent of a differencing
+    disk; anything another VM, a checkpoint, or a stray differencing disk depends on blocks it.
+  - A drive's boot entry is the drive's InstanceID plus "\B"; that is how the DVD is put first.
+  - Validation errors are 400 with `errors`; resource warnings are 409 code resourceWarnings with `warnings`,
+    sent again with acknowledgeWarnings. Settings that need the VM off return 409 code requiresShutdown.
+  - CIM read paths were checked live (CimHyperVStorageLiveTests). Creating, deleting, and applying settings
+    run live only with HH_LIFECYCLE_LIVE=1 (LifecycleLiveTests creates and deletes HyperHarbor-Test).
+  - Client: the elevation token stays in the Rust ApiClient (never in the webview); ClientError carries the
+    host's problemCode and issues. withElevation (lifecycle.svelte.ts) prompts once and retries.
+  - Vitest: write `beforeEach(() => { invoke.mockReset(); })` with braces. mockReset returns the mock, and a
+    function returned from beforeEach runs as a teardown, calling invoke() with no arguments.
+  - Number inputs for memory use step="any": a step mismatch (0.75 GB with step 0.5) silently blocks submit.
 
 ## Wake-on-LAN lessons (from real hosts)
 - Readiness checks can all pass while waking fails. Seen on TC-PC (2026-10-02): BIOS "PCI-E wake" was

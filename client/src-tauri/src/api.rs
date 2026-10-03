@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::error::ClientError;
+use crate::error::{ClientError, Issue};
 use crate::hosts::HostEntry;
 use crate::identity::{pem_to_der, ClientIdentity};
 use crate::paired::PairedHost;
@@ -34,10 +34,83 @@ pub struct ProvisionOptions {
     pub trust_new_host_key: bool,
 }
 
+/// Body of POST /vms/{vmId}/delete (api.yaml VmDeleteRequest).
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteVmRequest {
+    pub delete_disks: bool,
+    pub delete_checkpoints: bool,
+    pub confirm_name: String,
+}
+
+/// Body of POST /vms (api.yaml CreateVmRequest).
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateVmRequest {
+    pub name: String,
+    pub iso_name: String,
+    pub disk_size_gb: u32,
+    pub processor_count: u32,
+    pub startup_memory_mb: u64,
+    pub maximum_memory_mb: u64,
+    pub dynamic_memory: bool,
+    pub switch_id: Option<String>,
+    pub enable_tpm: bool,
+    pub acknowledge_warnings: bool,
+}
+
+/// Body of PATCH /vms/{vmId}/compute (api.yaml UpdateVmComputeRequest). Unset fields stay as they are.
+#[derive(Clone, Debug, Default, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateComputeRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub processor_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_memory_mb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maximum_memory_mb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dynamic_memory: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nested_virtualization: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mac_address_spoofing: Option<bool>,
+    #[serde(default)]
+    pub shut_down_to_apply: bool,
+    #[serde(default)]
+    pub acknowledge_warnings: bool,
+}
+
+/// The power actions in api.yaml VmAction.
+pub const VM_ACTIONS: [&str; 5] = ["start", "shutdown", "turnOff", "save", "restart"];
+
 #[derive(Deserialize)]
 struct ProblemDetails {
     title: Option<String>,
     detail: Option<String>,
+    code: Option<String>,
+    #[serde(default)]
+    errors: Vec<Issue>,
+    #[serde(default)]
+    warnings: Vec<Issue>,
+}
+
+/// The host's problem code when a request lacks a valid elevation token.
+pub const ELEVATION_REQUIRED: &str = "elevationRequired";
+
+/// Request header for the elevation token (the api.yaml elevation security scheme).
+const ELEVATION_HEADER: &str = "X-HyperHarbor-Elevation";
+
+/// An elevation token for one host. Kept only in memory, and never passed to the frontend.
+struct Elevation {
+    token: zeroize::Zeroizing<String>,
+}
+
+/// What the frontend may know about an elevation: when it ends.
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElevationGranted {
+    pub expires_at: String,
 }
 
 #[derive(Deserialize)]
@@ -75,6 +148,8 @@ pub struct ApiClient {
     clients: Mutex<HashMap<String, reqwest::Client>>,
     /// The base URL that last worked for each host ID.
     last_good: Mutex<HashMap<String, String>>,
+    /// Elevation tokens by host ID. In memory only; a restart of the client drops them.
+    elevations: Mutex<HashMap<String, Elevation>>,
 }
 
 impl ApiClient {
@@ -84,6 +159,7 @@ impl ApiClient {
             device_name,
             clients: Mutex::new(HashMap::new()),
             last_good: Mutex::new(HashMap::new()),
+            elevations: Mutex::new(HashMap::new()),
         }
     }
 
@@ -364,6 +440,217 @@ impl ApiClient {
         parse(response).await
     }
 
+    /// POST /auth/elevation. Keeps the token for this host in memory and returns only its expiry,
+    /// so the token never reaches the webview.
+    pub async fn elevate(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        passphrase: &str,
+    ) -> Result<ElevationGranted, ClientError> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Grant {
+            token: String,
+            expires_at: String,
+        }
+
+        let body = json!({ "passphrase": passphrase });
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/auth/elevation",
+                Some(&body),
+                None,
+            )
+            .await?;
+        let grant: Grant = parse(response).await?;
+        self.elevations.lock().unwrap().insert(
+            paired.host_id.clone(),
+            Elevation {
+                token: zeroize::Zeroizing::new(grant.token),
+            },
+        );
+        Ok(ElevationGranted {
+            expires_at: grant.expires_at,
+        })
+    }
+
+    /// GET /auth/elevation.
+    pub async fn elevation_status(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, "/auth/elevation").await
+    }
+
+    /// DELETE /auth/elevation, and forgets the token here even when the host cannot be reached.
+    pub async fn drop_elevation(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<(), ClientError> {
+        let result = self
+            .send_paired(host, paired, reqwest::Method::DELETE, "/auth/elevation")
+            .await;
+        self.elevations.lock().unwrap().remove(&paired.host_id);
+        result.map(|_| ())
+    }
+
+    /// POST /vms/{vmId}/actions. turnOff needs elevation.
+    pub async fn perform_vm_action(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        action: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        if !VM_ACTIONS.contains(&action) {
+            return Err(ClientError::InvalidRequest(format!(
+                "unknown power action {action}"
+            )));
+        }
+        let body = json!({ "action": action });
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "actions")?,
+            &body,
+        )
+        .await
+    }
+
+    /// GET /vms/{vmId}/delete-preview.
+    pub async fn delete_preview(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "delete-preview")?)
+            .await
+    }
+
+    /// POST /vms/{vmId}/delete. Returns the deletion job.
+    pub async fn delete_vm(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        request: &DeleteVmRequest,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "delete")?,
+            &to_body(request)?,
+        )
+        .await
+    }
+
+    /// GET /jobs/{jobId}.
+    pub async fn get_job(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        job_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        if !crate::hosts::is_guid(job_id) {
+            return Err(ClientError::InvalidRequest(
+                "the job ID is not valid".into(),
+            ));
+        }
+        self.get_json(host, paired, &format!("/jobs/{job_id}"))
+            .await
+    }
+
+    /// POST /vms. Returns the creation job.
+    pub async fn create_vm(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        request: &CreateVmRequest,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            "/vms",
+            &to_body(request)?,
+        )
+        .await
+    }
+
+    /// GET on a fixed, read-only path: /host/resources, /isos, or /switches.
+    pub async fn get_resource(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        resource: HostResource,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, resource.path()).await
+    }
+
+    /// GET /vms/{vmId}/compute.
+    pub async fn get_vm_compute(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "compute")?)
+            .await
+    }
+
+    /// PATCH /vms/{vmId}/compute. Returns `{ settings, job }`.
+    pub async fn update_vm_compute(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        request: &UpdateComputeRequest,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::PATCH,
+            &vm_path(vm_id, "compute")?,
+            &to_body(request)?,
+        )
+        .await
+    }
+
+    async fn get_json(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        path: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired(host, paired, reqwest::Method::GET, path)
+            .await?;
+        parse(response).await
+    }
+
+    async fn send_json(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        method: reqwest::Method,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired_with(host, paired, method, path, Some(body), None)
+            .await?;
+        parse(response).await
+    }
+
     async fn send_paired(
         &self,
         host: &HostEntry,
@@ -392,12 +679,22 @@ impl ApiClient {
             candidates.insert(0, good.clone());
         }
 
+        let token = self
+            .elevations
+            .lock()
+            .unwrap()
+            .get(&paired.host_id)
+            .map(|elevation| elevation.token.clone());
+
         let mut last_error = None;
         for base_url in candidates {
             let mut request =
                 http.request(method.clone(), format!("{base_url}{API_BASE_PATH}{path}"));
             if let Some(body) = body {
                 request = request.json(body);
+            }
+            if let Some(token) = &token {
+                request = request.header(ELEVATION_HEADER, token.as_str());
             }
             if let Some(timeout) = timeout {
                 request = request.timeout(timeout);
@@ -408,7 +705,14 @@ impl ApiClient {
                         .lock()
                         .unwrap()
                         .insert(paired.host_id.clone(), base_url);
-                    return check(response).await;
+                    let checked = check(response).await;
+                    if let Err(error) = &checked {
+                        // An expired or revoked token is useless; the frontend asks for the passphrase again.
+                        if error.problem_code() == Some(ELEVATION_REQUIRED) {
+                            self.elevations.lock().unwrap().remove(&paired.host_id);
+                        }
+                    }
+                    return checked;
                 }
                 // Only a failed connection proves the request never reached the host. After a
                 // timeout the host may still be working (provisioning, rotating), so retrying at
@@ -432,6 +736,25 @@ impl ApiClient {
         let client = build_client(tls::pinned(&self.identity, hash));
         clients.insert(paired.host_id.clone(), client.clone());
         Ok(client)
+    }
+}
+
+/// Read-only host-level resources the frontend can ask for by name.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum HostResource {
+    Resources,
+    Isos,
+    Switches,
+}
+
+impl HostResource {
+    fn path(self) -> &'static str {
+        match self {
+            HostResource::Resources => "/host/resources",
+            HostResource::Isos => "/isos",
+            HostResource::Switches => "/switches",
+        }
     }
 }
 
@@ -479,6 +802,10 @@ pub fn candidate_base_urls(host: &HostEntry) -> Vec<String> {
     urls
 }
 
+fn to_body<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, ClientError> {
+    serde_json::to_value(value).map_err(|e| ClientError::InvalidRequest(e.to_string()))
+}
+
 async fn check(response: reqwest::Response) -> Result<reqwest::Response, ClientError> {
     let status = response.status();
     if status.is_success() {
@@ -496,10 +823,20 @@ async fn check(response: reqwest::Response) -> Result<reqwest::Response, ClientE
                 .unwrap_or("Request failed")
                 .to_string()
         });
+    let (code, issues) = match problem {
+        Some(problem) => {
+            let mut issues = problem.errors;
+            issues.extend(problem.warnings);
+            (problem.code, issues)
+        }
+        None => (None, Vec::new()),
+    };
 
     Err(ClientError::Api {
         status: status.as_u16(),
         message,
+        code,
+        issues,
     })
 }
 
@@ -832,11 +1169,11 @@ mod server_tests {
         let list = api.list_vms(&target, &paired).await;
 
         assert!(
-            matches!(&connect, Err(ClientError::Api { status: 409, message }) if message == "Start the VM first."),
+            matches!(&connect, Err(ClientError::Api { status: 409, message, .. }) if message == "Start the VM first."),
             "{connect:?}"
         );
         assert!(
-            matches!(&list, Err(ClientError::Api { status: 503, message }) if message == "Hyper-V unavailable"),
+            matches!(&list, Err(ClientError::Api { status: 503, message, .. }) if message == "Hyper-V unavailable"),
             "{list:?}"
         );
     }
@@ -1081,6 +1418,41 @@ mod server_tests {
             .expect("wake readiness");
         assert!(readiness["checks"].is_array());
 
+        // Lifecycle wiring in the real service: no passphrase is set, so elevated calls are refused
+        // with elevationUnavailable before anything reaches Hyper-V.
+        let elevation = api
+            .elevation_status(&target, &paired)
+            .await
+            .expect("elevation status");
+        assert_eq!(elevation["configured"], false);
+        let turn_off = api
+            .perform_vm_action(&target, &paired, VM_ID, "turnOff")
+            .await;
+        assert_eq!(
+            turn_off.unwrap_err().problem_code(),
+            Some("elevationUnavailable")
+        );
+        let isos = api
+            .get_resource(&target, &paired, HostResource::Isos)
+            .await
+            .expect("ISO library");
+        assert!(isos.is_array());
+        match api
+            .get_resource(&target, &paired, HostResource::Resources)
+            .await
+        {
+            Ok(resources) => assert!(resources["logicalProcessorCount"].as_u64() > Some(0)),
+            Err(ClientError::Api { status: 503, .. }) => {}
+            Err(error) => panic!("host resources: {error:?}"),
+        }
+        let job = api
+            .get_job(&target, &paired, "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d")
+            .await;
+        assert!(
+            matches!(job, Err(ClientError::Api { status: 404, .. })),
+            "{job:?}"
+        );
+
         let mut other_pin = paired.clone();
         other_pin.host_id = "different".into();
         other_pin.host_certificate_fingerprint = "00".repeat(32);
@@ -1172,5 +1544,168 @@ mod server_tests {
             assert_eq!(keys(body), keys(&fixture(schema)), "{schema}");
         }
         assert_eq!(bodies.len(), 5);
+    }
+
+    #[test]
+    fn lifecycle_requests_round_trip_the_contract_fixtures() {
+        for schema in ["VmDeleteRequest", "CreateVmRequest"] {
+            let sample = fixture(schema);
+            let body = match schema {
+                "VmDeleteRequest" => {
+                    to_body(&serde_json::from_value::<DeleteVmRequest>(sample.clone()).unwrap())
+                }
+                _ => to_body(&serde_json::from_value::<CreateVmRequest>(sample.clone()).unwrap()),
+            }
+            .unwrap();
+            assert_eq!(body, sample, "{schema}");
+        }
+
+        // Unset compute fields are left out, so the host keeps those settings.
+        let sample = fixture("UpdateVmComputeRequest");
+        let update: UpdateComputeRequest = serde_json::from_value(sample.clone()).unwrap();
+        assert_eq!(to_body(&update).unwrap(), sample);
+        assert_eq!(
+            to_body(&UpdateComputeRequest::default()).unwrap(),
+            json!({ "shutDownToApply": false, "acknowledgeWarnings": false })
+        );
+    }
+
+    #[test]
+    fn lifecycle_responses_parse() {
+        let job = fixture("VmJob");
+        assert_eq!(job["kind"], "createVm");
+        assert!(job["vmId"].is_null() && job["error"].is_null());
+        let preview = fixture("VmDeletePreview");
+        assert_eq!(preview["blockers"][0]["scope"], "deleteDisks");
+        let update = fixture("VmComputeUpdate");
+        assert!(update["job"].is_null());
+        assert_eq!(update["settings"]["requiresOff"][0], "processorCount");
+    }
+
+    fn elevation_server(token: &'static str) -> TestServer {
+        TestServer::start("127.0.0.1:0", move |request| {
+            if request.path.ends_with("/auth/elevation") && request.method == "POST" {
+                Reply::json(
+                    200,
+                    format!(r#"{{"token":"{token}","expiresAt":"2026-10-03T12:05:00Z"}}"#),
+                )
+            } else if request.header(ELEVATION_HEADER) == Some(token) {
+                Reply::json(202, r#"{"accepted":true}"#)
+            } else {
+                Reply::json(
+                    403,
+                    r#"{"title":"Elevation required","status":403,"detail":"Enter the passphrase.","code":"elevationRequired"}"#,
+                )
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn elevation_token_is_kept_here_and_sent_with_later_requests() {
+        let server = elevation_server("secret-token");
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+
+        let before = api
+            .perform_vm_action(&target, &paired, VM_ID, "turnOff")
+            .await;
+        let granted = api.elevate(&target, &paired, "passphrase").await.unwrap();
+        let after = api
+            .perform_vm_action(&target, &paired, VM_ID, "turnOff")
+            .await;
+
+        assert_eq!(before.unwrap_err().problem_code(), Some(ELEVATION_REQUIRED));
+        assert!(after.is_ok(), "{after:?}");
+        assert_eq!(granted.expires_at, "2026-10-03T12:05:00Z");
+        let serialized = serde_json::to_string(&granted).unwrap();
+        assert!(!serialized.contains("secret-token"), "{serialized}");
+        let requests = server.requests();
+        assert_eq!(requests[0].header(ELEVATION_HEADER), None);
+        assert_eq!(requests[2].header(ELEVATION_HEADER), Some("secret-token"));
+    }
+
+    #[tokio::test]
+    async fn rejected_token_is_forgotten() {
+        let server = elevation_server("good-token");
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+        api.elevations.lock().unwrap().insert(
+            paired.host_id.clone(),
+            Elevation {
+                token: zeroize::Zeroizing::new("expired-token".into()),
+            },
+        );
+
+        let first = api
+            .perform_vm_action(&target, &paired, VM_ID, "turnOff")
+            .await;
+        let _ = api
+            .perform_vm_action(&target, &paired, VM_ID, "turnOff")
+            .await;
+
+        assert!(first.is_err());
+        let requests = server.requests();
+        assert_eq!(requests[0].header(ELEVATION_HEADER), Some("expired-token"));
+        assert_eq!(requests[1].header(ELEVATION_HEADER), None);
+    }
+
+    #[tokio::test]
+    async fn problem_codes_and_issues_reach_the_frontend() {
+        let server = TestServer::start("127.0.0.1:0", |_| {
+            Reply::json(
+                409,
+                r#"{"title":"Check host resources","status":409,"code":"resourceWarnings","warnings":[{"field":"startupMemoryMb","message":"Low memory."}]}"#,
+            )
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let request = CreateVmRequest {
+            name: "Dev".into(),
+            iso_name: "win.iso".into(),
+            disk_size_gb: 64,
+            processor_count: 2,
+            startup_memory_mb: 4096,
+            maximum_memory_mb: 4096,
+            dynamic_memory: false,
+            switch_id: None,
+            enable_tpm: true,
+            acknowledge_warnings: false,
+        };
+
+        let result = api()
+            .create_vm(&target, &paired(server.certificate_hash()), &request)
+            .await;
+
+        match result {
+            Err(ClientError::Api {
+                status,
+                code,
+                issues,
+                ..
+            }) => {
+                assert_eq!(status, 409);
+                assert_eq!(code.as_deref(), Some("resourceWarnings"));
+                assert_eq!(issues[0].field, "startupMemoryMb");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_actions_and_job_ids_never_reach_the_host() {
+        let server = TestServer::start("127.0.0.1:0", ok_list);
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+
+        let action = api
+            .perform_vm_action(&target, &paired, VM_ID, "explode")
+            .await;
+        let job = api.get_job(&target, &paired, "../vms").await;
+
+        assert!(matches!(action, Err(ClientError::InvalidRequest(_))));
+        assert!(matches!(job, Err(ClientError::InvalidRequest(_))));
+        assert!(server.requests().is_empty());
     }
 }

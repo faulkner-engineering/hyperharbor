@@ -9,6 +9,9 @@
     unpair,
     wakeHost,
     connectVm,
+    dropElevation,
+    performVmAction,
+    type VmAction,
     type HostEntry,
     type Vm,
   } from "$lib/api/client";
@@ -18,6 +21,12 @@
   import VmList from "$lib/components/VmList.svelte";
   import WakePanel from "$lib/components/WakePanel.svelte";
   import ProvisionDialog from "$lib/components/ProvisionDialog.svelte";
+  import ElevationDialog from "$lib/components/ElevationDialog.svelte";
+  import DeleteVmDialog from "$lib/components/DeleteVmDialog.svelte";
+  import CreateVmDialog from "$lib/components/CreateVmDialog.svelte";
+  import ComputeDialog from "$lib/components/ComputeDialog.svelte";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+  import { elevation, ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
 
   const REFRESH_INTERVAL_MS = 5000;
 
@@ -33,6 +42,12 @@
   let provisioning = $state<Vm | null>(null);
   let connectingVmId = $state<string | null>(null);
   let connectStatus = $state<{ ok: boolean; message: string } | null>(null);
+  let actionVmId = $state<string | null>(null);
+  let confirmTurnOff = $state<Vm | null>(null);
+  let deleting = $state<Vm | null>(null);
+  let editing = $state<Vm | null>(null);
+  let creating = $state(false);
+  let now = $state(Date.now());
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
   // VMs are only fetched from paired hosts; others show the pairing panel instead.
@@ -48,6 +63,11 @@
     wakeStatus = null;
     provisioning = null;
     connectStatus = null;
+    confirmTurnOff = null;
+    deleting = null;
+    editing = null;
+    creating = false;
+    elevation.finish(false);
   }
 
   async function refreshHosts() {
@@ -93,6 +113,76 @@
       connectingVmId = null;
     }
   }
+
+  function requestAction(vm: Vm, action: VmAction) {
+    // Turning off is like pulling the power cord, so it is confirmed first.
+    if (action === "turnOff") {
+      confirmTurnOff = vm;
+    } else {
+      sendAction(vm, action);
+    }
+  }
+
+  const actionVerbs: Record<VmAction, string> = {
+    start: "Starting",
+    shutdown: "Shutting down",
+    turnOff: "Turning off",
+    save: "Saving",
+    restart: "Restarting",
+  };
+
+  async function sendAction(vm: Vm, action: VmAction) {
+    const key = selectedKey;
+    if (key === null) return;
+    actionVmId = vm.id;
+    connectStatus = null;
+    try {
+      await withElevation(key, () => performVmAction(key, vm.id, action));
+      connectStatus = { ok: true, message: `${actionVerbs[action]} ${vm.name}…` };
+      await refreshVms(key);
+    } catch (error) {
+      if (!(error instanceof ElevationCancelled)) connectStatus = { ok: false, message: errorMessage(error) };
+    } finally {
+      actionVmId = null;
+    }
+  }
+
+  function turnOffConfirmed(confirmed: boolean) {
+    const vm = confirmTurnOff;
+    confirmTurnOff = null;
+    if (confirmed && vm) sendAction(vm, "turnOff");
+  }
+
+  /** Closes a lifecycle dialog and refreshes the list if it changed anything. */
+  function lifecycleClosed(changed: boolean) {
+    deleting = null;
+    editing = null;
+    creating = false;
+    if (changed && selectedKey) refreshVms(selectedKey);
+  }
+
+  async function dropSelectedElevation() {
+    if (selectedKey === null) return;
+    const key = selectedKey;
+    elevation.forget(key);
+    try {
+      await dropElevation(key);
+    } catch {
+      // The token is forgotten locally either way; the host ends it within minutes.
+    }
+  }
+
+  const elevatedUntil = $derived(selectedKey ? elevation.expiresAt[selectedKey] : undefined);
+  const elevatedSeconds = $derived(
+    elevatedUntil ? Math.max(0, Math.round((Date.parse(elevatedUntil) - now) / 1000)) : 0,
+  );
+
+  // Tick once a second while elevated, for the countdown.
+  $effect(() => {
+    if (!elevatedUntil) return;
+    const timer = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(timer);
+  });
 
   function provisioned(done: boolean) {
     const vm = provisioning;
@@ -167,6 +257,15 @@
         </div>
         {#if selectedHost.paired}
           <div class="header-actions">
+            {#if elevatedSeconds > 0}
+              <span class="elevated" title="Changes that need the admin passphrase are allowed until this runs out.">
+                Elevated {Math.floor(elevatedSeconds / 60)}:{String(elevatedSeconds % 60).padStart(2, "0")}
+                <button type="button" class="link" onclick={dropSelectedElevation}>End</button>
+              </span>
+            {/if}
+            <button type="button" class="primary" onclick={() => (creating = true)} disabled={offline || vms === null}>
+              New VM…
+            </button>
             <button type="button" onclick={() => (showWake = !showWake)}>
               Wake-on-LAN
             </button>
@@ -205,12 +304,38 @@
         <VmList
           {vms}
           busyVmId={connectingVmId}
+          {actionVmId}
           onconnect={connect}
           onprovision={(vm) => (provisioning = vm)}
+          onaction={requestAction}
+          onsettings={(vm) => (editing = vm)}
+          ondelete={(vm) => (deleting = vm)}
         />
         {#if provisioning}
           <ProvisionDialog host={selectedHost} vm={provisioning} onclose={provisioned} />
         {/if}
+        {#if confirmTurnOff}
+          <ConfirmDialog
+            title="Turn off {confirmTurnOff.name}?"
+            message="Turning off is like pulling the power cord: anything not saved in the VM is lost. Use Shut down when the guest can respond."
+            confirmLabel="Turn off"
+            danger
+            onclose={turnOffConfirmed}
+          />
+        {/if}
+        {#if deleting}
+          <DeleteVmDialog host={selectedHost} vm={deleting} onclose={lifecycleClosed} />
+        {/if}
+        {#if editing}
+          <ComputeDialog host={selectedHost} vm={editing} onclose={lifecycleClosed} />
+        {/if}
+        {#if creating}
+          <CreateVmDialog host={selectedHost} onclose={lifecycleClosed} />
+        {/if}
+      {/if}
+
+      {#if elevation.pending && elevation.pending.hostKey === selectedHost.key}
+        <ElevationDialog host={selectedHost} />
       {/if}
 
       {#if selectedHost.paired && showWake}
@@ -338,6 +463,32 @@
   header button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  header button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+  }
+
+  .elevated {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: var(--warn-bg);
+    color: var(--warn-fg);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  header .elevated button.link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    text-decoration: underline;
   }
 
   .placeholder {

@@ -222,6 +222,126 @@ async fn connect_vm(
     rdp::launch(&connection, &rdp::file_directory())
 }
 
+#[tauri::command]
+async fn get_elevation(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.elevation_status(&host, &paired).await
+}
+
+/// Exchanges the host's admin passphrase for an elevation token, which stays in the Rust side.
+#[tauri::command]
+async fn elevate(
+    state: State<'_, AppState>,
+    key: String,
+    mut passphrase: String,
+) -> Result<api::ElevationGranted, ClientError> {
+    let result = match state.paired_host(&key) {
+        Ok((host, paired)) => state.api.elevate(&host, &paired, &passphrase).await,
+        Err(error) => Err(error),
+    };
+    zeroize::Zeroize::zeroize(&mut passphrase);
+    result
+}
+
+#[tauri::command]
+async fn drop_elevation(state: State<'_, AppState>, key: String) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.drop_elevation(&host, &paired).await
+}
+
+#[tauri::command]
+async fn perform_vm_action(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    action: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .perform_vm_action(&host, &paired, &vm_id, &action)
+        .await
+}
+
+#[tauri::command]
+async fn get_delete_preview(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.delete_preview(&host, &paired, &vm_id).await
+}
+
+#[tauri::command]
+async fn delete_vm(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    request: api::DeleteVmRequest,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.delete_vm(&host, &paired, &vm_id, &request).await
+}
+
+#[tauri::command]
+async fn create_vm(
+    state: State<'_, AppState>,
+    key: String,
+    request: api::CreateVmRequest,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.create_vm(&host, &paired, &request).await
+}
+
+#[tauri::command]
+async fn get_job(
+    state: State<'_, AppState>,
+    key: String,
+    job_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_job(&host, &paired, &job_id).await
+}
+
+/// Host resources, the ISO library, or the virtual switches.
+#[tauri::command]
+async fn get_host_resource(
+    state: State<'_, AppState>,
+    key: String,
+    resource: api::HostResource,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_resource(&host, &paired, resource).await
+}
+
+#[tauri::command]
+async fn get_vm_compute(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_vm_compute(&host, &paired, &vm_id).await
+}
+
+#[tauri::command]
+async fn update_vm_compute(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    request: api::UpdateComputeRequest,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .update_vm_compute(&host, &paired, &vm_id, &request)
+        .await
+}
+
 /// Sends Wake-on-LAN magic packets using the cached adapter details. Returns datagrams sent.
 #[tauri::command]
 fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
@@ -406,6 +526,17 @@ pub fn run() {
             fix_wake,
             start_wake_test,
             provision_vm,
+            get_elevation,
+            elevate,
+            drop_elevation,
+            perform_vm_action,
+            get_delete_preview,
+            delete_vm,
+            create_vm,
+            get_job,
+            get_host_resource,
+            get_vm_compute,
+            update_vm_compute,
             connect_vm
         ])
         .run(tauri::generate_context!())

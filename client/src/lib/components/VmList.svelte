@@ -1,15 +1,27 @@
 <script lang="ts">
-  import type { Vm, VmState } from "$lib/api/client";
+  import type { Vm, VmAction, VmState } from "$lib/api/client";
 
   interface Props {
     vms: Vm[];
     /** VM whose Connect or Provision request is in progress. */
     busyVmId?: string | null;
+    /** VM whose power action is being sent. */
+    actionVmId?: string | null;
     onconnect?: (vm: Vm) => void;
     onprovision?: (vm: Vm) => void;
+    onaction?: (vm: Vm, action: VmAction) => void;
+    onsettings?: (vm: Vm) => void;
+    ondelete?: (vm: Vm) => void;
   }
 
-  let { vms, busyVmId = null, onconnect, onprovision }: Props = $props();
+  let { vms, busyVmId = null, actionVmId = null, onconnect, onprovision, onaction, onsettings, ondelete }: Props =
+    $props();
+
+  /** Runs a menu item and closes its menu. */
+  function choose(event: MouseEvent, run: () => void) {
+    (event.currentTarget as HTMLElement).closest("details")?.removeAttribute("open");
+    run();
+  }
 
   const stateLabels: Record<VmState, string> = {
     running: "Running",
@@ -99,6 +111,31 @@
                 Detecting OS…
               </span>
             {/if}
+            {#if vm.state === "off" || vm.state === "saved"}
+              <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "start")}>
+                {actionVmId === vm.id ? "Starting…" : "Start"}
+              </button>
+            {:else if vm.state === "running"}
+              <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "shutdown")}>
+                {actionVmId === vm.id ? "Sending…" : "Shut down"}
+              </button>
+            {/if}
+            <details class="menu">
+              <summary aria-label="More actions for {vm.name}">⋯</summary>
+              <div class="menu-items">
+                {#if vm.state === "running"}
+                  <button type="button" onclick={(event) => choose(event, () => onaction?.(vm, "restart"))}>Restart</button>
+                  <button type="button" onclick={(event) => choose(event, () => onaction?.(vm, "save"))}>Save state</button>
+                {/if}
+                {#if vm.state !== "off" && vm.state !== "saved"}
+                  <button type="button" class="danger" onclick={(event) => choose(event, () => onaction?.(vm, "turnOff"))}>
+                    Turn off…
+                  </button>
+                {/if}
+                <button type="button" onclick={(event) => choose(event, () => onsettings?.(vm))}>Settings…</button>
+                <button type="button" class="danger" onclick={(event) => choose(event, () => ondelete?.(vm))}>Delete…</button>
+              </div>
+            </details>
           </td>
         </tr>
       {/each}
@@ -205,6 +242,60 @@
   .actions button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .actions > button + button,
+  .actions > button + details,
+  .actions > span + button {
+    margin-left: 0.35rem;
+  }
+
+  .menu {
+    display: inline-block;
+    position: relative;
+    margin-left: 0.35rem;
+  }
+
+  .menu summary {
+    list-style: none;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .menu summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .menu-items {
+    position: absolute;
+    right: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    min-width: 10rem;
+    margin-top: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  }
+
+  .menu-items button {
+    border: none;
+    text-align: left;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .menu-items button:hover {
+    background: var(--hover);
+  }
+
+  .menu-items button.danger {
+    color: var(--danger);
   }
 
   .visually-hidden {
