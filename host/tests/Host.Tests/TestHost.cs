@@ -39,6 +39,7 @@ internal sealed class TestHost : IDisposable
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
             .UseSetting("Discovery:Enabled", "false")
             .UseSetting("DataDirectory", DataDirectory)
+            .UseSetting("Tray:PipeName", "HyperHarbor.Tests." + Guid.NewGuid().ToString("N"))
             .ConfigureLogging(logging => logging
                 .AddProvider(Logs)
                 .AddFilter<CapturingLoggerProvider>(category: null, LogLevel.Trace))

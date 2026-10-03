@@ -61,7 +61,13 @@ builder.Services.AddSingleton<IServiceAdvertiser, WindowsDnsServiceAdvertiser>()
 builder.Services.AddHostedService<DiscoveryAdvertisementService>();
 
 // The tray pipe server shows pairing PINs, so it is also the pairing notifier.
-builder.Services.AddSingleton<TrayPipeServer>();
+// Tray:PipeName exists so tests can run beside a real tray without either connecting to the other.
+var trayPipeName = builder.Configuration["Tray:PipeName"] is { Length: > 0 } pipeName ? pipeName : TrayPipe.Name;
+builder.Services.AddSingleton(services => new TrayPipeServer(
+    services.GetRequiredService<PairedDeviceStore>(),
+    services,
+    services.GetRequiredService<ILogger<TrayPipeServer>>(),
+    trayPipeName));
 builder.Services.AddSingleton<IPairingNotifier>(services => services.GetRequiredService<TrayPipeServer>());
 builder.Services.AddHostedService(services => services.GetRequiredService<TrayPipeServer>());
 builder.Services.AddSingleton(TimeProvider.System);

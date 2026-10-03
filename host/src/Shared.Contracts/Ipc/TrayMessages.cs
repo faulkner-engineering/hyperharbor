@@ -20,8 +20,12 @@ public abstract record TrayMessage;
 
 // Service to tray.
 
-/// <summary>Show the PIN for a pairing request.</summary>
-public sealed record PairingStartedMessage(Guid PairingId, string DeviceName, string Pin, DateTimeOffset ExpiresAt) : TrayMessage;
+/// <summary>Show the PIN for a pairing request. ToString never includes the PIN.</summary>
+public sealed record PairingStartedMessage(Guid PairingId, string DeviceName, string Pin, DateTimeOffset ExpiresAt) : TrayMessage
+{
+    public override string ToString() =>
+        $"PairingStartedMessage {{ PairingId = {PairingId}, DeviceName = {DeviceName}, ExpiresAt = {ExpiresAt:u} }}";
+}
 
 /// <param name="Outcome">paired, expired, tooManyAttempts, or cancelled.</param>
 public sealed record PairingEndedMessage(Guid PairingId, string DeviceName, string Outcome) : TrayMessage;

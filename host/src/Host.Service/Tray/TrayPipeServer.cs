@@ -11,18 +11,23 @@ namespace HyperHarbor.Host.Service.Tray;
 
 /// <summary>
 /// Serves tray apps over a named pipe. Shows pairing PINs and lets the tray list and revoke
-/// paired devices. The pipe ACL admits SYSTEM, Administrators, the service account, and
-/// interactively logged-on users.
+/// paired devices. The pipe ACL admits only SYSTEM, Administrators, and the account the service runs
+/// as: anyone who can connect sees pairing PINs and can revoke devices.
 /// </summary>
 public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.IWakeFixApprover
 {
     private readonly PairedDeviceStore _devices;
     private readonly IServiceProvider _services;
     private readonly ILogger<TrayPipeServer> _logger;
+    private readonly string _pipeName;
     private readonly ConcurrentDictionary<Guid, Connection> _connections = new();
 
-    public TrayPipeServer(PairedDeviceStore devices, IServiceProvider services, ILogger<TrayPipeServer> logger)
+    /// <summary>Longest message accepted from a tray, in characters. Longer input closes the connection.</summary>
+    public const int MaxMessageLength = 64 * 1024;
+
+    public TrayPipeServer(PairedDeviceStore devices, IServiceProvider services, ILogger<TrayPipeServer> logger, string pipeName = TrayPipe.Name)
     {
+        _pipeName = pipeName;
         _devices = devices;
         _services = services;
         _logger = logger;
@@ -56,7 +61,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             try
             {
                 pipe = NamedPipeServerStreamAcl.Create(
-                    TrayPipe.Name,
+                    _pipeName,
                     PipeDirection.InOut,
                     NamedPipeServerStream.MaxAllowedServerInstances,
                     PipeTransmissionMode.Byte,
@@ -96,7 +101,8 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         {
             await connection.SendAsync(DeviceList());
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
-            while (!stoppingToken.IsCancellationRequested && await reader.ReadLineAsync(stoppingToken) is { } line)
+            var lines = new BoundedLineReader(reader, MaxMessageLength);
+            while (!stoppingToken.IsCancellationRequested && await lines.ReadLineAsync(stoppingToken) is { } line)
             {
                 await HandleMessageAsync(connection, line);
             }
@@ -104,6 +110,14 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
         {
             // The tray disconnected or the service is stopping.
+        }
+        catch (InvalidDataException)
+        {
+            _logger.LogWarning("Closing a tray connection that sent a message longer than {MaxLength} characters.", MaxMessageLength);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Tray connection failed.");
         }
         finally
         {
@@ -120,7 +134,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         {
             message = TrayPipe.Deserialize(line);
         }
-        catch (System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException)
         {
             _logger.LogWarning("Ignoring malformed tray message.");
             return;
@@ -162,7 +176,8 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
     private static string JsonNamingPolicyCamel(PairingOutcome outcome) =>
         System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(outcome.ToString());
 
-    private static PipeSecurity CreatePipeSecurity()
+    /// <summary>SYSTEM, Administrators, and the service account. Exposed for tests.</summary>
+    internal static PipeSecurity CreatePipeSecurity()
     {
         var security = new PipeSecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
@@ -172,7 +187,6 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
 
         Allow(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl);
         Allow(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), PipeAccessRights.FullControl);
-        Allow(new SecurityIdentifier(WellKnownSidType.InteractiveSid, null), PipeAccessRights.ReadWrite);
 
         using var current = WindowsIdentity.GetCurrent();
         if (current.User is { } user)
