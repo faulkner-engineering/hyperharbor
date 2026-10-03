@@ -35,6 +35,13 @@ public static class VmEndpoints
                 $"installDesktop={request.InstallDesktop}, trustNewHostKey={request.TrustNewHostKey}");
         vms.MapPost("/{vmId:guid}/connect", ConnectAsync).WithName("connectVm").Audited();
 
+        vms.MapPost("/", CreateAsync).WithName("createVm")
+            .Audited<CreateVmRequest>(request =>
+                $"name={request.Name}, iso={request.IsoName}, diskSizeGb={request.DiskSizeGb}, processors={request.ProcessorCount}, " +
+                $"startupMemoryMb={request.StartupMemoryMb}, maximumMemoryMb={request.MaximumMemoryMb}, dynamicMemory={request.DynamicMemory}, " +
+                $"switchId={request.SwitchId ?? "default"}, tpm={request.EnableTpm}")
+            .RequireElevation();
+
         vms.MapGet("/{vmId:guid}/delete-preview", GetDeletePreviewAsync).WithName("getVmDeletePreview");
         vms.MapPost("/{vmId:guid}/delete", DeleteAsync).WithName("deleteVm")
             .Audited<VmDeleteRequest>(request => $"deleteDisks={request.DeleteDisks}, deleteCheckpoints={request.DeleteCheckpoints}")
@@ -99,6 +106,19 @@ public static class VmEndpoints
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
         return TypedResults.Ok(connection);
+    }
+
+    private static async Task<Accepted<VmJob>> CreateAsync(
+        CreateVmRequest request,
+        VmCreationService creation,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var audit = context.Audit()!;
+        audit.VmName = request.Name?.Trim();
+        var job = await creation.StartAsync(context.User.UserId(), request, context.CompletionAuditor(), cancellationToken);
+        audit.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }
 
     private static async Task<Ok<VmDeletePreview>> GetDeletePreviewAsync(Guid vmId, VmDeletionService deletion, CancellationToken cancellationToken) =>

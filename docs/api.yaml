@@ -229,6 +229,55 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/HyperVUnavailable"
+    post:
+      tags: [VMs]
+      operationId: createVm
+      summary: Create a virtual machine that boots from an ISO.
+      description: |
+        Starts a creation job; poll `GET /jobs/{jobId}` (the `Location` header). The VM is
+        Generation 2 with Secure Boot (Microsoft Windows template), a virtual TPM unless
+        `enableTpm` is false, a new dynamic VHDX, and the ISO attached as a DVD that is first in
+        the boot order. It is left off. If a step fails, the job removes the VM and its new disk.
+
+        Errors in the request return 400 with `errors`. When the VM would leave the host with
+        less free memory than the reserve, or the disk could outgrow its drive, the host returns
+        409 with `code: resourceWarnings` and `warnings`; send the request again with
+        `acknowledgeWarnings: true` to proceed.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVmRequest"
+      responses:
+        "202":
+          description: The creation job started.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          description: Resource warnings to acknowledge, or a VM with this name is already being created.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
 
   /vms/{vmId}:
     parameters:
@@ -1450,3 +1499,44 @@ components:
         isDefault:
           type: boolean
           description: The NAT Default Switch. VMs on it are reachable only from the host.
+
+    CreateVmRequest:
+      type: object
+      required: [name, isoName, diskSizeGb, processorCount, startupMemoryMb, maximumMemoryMb, dynamicMemory]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Unique on the host. Also names the VHDX file.
+        isoName:
+          type: string
+          description: An image `name` from `GET /isos`.
+        diskSizeGb:
+          type: integer
+          minimum: 1
+          maximum: 65536
+        processorCount:
+          type: integer
+          minimum: 1
+          description: At most `HostResources.logicalProcessorCount`.
+        startupMemoryMb:
+          type: integer
+          format: int64
+          description: An even number of megabytes, at least 32.
+        maximumMemoryMb:
+          type: integer
+          format: int64
+          description: Used with dynamic memory; at least the startup memory.
+        dynamicMemory:
+          type: boolean
+        switchId:
+          type: [string, "null"]
+          description: A switch `id` from `GET /switches`. Omitted or null selects the Default Switch.
+        enableTpm:
+          type: boolean
+          default: true
+          description: Add a virtual TPM, which Windows 11 needs.
+        acknowledgeWarnings:
+          type: boolean
+          default: false

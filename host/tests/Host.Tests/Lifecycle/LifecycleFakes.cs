@@ -63,10 +63,14 @@ internal sealed class FakeDiskFiles : IDiskFiles
 
     public List<string> Deleted { get; } = [];
 
+    public long? FreeSpaceMb { get; set; } = 1024 * 1024;
+
     /// <summary>Files whose Delete throws, as if another process opened them after the check.</summary>
     public HashSet<string> FailOnDelete { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public bool Exists(string path) => Files.Contains(path);
+
+    public long? AvailableSpaceMb(string path) => FreeSpaceMb;
 
     public bool CanDelete(string path) => Files.Contains(path) && !Undeletable.Contains(path);
 
@@ -108,4 +112,66 @@ internal sealed class FakeHyperVHost : IHyperVHost
 
     public Task<IReadOnlyList<Shared.Contracts.Hosts.VirtualSwitch>> ListSwitchesAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<Shared.Contracts.Hosts.VirtualSwitch>>(Switches.ToList());
+}
+
+/// <summary>Records each creation step and can fail at any of them.</summary>
+internal sealed class FakeHyperVBuilder : IHyperVBuilder
+{
+    public List<string> Steps { get; } = [];
+
+    public VmBlueprint? Configured { get; private set; }
+
+    public Guid CreatedVmId { get; } = Guid.Parse("5e4d3c2b-1a09-4f8e-9d7c-6b5a49382716");
+
+    /// <summary>The step name ("disk", "define", "configure", "tpm", "notes") that throws.</summary>
+    public string? FailAt { get; set; }
+
+    /// <summary>Called when the disk is created, for example to add it to a <see cref="FakeDiskFiles"/>.</summary>
+    public Action<string>? OnDiskCreated { get; set; }
+
+    public Task CreateDiskAsync(string path, long sizeBytes, Action<int> progress, CancellationToken cancellationToken)
+    {
+        Step("disk");
+        progress(100);
+        OnDiskCreated?.Invoke(path);
+        return Task.CompletedTask;
+    }
+
+    public Task<Guid> DefineAsync(VmBlueprint blueprint, string notes, CancellationToken cancellationToken)
+    {
+        Step("define");
+        return Task.FromResult(CreatedVmId);
+    }
+
+    public Task ConfigureAsync(Guid vmId, VmBlueprint blueprint, CancellationToken cancellationToken)
+    {
+        Step("configure");
+        Configured = blueprint;
+        return Task.CompletedTask;
+    }
+
+    public Task EnableTpmAsync(Guid vmId, CancellationToken cancellationToken)
+    {
+        Step("tpm");
+        return Task.CompletedTask;
+    }
+
+    public Task SetNotesAsync(Guid vmId, string notes, CancellationToken cancellationToken)
+    {
+        Step("notes");
+        return Task.CompletedTask;
+    }
+
+    private void Step(string name)
+    {
+        lock (Steps)
+        {
+            Steps.Add(name);
+        }
+
+        if (FailAt == name)
+        {
+            throw new Core.HyperV.HyperVJobFailedException(name, 32768, $"Simulated failure at {name}.");
+        }
+    }
 }

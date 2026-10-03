@@ -67,6 +67,7 @@ public class ContractFixtureTests
         ["ElevationGrant"] = new ElevationGrant("Zml4dHVyZS10b2tlbi1maXh0dXJlLXRva2VuLWZpeHR1cg", Time),
         // Null on purpose: expiresAt is required but nullable.
         ["ElevationStatus"] = new ElevationStatus(true, false, null),
+        ["CreateVmRequest"] = new CreateVmRequest("Win11 Dev", "Win11_24H2.iso", 64, 4, 4096, 8192, true, "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", true, false),
         ["ValidationIssue"] = new ValidationIssue("processorCount", "Use at most 16 virtual processors."),
         ["VmDeleteRequest"] = new VmDeleteRequest(true, true, "Ubuntu Dev"),
         ["DeleteBlocker"] = new DeleteBlocker(DeleteBlockerCode.SharedDisk, DeleteBlockerScope.DeleteDisksOrCheckpoints, @"C:\VMs\Base.vhdx is also used by Web."),

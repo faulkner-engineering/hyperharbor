@@ -1,4 +1,16 @@
 {
+  "CreateVmRequest": {
+    "name": "Win11 Dev",
+    "isoName": "Win11_24H2.iso",
+    "diskSizeGb": 64,
+    "processorCount": 4,
+    "startupMemoryMb": 4096,
+    "maximumMemoryMb": 8192,
+    "dynamicMemory": true,
+    "switchId": "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444",
+    "enableTpm": true,
+    "acknowledgeWarnings": false
+  },
   "DeleteBlocker": {
     "code": "sharedDisk",
     "scope": "deleteDisksOrCheckpoints",

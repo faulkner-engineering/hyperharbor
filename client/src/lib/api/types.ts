@@ -114,7 +114,19 @@ export interface paths {
         /** List virtual machines on the host. */
         get: operations["listVms"];
         put?: never;
-        post?: never;
+        /**
+         * Create a virtual machine that boots from an ISO.
+         * @description Starts a creation job; poll `GET /jobs/{jobId}` (the `Location` header). The VM is
+         *     Generation 2 with Secure Boot (Microsoft Windows template), a virtual TPM unless
+         *     `enableTpm` is false, a new dynamic VHDX, and the ISO attached as a DVD that is first in
+         *     the boot order. It is left off. If a step fails, the job removes the VM and its new disk.
+         *
+         *     Errors in the request return 400 with `errors`. When the VM would leave the host with
+         *     less free memory than the reserve, or the disk could outgrow its drive, the host returns
+         *     409 with `code: resourceWarnings` and `warnings`; send the request again with
+         *     `acknowledgeWarnings: true` to proceed.
+         */
+        post: operations["createVm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -892,6 +904,35 @@ export interface components {
             /** @description The NAT Default Switch. VMs on it are reachable only from the host. */
             isDefault: boolean;
         };
+        CreateVmRequest: {
+            /** @description Unique on the host. Also names the VHDX file. */
+            name: string;
+            /** @description An image `name` from `GET /isos`. */
+            isoName: string;
+            diskSizeGb: number;
+            /** @description At most `HostResources.logicalProcessorCount`. */
+            processorCount: number;
+            /**
+             * Format: int64
+             * @description An even number of megabytes, at least 32.
+             */
+            startupMemoryMb: number;
+            /**
+             * Format: int64
+             * @description Used with dynamic memory; at least the startup memory.
+             */
+            maximumMemoryMb: number;
+            dynamicMemory: boolean;
+            /** @description A switch `id` from `GET /switches`. Omitted or null selects the Default Switch. */
+            switchId?: string | null;
+            /**
+             * @description Add a virtual TPM, which Windows 11 needs.
+             * @default true
+             */
+            enableTpm: boolean;
+            /** @default false */
+            acknowledgeWarnings: boolean;
+        };
     };
     responses: {
         /** @description The request was malformed or failed validation. */
@@ -1199,6 +1240,45 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    createVm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVmRequest"];
+            };
+        };
+        responses: {
+            /** @description The creation job started. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            /** @description Resource warnings to acknowledge, or a VM with this name is already being created. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             503: components["responses"]["HyperVUnavailable"];
         };
     };

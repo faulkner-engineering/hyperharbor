@@ -41,6 +41,9 @@ public interface IDiskFiles
     /// <exception cref="UnauthorizedAccessException">The service lacks the right to delete it.</exception>
     void Delete(string path);
 
+    /// <summary>Free space in megabytes on the volume that holds <paramref name="path"/>, or null when unknown.</summary>
+    long? AvailableSpaceMb(string path);
+
     /// <summary>Virtual hard disk files (.vhd, .vhdx, .avhd, .avhdx) directly in <paramref name="directory"/>.</summary>
     IEnumerable<string> ListDiskFiles(string directory);
 }
@@ -90,6 +93,18 @@ public sealed class WindowsDiskFiles : IDiskFiles
     }
 
     public void Delete(string path) => File.Delete(path);
+
+    public long? AvailableSpaceMb(string path)
+    {
+        try
+        {
+            return Path.GetPathRoot(Path.GetFullPath(path)) is { Length: > 0 } root ? new DriveInfo(root).AvailableFreeSpace / (1024 * 1024) : null;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     public IEnumerable<string> ListDiskFiles(string directory) =>
         Directory.Exists(directory)
