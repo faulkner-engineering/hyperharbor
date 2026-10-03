@@ -23,6 +23,12 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
     /// <summary>Thrown by every call when set.</summary>
     public Exception? Failure { get; set; }
 
+    /// <summary>
+    /// When true, every call fails with a GuestOperationException whose message repeats the administrator
+    /// password and the account password it was given, as careless guest output could.
+    /// </summary>
+    public bool EchoSecretsInFailure { get; set; }
+
     /// <summary>When true, provisioning "succeeds" but the account is not allowed to sign in remotely.</summary>
     public bool SkipGroupMembership { get; set; }
 
@@ -31,7 +37,7 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
 
     public async Task<GuestAccountState> InspectAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken)
     {
-        await Enter(target, admin);
+        await Enter(target, admin, password: null);
         lock (_gate)
         {
             return Accounts.GetValueOrDefault(target.VmId, new GuestAccountState(false, false, false, false));
@@ -46,7 +52,7 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
         GuestProvisionOptions options,
         CancellationToken cancellationToken)
     {
-        await Enter(target, admin);
+        await Enter(target, admin, password);
         lock (_gate)
         {
             Accounts[target.VmId] = new GuestAccountState(true, true, true, !SkipGroupMembership);
@@ -60,14 +66,14 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
 
     public async Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
     {
-        await Enter(target, admin);
+        await Enter(target, admin, password);
         lock (_gate)
         {
             PasswordsSet.Add((target.VmId, accountName, password));
         }
     }
 
-    private async Task Enter(GuestTarget target, GuestCredential admin)
+    private async Task Enter(GuestTarget target, GuestCredential admin, string? password)
     {
         lock (_gate)
         {
@@ -83,6 +89,11 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
         if (Failure is not null)
         {
             throw Failure;
+        }
+
+        if (EchoSecretsInFailure)
+        {
+            throw new GuestOperationException($"Command failed: echo {admin.Password} | chpasswd; new password {password}\n\u001b[31mstderr\u001b[0m");
         }
     }
 }

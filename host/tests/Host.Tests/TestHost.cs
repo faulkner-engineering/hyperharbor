@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HyperHarbor.Host.Tests;
 
@@ -38,6 +39,9 @@ internal sealed class TestHost : IDisposable
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
             .UseSetting("Discovery:Enabled", "false")
             .UseSetting("DataDirectory", DataDirectory)
+            .ConfigureLogging(logging => logging
+                .AddProvider(Logs)
+                .AddFilter<CapturingLoggerProvider>(category: null, LogLevel.Trace))
             .ConfigureTestServices(services =>
             {
                 services.AddSingleton<IVmInventory>(Inventory);
@@ -64,6 +68,9 @@ internal sealed class TestHost : IDisposable
     public FakeSleepController Sleep { get; } = new();
 
     public FakeGuestAccountManager Guest { get; } = new();
+
+    /// <summary>Every log entry the host wrote, at every level.</summary>
+    public CapturingLoggerProvider Logs { get; } = new();
 
     public IServiceProvider Services => _factory.Services;
 

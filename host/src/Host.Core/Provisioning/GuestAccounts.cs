@@ -100,6 +100,53 @@ public sealed class GuestOperationException(string message) : Exception(message)
 /// <summary>The request conflicts with the VM or account state (409).</summary>
 public sealed class GuestAccountConflictException(string message) : Exception(message);
 
+/// <summary>
+/// Guest error messages can include text the guest wrote (stderr, script output). They reach logs and
+/// the API response, so they are cleaned first: known secrets are replaced, control characters
+/// removed, and the length capped.
+/// </summary>
+public static class GuestErrors
+{
+    public const int MaxMessageLength = 1000;
+
+    private const string Redacted = "[redacted]";
+
+    public static bool IsGuestError(Exception exception) => exception is GuestCredentialRejectedException
+        or GuestUnavailableException
+        or GuestOperationException
+        or GuestAccountConflictException;
+
+    /// <summary>
+    /// Returns an exception of the same type with a cleaned message. The original is not attached as
+    /// the inner exception because its message is what is being cleaned.
+    /// </summary>
+    public static Exception Sanitize(Exception exception, params string?[] secrets)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        var message = Clean(exception.Message, secrets);
+        return exception switch
+        {
+            GuestCredentialRejectedException => new GuestCredentialRejectedException(message),
+            GuestUnavailableException => new GuestUnavailableException(message),
+            GuestOperationException => new GuestOperationException(message),
+            GuestAccountConflictException => new GuestAccountConflictException(message),
+            _ => exception,
+        };
+    }
+
+    public static string Clean(string message, params string?[] secrets)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        foreach (var secret in secrets.Where(secret => !string.IsNullOrEmpty(secret)).OrderByDescending(secret => secret!.Length))
+        {
+            message = message.Replace(secret!, Redacted, StringComparison.Ordinal);
+        }
+
+        var cleaned = new string(message.Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
+        return cleaned.Length <= MaxMessageLength ? cleaned : cleaned[..MaxMessageLength] + "...";
+    }
+}
+
 /// <summary>Generates passwords that satisfy the default Windows complexity policy.</summary>
 public static class PasswordGenerator
 {

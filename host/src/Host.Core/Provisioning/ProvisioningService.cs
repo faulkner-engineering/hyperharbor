@@ -74,9 +74,18 @@ public sealed class ProvisioningService
         var options = new GuestProvisionOptions(request.EnableRemoteDesktop, request.InstallDesktop);
 
         // The initial password is never stored; each connect rotates it.
-        target = await _guest.ProvisionAsync(target, admin, user.VmAccountName, PasswordGenerator.Generate(), options, cancellationToken);
+        var initialPassword = PasswordGenerator.Generate();
+        GuestAccountState state;
+        try
+        {
+            target = await _guest.ProvisionAsync(target, admin, user.VmAccountName, initialPassword, options, cancellationToken);
+            state = await _guest.InspectAsync(target, admin, user.VmAccountName, cancellationToken);
+        }
+        catch (Exception ex) when (GuestErrors.IsGuestError(ex))
+        {
+            throw GuestErrors.Sanitize(ex, admin.Password, initialPassword);
+        }
 
-        var state = await _guest.InspectAsync(target, admin, user.VmAccountName, cancellationToken);
         if (!state.IsReadyForRemoteDesktop)
         {
             var remoteDesktop = os == GuestOsFamily.Linux ? "xrdp running with a desktop installed" : "in Remote Desktop Users";

@@ -60,7 +60,14 @@ public sealed class PasswordRotator : IDisposable
                 ?? throw new GuestAccountConflictException("This VM has no stored administrator credential. Provision it again.");
 
             var password = PasswordGenerator.Generate();
-            await _guest.SetPasswordAsync(target, admin, accountName, password, cancellationToken);
+            try
+            {
+                await _guest.SetPasswordAsync(target, admin, accountName, password, cancellationToken);
+            }
+            catch (Exception ex) when (GuestErrors.IsGuestError(ex))
+            {
+                throw GuestErrors.Sanitize(ex, admin.Password, password);
+            }
 
             entry.Clear();
             entry.Password = password.ToCharArray();
