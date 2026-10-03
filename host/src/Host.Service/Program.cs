@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Authentication;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Discovery;
@@ -17,6 +18,7 @@ using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Ipc;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Options;
 
@@ -96,14 +98,14 @@ builder.Services.AddOptions<ApiOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// All interfaces, HTTPS only. Every endpoint except pairing requires a paired client certificate,
+// All interfaces (or Api:ListenAddress), HTTPS only. Every endpoint except pairing requires a paired client certificate,
 // which satisfies the CLAUDE.md rule against binding without mTLS.
 builder.WebHost.ConfigureKestrel((context, kestrel) =>
 {
     var api = kestrel.ApplicationServices.GetRequiredService<IOptions<ApiOptions>>().Value;
     var certificate = kestrel.ApplicationServices.GetRequiredService<HostCertificateStore>().GetOrCreate();
 
-    kestrel.ListenAnyIP(api.Port, listen => listen.UseHttps(https =>
+    void Https(ListenOptions listen) => listen.UseHttps(https =>
     {
         https.ServerCertificate = certificate;
         https.SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13;
@@ -112,7 +114,16 @@ builder.WebHost.ConfigureKestrel((context, kestrel) =>
         // certificates are self-signed; PairedDeviceAuthenticationHandler checks the pinned fingerprint.
         https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
         https.AllowAnyClientCertificate();
-    }));
+    });
+
+    if (string.IsNullOrEmpty(api.ListenAddress))
+    {
+        kestrel.ListenAnyIP(api.Port, Https);
+    }
+    else
+    {
+        kestrel.Listen(IPAddress.Parse(api.ListenAddress), api.Port, Https);
+    }
 });
 
 builder.Services
