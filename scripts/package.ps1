@@ -67,7 +67,12 @@ if (-not $SkipTests) {
     if (-not $HostOnly) {
         Push-Location (Join-Path $repo 'client')
         try {
+            Invoke-Step 'Generated API types match api.yaml' {
+                npm run gen:api
+                if ($LASTEXITCODE -eq 0) { git diff --exit-code -- src/lib/api/types.ts }
+            }
             Invoke-Step 'Frontend type check' { npm run check }
+            Invoke-Step 'Frontend tests' { npm test }
             Push-Location 'src-tauri'
             try {
                 Invoke-Step 'Client tests' { cargo test }

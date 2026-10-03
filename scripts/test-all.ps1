@@ -5,7 +5,7 @@
 .DESCRIPTION
     Host:     dotnet build -warnaserror (security analyzers and NuGet audit run here), dotnet test.
     Contract: Redocly lint of docs/api.yaml; regenerated TypeScript types must match the committed file.
-    Client:   npm ci, svelte-check, npm audit (high and above).
+    Client:   npm ci, svelte-check, Vitest, npm audit (high and above).
     Rust:     cargo fmt --check, clippy -D warnings, cargo test, cargo audit.
 
     -Coverage collects host code coverage into TestResults/.
@@ -84,6 +84,7 @@ if (-not $HostOnly) {
         }
     }
     Invoke-Check 'Frontend type check' $client { npm run check }
+    Invoke-Check 'Frontend tests' $client { npm test }
     Invoke-Check 'cargo fmt' $tauri { cargo fmt --check }
     Invoke-Check 'cargo clippy' $tauri { cargo clippy --all-targets -- -D warnings }
     Invoke-Check 'cargo test' $tauri { cargo test }
