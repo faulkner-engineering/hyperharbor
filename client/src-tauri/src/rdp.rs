@@ -54,6 +54,39 @@ impl std::fmt::Debug for VmConnection {
     }
 }
 
+/// Longest user name Windows accepts for a local account, plus a ".\" prefix.
+const MAX_USER_NAME: usize = 22;
+
+impl VmConnection {
+    /// Checks the values that go into the .rdp file and the TERMSRV credential target. The host
+    /// sends an IP address and a generated account name; anything else (for example a line break,
+    /// which would add arbitrary .rdp settings) is rejected rather than escaped.
+    pub fn validate(&self) -> Result<(), ClientError> {
+        if self.address.parse::<std::net::IpAddr>().is_err() {
+            return Err(ClientError::InvalidResponse(
+                "the Remote Desktop address is not an IP address".into(),
+            ));
+        }
+        let user_name_ok = !self.user_name.is_empty()
+            && self.user_name.chars().count() <= MAX_USER_NAME
+            && self
+                .user_name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '\\' | '-' | '_'));
+        if !user_name_ok {
+            return Err(ClientError::InvalidResponse(
+                "the Remote Desktop user name contains unexpected characters".into(),
+            ));
+        }
+        if self.port == 0 {
+            return Err(ClientError::InvalidResponse(
+                "the Remote Desktop port is 0".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl Drop for VmConnection {
     fn drop(&mut self) {
         self.password.zeroize();
@@ -98,6 +131,7 @@ pub fn is_reachable(address: &str, port: u16) -> bool {
 /// Writes the credential, launches mstsc, and removes the credential and file in the background once
 /// the session has opened (or mstsc exits, or the wait times out).
 pub fn launch(connection: &VmConnection, file_directory: &Path) -> Result<(), ClientError> {
+    connection.validate()?;
     let target = format!("TERMSRV/{}", connection.address);
     credentials::write(&target, &connection.user_name, &connection.password)?;
 
@@ -179,17 +213,39 @@ mod credentials {
         text.encode_utf16().chain(std::iter::once(0)).collect()
     }
 
+    /// Writes a session-scoped credential tagged with this app's comment.
     pub fn write(target: &str, user_name: &str, password: &str) -> Result<(), ClientError> {
+        write_with_comment(target, user_name, password, Some(CREDENTIAL_COMMENT))
+    }
+
+    /// Writes a credential without the tag, like one the user created. For tests of cleanup.
+    #[cfg(test)]
+    pub fn write_untagged(
+        target: &str,
+        user_name: &str,
+        password: &str,
+    ) -> Result<(), ClientError> {
+        write_with_comment(target, user_name, password, None)
+    }
+
+    fn write_with_comment(
+        target: &str,
+        user_name: &str,
+        password: &str,
+        comment: Option<&str>,
+    ) -> Result<(), ClientError> {
         let mut target = wide(target);
         let mut user = wide(user_name);
-        let mut comment = wide(CREDENTIAL_COMMENT);
+        let mut comment = comment.map(wide);
         // TERMSRV credentials store the password as UTF-16LE without a terminator.
         let mut blob: Vec<u8> = password.encode_utf16().flat_map(u16::to_le_bytes).collect();
 
         let credential = CREDENTIALW {
             Type: CRED_TYPE_GENERIC,
             TargetName: target.as_mut_ptr(),
-            Comment: comment.as_mut_ptr(),
+            Comment: comment
+                .as_mut()
+                .map_or(std::ptr::null_mut(), |comment| comment.as_mut_ptr()),
             CredentialBlobSize: blob.len() as u32,
             CredentialBlob: blob.as_mut_ptr(),
             Persist: CRED_PERSIST_SESSION,
@@ -371,6 +427,94 @@ mod tests {
             credentials::remove_tagged(&format!("TERMSRV/hyperharbor-test-{}", std::process::id()));
         assert_eq!(removed, 1);
         assert!(!credentials::exists(&target));
+    }
+
+    #[test]
+    fn cleanup_keeps_credentials_it_did_not_create() {
+        let prefix = format!("TERMSRV/hyperharbor-test-untagged-{}", std::process::id());
+        let ours = format!("{prefix}-ours");
+        let users = format!("{prefix}-users");
+        credentials::write(&ours, "hh-owner", "Not-A-Real-Pass1!").unwrap();
+        credentials::write_untagged(&users, "someone", "Users-Own-Pass1!").unwrap();
+
+        let removed = credentials::remove_tagged(&format!("{prefix}-*"));
+
+        let users_survived = credentials::exists(&users);
+        credentials::delete(&users);
+        assert_eq!(removed, 1);
+        assert!(!credentials::exists(&ours));
+        assert!(
+            users_survived,
+            "cleanup removed a credential the user created"
+        );
+    }
+
+    fn connection(address: &str, user_name: &str) -> VmConnection {
+        VmConnection {
+            user_name: user_name.into(),
+            password: "Not-A-Real-Pass1!".into(),
+            address: address.into(),
+            port: 3389,
+            guest_os: GuestOs::Windows,
+        }
+    }
+
+    #[test]
+    fn validate_accepts_what_the_host_sends() {
+        for (address, user_name) in [
+            ("192.168.0.50", r".\hh-owner"),
+            ("172.25.190.7", "hh-owner"),
+            ("fd00::5", "hh-a_b.c"),
+        ] {
+            assert!(
+                connection(address, user_name).validate().is_ok(),
+                "{address} {user_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_rejects_values_that_could_change_the_rdp_file() {
+        for (address, user_name) in [
+            ("192.168.0.50\r\nalternate shell:s:cmd.exe", "hh-owner"),
+            ("192.168.0.50", "hh-owner\r\ndrivestoredirect:s:*"),
+            ("192.168.0.50", "hh-owner\ndrivestoredirect:s:*"),
+            ("vm.example.com", "hh-owner"),
+            ("192.168.0.50:3390", "hh-owner"),
+            ("", "hh-owner"),
+            ("192.168.0.50", ""),
+            ("192.168.0.50", "hh owner"),
+            ("192.168.0.50", "hh-owner;x"),
+            ("192.168.0.50", "hh-ownerhh-ownerhh-owner"),
+            ("192.168.0.50", "TERMSRV/*"),
+        ] {
+            assert!(
+                matches!(
+                    connection(address, user_name).validate(),
+                    Err(ClientError::InvalidResponse(_))
+                ),
+                "accepted {address:?} {user_name:?}"
+            );
+        }
+        let mut zero_port = connection("192.168.0.50", "hh-owner");
+        zero_port.port = 0;
+        assert!(zero_port.validate().is_err());
+    }
+
+    #[test]
+    fn launch_with_injected_address_writes_nothing() {
+        let directory =
+            std::env::temp_dir().join(format!("hyperharbor-test-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let address = "10.0.0.5\r\nalternate shell:s:cmd.exe";
+
+        let result = launch(&connection(address, "hh-owner"), &directory);
+
+        let files = std::fs::read_dir(&directory).unwrap().count();
+        let _ = std::fs::remove_dir_all(&directory);
+        assert!(matches!(result, Err(ClientError::InvalidResponse(_))));
+        assert!(!credentials::exists(&format!("TERMSRV/{address}")));
+        assert_eq!(files, 0);
     }
 
     #[test]

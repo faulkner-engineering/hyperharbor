@@ -203,6 +203,20 @@ async fn connect_vm(
     }
 
     let connection = state.api.connect_vm(&host, &paired, &vm_id).await?;
+    connection.validate()?;
+
+    // The VM may report a different address by now; launch only to an address this device reaches.
+    if connection.address != address {
+        let probe_address = connection.address.clone();
+        let port = connection.port;
+        let reachable =
+            tauri::async_runtime::spawn_blocking(move || rdp::is_reachable(&probe_address, port))
+                .await
+                .unwrap_or(false);
+        if !reachable {
+            return Err(ClientError::VmUnreachable(connection.address.clone()));
+        }
+    }
     rdp::launch(&connection, &rdp::file_directory())
 }
 
