@@ -108,7 +108,8 @@ export interface paths {
          *       Remote Desktop Users.
          *     - Linux: SSH with password authentication to the VM's address, then sudo; Remote
          *       Desktop is xrdp. The guest's SSH host key is pinned on first use and checked on
-         *       every later connection. Installing packages can take several minutes.
+         *       every later connection, including when the VM is set up again (unless
+         *       `trustNewHostKey` is true). Installing packages can take several minutes.
          *
          *     The guest OS comes from `Vm.guestOs`; a VM whose family is `unknown` cannot be provisioned.
          */
@@ -436,6 +437,14 @@ export interface components {
              * @default false
              */
             installDesktop: boolean;
+            /**
+             * @description Linux only: accept an SSH host key that differs from the one pinned when the VM was
+             *     last set up, for example after the guest was reinstalled. When false, a changed key
+             *     fails with 409 and nothing is sent to the guest after the key exchange. Ignored for
+             *     Windows guests.
+             * @default false
+             */
+            trustNewHostKey: boolean;
         };
         VmProvisioning: {
             /** Format: uuid */
@@ -831,8 +840,9 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             /**
-             * @description The VM is not running, its guest OS is unknown or has no address (Linux), or an
-             *     existing account with the same name is not a local account.
+             * @description The VM is not running, its guest OS is unknown or has no address (Linux), an
+             *     existing account with the same name is not a local account, or (Linux) the guest's
+             *     SSH host key differs from the pinned one and `trustNewHostKey` is false.
              */
             409: {
                 headers: {

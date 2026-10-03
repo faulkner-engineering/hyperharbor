@@ -107,6 +107,8 @@ export interface ProvisionOptions {
   enableRemoteDesktop: boolean;
   /** Linux only: install Xfce when the guest has no desktop environment. */
   installDesktop: boolean;
+  /** Linux only: accept an SSH host key that differs from the one pinned at the last setup. */
+  trustNewHostKey: boolean;
 }
 
 /** One-time setup of this User's account on a VM. The admin password is sent to the host over mTLS. */

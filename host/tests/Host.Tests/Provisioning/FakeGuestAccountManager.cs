@@ -35,6 +35,12 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
     /// <summary>Simulated time for a guest call, to exercise concurrency.</summary>
     public TimeSpan Delay { get; set; }
 
+    /// <summary>
+    /// The SSH host key Linux guests present. Like the SSH manager, a call whose target pins a
+    /// different key fails before the administrator credential is used.
+    /// </summary>
+    public string PresentedHostKey { get; set; } = FakeHostKey;
+
     public async Task<GuestAccountState> InspectAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken)
     {
         await Enter(target, admin, password: null);
@@ -61,7 +67,7 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
         }
 
         // Like the SSH manager, Linux targets come back with the host key pinned.
-        return target.Os == GuestOsFamily.Linux ? target with { SshHostKey = FakeHostKey } : target;
+        return target.Os == GuestOsFamily.Linux ? target with { SshHostKey = PresentedHostKey } : target;
     }
 
     public async Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
@@ -77,8 +83,17 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
     {
         lock (_gate)
         {
-            AdminCredentialsUsed.Add(admin);
             TargetsUsed.Add(target);
+        }
+
+        if (target is { Os: GuestOsFamily.Linux, SshHostKey: { } pinned } && pinned != PresentedHostKey)
+        {
+            throw new GuestAccountConflictException($"The VM's SSH host key changed (expected {pinned}, got {PresentedHostKey}).");
+        }
+
+        lock (_gate)
+        {
+            AdminCredentialsUsed.Add(admin);
         }
 
         if (Delay > TimeSpan.Zero)

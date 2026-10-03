@@ -69,8 +69,11 @@ public sealed class ProvisioningService
         var user = _users.Find(userId) ?? throw new InvalidOperationException($"User {userId} does not exist.");
         var admin = new GuestCredential(request.AdminUserName.Trim(), request.AdminPassword);
 
-        // Setting a VM up again trusts the SSH host key presented now, so a reinstalled guest can be set up again.
-        var target = new GuestTarget(vmId, os, address);
+        // Setting a VM up again keeps the pinned SSH host key, so a guest that changed its key (or an
+        // impostor at its address) does not receive the admin credential. After a reinstall the user
+        // opts in with TrustNewHostKey.
+        var pinnedKey = os == GuestOsFamily.Linux && !request.TrustNewHostKey ? _provisioning.Find(vmId, userId)?.SshHostKey : null;
+        var target = new GuestTarget(vmId, os, address, pinnedKey);
         var options = new GuestProvisionOptions(request.EnableRemoteDesktop, request.InstallDesktop);
 
         // The initial password is never stored; each connect rotates it.

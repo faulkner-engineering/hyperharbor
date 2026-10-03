@@ -7,14 +7,17 @@ namespace HyperHarbor.Shared.Contracts.Vms;
 /// <param name="AdminPassword">Stored on the host with DPAPI. Never logged.</param>
 /// <param name="EnableRemoteDesktop">Windows: enable Remote Desktop and its firewall rule. Linux: install and enable xrdp.</param>
 /// <param name="InstallDesktop">Linux only: install Xfce when the guest has no desktop environment.</param>
+/// <param name="TrustNewHostKey">Linux only: accept an SSH host key that differs from the one pinned at the last setup.</param>
 public sealed record ProvisionVmRequest(
     [property: JsonRequired] string AdminUserName,
     [property: JsonRequired] string AdminPassword,
     bool EnableRemoteDesktop = true,
-    bool InstallDesktop = false)
+    bool InstallDesktop = false,
+    bool TrustNewHostKey = false)
 {
     /// <summary>Keeps the admin password out of logs and exception messages.</summary>
-    public override string ToString() => $"ProvisionVmRequest {{ AdminUserName = {AdminUserName}, EnableRemoteDesktop = {EnableRemoteDesktop}, InstallDesktop = {InstallDesktop} }}";
+    public override string ToString() =>
+        $"ProvisionVmRequest {{ AdminUserName = {AdminUserName}, EnableRemoteDesktop = {EnableRemoteDesktop}, InstallDesktop = {InstallDesktop}, TrustNewHostKey = {TrustNewHostKey} }}";
 }
 
 /// <summary>Result of provisioning. Schema: VmProvisioning.</summary>

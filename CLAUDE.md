@@ -114,7 +114,8 @@ Mark required request properties [JsonRequired] (an empty body must not default 
     `sudo -S -k true`; the script then reads the account password from the stdin line starting "HH:".
   - The bash script lives in a C# raw string; it is sent with LF line endings (ReplaceLineEndings).
     Check syntax in the guest with `bash -n` after editing it.
-  - The SSH host key is pinned at setup (ProvisionedAccount.SshHostKey); setting up again re-pins.
+  - The SSH host key is pinned at setup (ProvisionedAccount.SshHostKey). Setting up again keeps the pin;
+    a changed key is a 409 unless the request sets trustNewHostKey (the dialog offers it for set-up VMs).
   - xrdp has no NLA, so Linux .rdp files set enablecredsspsupport:i:0 and mstsc sends the stored
     credential in the TLS logon packet. Remote Desktop needs a desktop session; setup can install Xfce.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set

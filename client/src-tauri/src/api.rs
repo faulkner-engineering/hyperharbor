@@ -22,12 +22,16 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const PROVISION_TIMEOUT: Duration = Duration::from_secs(25 * 60);
 const VM_CONNECT_TIMEOUT: Duration = Duration::from_secs(90);
 
-/// Options for POST /vms/{vmId}/provision. `install_desktop` applies to Linux guests only.
+/// Options for POST /vms/{vmId}/provision. `install_desktop` and `trust_new_host_key` apply to Linux
+/// guests only.
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvisionOptions {
     pub enable_remote_desktop: bool,
     pub install_desktop: bool,
+    /// Accept an SSH host key that differs from the one pinned at the last setup.
+    #[serde(default)]
+    pub trust_new_host_key: bool,
 }
 
 #[derive(Deserialize)]
@@ -249,6 +253,7 @@ impl ApiClient {
             "adminPassword": admin_password,
             "enableRemoteDesktop": options.enable_remote_desktop,
             "installDesktop": options.install_desktop,
+            "trustNewHostKey": options.trust_new_host_key,
         });
         let response = self
             .send_paired_with(

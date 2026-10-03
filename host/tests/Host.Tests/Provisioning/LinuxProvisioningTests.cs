@@ -42,7 +42,44 @@ public sealed class LinuxProvisioningTests : IDisposable
         }
     }
 
-    private static ProvisionVmRequest Request(bool installDesktop = false) => new("hhadmin", "Adm1n-Secret!", true, installDesktop);
+    private static ProvisionVmRequest Request(bool installDesktop = false, bool trustNewHostKey = false) =>
+        new("hhadmin", "Adm1n-Secret!", true, installDesktop, trustNewHostKey);
+
+    [Fact]
+    public async Task ProvisionAgain_KeepsThePinnedHostKey()
+    {
+        await _service.ProvisionAsync(LinuxVm, _userId, Request(), CancellationToken.None);
+        _guest.TargetsUsed.Clear();
+
+        await _service.ProvisionAsync(LinuxVm, _userId, Request(), CancellationToken.None);
+
+        Assert.Equal(FakeGuestAccountManager.FakeHostKey, _guest.TargetsUsed[0].SshHostKey);
+    }
+
+    [Fact]
+    public async Task ProvisionAgain_ChangedHostKey_FailsBeforeTheCredentialIsUsed()
+    {
+        await _service.ProvisionAsync(LinuxVm, _userId, Request(), CancellationToken.None);
+        _guest.AdminCredentialsUsed.Clear();
+        _guest.PresentedHostKey = "SHA256:impostor";
+
+        await Assert.ThrowsAsync<GuestAccountConflictException>(
+            () => _service.ProvisionAsync(LinuxVm, _userId, Request(), CancellationToken.None));
+
+        Assert.Empty(_guest.AdminCredentialsUsed);
+        Assert.Equal(FakeGuestAccountManager.FakeHostKey, _provisioning.Find(LinuxVm, _userId)!.SshHostKey);
+    }
+
+    [Fact]
+    public async Task ProvisionAgain_TrustNewHostKey_PinsTheNewKey()
+    {
+        await _service.ProvisionAsync(LinuxVm, _userId, Request(), CancellationToken.None);
+        _guest.PresentedHostKey = "SHA256:reinstalled";
+
+        await _service.ProvisionAsync(LinuxVm, _userId, Request(trustNewHostKey: true), CancellationToken.None);
+
+        Assert.Equal("SHA256:reinstalled", _provisioning.Find(LinuxVm, _userId)!.SshHostKey);
+    }
 
     [Fact]
     public async Task Provision_Linux_UsesSshTarget_AndPinsHostKey()

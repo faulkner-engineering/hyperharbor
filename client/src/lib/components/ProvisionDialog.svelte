@@ -17,6 +17,8 @@
   let adminPassword = $state("");
   let enableRemoteDesktop = $state(true);
   let installDesktop = $state(false);
+  // Only offered when setting a Linux VM up again; see the checkbox below.
+  let trustNewHostKey = $state(false);
   let busy = $state(false);
   let error = $state<string | null>(null);
 
@@ -30,6 +32,7 @@
       await provisionVm(host.key, vm.id, adminUserName.trim(), adminPassword, {
         enableRemoteDesktop,
         installDesktop: linux && enableRemoteDesktop && installDesktop,
+        trustNewHostKey: linux && vm.provisioned && trustNewHostKey,
       });
       adminPassword = "";
       onclose(true);
@@ -81,6 +84,12 @@
           <input type="checkbox" bind:checked={installDesktop} disabled={busy || !enableRemoteDesktop} />
           Install a lightweight desktop (Xfce) if the VM has none
         </label>
+        {#if vm.provisioned}
+          <label class="check">
+            <input type="checkbox" bind:checked={trustNewHostKey} disabled={busy} />
+            Trust a new SSH host key (only if this VM was reinstalled)
+          </label>
+        {/if}
       {/if}
 
       {#if busy && linux}

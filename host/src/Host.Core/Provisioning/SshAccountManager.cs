@@ -119,8 +119,9 @@ public sealed class SshAccountManager : IGuestAccountManager
         }
         catch (SshConnectionException) when (presentedKey is not null && target.SshHostKey is not null && presentedKey != target.SshHostKey)
         {
-            throw new GuestOperationException(
-                $"The VM's SSH host key changed (expected {target.SshHostKey}, got {presentedKey}). If the guest was reinstalled, set it up again.");
+            throw new GuestAccountConflictException(
+                $"The VM's SSH host key changed (expected {target.SshHostKey}, got {presentedKey}). If the guest was reinstalled, " +
+                "set it up again and choose to trust its new host key.");
         }
         catch (Exception ex) when (ex is SocketException or SshConnectionException or SshOperationTimeoutException
             || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
