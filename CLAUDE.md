@@ -16,6 +16,10 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
   (serialized per VM and User, short reuse window), returns it to the requesting paired Device over mTLS,
   and the client removes it from the OS credential store after launching RDP.
 - Wake-on-LAN: readiness check with auto-fix, Test Wake, relay mode later
+- VM lifecycle: create from an ISO in the host's library, change compute settings, delete; long operations
+  are jobs the client polls. Power actions, lifecycle jobs, and settings changes take a per-VM lock.
+- Audit and elevation: every state-changing request is audited (audit.log in the data directory). Delete,
+  create, compute changes, and turnOff need a 5-minute elevation token from the admin passphrase set in the tray.
 
 ## Roadmap (one phase per session, read-only first)
 1. Solution skeleton + OpenAPI contract (done)
@@ -26,13 +30,11 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 6. Wake-on-LAN (done)
 7. One-click RDP with a per-User VM account (Windows guests via PowerShell Direct; Linux guests via SSH
    and xrdp, added at the user's request)
-8. VM lifecycle (in progress, added at the user's request), in steps:
-   0. Audit log for every state-changing route, admin passphrase elevation, job store, per-VM lock
-   1. Delete VM (off only, optional disks and checkpoints, refuses shared parent disks)
-   2. Read-only host resources, ISO library, virtual switches
-   3. Create VM from ISO (Gen 2, Secure Boot, vTPM via CIM) as a job
-   4. Compute settings (vCPU, memory, nested virtualization, MAC spoofing) with shut down and apply
-   Delete, create, compute changes, and turnOff require elevation.
+8. VM lifecycle, added at the user's request (done 2026-10-03; awaiting the user's test of the packaged client):
+   audit log and admin passphrase elevation; delete VM (off only, optional disks and checkpoints, refuses
+   shared parent disks); host resources, ISO library, switches; create Gen 2 VM from ISO (Secure Boot, vTPM)
+   as a job; compute settings (vCPU, memory, nested virtualization, MAC spoofing) with shut down and apply;
+   client power controls and dialogs for all of it.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -51,18 +53,20 @@ per-device VM accounts and a user management UI.
 - host/src/Shared.Contracts: DTOs mirroring api.yaml; ContractJson holds the wire JSON options
 - host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/,
   Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile),
-  Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService)
-- host/src/Host.Service: Kestrel API (Api/), device auth and elevation filter (Security/), audit filter (Audit/),
-  tray pipe server (Tray/), mDNS (Discovery/)
+  Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService), Lifecycle/ (create, delete,
+  compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers)
+- host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
+  elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/)
 - host/src/Host.Tray: WinForms tray; shows pairing PINs and paired devices, sets the admin passphrase
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
-  identity.rs (key in Credential Manager), paired.rs; client/src: SvelteKit SPA
+  identity.rs (key in Credential Manager), paired.rs; client/src: SvelteKit SPA. Lifecycle UI:
+  lib/lifecycle.svelte.ts (elevation prompt, job polling) and lib/components/*Dialog.svelte on a shared Dialog
 - docs/pairing.md: the SPAKE2 pairing protocol; both implementations must match it and Spake2Vectors.json
 
 ## Commands
 Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotnet:/c/Program Files/nodejs:$HOME/.cargo/bin:$PATH"
-- Everything CI runs (build, tests, lint, type drift, audits): powershell -ExecutionPolicy Bypass -File scripts	est-all.ps1
+- Everything CI runs (build, tests, lint, type drift, audits): powershell -ExecutionPolicy Bypass -File scripts\test-all.ps1
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service; pairing needs Host.Tray running
@@ -73,7 +77,10 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Live mDNS browse (host service running): cargo test live_browse -- --ignored --nocapture
 - Live pairing over LAN (service running, something writing the PIN to the file):
   HH_LIVE_HOST=<lan ip> HH_PIN_FILE=pin.txt cargo test live_pairing -- --ignored --nocapture
-- End to end on loopback (no LAN, no setup): powershell -ExecutionPolicy Bypass -File scriptse2e.ps1
+- End to end on loopback (no LAN, no setup): powershell -ExecutionPolicy Bypass -File scripts\e2e.ps1
+  It starts the real service on a free loopback port, so it can run while a packaged host is running.
+- Live lifecycle (creates, changes, and deletes HyperHarbor-Test; ask first):
+  HH_LIFECYCLE_LIVE=1 dotnet test HyperHarbor.sln --filter LifecycleLiveTests
 
 ## Packaging (multi-machine testing)
 - powershell -ExecutionPolicy Bypass -File scripts\package.ps1 [-Fast] [-SkipTests] [-HostOnly|-ClientOnly]
@@ -93,6 +100,9 @@ is anonymous. ContractFixtureTests check one sample per DTO against api.yaml; re
 ContractFixtures.json with HH_WRITE_CONTRACT_FIXTURES=1 (the Rust tests parse it). Required nullable
 properties need [JsonIgnore(Condition = Never)], because ContractJson omits nulls.
 Mark required request properties [JsonRequired] (an empty body must not default to action=start).
+A nullable object property is `oneOf: [$ref, type: "null"]` (the fixture checker understands that form).
+In api.yaml, quote or rephrase plain scalars containing ": " (YamlDotNet in the tests rejects them even when
+Redocly does not). The tests read api.yaml from the build output, so rebuild before running them.
 
 ## Gotchas
 - Build Rust from PowerShell, not Git Bash: Git Bash's /usr/bin/link shadows MSVC link.exe.
@@ -112,6 +122,16 @@ Mark required request properties [JsonRequired] (an empty body must not default 
   - Saving reports EnabledState 1 with OtherEnabledState "Saving". Starting reports OperationalStatus 11 with RequestedState 2.
   - A guest shutdown shows no "stopping" state, and a guest reboot does not reset uptime.
   - The shutdown component reports OperationalStatus 12 (No Contact) when no guest OS is running; the API returns 409.
+  - ModifySystemSettings ignores an empty Notes array; one empty string clears the notes.
+  - Each new device is cloned from the single "Microsoft:Definition\<guid>\Default" instance of its class and
+    ResourceSubType. A drive's boot entry is its InstanceID plus "\B" in BootSourceOrder (a string array).
+  - Secure Boot template IDs are not queryable through CIM: MicrosoftWindows is 1734c6e8-3154-4dda-ba5f-a874cc483422,
+    MicrosoftUEFICertificateAuthority is 272e7447-90a4-4563-a4b9-8e4ab00526ce (read back in the live test).
+  - vTPM: MSFT_HgsGuardian "UntrustedGuardian" (NewByGenerateCertificates if missing), then
+    MSFT_HgsKeyProtector.NewByGuardians, Msvm_SecurityService.SetKeyProtector, and TpmEnabled.
+  - The Default Switch's Name is C08CB7B8-9B3C-408E-8E30-5E16A3AEB444. This host's default VHD folder is
+    C:\ProgramData\Microsoft\Windows\Virtual Hard Disks; HyperHarbor-Linux lives in Public Documents.
+  - A running VM holds its disk files open, so a delete-access check only means something once it is off.
 - ASP.NET Core 8 logs every handled exception; that category is off in appsettings.json and ApiExceptionHandler logs instead.
 - Svelte: run the svelte-autofixer MCP tool on every .svelte file you change.
 - Remote Desktop (Phase 7):
@@ -160,11 +180,13 @@ Mark required request properties [JsonRequired] (an empty body must not default 
     IHyperVHost, IHostCapacityReader) have fakes in Host.Tests/Lifecycle/LifecycleFakes.cs.
   - Delete follows checkpoint .avhdx parents to the base disk and never deletes a parent of a differencing
     disk; anything another VM, a checkpoint, or a stray differencing disk depends on blocks it.
-  - A drive's boot entry is the drive's InstanceID plus "\B"; that is how the DVD is put first.
   - Validation errors are 400 with `errors`; resource warnings are 409 code resourceWarnings with `warnings`,
     sent again with acknowledgeWarnings. Settings that need the VM off return 409 code requiresShutdown.
-  - CIM read paths were checked live (CimHyperVStorageLiveTests). Creating, deleting, and applying settings
-    run live only with HH_LIFECYCLE_LIVE=1 (LifecycleLiveTests creates and deletes HyperHarbor-Test).
+  - Configuration: Lifecycle:VmRootFolder (unset: Hyper-V's default folders), Lifecycle:IsoFolder (unset:
+    Public Documents\HyperHarbor ISOs), Lifecycle:HostMemoryReserveMb (4096), Lifecycle:ShutdownTimeoutSeconds
+    (300), Elevation:TokenLifetimeSeconds (300).
+  - Verified live on 2026-10-03: CIM reads (CimHyperVStorageLiveTests), and create, developer preset, and delete
+    (LifecycleLiveTests). Not yet run live: shut down and apply on a running VM, and checkpoint merging on delete.
   - Client: the elevation token stays in the Rust ApiClient (never in the webview); ClientError carries the
     host's problemCode and issues. withElevation (lifecycle.svelte.ts) prompts once and retries.
   - Vitest: write `beforeEach(() => { invoke.mockReset(); })` with braces. mockReset returns the mock, and a
@@ -189,6 +211,9 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 - No real installer yet: the service runs as a console app, not a Windows service. An MSI (service as
   LocalSystem, tray at logon) needs the data-file ACLs and pipe ACL retested under LocalSystem; the pipe
   must then grant the logged-on user explicitly, since the service account is no longer that user.
+- The client has no VM console, so installing an OS on a new VM needs the host's Hyper-V console.
+- Jobs live in host memory: a service restart forgets them, and a VM whose creation was interrupted keeps its
+  "creation in progress" note. Elevation tokens also end when the host service or the client restarts.
 
 ## Live testing
 - Live tests skip themselves when Hyper-V is unreachable ([HyperVFact]); the account must be in Hyper-V Administrators.
@@ -198,6 +223,7 @@ Mark required request properties [JsonRequired] (an empty body must not default 
 - Test VM HyperHarbor-Linux: Ubuntu 24.04 server (no desktop), user hhadmin, SSH key
   ~/.ssh/hyperharbor_linux_ed25519; sudo needs hhadmin's password. Dynamic memory 768 MB startup, because
   this PC often has little free RAM.
-- For throwaway VMs, create HyperHarbor-Test (Gen 2, no disk) and delete it afterwards. Ask before changing any other VM.
+- For throwaway VMs, create HyperHarbor-Test and delete it afterwards (LifecycleLiveTests does both, with a
+  1 GB disk in a temporary folder). Ask before changing any other VM.
 - VM console automation: Msvm_Keyboard.TypeText can drop characters, so send TypeKey one key at a time.
   Read the screen with GetVirtualSystemThumbnailImage (RGB565) and confirm a prompt is gone before moving on.
