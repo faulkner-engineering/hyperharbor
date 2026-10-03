@@ -137,3 +137,49 @@ fn public_keys_match(certificate_der: &[u8], key_pair: &KeyPair) -> bool {
         .windows(public_key.len())
         .any(|window| window == public_key)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pem_round_trips_to_the_certificate_der() {
+        let (identity, _) = ClientIdentity::generate("test").unwrap();
+
+        assert_eq!(
+            pem_to_der(&identity.certificate_pem).as_deref(),
+            Some(identity.certificate_der.as_slice())
+        );
+    }
+
+    #[test]
+    fn pem_to_der_rejects_other_input() {
+        for input in [
+            "",
+            "not pem",
+            "-----BEGIN CERTIFICATE-----\nnot base64!\n-----END CERTIFICATE-----\n",
+        ] {
+            assert_eq!(pem_to_der(input), None, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn key_matches_only_its_own_certificate() {
+        let (identity, key_pem) = ClientIdentity::generate("test").unwrap();
+        let (_, other_key_pem) = ClientIdentity::generate("other").unwrap();
+
+        let own = KeyPair::from_pem(&key_pem).unwrap();
+        let other = KeyPair::from_pem(&other_key_pem).unwrap();
+
+        assert!(public_keys_match(&identity.certificate_der, &own));
+        assert!(!public_keys_match(&identity.certificate_der, &other));
+    }
+
+    #[test]
+    fn certificate_hash_is_sha256_of_the_der() {
+        let (identity, _) = ClientIdentity::generate("test").unwrap();
+        let expected: [u8; 32] = Sha256::digest(&identity.certificate_der).into();
+
+        assert_eq!(identity.certificate_hash(), expected);
+    }
+}

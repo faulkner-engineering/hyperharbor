@@ -443,12 +443,7 @@ fn tries_next_address(error: &reqwest::Error) -> bool {
 
 /// "/vms/{vmId}/{action}". The ID comes from the frontend; only a GUID may become part of a path.
 fn vm_path(vm_id: &str, action: &str) -> Result<String, ClientError> {
-    let is_guid = vm_id.len() == 36
-        && vm_id.char_indices().all(|(index, c)| match index {
-            8 | 13 | 18 | 23 => c == '-',
-            _ => c.is_ascii_hexdigit(),
-        });
-    if is_guid {
+    if crate::hosts::is_guid(vm_id) {
         Ok(format!("/vms/{vm_id}/{action}"))
     } else {
         Err(ClientError::InvalidVmId)

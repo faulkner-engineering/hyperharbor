@@ -135,6 +135,15 @@ pub fn normalize_host_name(name: &str) -> String {
     name.to_ascii_lowercase()
 }
 
+/// True for a GUID in its 36-character hyphenated form (host and VM IDs).
+pub fn is_guid(value: &str) -> bool {
+    value.len() == 36
+        && value.char_indices().all(|(index, c)| match index {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_hexdigit(),
+        })
+}
+
 pub fn is_local_host_name(name: &str, local_host_name: &str) -> bool {
     !local_host_name.is_empty() && normalize_host_name(name) == normalize_host_name(local_host_name)
 }
