@@ -165,6 +165,7 @@ pub fn file_directory() -> PathBuf {
     std::env::temp_dir()
 }
 
+#[allow(unsafe_code)]
 mod credentials {
     use windows_sys::Win32::Security::Credentials::{
         CredDeleteW, CredEnumerateW, CredFree, CredWriteW, CREDENTIALW, CRED_PERSIST_SESSION,
@@ -270,6 +271,7 @@ mod credentials {
     }
 }
 
+#[allow(unsafe_code)]
 mod windows {
     use windows_sys::Win32::Foundation::{HWND, LPARAM};
     use windows_sys::Win32::UI::WindowsAndMessaging::{

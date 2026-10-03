@@ -48,3 +48,13 @@ strip = true
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }
+
+# Unsafe code is denied crate-wide; only the Win32 wrappers in rdp.rs opt out.
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"

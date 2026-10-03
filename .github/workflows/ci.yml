@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build (analyzers and NuGet audit fail the build)
+        run: dotnet build HyperHarbor.sln -warnaserror
+      - name: Test with coverage
+        run: dotnet test HyperHarbor.sln --no-build --collect:"XPlat Code Coverage" --results-directory TestResults
+      - name: Lint API contract
+        run: npx --yes @redocly/cli lint docs/api.yaml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-coverage
+          path: TestResults/**/coverage.cobertura.xml
+
+  client:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/src-tauri
+      - run: npm ci --no-audit --no-fund
+      - name: Generated API types match api.yaml
+        shell: pwsh
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/lib/api/types.ts
+      - run: npm run check
+      - run: npm audit --audit-level=high
+      - name: cargo fmt
+        working-directory: client/src-tauri
+        run: cargo fmt --check
+      - name: cargo clippy
+        working-directory: client/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo test
+        working-directory: client/src-tauri
+        run: cargo test
+      - name: cargo audit
+        working-directory: client/src-tauri
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit

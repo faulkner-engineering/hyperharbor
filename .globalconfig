@@ -1,0 +1,4 @@
+is_global = true
+
+# Security rules (CA2100, CA2300-CA2330, CA3001-CA3147, CA5350-CA5405) fail the build.
+dotnet_analyzer_diagnostic.category-Security.severity = error

@@ -8,4 +8,13 @@
     <Company>HyperHarbor</Company>
     <Product>HyperHarbor</Product>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Fail restore on known vulnerable packages, including transitive ones. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>moderate</NuGetAuditLevel>
+    <!-- Security analyzer rules are raised to errors in .globalconfig (picked up by the SDK). -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
 </Project>
