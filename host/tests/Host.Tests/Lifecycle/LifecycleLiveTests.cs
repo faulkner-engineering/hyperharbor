@@ -62,6 +62,22 @@ public sealed class LifecycleLiveTests(ITestOutputHelper output) : IDisposable
         try
         {
             CheckSettings(vmId);
+
+            // The developer preset on the (off) VM: static memory, nested virtualization, MAC spoofing, one processor.
+            var compute = new VmComputeService(
+                inventory, new CimHyperVCompute(), new Core.Power.CimHyperVPowerInvoker(), new WindowsHostCapacityReader(),
+                new VmOperationLocks(), jobs, options, TimeProvider.System, NullLogger<VmComputeService>.Instance);
+            var update = await compute.UpdateAsync(
+                vmId,
+                UserId,
+                new UpdateVmComputeRequest(ProcessorCount: 1, DynamicMemory: false, NestedVirtualization: true, MacAddressSpoofing: true, AcknowledgeWarnings: true),
+                snapshot => throw new InvalidOperationException("An off VM needs no job."),
+                null,
+                CancellationToken.None);
+            var applied = await new CimHyperVCompute().ReadAsync(vmId, CancellationToken.None);
+            output.WriteLine($"Applied: {applied}");
+            Assert.NotNull(update.Settings);
+            Assert.Equal(new ComputeState(1, 1024, 1024, false, true, true, 1), applied);
         }
         finally
         {
@@ -86,7 +102,9 @@ public sealed class LifecycleLiveTests(ITestOutputHelper output) : IDisposable
         Assert.Equal("Microsoft:Hyper-V:SubType:2", settings.CimInstanceProperties["VirtualSystemSubType"].Value);
         Assert.Equal(true, settings.CimInstanceProperties["SecureBootEnabled"].Value);
         Assert.Equal(CimHyperVBuilder.MicrosoftWindowsTemplateId, (string)settings.CimInstanceProperties["SecureBootTemplateId"].Value, ignoreCase: true);
-        Assert.Empty(settings.CimInstanceProperties["Notes"].Value as string[] ?? []);
+        var notes = settings.CimInstanceProperties["Notes"].Value as string[] ?? [];
+        output.WriteLine($"Notes: [{string.Join("|", notes.Select(note => $"\"{note}\""))}] ({notes.Length})");
+        Assert.All(notes, note => Assert.True(string.IsNullOrEmpty(note), note));
 
         var processor = session.EnumerateAssociatedInstances(HyperVCim.Namespace, settings, null, "Msvm_ProcessorSettingData", null, null).Single();
         Assert.Equal(2UL, processor.CimInstanceProperties["VirtualQuantity"].Value);

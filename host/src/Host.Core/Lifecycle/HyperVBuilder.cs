@@ -193,7 +193,8 @@ public sealed class CimHyperVBuilder : IHyperVBuilder
         {
             using var settings = CimVmSettings.Realized(session, vmId);
             await CimVmSettings.ModifySystemAsync(session, settings, cancellationToken,
-                new CimXml.Property("Notes", CimType.StringArray, string.IsNullOrEmpty(notes) ? Array.Empty<string>() : new[] { notes }));
+                // An empty array is read as "no change"; one empty string clears the notes, as Set-VM -Notes "" does.
+                new CimXml.Property("Notes", CimType.StringArray, new[] { notes }));
         }, cancellationToken);
 
     /// <summary>Memory settings in the form Msvm_MemorySettingData takes.</summary>
