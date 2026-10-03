@@ -23,6 +23,19 @@
     "apiVersion": "1.2.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
+  "HostResources": {
+    "logicalProcessorCount": 16,
+    "totalMemoryMb": 32768,
+    "availableMemoryMb": 20000,
+    "memoryReserveMb": 4096,
+    "virtualHardDiskFolder": "C:\\ProgramData\\Microsoft\\Windows\\Virtual Hard Disks",
+    "isoFolder": "C:\\Users\\Public\\Documents\\HyperHarbor ISOs"
+  },
+  "IsoImage": {
+    "name": "Windows\\Win11_24H2.iso",
+    "sizeBytes": 5800000000,
+    "modifiedAt": "2026-10-03T12:00:00\u002B00:00"
+  },
   "JobError": {
     "title": "Deleting disks failed",
     "detail": "The file is in use."
@@ -57,6 +70,11 @@
   "ValidationIssue": {
     "field": "processorCount",
     "message": "Use at most 16 virtual processors."
+  },
+  "VirtualSwitch": {
+    "id": "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444",
+    "name": "Default Switch",
+    "isDefault": true
   },
   "Vm": {
     "id": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",

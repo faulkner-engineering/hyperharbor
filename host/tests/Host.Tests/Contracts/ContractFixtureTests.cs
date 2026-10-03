@@ -78,6 +78,10 @@ public class ContractFixtureTests
             [@"C:\VMs\Ubuntu Dev.vhdx"],
             [new DeleteBlocker(DeleteBlockerCode.DiskNotDeletable, DeleteBlockerScope.DeleteDisks, "In use.")]),
         ["JobError"] = new JobError("Deleting disks failed", "The file is in use."),
+        ["HostResources"] = new HostResources(16, 32768, 20000, 4096, @"C:\ProgramData\Microsoft\Windows\Virtual Hard Disks", @"C:\Users\Public\Documents\HyperHarbor ISOs"),
+        ["IsoImage"] = new IsoImage(@"Windows\Win11_24H2.iso", 5_800_000_000, Time),
+        ["VirtualSwitch"] = new VirtualSwitch("C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", "Default Switch", true),
+
         // Nulls on purpose: vmId and error are required but nullable.
         ["VmJob"] = new VmJob(Guid.Parse("7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d"), VmJobKind.CreateVm, null, VmJobState.Running, "Creating the disk", 10, Time, Time, null),
     };

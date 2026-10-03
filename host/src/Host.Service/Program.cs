@@ -111,6 +111,10 @@ builder.Services.AddSingleton(services => new VmJobStore(
     services.GetRequiredService<TimeProvider>(),
     services.GetRequiredService<ILogger<VmJobStore>>()));
 builder.Services.AddSingleton<VmDeletionService>();
+builder.Services.AddOptions<LifecycleOptions>().Bind(builder.Configuration.GetSection(LifecycleOptions.SectionName));
+builder.Services.AddSingleton<IHostCapacityReader, WindowsHostCapacityReader>();
+builder.Services.AddSingleton<IHyperVHost, CimHyperVHost>();
+builder.Services.AddSingleton(services => new IsoLibrary(services.GetRequiredService<IOptions<LifecycleOptions>>().Value.EffectiveIsoFolder));
 
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))

@@ -38,6 +38,21 @@ public sealed class CimHyperVStorageLiveTests(ITestOutputHelper output)
     }
 
     [HyperVFact]
+    public async Task Host_ReportsDefaultFoldersAndSwitches()
+    {
+        var host = new CimHyperVHost();
+
+        var defaults = await host.GetDefaultsAsync(CancellationToken.None);
+        var switches = await host.ListSwitchesAsync(CancellationToken.None);
+
+        output.WriteLine($"Config: {defaults.ConfigurationFolder}; disks: {defaults.VirtualHardDiskFolder}");
+        switches.ToList().ForEach(item => output.WriteLine($"Switch {item.Name} ({item.Id}) default={item.IsDefault}"));
+        Assert.True(Path.IsPathRooted(defaults.VirtualHardDiskFolder));
+        Assert.All(switches, item => Assert.False(string.IsNullOrWhiteSpace(item.Id)));
+        Assert.True(new WindowsHostCapacityReader().Read().TotalMemoryMb > 0);
+    }
+
+    [HyperVFact]
     public async Task Preview_OfEveryVm_ResolvesBaseDisks()
     {
         var inventory = new VmInventory(new CimHyperVReader(NullLogger<CimHyperVReader>.Instance), new TcpRdpProbe(TimeProvider.System));

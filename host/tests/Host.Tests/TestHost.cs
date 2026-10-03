@@ -42,6 +42,7 @@ internal sealed class TestHost : IDisposable
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
             .UseSetting("Discovery:Enabled", "false")
             .UseSetting("DataDirectory", DataDirectory)
+            .UseSetting("Lifecycle:IsoFolder", Path.Combine(DataDirectory, "isos"))
             .UseSetting("Tray:PipeName", "HyperHarbor.Tests." + Guid.NewGuid().ToString("N"))
             .ConfigureLogging(logging => logging
                 .AddProvider(Logs)
@@ -57,6 +58,8 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IGuestAccountManager>(Guest);
                 services.AddSingleton<IHyperVStorage>(Storage);
                 services.AddSingleton<IDiskFiles>(DiskFiles);
+                services.AddSingleton<IHostCapacityReader>(Capacity);
+                services.AddSingleton<IHyperVHost>(HyperVHost);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
             }));
@@ -79,6 +82,13 @@ internal sealed class TestHost : IDisposable
     public FakeHyperVStorage Storage { get; } = new();
 
     public FakeDiskFiles DiskFiles { get; } = new();
+
+    public FakeHostCapacity Capacity { get; } = new();
+
+    public FakeHyperVHost HyperVHost { get; } = new();
+
+    /// <summary>The ISO library folder, inside the data directory.</summary>
+    public string IsoFolder => Path.Combine(DataDirectory, "isos");
 
     /// <summary>Entries in the host's audit.log, oldest first.</summary>
     public IReadOnlyList<System.Text.Json.Nodes.JsonObject> AuditEntries()

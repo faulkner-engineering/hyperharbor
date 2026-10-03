@@ -21,6 +21,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's processors, memory, and VM folders.
+         * @description Used to bound VM settings in the client. The host validates every request against the
+         *     same figures and warns when a VM would leave less free memory than `memoryReserveMb`.
+         */
+        get: operations["getHostResources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/isos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the installation images in the host's ISO library.
+         * @description Images are files ending in .iso in the library folder (`HostResources.isoFolder`) and its
+         *     subfolders. Links are not followed. Create requests name an image by its `name`; paths
+         *     outside the library are refused.
+         */
+        get: operations["listIsos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/switches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the host's Hyper-V virtual switches. */
+        get: operations["listSwitches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/elevation": {
         parameters: {
             query?: never;
@@ -799,6 +859,39 @@ export interface components {
             updatedAt: string;
             error: components["schemas"]["JobError"] | null;
         };
+        HostResources: {
+            logicalProcessorCount: number;
+            /** Format: int64 */
+            totalMemoryMb: number;
+            /**
+             * Format: int64
+             * @description Physical memory free right now.
+             */
+            availableMemoryMb: number;
+            /**
+             * Format: int64
+             * @description The host warns when a VM would leave less than this free.
+             */
+            memoryReserveMb: number;
+            /** @description Where new VMs' disks are created. */
+            virtualHardDiskFolder: string;
+            /** @description The ISO library folder. Copy installation images here on the host. */
+            isoFolder: string;
+        };
+        IsoImage: {
+            /** @description Path relative to the ISO library folder. */
+            name: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: date-time */
+            modifiedAt: string;
+        };
+        VirtualSwitch: {
+            id: string;
+            name: string;
+            /** @description The NAT Default Switch. VMs on it are reachable only from the host. */
+            isDefault: boolean;
+        };
     };
     responses: {
         /** @description The request was malformed or failed validation. */
@@ -940,6 +1033,71 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getHostResources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Host resources. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostResources"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    listIsos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The images, sorted by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IsoImage"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listSwitches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The switches, the Default Switch first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VirtualSwitch"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["HyperVUnavailable"];
         };
     };
     getElevation: {

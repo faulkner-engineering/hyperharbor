@@ -88,6 +88,66 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /host/resources:
+    get:
+      tags: [Host]
+      operationId: getHostResources
+      summary: Get the host's processors, memory, and VM folders.
+      description: |
+        Used to bound VM settings in the client. The host validates every request against the
+        same figures and warns when a VM would leave less free memory than `memoryReserveMb`.
+      responses:
+        "200":
+          description: Host resources.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostResources"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
+  /isos:
+    get:
+      tags: [Host]
+      operationId: listIsos
+      summary: List the installation images in the host's ISO library.
+      description: |
+        Images are files ending in .iso in the library folder (`HostResources.isoFolder`) and its
+        subfolders. Links are not followed. Create requests name an image by its `name`; paths
+        outside the library are refused.
+      responses:
+        "200":
+          description: The images, sorted by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IsoImage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /switches:
+    get:
+      tags: [Host]
+      operationId: listSwitches
+      summary: List the host's Hyper-V virtual switches.
+      responses:
+        "200":
+          description: The switches, the Default Switch first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VirtualSwitch"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
   /auth/elevation:
     get:
       tags: [Auth]
@@ -1339,3 +1399,54 @@ components:
           oneOf:
             - $ref: "#/components/schemas/JobError"
             - type: "null"
+
+    HostResources:
+      type: object
+      required: [logicalProcessorCount, totalMemoryMb, availableMemoryMb, memoryReserveMb, virtualHardDiskFolder, isoFolder]
+      properties:
+        logicalProcessorCount:
+          type: integer
+          minimum: 1
+        totalMemoryMb:
+          type: integer
+          format: int64
+        availableMemoryMb:
+          type: integer
+          format: int64
+          description: Physical memory free right now.
+        memoryReserveMb:
+          type: integer
+          format: int64
+          description: The host warns when a VM would leave less than this free.
+        virtualHardDiskFolder:
+          type: string
+          description: Where new VMs' disks are created.
+        isoFolder:
+          type: string
+          description: The ISO library folder. Copy installation images here on the host.
+
+    IsoImage:
+      type: object
+      required: [name, sizeBytes, modifiedAt]
+      properties:
+        name:
+          type: string
+          description: Path relative to the ISO library folder.
+        sizeBytes:
+          type: integer
+          format: int64
+        modifiedAt:
+          type: string
+          format: date-time
+
+    VirtualSwitch:
+      type: object
+      required: [id, name, isDefault]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        isDefault:
+          type: boolean
+          description: The NAT Default Switch. VMs on it are reachable only from the host.

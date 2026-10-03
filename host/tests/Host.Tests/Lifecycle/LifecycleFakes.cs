@@ -84,3 +84,28 @@ internal sealed class FakeDiskFiles : IDiskFiles
     public IEnumerable<string> ListDiskFiles(string directory) =>
         Files.Where(file => string.Equals(Path.GetDirectoryName(file), directory.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)).ToList();
 }
+
+/// <summary>Fixed host capacity.</summary>
+internal sealed class FakeHostCapacity : IHostCapacityReader
+{
+    public HostCapacity Capacity { get; set; } = new(16, 32768, 20000);
+
+    public HostCapacity Read() => Capacity;
+}
+
+/// <summary>Hyper-V defaults and switches that tests can change.</summary>
+internal sealed class FakeHyperVHost : IHyperVHost
+{
+    public HyperVDefaults Defaults { get; set; } = new(@"C:\Hyper-V\Config", @"C:\Hyper-V\Virtual Hard Disks");
+
+    public List<Shared.Contracts.Hosts.VirtualSwitch> Switches { get; } =
+    [
+        new(CimHyperVHost.DefaultSwitchId, "Default Switch", true),
+        new("1d6e5b3c-0000-4000-8000-000000000001", "External", false),
+    ];
+
+    public Task<HyperVDefaults> GetDefaultsAsync(CancellationToken cancellationToken) => Task.FromResult(Defaults);
+
+    public Task<IReadOnlyList<Shared.Contracts.Hosts.VirtualSwitch>> ListSwitchesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Shared.Contracts.Hosts.VirtualSwitch>>(Switches.ToList());
+}
