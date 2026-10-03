@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace HyperHarbor.Shared.Contracts.Vms;
 
 /// <summary>Virtual machine summary. Schema: Vm.</summary>
@@ -21,6 +23,8 @@ public sealed record Vm(
     VmGuestOs? GuestOs = null);
 
 /// <summary>Remote Desktop endpoint of a VM. Schema: VmRemoteDesktop.</summary>
-/// <param name="Address">Guest address clients connect to, or null when none is reported.</param>
+/// <param name="Address">Guest address clients connect to, or null when none is reported. Sent as null (required in the schema).</param>
 /// <param name="ReachableFromHost">Same as Vm.RdpAvailable.</param>
-public sealed record VmRemoteDesktop(string? Address, bool ReachableFromHost);
+public sealed record VmRemoteDesktop(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Address,
+    bool ReachableFromHost);

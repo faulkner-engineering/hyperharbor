@@ -1,0 +1,134 @@
+{
+  "HostInfo": {
+    "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+    "hostName": "TC-PC",
+    "version": "0.1.0",
+    "apiVersion": "1.1.0",
+    "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "PairingConfirmation": {
+    "clientShare": "BAUG",
+    "clientConfirmation": "BwgJ"
+  },
+  "PairingRequest": {
+    "deviceName": "Laptop",
+    "clientCertificatePem": "-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n"
+  },
+  "PairingRequestCreated": {
+    "pairingId": "3f2a9c1d-4b5e-4f70-8192-a3b4c5d6e7f8",
+    "hostShare": "AQID",
+    "expiresAt": "2026-10-03T12:00:00\u002B00:00"
+  },
+  "PairingResult": {
+    "deviceId": "11111111-2222-4333-8444-555555555555",
+    "userId": "66666666-7777-4888-9999-aaaaaaaaaaaa",
+    "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+    "hostCertificatePem": "-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n",
+    "hostConfirmation": "CgsM"
+  },
+  "ProvisionVmRequest": {
+    "adminUserName": "hhadmin",
+    "adminPassword": "Fixture-Admin1!",
+    "enableRemoteDesktop": true,
+    "installDesktop": true,
+    "trustNewHostKey": true
+  },
+  "Vm": {
+    "id": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "name": "Ubuntu Dev",
+    "state": "running",
+    "uptimeSeconds": 3600,
+    "cpuUsagePercent": 12,
+    "memoryAssignedMb": 2048,
+    "generation": 2,
+    "rdpAvailable": true,
+    "ipAddresses": [
+      "192.168.0.50",
+      "fe80::5"
+    ],
+    "provisioned": true,
+    "remoteDesktop": {
+      "address": "192.168.0.50",
+      "reachableFromHost": true
+    },
+    "guestOs": {
+      "family": "linux",
+      "name": "Ubuntu"
+    }
+  },
+  "VmActionRequest": {
+    "action": "turnOff"
+  },
+  "VmActionResult": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "action": "shutdown",
+    "accepted": true,
+    "state": "running"
+  },
+  "VmConnection": {
+    "userName": ".\\hh-owner",
+    "password": "Fixture-Pass1!",
+    "address": "192.168.0.50",
+    "port": 3389,
+    "expiresAt": "2026-10-03T12:00:00\u002B00:00",
+    "guestOs": "windows"
+  },
+  "VmGuestOs": {
+    "family": "unknown",
+    "name": null
+  },
+  "VmProvisioning": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "accountName": "hh-owner",
+    "provisionedAt": "2026-10-03T12:00:00\u002B00:00"
+  },
+  "VmRemoteDesktop": {
+    "address": null,
+    "reachableFromHost": false
+  },
+  "WakeAdapter": {
+    "name": "Ethernet",
+    "macAddress": "00155D012345",
+    "ipv4Address": "192.168.0.10",
+    "broadcastAddress": "192.168.0.255"
+  },
+  "WakeCheck": {
+    "id": "adapterLink",
+    "title": "Network link",
+    "status": "pass",
+    "autoFixAvailable": false
+  },
+  "WakeFixRequest": {
+    "checkIds": [
+      "magicPacket"
+    ]
+  },
+  "WakeInfo": {
+    "adapters": [
+      {
+        "name": "Ethernet",
+        "macAddress": "00155D012345",
+        "ipv4Address": "192.168.0.10",
+        "broadcastAddress": "192.168.0.255"
+      }
+    ]
+  },
+  "WakeReadiness": {
+    "ready": false,
+    "checks": [
+      {
+        "id": "magicPacket",
+        "title": "Wake on magic packet",
+        "status": "fail",
+        "detail": "Off",
+        "autoFixAvailable": true
+      }
+    ]
+  },
+  "WakeTestRequest": {
+    "delaySeconds": 30
+  },
+  "WakeTestScheduled": {
+    "sleepAt": "2026-10-03T12:00:00\u002B00:00"
+  }
+}

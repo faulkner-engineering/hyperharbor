@@ -969,4 +969,82 @@ mod server_tests {
             result.err()
         );
     }
+
+    /// Wire samples written by the host's ContractFixtureTests (checked there against api.yaml).
+    fn fixture(schema: &str) -> serde_json::Value {
+        let all: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../host/tests/Host.Tests/Contracts/ContractFixtures.json"
+        ))
+        .unwrap();
+        all[schema].clone()
+    }
+
+    fn keys(value: &serde_json::Value) -> Vec<String> {
+        let mut keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+        keys.sort();
+        keys
+    }
+
+    #[test]
+    fn host_responses_parse_into_client_types() {
+        let created: PairingRequestCreated =
+            serde_json::from_value(fixture("PairingRequestCreated")).unwrap();
+        assert_eq!(created.pairing_id, "3f2a9c1d-4b5e-4f70-8192-a3b4c5d6e7f8");
+        assert_eq!(decode_base64(&created.host_share).unwrap(), [1, 2, 3]);
+
+        let result: PairingResult = serde_json::from_value(fixture("PairingResult")).unwrap();
+        assert_eq!(
+            decode_base64(&result.host_confirmation).unwrap(),
+            [10, 11, 12]
+        );
+
+        let connection: crate::rdp::VmConnection =
+            serde_json::from_value(fixture("VmConnection")).unwrap();
+        assert_eq!(connection.guest_os, crate::rdp::GuestOs::Windows);
+        assert_eq!(connection.port, 3389);
+        connection.validate().unwrap();
+
+        let adapters: Vec<WakeAdapter> =
+            serde_json::from_value(fixture("WakeInfo")["adapters"].clone()).unwrap();
+        assert_eq!(adapters[0].mac_address, "00155D012345");
+    }
+
+    #[tokio::test]
+    async fn request_bodies_use_the_contract_property_names() {
+        let server = pairing_server(None);
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+
+        let pending = api.start_pairing(&target).await.unwrap();
+        let _ = api.complete_pairing(&target, &pending, "482913").await;
+        let options = ProvisionOptions {
+            enable_remote_desktop: true,
+            install_desktop: true,
+            trust_new_host_key: true,
+        };
+        let _ = api
+            .provision_vm(&target, &paired, VM_ID, "hhadmin", "x", options)
+            .await;
+        let _ = api
+            .fix_wake(&target, &paired, &["magicPacket".to_string()])
+            .await;
+        let _ = api.start_wake_test(&target, &paired, 30).await;
+
+        let bodies: Vec<serde_json::Value> = server
+            .requests()
+            .iter()
+            .map(|request| serde_json::from_str(&request.body).unwrap())
+            .collect();
+        for (body, schema) in bodies.iter().zip([
+            "PairingRequest",
+            "PairingConfirmation",
+            "ProvisionVmRequest",
+            "WakeFixRequest",
+            "WakeTestRequest",
+        ]) {
+            assert_eq!(keys(body), keys(&fixture(schema)), "{schema}");
+        }
+        assert_eq!(bodies.len(), 5);
+    }
 }
