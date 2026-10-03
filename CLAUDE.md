@@ -50,9 +50,11 @@ per-device VM accounts and a user management UI.
 - docs/api.yaml: OpenAPI 3.1 contract, the source of truth for host and client
 - host/src/Shared.Contracts: DTOs mirroring api.yaml; ContractJson holds the wire JSON options
 - host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/,
-  Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile)
-- host/src/Host.Service: Kestrel API (Api/), device auth (Security/), tray pipe server (Tray/), mDNS (Discovery/)
-- host/src/Host.Tray: WinForms tray; shows pairing PINs and paired devices over the named pipe
+  Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile),
+  Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService)
+- host/src/Host.Service: Kestrel API (Api/), device auth and elevation filter (Security/), audit filter (Audit/),
+  tray pipe server (Tray/), mDNS (Discovery/)
+- host/src/Host.Tray: WinForms tray; shows pairing PINs and paired devices, sets the admin passphrase
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
   identity.rs (key in Credential Manager), paired.rs; client/src: SvelteKit SPA
@@ -138,6 +140,18 @@ Mark required request properties [JsonRequired] (an empty body must not default 
     credential in the TLS logon packet. Remote Desktop needs a desktop session; setup can install Xfce.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
+- Audit and elevation (Phase 8):
+  - Every non-GET route needs .Audited(), or .Audited<TRequest>(describe) to summarize the request; the
+    summary must never contain a secret. A "requested" entry is written before the handler and the request
+    fails with 503 if it cannot be. EndpointSecurityTests enforce this, and SecretLeakTests read audit.log.
+  - Elevated routes call .RequireElevation() after .Audited() and list the `elevation` security scheme in
+    api.yaml. Elevation that depends on the body (performVmAction with turnOff) uses a predicate, is
+    described in the operation, and is listed in ConditionallyElevatedEndpoints_AreTheDocumentedOnes.
+  - The admin passphrase is set only from the tray. The tray hashes it (PBKDF2-SHA256, 600,000 iterations)
+    and sends only salt and hash over the pipe, so a process squatting the pipe never sees the passphrase.
+    Tokens are random, kept as SHA-256 in memory, bound to device and User, and end on passphrase change,
+    unpair, or restart. ElevateRequest, ElevationGrant, and SetAdminPassphraseMessage hide secrets in ToString.
+  - Tests set the passphrase with AdminPassphrase.CreateHash(..., ElevationServiceTests.TestIterations).
 
 ## Wake-on-LAN lessons (from real hosts)
 - Readiness checks can all pass while waking fails. Seen on TC-PC (2026-10-02): BIOS "PCI-E wake" was

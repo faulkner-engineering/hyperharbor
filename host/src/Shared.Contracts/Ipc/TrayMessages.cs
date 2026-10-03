@@ -16,6 +16,8 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(CancelPairingMessage), "cancelPairing")]
 [JsonDerivedType(typeof(WakeFixRequestedMessage), "wakeFixRequested")]
 [JsonDerivedType(typeof(WakeFixCompletedMessage), "wakeFixCompleted")]
+[JsonDerivedType(typeof(AdminPassphraseStatusMessage), "adminPassphraseStatus")]
+[JsonDerivedType(typeof(SetAdminPassphraseMessage), "setAdminPassphrase")]
 public abstract record TrayMessage;
 
 // Service to tray.
@@ -43,6 +45,9 @@ public sealed record WakeFixRequestedMessage(Guid RequestId, string RequestedBy,
 
 public sealed record WakeFixItem(string CheckId, string Title);
 
+/// <summary>Whether an admin passphrase is set. Sent on connect and after it changes.</summary>
+public sealed record AdminPassphraseStatusMessage(bool Configured) : TrayMessage;
+
 // Tray to service.
 
 public sealed record ListDevicesMessage : TrayMessage;
@@ -53,6 +58,15 @@ public sealed record CancelPairingMessage : TrayMessage;
 
 /// <param name="Outcome">applied, declined, or failed.</param>
 public sealed record WakeFixCompletedMessage(Guid RequestId, string Outcome, string? Detail) : TrayMessage;
+
+/// <summary>
+/// Sets or replaces the admin passphrase used for elevation. Carries only a PBKDF2 hash made by
+/// <see cref="AdminPassphrase.CreateHash"/>; the passphrase itself never crosses the pipe.
+/// </summary>
+public sealed record SetAdminPassphraseMessage(byte[] Salt, byte[] Hash, int Iterations) : TrayMessage
+{
+    public override string ToString() => $"SetAdminPassphraseMessage {{ Iterations = {Iterations} }}";
+}
 
 /// <summary>Command-line switch for the elevated fix helper: --apply-wake-fixes id1,id2.</summary>
 public static class WakeFixHelper

@@ -1,9 +1,21 @@
 {
+  "ElevateRequest": {
+    "passphrase": "Fixture passphrase"
+  },
+  "ElevationGrant": {
+    "token": "Zml4dHVyZS10b2tlbi1maXh0dXJlLXRva2VuLWZpeHR1cg",
+    "expiresAt": "2026-10-03T12:00:00\u002B00:00"
+  },
+  "ElevationStatus": {
+    "configured": true,
+    "active": false,
+    "expiresAt": null
+  },
   "HostInfo": {
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.1.0",
+    "apiVersion": "1.2.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "PairingConfirmation": {

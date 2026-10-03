@@ -8,4 +8,9 @@ public static class ClaimsPrincipalExtensions
     public static Guid UserId(this ClaimsPrincipal principal) =>
         Guid.Parse(principal.FindFirst(PairedDeviceAuthenticationHandler.UserIdClaim)?.Value
             ?? throw new InvalidOperationException("The request is not from a paired device."));
+
+    /// <summary>The calling paired device.</summary>
+    public static Guid DeviceId(this ClaimsPrincipal principal) =>
+        Guid.Parse(principal.FindFirst(PairedDeviceAuthenticationHandler.DeviceIdClaim)?.Value
+            ?? throw new InvalidOperationException("The request is not from a paired device."));
 }

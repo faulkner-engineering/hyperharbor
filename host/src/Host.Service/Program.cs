@@ -3,6 +3,7 @@ using System.Security.Authentication;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Discovery;
+using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Provisioning;
@@ -59,6 +60,13 @@ users.GetOrCreateDefault();
 builder.Services.AddSingleton(users);
 builder.Services.AddSingleton(new PairedDeviceStore(dataDirectory, users));
 builder.Services.AddSingleton<IAuditLog>(new FileAuditLog(dataDirectory));
+builder.Services.AddSingleton(new AdminPassphraseStore(dataDirectory));
+builder.Services.AddSingleton(services => new ElevationService(
+    services.GetRequiredService<AdminPassphraseStore>(),
+    services.GetRequiredService<PairedDeviceStore>(),
+    services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<ElevationService>>(),
+    TimeSpan.FromSeconds(builder.Configuration.GetValue("Elevation:TokenLifetimeSeconds", (int)ElevationService.DefaultTokenLifetime.TotalSeconds))));
 
 builder.Services.AddOptions<DiscoveryOptions>().Bind(builder.Configuration.GetSection(DiscoveryOptions.SectionName));
 builder.Services.AddSingleton<IServiceAdvertiser, WindowsDnsServiceAdvertiser>();
@@ -150,6 +158,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHostEndpoints();
+app.MapAuthEndpoints();
 app.MapVmEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();

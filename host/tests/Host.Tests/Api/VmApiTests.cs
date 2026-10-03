@@ -84,7 +84,7 @@ public sealed class VmApiTests : IDisposable
     {
         _inventory.Vms.Add(FakeVmInventory.CreateVm(VmId, "Dev", VmState.Off));
 
-        var response = await _client.PostAsJsonAsync($"/api/v1/vms/{VmId}/actions", new { action = "turnOff" });
+        var response = await _client.PostAsJsonAsync($"/api/v1/vms/{VmId}/actions", new { action = "shutdown" });
 
         await AssertProblemAsync(response, HttpStatusCode.Conflict);
         Assert.Empty(_invoker.Calls);

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.1.0
+  version: 1.2.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -58,6 +58,18 @@ tags:
       Wake-on-LAN support. A sleeping host cannot wake itself, so clients cache the
       adapter details from `GET /wake/info` and send the magic packet directly.
       Relay mode is not part of this version.
+  - name: Auth
+    description: |
+      Elevation for operations that destroy data or change settings. The owner sets an admin
+      passphrase from the tray on the host (it cannot be set through the API). A paired device
+      sends it to `POST /auth/elevation` and receives a token that is valid for 5 minutes, for
+      that device and its User only. Operations that need it list the `elevation` security
+      scheme and return 403 with `code: elevationRequired` without a valid token, or
+      `code: elevationUnavailable` when no passphrase is set.
+
+      Wrong passphrases are limited to 5 per device in 15 minutes and 20 across all devices
+      in an hour; beyond that the host returns 429 with `Retry-After`. Changing the passphrase,
+      unpairing the device, or restarting the host service ends every elevation.
 paths:
   /host:
     get:
@@ -71,6 +83,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HostInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/elevation:
+    get:
+      tags: [Auth]
+      operationId: getElevation
+      summary: Get the calling device's elevation state.
+      responses:
+        "200":
+          description: Whether a passphrase is set and whether this device is elevated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElevationStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Auth]
+      operationId: elevate
+      summary: Elevate the calling device with the admin passphrase.
+      description: |
+        Returns a token for the `X-HyperHarbor-Elevation` header. A new token replaces any
+        earlier one for this device. The response is sent with `Cache-Control: no-store`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElevateRequest"
+      responses:
+        "200":
+          description: The device is elevated.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElevationGrant"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: |
+            The passphrase is wrong (`code: incorrectPassphrase`) or no passphrase is set
+            (`code: elevationUnavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "429":
+          $ref: "#/components/responses/ElevationRateLimited"
+    delete:
+      tags: [Auth]
+      operationId: dropElevation
+      summary: End the calling device's elevation.
+      responses:
+        "204":
+          description: The device is no longer elevated.
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -126,7 +201,8 @@ paths:
         header) to observe the resulting state.
 
         `turnOff` is equivalent to pulling the power cord and can lose unsaved data
-        in the guest. Clients must confirm with the user before sending it.
+        in the guest. Clients must confirm with the user before sending it, and the
+        request needs elevation (the `X-HyperHarbor-Elevation` header). Other actions do not.
       requestBody:
         required: true
         content:
@@ -151,6 +227,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -467,6 +545,13 @@ components:
     mutualTLS:
       type: mutualTLS
       description: Client certificate issued to the device during pairing.
+    elevation:
+      type: apiKey
+      in: header
+      name: X-HyperHarbor-Elevation
+      description: |
+        Token from `POST /auth/elevation`. Required, in addition to the client certificate,
+        by operations that list this scheme.
 
   parameters:
     VmId:
@@ -535,6 +620,25 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
+    ElevationRequired:
+      description: |
+        The request needs elevation and has no valid token (`code: elevationRequired`), or no
+        admin passphrase is set on the host (`code: elevationUnavailable`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    ElevationRateLimited:
+      description: Too many wrong passphrases (`code` is `tooManyAttempts`).
+      headers:
+        Retry-After:
+          description: Seconds until another attempt is accepted.
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
 
   schemas:
     ProblemDetails:
@@ -551,6 +655,11 @@ components:
           type: string
         instance:
           type: string
+        code:
+          type: string
+          description: |
+            Set for errors a client handles differently from others with the same status:
+            `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`.
 
     HostInfo:
       type: object
@@ -950,4 +1059,40 @@ components:
       properties:
         sleepAt:
           type: string
+          format: date-time
+
+    ElevateRequest:
+      type: object
+      required: [passphrase]
+      properties:
+        passphrase:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 256
+          description: The admin passphrase set in the host tray. Never logged or stored by the host.
+
+    ElevationGrant:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token:
+          type: string
+          description: Send in the `X-HyperHarbor-Elevation` header. Keep it out of logs and storage.
+        expiresAt:
+          type: string
+          format: date-time
+
+    ElevationStatus:
+      type: object
+      required: [configured, active, expiresAt]
+      properties:
+        configured:
+          type: boolean
+          description: True when an admin passphrase is set on the host.
+        active:
+          type: boolean
+          description: True when the calling device holds an unexpired elevation token.
+        expiresAt:
+          type: [string, "null"]
           format: date-time

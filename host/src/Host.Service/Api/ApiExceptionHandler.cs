@@ -1,10 +1,13 @@
+using System.Globalization;
 using HyperHarbor.Host.Core.Audit;
+using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Pairing;
+using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.Wake;
-using HyperHarbor.Host.Core.Power;
+using HyperHarbor.Shared.Contracts;
 using Microsoft.AspNetCore.Diagnostics;
 
 namespace HyperHarbor.Host.Service.Api;
@@ -40,7 +43,12 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         }
 
         httpContext.Response.StatusCode = status;
-        return await _problemDetails.TryWriteAsync(new ProblemDetailsContext
+        if (exception is ElevationRateLimitedException limited)
+        {
+            httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(limited.RetryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+        }
+
+        var context = new ProblemDetailsContext
         {
             HttpContext = httpContext,
             Exception = exception,
@@ -50,8 +58,24 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
                 Title = title,
                 Detail = exception.Message,
             },
-        });
+        };
+        if (ProblemCode(exception) is { } code)
+        {
+            context.ProblemDetails.Extensions["code"] = code;
+        }
+
+        return await _problemDetails.TryWriteAsync(context);
     }
+
+    /// <summary>The problem details "code" for errors a client handles differently from others with the same status.</summary>
+    internal static string? ProblemCode(Exception exception) => exception switch
+    {
+        ElevationRequiredException => ContractInfo.ProblemCodes.ElevationRequired,
+        ElevationUnavailableException => ContractInfo.ProblemCodes.ElevationUnavailable,
+        IncorrectPassphraseException => ContractInfo.ProblemCodes.IncorrectPassphrase,
+        ElevationRateLimitedException => ContractInfo.ProblemCodes.TooManyAttempts,
+        _ => null,
+    };
 
     /// <summary>The response status and title for a known exception, or status 0 for an unexpected one.</summary>
     internal static (int Status, string Title) Classify(Exception exception)
@@ -59,6 +83,10 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         return exception switch
         {
             AuditUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Audit log unavailable"),
+            ElevationRequiredException => (StatusCodes.Status403Forbidden, "Elevation required"),
+            ElevationUnavailableException => (StatusCodes.Status403Forbidden, "Elevation unavailable"),
+            IncorrectPassphraseException => (StatusCodes.Status403Forbidden, "Incorrect passphrase"),
+            ElevationRateLimitedException => (StatusCodes.Status429TooManyRequests, "Too many attempts"),
             BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),
             VmNotFoundException => (StatusCodes.Status404NotFound, "Virtual machine not found"),
             VmActionNotAllowedException => (StatusCodes.Status409Conflict, "Action not allowed"),

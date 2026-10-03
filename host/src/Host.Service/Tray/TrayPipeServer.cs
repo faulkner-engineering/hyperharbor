@@ -4,6 +4,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using HyperHarbor.Host.Core.Audit;
+using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
@@ -14,7 +15,7 @@ namespace HyperHarbor.Host.Service.Tray;
 /// <summary>
 /// Serves tray apps over a named pipe. Shows pairing PINs and lets the tray list and revoke
 /// paired devices. The pipe ACL admits only SYSTEM, Administrators, and the account the service runs
-/// as: anyone who can connect sees pairing PINs and can revoke devices.
+/// as: anyone who can connect sees pairing PINs, can revoke devices, and can set the admin passphrase.
 /// </summary>
 public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.IWakeFixApprover
 {
@@ -102,6 +103,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         try
         {
             await connection.SendAsync(DeviceList());
+            if (Elevation is { } elevation)
+            {
+                await connection.SendAsync(new AdminPassphraseStatusMessage(elevation.IsConfigured));
+            }
+
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
             var lines = new BoundedLineReader(reader, MaxMessageLength);
             while (!stoppingToken.IsCancellationRequested && await lines.ReadLineAsync(stoppingToken) is { } line)
@@ -169,7 +175,39 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                     completed.Outcome == "applied" ? AuditOutcome.Succeeded : AuditOutcome.Failed);
                 _services.GetRequiredService<Wake.WakeFixCoordinator>().OnCompleted(completed);
                 break;
+            case SetAdminPassphraseMessage set:
+                SetAdminPassphrase(set);
+                break;
         }
+    }
+
+    private ElevationService? Elevation => _services.GetService<ElevationService>();
+
+    private void SetAdminPassphrase(SetAdminPassphraseMessage set)
+    {
+        if (Elevation is not { } elevation)
+        {
+            return;
+        }
+
+        if (set.Iterations < AdminPassphrase.MinimumIterations)
+        {
+            _logger.LogWarning("Ignoring an admin passphrase hash with {Iterations} iterations; at least {Minimum} are required.", set.Iterations, AdminPassphrase.MinimumIterations);
+            return;
+        }
+
+        try
+        {
+            elevation.SetPassphrase(set.Salt, set.Hash, set.Iterations);
+        }
+        catch (ArgumentException)
+        {
+            _logger.LogWarning("Ignoring an admin passphrase hash that is not in the expected format.");
+            return;
+        }
+
+        AuditTrayAction("traySetAdminPassphrase", null, null, null);
+        Broadcast(new AdminPassphraseStatusMessage(Configured: true));
     }
 
     /// <summary>

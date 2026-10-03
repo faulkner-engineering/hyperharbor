@@ -15,7 +15,7 @@ namespace HyperHarbor.Host.Tests.Tray;
 /// <summary>The tray pipe server on a uniquely named pipe, driven by a raw pipe client.</summary>
 public sealed class TrayPipeServerTests : IAsyncLifetime
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+    internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "hyperharbor-tests", Guid.NewGuid().ToString("N"));
     private readonly string _pipeName = "HyperHarbor.Tests." + Guid.NewGuid().ToString("N");
@@ -202,7 +202,7 @@ public sealed class TrayPipeServerTests : IAsyncLifetime
         }
     }
 
-    private sealed class TrayClient(NamedPipeClientStream pipe) : IAsyncDisposable
+    internal sealed class TrayClient(NamedPipeClientStream pipe) : IAsyncDisposable
     {
         private readonly StreamReader _reader = new(pipe, Encoding.UTF8, leaveOpen: true);
         private readonly StreamWriter _writer = new(pipe, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true, NewLine = "\n" };

@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using HyperHarbor.Host.Service.Audit;
+using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
@@ -53,6 +54,46 @@ public sealed partial class EndpointSecurityTests : IDisposable
     {
         var unaudited = Endpoints(_host)
             .Where(endpoint => !endpoint.Key.StartsWith("GET ", StringComparison.Ordinal))
+            .Where(endpoint => endpoint.Value.Metadata.GetMetadata<AuditedMetadata>() is null)
+            .Select(endpoint => endpoint.Key);
+
+        Assert.Empty(unaudited);
+    }
+
+    [Fact]
+    public void ElevatedEndpoints_MatchContract()
+    {
+        var elevated = Endpoints(_host)
+            .Where(endpoint => endpoint.Value.Metadata.GetMetadata<ElevationRequiredMetadata>() is { Conditional: false })
+            .Select(endpoint => OperationId(endpoint.Value))
+            .Order();
+        var contractElevated = ContractOperations()
+            .Where(operation => operation.Value.Elevated)
+            .Select(operation => operation.Value.OperationId)
+            .Order();
+
+        Assert.Equal(contractElevated, elevated);
+    }
+
+    /// <summary>
+    /// OpenAPI cannot express elevation that depends on the request body, so these operations
+    /// document it in their description instead. Adding one here means documenting it there.
+    /// </summary>
+    [Fact]
+    public void ConditionallyElevatedEndpoints_AreTheDocumentedOnes()
+    {
+        var conditional = Endpoints(_host)
+            .Where(endpoint => endpoint.Value.Metadata.GetMetadata<ElevationRequiredMetadata>() is { Conditional: true })
+            .Select(endpoint => OperationId(endpoint.Value));
+
+        Assert.Equal(["performVmAction"], conditional);
+    }
+
+    [Fact]
+    public void ElevatedEndpoints_AreAudited()
+    {
+        var unaudited = Endpoints(_host)
+            .Where(endpoint => endpoint.Value.Metadata.GetMetadata<ElevationRequiredMetadata>() is not null)
             .Where(endpoint => endpoint.Value.Metadata.GetMetadata<AuditedMetadata>() is null)
             .Select(endpoint => endpoint.Key);
 
@@ -154,7 +195,7 @@ public sealed partial class EndpointSecurityTests : IDisposable
         endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName
         ?? throw new InvalidOperationException($"{endpoint.RoutePattern.RawText} has no name; name it after its api.yaml operationId.");
 
-    private sealed record ContractOperation(string OperationId, bool Anonymous);
+    private sealed record ContractOperation(string OperationId, bool Anonymous, bool Elevated);
 
     /// <summary>api.yaml operations keyed "METHOD /api/v1/path/{param}".</summary>
     private static Dictionary<string, ContractOperation> ContractOperations()
@@ -181,7 +222,9 @@ public sealed partial class EndpointSecurityTests : IDisposable
                 var anonymous = operation.Children.TryGetValue(new YamlScalarNode("security"), out var security)
                     && security is YamlSequenceNode { Children.Count: 0 };
                 var route = ContractInfo.BasePath + ((YamlScalarNode)pathNode).Value!;
-                operations.Add($"{method.ToUpperInvariant()} {route.TrimEnd('/')}", new ContractOperation(operationId, anonymous));
+                var elevated = security is YamlSequenceNode requirements
+                    && requirements.Children.OfType<YamlMappingNode>().Any(requirement => requirement.Children.ContainsKey(new YamlScalarNode("elevation")));
+                operations.Add($"{method.ToUpperInvariant()} {route.TrimEnd('/')}", new ContractOperation(operationId, anonymous, elevated));
             }
         }
 

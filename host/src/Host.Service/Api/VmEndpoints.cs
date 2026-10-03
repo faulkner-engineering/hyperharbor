@@ -24,7 +24,8 @@ public static class VmEndpoints
         vms.MapGet("/", ListVmsAsync).WithName("listVms");
         vms.MapGet("/{vmId:guid}", GetVmAsync).WithName("getVm");
         vms.MapPost("/{vmId:guid}/actions", PerformVmActionAsync).WithName("performVmAction")
-            .Audited<VmActionRequest>(request => $"action={request.Action}");
+            .Audited<VmActionRequest>(request => $"action={request.Action}")
+            .RequireElevation(arguments => arguments.OfType<VmActionRequest>().Any(request => request.Action == VmAction.TurnOff));
 
         // The admin password is deliberately left out of the summary.
         vms.MapPost("/{vmId:guid}/provision", ProvisionAsync).WithName("provisionVm")

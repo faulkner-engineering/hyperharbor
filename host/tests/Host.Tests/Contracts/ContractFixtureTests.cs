@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Auth;
 using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Pairing;
 using HyperHarbor.Shared.Contracts.Vms;
@@ -62,6 +63,10 @@ public class ContractFixtureTests
         ["WakeFixRequest"] = new WakeFixRequest(["magicPacket"]),
         ["WakeTestRequest"] = new WakeTestRequest(30),
         ["WakeTestScheduled"] = new WakeTestScheduled(Time),
+        ["ElevateRequest"] = new ElevateRequest("Fixture passphrase"),
+        ["ElevationGrant"] = new ElevationGrant("Zml4dHVyZS10b2tlbi1maXh0dXJlLXRva2VuLWZpeHR1cg", Time),
+        // Null on purpose: expiresAt is required but nullable.
+        ["ElevationStatus"] = new ElevationStatus(true, false, null),
     };
 
     [Fact]

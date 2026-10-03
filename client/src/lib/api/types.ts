@@ -21,6 +21,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/elevation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the calling device's elevation state. */
+        get: operations["getElevation"];
+        put?: never;
+        /**
+         * Elevate the calling device with the admin passphrase.
+         * @description Returns a token for the `X-HyperHarbor-Elevation` header. A new token replaces any
+         *     earlier one for this device. The response is sent with `Cache-Control: no-store`.
+         */
+        post: operations["elevate"];
+        /** End the calling device's elevation. */
+        delete: operations["dropElevation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms": {
         parameters: {
             query?: never;
@@ -76,7 +99,8 @@ export interface paths {
          *     header) to observe the resulting state.
          *
          *     `turnOff` is equivalent to pulling the power cord and can lose unsaved data
-         *     in the guest. Clients must confirm with the user before sending it.
+         *     in the guest. Clients must confirm with the user before sending it, and the
+         *     request needs elevation (the `X-HyperHarbor-Elevation` header). Other actions do not.
          */
         post: operations["performVmAction"];
         delete?: never;
@@ -310,6 +334,11 @@ export interface components {
             status?: number;
             detail?: string;
             instance?: string;
+            /**
+             * @description Set for errors a client handles differently from others with the same status:
+             *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`.
+             */
+            code?: string;
         };
         /**
          * @example {
@@ -605,6 +634,24 @@ export interface components {
             /** Format: date-time */
             sleepAt: string;
         };
+        ElevateRequest: {
+            /** @description The admin passphrase set in the host tray. Never logged or stored by the host. */
+            passphrase: string;
+        };
+        ElevationGrant: {
+            /** @description Send in the `X-HyperHarbor-Elevation` header. Keep it out of logs and storage. */
+            token: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ElevationStatus: {
+            /** @description True when an admin passphrase is set on the host. */
+            configured: boolean;
+            /** @description True when the calling device holds an unexpired elevation token. */
+            active: boolean;
+            /** Format: date-time */
+            expiresAt: string | null;
+        };
     };
     responses: {
         /** @description The request was malformed or failed validation. */
@@ -691,6 +738,29 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /**
+         * @description The request needs elevation and has no valid token (`code: elevationRequired`), or no
+         *     admin passphrase is set on the host (`code: elevationUnavailable`).
+         */
+        ElevationRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description Too many wrong passphrases (`code` is `tooManyAttempts`). */
+        ElevationRateLimited: {
+            headers: {
+                /** @description Seconds until another attempt is accepted. */
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
     };
     parameters: {
         /** @description Hyper-V virtual machine ID. */
@@ -719,6 +789,86 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HostInfo"];
                 };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getElevation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether a passphrase is set and whether this device is elevated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ElevationStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    elevate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ElevateRequest"];
+            };
+        };
+        responses: {
+            /** @description The device is elevated. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ElevationGrant"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /**
+             * @description The passphrase is wrong (`code: incorrectPassphrase`) or no passphrase is set
+             *     (`code: elevationUnavailable`).
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            429: components["responses"]["ElevationRateLimited"];
+        };
+    };
+    dropElevation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The device is no longer elevated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Unauthorized"];
         };
@@ -805,6 +955,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             502: components["responses"]["HyperVOperationFailed"];

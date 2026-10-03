@@ -13,6 +13,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private IReadOnlyList<TrayDevice> _devices = [];
     private PinForm? _pinForm;
     private DevicesForm? _devicesForm;
+    private readonly ToolStripMenuItem _passphraseItem;
+    private AdminPassphraseForm? _passphraseForm;
+    private bool _passphraseConfigured;
+    private bool _passphraseSaving;
 
     public TrayApplicationContext()
     {
@@ -22,6 +26,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(_status);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Paired devices…", null, (_, _) => ShowDevices());
+        _passphraseItem = new ToolStripMenuItem("Set admin passphrase…", null, (_, _) => ShowPassphrase()) { Enabled = false };
+        menu.Items.Add(_passphraseItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
@@ -47,6 +53,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _pipe.Dispose();
             _pinForm?.Dispose();
             _devicesForm?.Dispose();
+            _passphraseForm?.Dispose();
             _notifyIcon.Visible = false;
             _notifyIcon.ContextMenuStrip?.Dispose();
             _notifyIcon.Dispose();
@@ -59,6 +66,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         _status.Text = connected ? "Host service running" : "Host service not running";
         _notifyIcon.Text = connected ? "HyperHarbor" : "HyperHarbor (service not running)";
+        _passphraseItem.Enabled = connected;
         if (!connected)
         {
             _pinForm?.Close();
@@ -78,6 +86,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
             case DeviceListMessage list:
                 _devices = list.Devices;
                 _devicesForm?.ShowDevices(_devices);
+                break;
+            case AdminPassphraseStatusMessage status:
+                OnPassphraseStatus(status);
                 break;
             case WakeFixRequestedMessage wakeFix:
                 _ = ApproveWakeFixAsync(wakeFix);
@@ -140,6 +151,33 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (title.Length > 0)
         {
             _notifyIcon.ShowBalloonTip(5000, title, text, icon);
+        }
+    }
+
+    private void ShowPassphrase()
+    {
+        if (_passphraseForm is null)
+        {
+            _passphraseForm = new AdminPassphraseForm(_passphraseConfigured, async hash =>
+            {
+                _passphraseSaving = true;
+                await _pipe.SendAsync(hash);
+            });
+            _passphraseForm.FormClosed += (_, _) => _passphraseForm = null;
+        }
+
+        _passphraseForm.Show();
+        _passphraseForm.Activate();
+    }
+
+    private void OnPassphraseStatus(AdminPassphraseStatusMessage status)
+    {
+        _passphraseConfigured = status.Configured;
+        _passphraseItem.Text = status.Configured ? "Change admin passphrase…" : "Set admin passphrase…";
+        if (_passphraseSaving && status.Configured)
+        {
+            _passphraseSaving = false;
+            _notifyIcon.ShowBalloonTip(5000, "Admin passphrase saved", "Paired devices now need it to change VMs.", ToolTipIcon.Info);
         }
     }
 
