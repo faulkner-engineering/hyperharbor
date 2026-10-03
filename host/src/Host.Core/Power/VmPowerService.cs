@@ -1,3 +1,4 @@
+using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging;
 
@@ -7,17 +8,22 @@ public sealed class VmPowerService : IVmPowerService
 {
     private readonly IVmInventory _inventory;
     private readonly IHyperVPowerInvoker _invoker;
+    private readonly VmOperationLocks _locks;
     private readonly ILogger<VmPowerService> _logger;
 
-    public VmPowerService(IVmInventory inventory, IHyperVPowerInvoker invoker, ILogger<VmPowerService> logger)
+    public VmPowerService(IVmInventory inventory, IHyperVPowerInvoker invoker, VmOperationLocks locks, ILogger<VmPowerService> logger)
     {
         _inventory = inventory;
         _invoker = invoker;
+        _locks = locks;
         _logger = logger;
     }
 
     public async Task<VmActionResult> PerformAsync(Guid vmId, VmAction action, CancellationToken cancellationToken)
     {
+        // Held from the state check through the request, so a deletion or settings change cannot interleave.
+        using var hold = _locks.Acquire(vmId, $"power action {action}");
+
         var vm = await _inventory.GetAsync(vmId, cancellationToken).ConfigureAwait(false)
             ?? throw new VmNotFoundException(vmId);
 

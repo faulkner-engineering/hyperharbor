@@ -1,4 +1,5 @@
 using HyperHarbor.Host.Core.HyperV;
+using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Power;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,6 +23,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddVmPowerControl(this IServiceCollection services)
     {
+        services.AddSingleton<VmOperationLocks>();
         services.AddSingleton<IHyperVPowerInvoker, CimHyperVPowerInvoker>();
         services.AddSingleton<IVmPowerService, VmPowerService>();
         return services;

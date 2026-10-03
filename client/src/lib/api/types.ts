@@ -681,7 +681,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
-        /** @description The operation is not valid in the current state. */
+        /** @description The operation is not valid in the current state, or another operation is in progress on the VM. */
         Conflict: {
             headers: {
                 [name: string]: unknown;

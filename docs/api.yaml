@@ -583,7 +583,7 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
     Conflict:
-      description: The operation is not valid in the current state.
+      description: The operation is not valid in the current state, or another operation is in progress on the VM.
       content:
         application/problem+json:
           schema:

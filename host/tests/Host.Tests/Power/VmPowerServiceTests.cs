@@ -1,3 +1,4 @@
+using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,12 +11,13 @@ public class VmPowerServiceTests
 
     private readonly FakeVmInventory _inventory = new();
     private readonly FakePowerInvoker _invoker;
+    private readonly VmOperationLocks _locks = new();
     private readonly VmPowerService _service;
 
     public VmPowerServiceTests()
     {
         _invoker = new FakePowerInvoker(_inventory);
-        _service = new VmPowerService(_inventory, _invoker, NullLogger<VmPowerService>.Instance);
+        _service = new VmPowerService(_inventory, _invoker, _locks, NullLogger<VmPowerService>.Instance);
     }
 
     [Fact]
@@ -59,5 +61,32 @@ public class VmPowerServiceTests
 
         await Assert.ThrowsAsync<HyperVOperationException>(
             () => _service.PerformAsync(VmId, VmAction.Save, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PerformAsync_WhileAnotherOperationHoldsTheVm_ThrowsBusyWithoutInvoking()
+    {
+        _inventory.Vms.Add(FakeVmInventory.CreateVm(VmId, "Dev", VmState.Off));
+        using var held = _locks.Acquire(VmId, "deleteVm");
+
+        var ex = await Assert.ThrowsAsync<VmBusyException>(
+            () => _service.PerformAsync(VmId, VmAction.Start, CancellationToken.None));
+
+        Assert.Equal("deleteVm", ex.Holder);
+        Assert.Empty(_invoker.Calls);
+    }
+
+    [Fact]
+    public async Task PerformAsync_ReleasesTheLock_AfterSuccessAndFailure()
+    {
+        _inventory.Vms.Add(FakeVmInventory.CreateVm(VmId, "Dev", VmState.Running));
+
+        await _service.PerformAsync(VmId, VmAction.Save, CancellationToken.None);
+        Assert.Null(_locks.HolderOf(VmId));
+
+        _invoker.ThrowOnInvoke = new HyperVOperationException("RequestStateChange", 32768);
+        await Assert.ThrowsAsync<HyperVOperationException>(
+            () => _service.PerformAsync(VmId, VmAction.Save, CancellationToken.None));
+        Assert.Null(_locks.HolderOf(VmId));
     }
 }

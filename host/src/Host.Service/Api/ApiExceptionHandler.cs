@@ -2,6 +2,7 @@ using System.Globalization;
 using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.HyperV;
+using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
@@ -90,6 +91,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),
             VmNotFoundException => (StatusCodes.Status404NotFound, "Virtual machine not found"),
             VmActionNotAllowedException => (StatusCodes.Status409Conflict, "Action not allowed"),
+            VmBusyException => (StatusCodes.Status409Conflict, "Virtual machine busy"),
             HyperVUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Hyper-V unavailable"),
             HyperVOperationException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
             WakeTestAlreadyScheduledException => (StatusCodes.Status409Conflict, "Wake test already scheduled"),
