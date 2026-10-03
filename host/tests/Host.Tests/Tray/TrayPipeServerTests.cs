@@ -219,7 +219,15 @@ public sealed class TrayPipeServerTests : IAsyncLifetime
         public async ValueTask DisposeAsync()
         {
             _reader.Dispose();
-            await _writer.DisposeAsync();
+            try
+            {
+                // Flushes anything still buffered, which fails when the server has closed the pipe.
+                await _writer.DisposeAsync();
+            }
+            catch (IOException)
+            {
+            }
+
             await pipe.DisposeAsync();
         }
     }

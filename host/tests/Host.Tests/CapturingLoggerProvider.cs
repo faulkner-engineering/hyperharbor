@@ -8,7 +8,8 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider
 {
     private readonly ConcurrentQueue<string> _entries = new();
 
-    public IReadOnlyList<string> Entries => [.. _entries];
+    // ToArray is an atomic snapshot; a collection spread can race with concurrent writers.
+    public IReadOnlyList<string> Entries => _entries.ToArray();
 
     public ILogger CreateLogger(string categoryName) => new Logger(categoryName, _entries);
 
