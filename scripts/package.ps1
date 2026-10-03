@@ -46,7 +46,9 @@ function Invoke-Step([string]$Title, [scriptblock]$Command) {
     }
 }
 
-$version = ([xml](Get-Content (Join-Path $repo 'Directory.Build.props'))).Project.PropertyGroup.Version
+# Directory.Build.props has several PropertyGroups; take the one Version that is set.
+$version = ([xml](Get-Content (Join-Path $repo 'Directory.Build.props'))).Project.PropertyGroup.Version |
+    Where-Object { $_ } | Select-Object -First 1
 if (-not $version) {
     $version = (Get-Content (Join-Path $repo 'client\src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json).version
 }
