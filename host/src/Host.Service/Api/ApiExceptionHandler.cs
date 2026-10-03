@@ -65,6 +65,16 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             context.ProblemDetails.Extensions["code"] = code;
         }
 
+        if (exception is LifecycleValidationException { Errors.Count: > 0 } invalid)
+        {
+            context.ProblemDetails.Extensions["errors"] = invalid.Errors;
+        }
+
+        if (exception is ResourceWarningsException warned)
+        {
+            context.ProblemDetails.Extensions["warnings"] = warned.Warnings;
+        }
+
         return await _problemDetails.TryWriteAsync(context);
     }
 
@@ -75,6 +85,8 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         ElevationUnavailableException => ContractInfo.ProblemCodes.ElevationUnavailable,
         IncorrectPassphraseException => ContractInfo.ProblemCodes.IncorrectPassphrase,
         ElevationRateLimitedException => ContractInfo.ProblemCodes.TooManyAttempts,
+        ResourceWarningsException => ContractInfo.ProblemCodes.ResourceWarnings,
+        LifecycleConflictException { Code: { } code } => code,
         _ => null,
     };
 
@@ -92,6 +104,10 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             VmNotFoundException => (StatusCodes.Status404NotFound, "Virtual machine not found"),
             VmActionNotAllowedException => (StatusCodes.Status409Conflict, "Action not allowed"),
             VmBusyException => (StatusCodes.Status409Conflict, "Virtual machine busy"),
+            LifecycleValidationException => (StatusCodes.Status400BadRequest, "Invalid request"),
+            LifecycleConflictException => (StatusCodes.Status409Conflict, "Cannot complete the request"),
+            ResourceWarningsException => (StatusCodes.Status409Conflict, "Check host resources"),
+            HyperVJobFailedException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
             HyperVUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Hyper-V unavailable"),
             HyperVOperationException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
             WakeTestAlreadyScheduledException => (StatusCodes.Status409Conflict, "Wake test already scheduled"),

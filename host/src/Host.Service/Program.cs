@@ -5,6 +5,7 @@ using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.Identity;
+using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Security;
@@ -103,6 +104,14 @@ builder.Services.AddSingleton(services => new PasswordRotator(
     services.GetRequiredService<ILogger<PasswordRotator>>()));
 builder.Services.AddSingleton<ConnectService>();
 
+builder.Services.AddSingleton<IHyperVStorage, CimHyperVStorage>();
+builder.Services.AddSingleton<IDiskFiles, WindowsDiskFiles>();
+builder.Services.AddSingleton(services => new VmJobStore(
+    services.GetRequiredService<VmOperationLocks>(),
+    services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<VmJobStore>>()));
+builder.Services.AddSingleton<VmDeletionService>();
+
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))
     .ValidateDataAnnotations()
@@ -160,6 +169,7 @@ app.UseAuthorization();
 app.MapHostEndpoints();
 app.MapAuthEndpoints();
 app.MapVmEndpoints();
+app.MapJobEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();
 

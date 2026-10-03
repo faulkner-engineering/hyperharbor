@@ -1,16 +1,10 @@
+using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging;
 
 namespace HyperHarbor.Host.Core.Lifecycle;
 
-public enum VmJobState
-{
-    Running,
-    Succeeded,
-    Failed,
-}
-
 /// <summary>A point-in-time copy of a job, safe to return to callers.</summary>
-/// <param name="Kind">The operation, named after its api.yaml operationId, for example "deleteVm".</param>
+/// <param name="Kind">The operation.</param>
 /// <param name="VmId">Null until a create job has defined its virtual machine.</param>
 /// <param name="UserId">Only this User's devices can see the job.</param>
 /// <param name="Step">What the job is doing now, for example "Deleting disks".</param>
@@ -18,7 +12,7 @@ public enum VmJobState
 /// <param name="ErrorDetail">Safe to show to the client; unexpected failures get a generic message.</param>
 public sealed record VmJobSnapshot(
     Guid Id,
-    string Kind,
+    VmJobKind Kind,
     Guid? VmId,
     Guid UserId,
     VmJobState State,
@@ -101,14 +95,14 @@ public sealed class VmJobStore : IDisposable
     /// <param name="onFinished">Called once with the final snapshot, for example to write the audit entry.</param>
     /// <exception cref="VmBusyException">Another job or power action holds the virtual machine.</exception>
     public VmJobSnapshot Start(
-        string kind,
+        VmJobKind kind,
         Guid? vmId,
         Guid userId,
         string firstStep,
         Func<VmJobContext, Task> work,
         Action<VmJobSnapshot>? onFinished = null)
     {
-        var hold = vmId is { } id ? _locks.Acquire(id, kind) : null;
+        var hold = vmId is { } id ? _locks.Acquire(id, Describe(kind)) : null;
         var now = _time.GetUtcNow();
         var entry = new Entry(new VmJobSnapshot(Guid.NewGuid(), kind, vmId, userId, VmJobState.Running, firstStep, 0, now, now, null, null));
         if (hold is not null)
@@ -152,6 +146,15 @@ public sealed class VmJobStore : IDisposable
         _stopping.Dispose();
     }
 
+    /// <summary>How a job is named to a caller that finds its VM busy.</summary>
+    public static string Describe(VmJobKind kind) => kind switch
+    {
+        VmJobKind.CreateVm => "creating the virtual machine",
+        VmJobKind.DeleteVm => "deleting the virtual machine",
+        VmJobKind.ApplyCompute => "applying settings",
+        _ => kind.ToString(),
+    };
+
     internal void Update(Guid jobId, string step, int percentComplete)
     {
         lock (_gate)
@@ -173,7 +176,7 @@ public sealed class VmJobStore : IDisposable
                 throw new InvalidOperationException("The job already has a virtual machine.");
             }
 
-            entry.Holds.Add(_locks.Acquire(vmId, entry.Snapshot.Kind));
+            entry.Holds.Add(_locks.Acquire(vmId, Describe(entry.Snapshot.Kind)));
             entry.Snapshot = entry.Snapshot with { VmId = vmId, UpdatedAt = _time.GetUtcNow() };
         }
     }

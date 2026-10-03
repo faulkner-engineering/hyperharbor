@@ -21,5 +21,7 @@ public static class ContractInfo
         public const string ElevationUnavailable = "elevationUnavailable";
         public const string IncorrectPassphrase = "incorrectPassphrase";
         public const string TooManyAttempts = "tooManyAttempts";
+        public const string ResourceWarnings = "resourceWarnings";
+        public const string RequiresShutdown = "requiresShutdown";
     }
 }

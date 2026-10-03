@@ -67,6 +67,19 @@ public class ContractFixtureTests
         ["ElevationGrant"] = new ElevationGrant("Zml4dHVyZS10b2tlbi1maXh0dXJlLXRva2VuLWZpeHR1cg", Time),
         // Null on purpose: expiresAt is required but nullable.
         ["ElevationStatus"] = new ElevationStatus(true, false, null),
+        ["ValidationIssue"] = new ValidationIssue("processorCount", "Use at most 16 virtual processors."),
+        ["VmDeleteRequest"] = new VmDeleteRequest(true, true, "Ubuntu Dev"),
+        ["DeleteBlocker"] = new DeleteBlocker(DeleteBlockerCode.SharedDisk, DeleteBlockerScope.DeleteDisksOrCheckpoints, @"C:\VMs\Base.vhdx is also used by Web."),
+        ["VmDeletePreview"] = new VmDeletePreview(
+            VmId,
+            "Ubuntu Dev",
+            VmState.Off,
+            1,
+            [@"C:\VMs\Ubuntu Dev.vhdx"],
+            [new DeleteBlocker(DeleteBlockerCode.DiskNotDeletable, DeleteBlockerScope.DeleteDisks, "In use.")]),
+        ["JobError"] = new JobError("Deleting disks failed", "The file is in use."),
+        // Nulls on purpose: vmId and error are required but nullable.
+        ["VmJob"] = new VmJob(Guid.Parse("7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d"), VmJobKind.CreateVm, null, VmJobState.Running, "Creating the disk", 10, Time, Time, null),
     };
 
     [Fact]
@@ -132,6 +145,26 @@ public class ContractFixtureTests
     private static void Validate(JsonNode? node, YamlNode schemaNode, string at, List<string> problems)
     {
         var schema = Resolve((YamlMappingNode)schemaNode);
+
+        // oneOf is used only for "this object or null"; validate against the object branch.
+        if (schema.Children.TryGetValue(new YamlScalarNode("oneOf"), out var oneOf))
+        {
+            var branches = ((YamlSequenceNode)oneOf).Children.Cast<YamlMappingNode>().ToList();
+            var nullable = branches.Any(branch => branch.Children.TryGetValue(new YamlScalarNode("type"), out var type) && ((YamlScalarNode)type).Value == "null");
+            if (node is null)
+            {
+                if (!nullable)
+                {
+                    problems.Add($"{at} is null but the schema does not allow null.");
+                }
+
+                return;
+            }
+
+            Validate(node, branches.First(branch => !branch.Children.ContainsKey(new YamlScalarNode("type")) || ((YamlScalarNode)branch["type"]).Value != "null"), at, problems);
+            return;
+        }
+
         if (node is null)
         {
             if (!AllowsNull(schema))

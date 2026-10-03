@@ -170,6 +170,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/delete-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Show what deleting a virtual machine would do.
+         * @description Lists the disk files `deleteDisks` would delete, the number of checkpoints, and anything
+         *     that prevents the deletion. Clients show this before asking the user to type the VM's
+         *     name to confirm.
+         */
+        get: operations["getVmDeletePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete a virtual machine that is off.
+         * @description Starts a deletion job; poll `GET /jobs/{jobId}` (the `Location` header). The VM must be
+         *     off. When it has checkpoints, `deleteCheckpoints` must be true: they are merged into its
+         *     disks first. With `deleteDisks`, the VM's own disk files are deleted too; a parent of
+         *     its differencing disk is never deleted. Disks that another VM, or a differencing disk the
+         *     VM does not use, depends on are never deleted or merged, and the request is refused.
+         */
+        post: operations["deleteVm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Job ID returned when the job was started. */
+                jobId: components["parameters"]["JobId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get the progress of a long-running VM operation.
+         * @description Jobs are visible only to devices of the User who started them, and are kept for an hour
+         *     after they finish. A host service restart forgets them.
+         */
+        get: operations["getJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pairing/requests": {
         parameters: {
             query?: never;
@@ -336,9 +412,22 @@ export interface components {
             instance?: string;
             /**
              * @description Set for errors a client handles differently from others with the same status:
-             *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`.
+             *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
+             *     `resourceWarnings` (see `warnings`), `requiresShutdown`.
              */
             code?: string;
+            /** @description Field-level validation problems (400). */
+            errors?: components["schemas"]["ValidationIssue"][];
+            /**
+             * @description Host resource warnings (409 with `code: resourceWarnings`). Send the request again with
+             *     `acknowledgeWarnings: true` to proceed.
+             */
+            warnings?: components["schemas"]["ValidationIssue"][];
+        };
+        ValidationIssue: {
+            /** @description The request property, for example `processorCount`. */
+            field: string;
+            message: string;
         };
         /**
          * @example {
@@ -652,6 +741,64 @@ export interface components {
             /** Format: date-time */
             expiresAt: string | null;
         };
+        VmDeleteRequest: {
+            /** @description Also delete the VM's own disk files. Parent disks are never deleted. */
+            deleteDisks: boolean;
+            /** @description Required when the VM has checkpoints. They are merged into its disks first. */
+            deleteCheckpoints: boolean;
+            /** @description Must equal the VM's name exactly. */
+            confirmName: string;
+        };
+        /** @enum {string} */
+        DeleteBlockerCode: "notOff" | "sharedDisk" | "diskNotDeletable";
+        /**
+         * @description Which deletions a blocker prevents. `always`; `deleteDisks` (only when deleting disks);
+         *     `deleteDisksOrCheckpoints` (when deleting disks, or merging checkpoints into them).
+         * @enum {string}
+         */
+        DeleteBlockerScope: "always" | "deleteDisks" | "deleteDisksOrCheckpoints";
+        DeleteBlocker: {
+            code: components["schemas"]["DeleteBlockerCode"];
+            scope: components["schemas"]["DeleteBlockerScope"];
+            message: string;
+        };
+        VmDeletePreview: {
+            /** Format: uuid */
+            vmId: string;
+            vmName: string;
+            state: components["schemas"]["VmState"];
+            checkpointCount: number;
+            /** @description The files `deleteDisks` would delete. */
+            disks: string[];
+            blockers: components["schemas"]["DeleteBlocker"][];
+        };
+        /** @enum {string} */
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute";
+        /** @enum {string} */
+        VmJobState: "running" | "succeeded" | "failed";
+        JobError: {
+            title: string;
+            detail: string;
+        };
+        VmJob: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["VmJobKind"];
+            /**
+             * Format: uuid
+             * @description Null until a create job has defined its virtual machine.
+             */
+            vmId: string | null;
+            state: components["schemas"]["VmJobState"];
+            /** @description What the job is doing now, for example "Deleting disks". */
+            step: string;
+            percentComplete: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            error: components["schemas"]["JobError"] | null;
+        };
     };
     responses: {
         /** @description The request was malformed or failed validation. */
@@ -765,6 +912,8 @@ export interface components {
     parameters: {
         /** @description Hyper-V virtual machine ID. */
         VmId: string;
+        /** @description Job ID returned when the job was started. */
+        JobId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1051,6 +1200,103 @@ export interface operations {
             };
             502: components["responses"]["GuestOperationFailed"];
             503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    getVmDeletePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deletion preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmDeletePreview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    deleteVm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VmDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description The deletion job started. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not off, has checkpoints and `deleteCheckpoints` is false, a disk is shared
+             *     or cannot be deleted, or another operation is in progress on the VM.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    getJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Job ID returned when the job was started. */
+                jobId: components["parameters"]["JobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     createPairingRequest: {

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Core;
+using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Service.Security;
@@ -33,6 +34,11 @@ public static class VmEndpoints
                 $"adminUserName={request.AdminUserName}, enableRemoteDesktop={request.EnableRemoteDesktop}, " +
                 $"installDesktop={request.InstallDesktop}, trustNewHostKey={request.TrustNewHostKey}");
         vms.MapPost("/{vmId:guid}/connect", ConnectAsync).WithName("connectVm").Audited();
+
+        vms.MapGet("/{vmId:guid}/delete-preview", GetDeletePreviewAsync).WithName("getVmDeletePreview");
+        vms.MapPost("/{vmId:guid}/delete", DeleteAsync).WithName("deleteVm")
+            .Audited<VmDeleteRequest>(request => $"deleteDisks={request.DeleteDisks}, deleteCheckpoints={request.DeleteCheckpoints}")
+            .RequireElevation();
 
         return endpoints;
     }
@@ -93,6 +99,21 @@ public static class VmEndpoints
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
         return TypedResults.Ok(connection);
+    }
+
+    private static async Task<Ok<VmDeletePreview>> GetDeletePreviewAsync(Guid vmId, VmDeletionService deletion, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await deletion.PreviewAsync(vmId, cancellationToken));
+
+    private static async Task<Accepted<VmJob>> DeleteAsync(
+        Guid vmId,
+        VmDeleteRequest request,
+        VmDeletionService deletion,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var job = await deletion.StartAsync(vmId, context.User.UserId(), request, context.CompletionAuditor(), cancellationToken);
+        context.Audit()!.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }
 
     /// <summary>Adds the per-User fields; the inventory itself is shared by all Users.</summary>

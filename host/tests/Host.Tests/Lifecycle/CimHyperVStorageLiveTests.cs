@@ -1,0 +1,57 @@
+using HyperHarbor.Host.Core;
+using HyperHarbor.Host.Core.HyperV;
+using HyperHarbor.Host.Core.Lifecycle;
+using HyperHarbor.Host.Tests.HyperV;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit.Abstractions;
+
+namespace HyperHarbor.Host.Tests.Lifecycle;
+
+/// <summary>
+/// Read-only checks of the storage queries against the local Hyper-V installation. Nothing is deleted:
+/// only ReadAsync, GetParentPathAsync, and the deletion preview run.
+/// </summary>
+public sealed class CimHyperVStorageLiveTests(ITestOutputHelper output)
+{
+    [HyperVFact]
+    public async Task ReadAsync_FindsEveryVmsDisks_AndTheirParents()
+    {
+        var storage = new CimHyperVStorage();
+
+        var snapshot = await storage.ReadAsync(CancellationToken.None);
+
+        foreach (var disk in snapshot.Disks)
+        {
+            var parent = await storage.GetParentPathAsync(disk.Path, CancellationToken.None);
+            output.WriteLine($"{disk.VmName} checkpoint={disk.InCheckpoint} {disk.Path} -> {parent ?? "(no parent)"}");
+            Assert.True(DiskPaths.IsDisk(disk.Path), disk.Path);
+            if (DiskPaths.IsCheckpointDisk(disk.Path))
+            {
+                Assert.NotNull(parent);
+            }
+        }
+
+        foreach (var (vmId, count) in snapshot.CheckpointCounts)
+        {
+            output.WriteLine($"{vmId}: {count} checkpoint(s)");
+        }
+    }
+
+    [HyperVFact]
+    public async Task Preview_OfEveryVm_ResolvesBaseDisks()
+    {
+        var inventory = new VmInventory(new CimHyperVReader(NullLogger<CimHyperVReader>.Instance), new TcpRdpProbe(TimeProvider.System));
+        using var jobs = new VmJobStore(new VmOperationLocks(), TimeProvider.System, NullLogger<VmJobStore>.Instance);
+        var deletion = new VmDeletionService(inventory, new CimHyperVStorage(), new WindowsDiskFiles(), jobs, NullLogger<VmDeletionService>.Instance);
+
+        foreach (var vm in await inventory.ListAsync(CancellationToken.None))
+        {
+            var preview = await deletion.PreviewAsync(vm.Id, CancellationToken.None);
+
+            output.WriteLine($"{preview.VmName} ({preview.State}), {preview.CheckpointCount} checkpoint(s)");
+            preview.Disks.ToList().ForEach(disk => output.WriteLine($"  delete: {disk}"));
+            preview.Blockers.ToList().ForEach(blocker => output.WriteLine($"  blocker {blocker.Code}/{blocker.Scope}: {blocker.Message}"));
+            Assert.All(preview.Disks, disk => Assert.False(DiskPaths.IsCheckpointDisk(disk), $"{disk} is a checkpoint disk; it should have been followed to its base."));
+        }
+    }
+}

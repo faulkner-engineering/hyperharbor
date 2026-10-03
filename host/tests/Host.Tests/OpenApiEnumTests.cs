@@ -18,6 +18,10 @@ public class OpenApiEnumTests
     [InlineData("VmAction", typeof(VmAction))]
     [InlineData("GuestOsFamily", typeof(GuestOsFamily))]
     [InlineData("WakeCheckStatus", typeof(WakeCheckStatus))]
+    [InlineData("DeleteBlockerCode", typeof(DeleteBlockerCode))]
+    [InlineData("DeleteBlockerScope", typeof(DeleteBlockerScope))]
+    [InlineData("VmJobKind", typeof(VmJobKind))]
+    [InlineData("VmJobState", typeof(VmJobState))]
     public void EnumWireValues_MatchOpenApiSchema(string schemaName, Type enumType)
     {
         var schema = (YamlMappingNode)Schemas[schemaName];

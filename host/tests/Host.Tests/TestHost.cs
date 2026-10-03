@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using HyperHarbor.Host.Core;
+using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
@@ -9,6 +10,7 @@ using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.Wake;
+using HyperHarbor.Host.Tests.Lifecycle;
 using HyperHarbor.Shared.Contracts.Ipc;
 using HyperHarbor.Shared.Contracts.Pairing;
 using Microsoft.AspNetCore.Builder;
@@ -53,6 +55,8 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IWakeEnvironmentReader>(Wake);
                 services.AddSingleton<ISleepController>(Sleep);
                 services.AddSingleton<IGuestAccountManager>(Guest);
+                services.AddSingleton<IHyperVStorage>(Storage);
+                services.AddSingleton<IDiskFiles>(DiskFiles);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
             }));
@@ -71,6 +75,10 @@ internal sealed class TestHost : IDisposable
     public FakeSleepController Sleep { get; } = new();
 
     public FakeGuestAccountManager Guest { get; } = new();
+
+    public FakeHyperVStorage Storage { get; } = new();
+
+    public FakeDiskFiles DiskFiles { get; } = new();
 
     /// <summary>Entries in the host's audit.log, oldest first.</summary>
     public IReadOnlyList<System.Text.Json.Nodes.JsonObject> AuditEntries()

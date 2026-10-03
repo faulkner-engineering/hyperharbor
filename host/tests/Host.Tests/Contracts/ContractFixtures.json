@@ -1,4 +1,9 @@
 {
+  "DeleteBlocker": {
+    "code": "sharedDisk",
+    "scope": "deleteDisksOrCheckpoints",
+    "message": "C:\\VMs\\Base.vhdx is also used by Web."
+  },
   "ElevateRequest": {
     "passphrase": "Fixture passphrase"
   },
@@ -17,6 +22,10 @@
     "version": "0.1.0",
     "apiVersion": "1.2.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "JobError": {
+    "title": "Deleting disks failed",
+    "detail": "The file is in use."
   },
   "PairingConfirmation": {
     "clientShare": "BAUG",
@@ -44,6 +53,10 @@
     "enableRemoteDesktop": true,
     "installDesktop": true,
     "trustNewHostKey": true
+  },
+  "ValidationIssue": {
+    "field": "processorCount",
+    "message": "Use at most 16 virtual processors."
   },
   "Vm": {
     "id": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
@@ -85,9 +98,41 @@
     "expiresAt": "2026-10-03T12:00:00\u002B00:00",
     "guestOs": "windows"
   },
+  "VmDeletePreview": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "vmName": "Ubuntu Dev",
+    "state": "off",
+    "checkpointCount": 1,
+    "disks": [
+      "C:\\VMs\\Ubuntu Dev.vhdx"
+    ],
+    "blockers": [
+      {
+        "code": "diskNotDeletable",
+        "scope": "deleteDisks",
+        "message": "In use."
+      }
+    ]
+  },
+  "VmDeleteRequest": {
+    "deleteDisks": true,
+    "deleteCheckpoints": true,
+    "confirmName": "Ubuntu Dev"
+  },
   "VmGuestOs": {
     "family": "unknown",
     "name": null
+  },
+  "VmJob": {
+    "id": "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
+    "kind": "createVm",
+    "vmId": null,
+    "state": "running",
+    "step": "Creating the disk",
+    "percentComplete": 10,
+    "createdAt": "2026-10-03T12:00:00\u002B00:00",
+    "updatedAt": "2026-10-03T12:00:00\u002B00:00",
+    "error": null
   },
   "VmProvisioning": {
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
