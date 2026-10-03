@@ -26,6 +26,13 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 6. Wake-on-LAN (done)
 7. One-click RDP with a per-User VM account (Windows guests via PowerShell Direct; Linux guests via SSH
    and xrdp, added at the user's request)
+8. VM lifecycle (in progress, added at the user's request), in steps:
+   0. Audit log for every state-changing route, admin passphrase elevation, job store, per-VM lock
+   1. Delete VM (off only, optional disks and checkpoints, refuses shared parent disks)
+   2. Read-only host resources, ISO library, virtual switches
+   3. Create VM from ISO (Gen 2, Secure Boot, vTPM via CIM) as a job
+   4. Compute settings (vCPU, memory, nested virtualization, MAC spoofing) with shut down and apply
+   Delete, create, compute changes, and turnOff require elevation.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
