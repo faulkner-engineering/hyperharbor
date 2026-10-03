@@ -72,3 +72,18 @@ jobs:
         run: |
           cargo install cargo-audit --locked
           cargo audit
+
+  e2e:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/src-tauri
+      - name: Client pairs with the real host over loopback
+        shell: pwsh
+        run: ./scripts/e2e.ps1

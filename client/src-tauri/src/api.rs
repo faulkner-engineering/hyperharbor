@@ -970,6 +970,132 @@ mod server_tests {
         );
     }
 
+    /// The real host service on loopback, with this test acting as its tray app.
+    struct LoopbackHost {
+        process: std::process::Child,
+        port: u16,
+        pipe_name: String,
+        data_directory: std::path::PathBuf,
+    }
+
+    impl LoopbackHost {
+        fn start(service_exe: &str) -> Self {
+            let port = closed_address().port();
+            let id = format!("{}-{port}", std::process::id());
+            let pipe_name = format!("HyperHarbor.E2E.{id}");
+            let data_directory = std::env::temp_dir().join(format!("hyperharbor-e2e-{id}"));
+            let process = std::process::Command::new(service_exe)
+                .args(["--DataDirectory", data_directory.to_str().unwrap()])
+                .args(["--Api:Port", &port.to_string()])
+                .args(["--Api:ListenAddress", "127.0.0.1"])
+                .args(["--Discovery:Enabled", "false"])
+                .args(["--Tray:PipeName", &pipe_name])
+                .stdout(std::process::Stdio::null())
+                .spawn()
+                .expect("start the host service");
+
+            let deadline = std::time::Instant::now() + Duration::from_secs(60);
+            while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the service did not listen"
+                );
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            Self {
+                process,
+                port,
+                pipe_name,
+                data_directory,
+            }
+        }
+
+        /// Connects to the tray pipe and returns a receiver for the PINs the host shows.
+        fn tray(&self) -> std::sync::mpsc::Receiver<String> {
+            use std::io::BufRead;
+            let pipe = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(format!(r"\\.\pipe\{}", self.pipe_name))
+                .expect("connect to the tray pipe");
+            let mut lines = std::io::BufReader::new(pipe).lines();
+            // The first message (the device list) means the host has registered this tray.
+            lines.next().expect("device list").unwrap();
+
+            let (sender, receiver) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                for line in lines.map_while(Result::ok) {
+                    let message: serde_json::Value = serde_json::from_str(&line).unwrap();
+                    if message["type"] == "pairingStarted" {
+                        let _ = sender.send(message["pin"].as_str().unwrap().to_string());
+                    }
+                }
+            });
+            receiver
+        }
+    }
+
+    impl Drop for LoopbackHost {
+        fn drop(&mut self) {
+            let _ = self.process.kill();
+            let _ = self.process.wait();
+            let _ = std::fs::remove_dir_all(&self.data_directory);
+        }
+    }
+
+    /// End to end against the real host service, on loopback only. Run with scripts\e2e.ps1, or:
+    /// HH_E2E_SERVICE_EXE=<path to HyperHarbor.Host.Service.exe> cargo test e2e_loopback -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_loopback() {
+        let service_exe = std::env::var("HH_E2E_SERVICE_EXE").expect("HH_E2E_SERVICE_EXE");
+        let service = LoopbackHost::start(&service_exe);
+        let pins = service.tray();
+        let target = host(&["127.0.0.1"], service.port);
+        let api = api();
+
+        let pending = api.start_pairing(&target).await.expect("start pairing");
+        let pin = pins
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the host showed a PIN");
+        let wrong_pin = if pin == "000000" { "000001" } else { "000000" };
+        let wrong = api.complete_pairing(&target, &pending, wrong_pin).await;
+        assert!(
+            matches!(wrong, Err(ClientError::Api { status: 401, .. })),
+            "wrong PIN: {wrong:?}"
+        );
+        let paired = api
+            .complete_pairing(&target, &pending, &pin)
+            .await
+            .expect("complete pairing");
+
+        // Hyper-V may be missing (CI); then the host answers 503, which still proves mTLS worked.
+        match api.list_vms(&target, &paired).await {
+            Ok(vms) => assert!(vms.is_array()),
+            Err(ClientError::Api { status: 503, .. }) => {}
+            Err(error) => panic!("list VMs: {error:?}"),
+        }
+        let readiness = api
+            .wake_readiness(&target, &paired)
+            .await
+            .expect("wake readiness");
+        assert!(readiness["checks"].is_array());
+
+        let mut other_pin = paired.clone();
+        other_pin.host_id = "different".into();
+        other_pin.host_certificate_fingerprint = "00".repeat(32);
+        assert!(matches!(
+            api.list_vms(&target, &other_pin).await,
+            Err(ClientError::Unreachable(_))
+        ));
+
+        api.unpair(&target, &paired).await.expect("unpair");
+        assert!(matches!(
+            api.list_vms(&target, &paired).await,
+            Err(ClientError::Api { status: 401, .. })
+        ));
+    }
+
     /// Wire samples written by the host's ContractFixtureTests (checked there against api.yaml).
     fn fixture(schema: &str) -> serde_json::Value {
         let all: serde_json::Value = serde_json::from_str(include_str!(
