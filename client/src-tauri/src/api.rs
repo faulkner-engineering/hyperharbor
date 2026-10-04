@@ -1464,10 +1464,31 @@ mod server_tests {
 
     impl LoopbackHost {
         fn start(service_exe: &str) -> Self {
+            Self::start_with(service_exe, None)
+        }
+
+        /// Starts the service with `passphrase` already set as its admin passphrase, as the tray would
+        /// (PBKDF2-SHA256; one iteration is enough for a test and accepted from the data file).
+        fn start_with(service_exe: &str, passphrase: Option<&str>) -> Self {
             let port = closed_address().port();
             let id = format!("{}-{port}", std::process::id());
             let pipe_name = format!("HyperHarbor.E2E.{id}");
             let data_directory = std::env::temp_dir().join(format!("hyperharbor-e2e-{id}"));
+            if let Some(passphrase) = passphrase {
+                use hmac::{Hmac, KeyInit, Mac};
+                let salt = rand_bytes().repeat(2);
+                let mut mac =
+                    <Hmac<Sha256> as KeyInit>::new_from_slice(passphrase.as_bytes()).unwrap();
+                mac.update(&salt);
+                mac.update(&1u32.to_be_bytes());
+                let hash = mac.finalize().into_bytes();
+                std::fs::create_dir_all(&data_directory).unwrap();
+                std::fs::write(
+                    data_directory.join("admin-passphrase.json"),
+                    json!({ "Salt": encode_base64(&salt), "Hash": encode_base64(&hash), "Iterations": 1 }).to_string(),
+                )
+                .unwrap();
+            }
             let process = std::process::Command::new(service_exe)
                 .args(["--DataDirectory", data_directory.to_str().unwrap()])
                 .args(["--Api:Port", &port.to_string()])
@@ -1525,6 +1546,55 @@ mod server_tests {
             let _ = self.process.wait();
             let _ = std::fs::remove_dir_all(&self.data_directory);
         }
+    }
+
+    /// Upload throughput of this client against the real host service on loopback (1 GB file):
+    /// HH_E2E_SERVICE_EXE=<path to HyperHarbor.Host.Service.exe> cargo test --release upload_throughput -- --ignored --nocapture
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn upload_throughput() {
+        let service_exe = std::env::var("HH_E2E_SERVICE_EXE").expect("HH_E2E_SERVICE_EXE");
+        let service = LoopbackHost::start_with(&service_exe, Some("benchmark passphrase"));
+        let pins = service.tray();
+        let target = host(&["127.0.0.1"], service.port);
+        let api = api();
+        let pending = api.start_pairing(&target).await.unwrap();
+        let pin = pins.recv_timeout(Duration::from_secs(10)).unwrap();
+        let paired = api.complete_pairing(&target, &pending, &pin).await.unwrap();
+        api.elevate(&target, &paired, "benchmark passphrase")
+            .await
+            .unwrap();
+
+        let size = 1024 * 1024 * 1024;
+        let path = std::env::temp_dir().join(format!("hh-bench-{}.iso", hex::encode(rand_bytes())));
+        {
+            use std::io::Write;
+            let mut file = std::io::BufWriter::new(std::fs::File::create(&path).unwrap());
+            let block = vec![0x5Au8; 4 * 1024 * 1024];
+            for _ in 0..size / block.len() {
+                file.write_all(&block).unwrap();
+            }
+        }
+
+        let started = std::time::Instant::now();
+        let result = api
+            .upload_iso(
+                &target,
+                &paired,
+                "bench.iso",
+                &path,
+                Arc::new(|_| {}),
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            )
+            .await;
+        let elapsed = started.elapsed().as_secs_f64();
+        std::fs::remove_file(&path).unwrap();
+
+        result.expect("upload");
+        println!(
+            "Uploaded 1 GB in {elapsed:.1} s: {:.0} MB/s",
+            1024.0 / elapsed
+        );
     }
 
     /// End to end against the real host service, on loopback only. Run with scripts\e2e.ps1, or:

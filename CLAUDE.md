@@ -49,7 +49,8 @@ per-device VM accounts and a user management UI.
 - Ask before any destructive Hyper-V operation.
 - After any change, without asking (the user's standing instruction): stop everything running from dist/
   (HyperHarbor.Host.Service, HyperHarbor.Host.Tray, the portable client), rebuild with
-  scripts\package.ps1 -Fast, then relaunch: dist\host\Start-HyperHarbor.ps1 (service and tray) and
+  scripts\package.ps1 -Fast (add -SkipTests once the change's tests have passed, and -HostOnly or -ClientOnly
+  when only one side changed), then relaunch: dist\host\Start-HyperHarbor.ps1 (service and tray) and
   dist\HyperHarbor-Client-<ver>-portable.exe. Report it if the rebuild fails, and leave things stopped.
 
 ## Layout
@@ -92,7 +93,11 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 ## Packaging (multi-machine testing)
 - powershell -ExecutionPolicy Bypass -File scripts\package.ps1 [-Fast] [-SkipTests] [-HostOnly|-ClientOnly]
 - Output in dist/ (git-ignored): HyperHarbor-Host-<ver>-portable.zip, client NSIS setup exe, portable client exe.
-- -Fast uses thin LTO for test builds (about 3 min total vs about 10). Switching between fast and full recompiles once.
+- -Fast is for test builds: the client without LTO at opt 1, incremental (a small client change rebuilds in
+  seconds), uncompressed host executables, fastest zip. Switching between fast and full recompiles once
+  (about 6 min). Measured 2026-10-04: thin LTO took 170 s for a one-line client change, -Fast about 7 s.
+- Upload throughput on loopback (2026-10-04): about 320 MB/s into the host and 351 MB/s from the Rust client
+  (IsoUpload_Throughput with HH_BENCHMARK=1; upload_throughput with HH_E2E_SERVICE_EXE).
 - Version comes from Directory.Build.props (host) and client/src-tauri/tauri.conf.json (client); keep them equal.
 - The script refuses to run while anything is running from dist/ (Windows locks the exe).
 - The host zip's Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,

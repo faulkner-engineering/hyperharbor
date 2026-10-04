@@ -8,10 +8,11 @@
        them with the start and stop scripts from packaging/host.
     3. Builds the Tauri client and copies its NSIS installer and portable executable.
 
-    -Fast builds the client with thin LTO and parallel code generation instead of the full
-    release profile (fat LTO, one codegen unit). The link step drops from minutes to seconds and
-    the binary is slightly larger. Use it for test builds; omit it for releases. Switching
-    between fast and full builds recompiles the client crates once.
+    -Fast is for test builds; omit it for releases. It builds the client without LTO, at
+    optimization level 1, incrementally (a one-line change rebuilds in seconds instead of about
+    three minutes), publishes the host executables without single-file compression (about 20
+    seconds faster; they are larger), and zips with the fastest compression. Switching between
+    fast and full builds recompiles the client crates once.
 
     Run from any directory in Windows PowerShell or PowerShell 7:
         powershell -ExecutionPolicy Bypass -File scripts\package.ps1 [-Fast] [-SkipTests]
@@ -101,7 +102,7 @@ if (-not $ClientOnly) {
         '--self-contained', 'true',
         '-p:PublishSingleFile=true',
         '-p:IncludeNativeLibrariesForSelfExtract=true',
-        '-p:EnableCompressionInSingleFile=true',
+        "-p:EnableCompressionInSingleFile=$(if ($Fast) { 'false' } else { 'true' })",
         '-p:DebugType=None',
         '-o', $staging
     )
@@ -114,15 +115,19 @@ if (-not $ClientOnly) {
 
     $zip = Join-Path $dist "HyperHarbor-Host-$version-portable.zip"
     Remove-Item $zip -ErrorAction SilentlyContinue
-    Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zip
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $level = if ($Fast) { [IO.Compression.CompressionLevel]::Fastest } else { [IO.Compression.CompressionLevel]::Optimal }
+    [IO.Compression.ZipFile]::CreateFromDirectory($staging, $zip, $level, $false)
     Write-Host "Host package: $zip" -ForegroundColor Green
 }
 
 if (-not $HostOnly) {
     if ($Fast) {
-        # Overrides [profile.release] in client/src-tauri/Cargo.toml for this build only.
-        $env:CARGO_PROFILE_RELEASE_LTO = 'thin'
-        $env:CARGO_PROFILE_RELEASE_CODEGEN_UNITS = '16'
+        # Overrides [profile.release] in client/src-tauri/Cargo.toml for this build only. Measured on an
+        # 8-thread PC after a one-line change: thin LTO at opt 3 took 170 s, this takes under 10 s.
+        $env:CARGO_PROFILE_RELEASE_LTO = 'off'
+        $env:CARGO_PROFILE_RELEASE_OPT_LEVEL = '1'
+        $env:CARGO_PROFILE_RELEASE_INCREMENTAL = 'true'
     }
 
     Push-Location (Join-Path $repo 'client')
@@ -132,7 +137,7 @@ if (-not $HostOnly) {
     }
     finally {
         Pop-Location
-        Remove-Item Env:\CARGO_PROFILE_RELEASE_LTO, Env:\CARGO_PROFILE_RELEASE_CODEGEN_UNITS -ErrorAction SilentlyContinue
+        Remove-Item Env:\CARGO_PROFILE_RELEASE_LTO, Env:\CARGO_PROFILE_RELEASE_OPT_LEVEL, Env:\CARGO_PROFILE_RELEASE_INCREMENTAL, Env:\CARGO_PROFILE_RELEASE_CODEGEN_UNITS -ErrorAction SilentlyContinue
     }
 
     $release = Join-Path $repo 'client\src-tauri\target\release'
