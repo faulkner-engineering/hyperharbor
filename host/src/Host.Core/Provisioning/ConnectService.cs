@@ -52,8 +52,10 @@ public sealed class ConnectService
             vmId,
             deviceName);
 
-        // Windows needs ".\" to select the local account; xrdp expects the plain Linux user name.
-        var userName = account.GuestOs == GuestOsFamily.Linux ? account.AccountName : $@".\{account.AccountName}";
+        // The plain account name for both. Given ".\hh-owner", mstsc signs in as ".\.\hh-owner", which
+        // the guest rejects as an unknown user (seen on Windows 11). A plain name resolves to the guest's
+        // local account, and xrdp expects the plain Linux user name.
+        var userName = account.AccountName;
         return new VmConnection(userName, rotated.Password, address, RemoteDesktopPort, rotated.ExpiresAt, account.GuestOs, _performance?.Find(vmId) is not null);
     }
 

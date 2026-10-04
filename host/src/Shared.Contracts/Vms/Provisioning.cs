@@ -25,7 +25,7 @@ public sealed record ProvisionVmRequest(
 public sealed record VmProvisioning(Guid VmId, string AccountName, DateTimeOffset ProvisionedAt);
 
 /// <summary>Remote Desktop credentials. Schema: VmConnection.</summary>
-/// <param name="UserName">For example ".\hh-owner" (Windows) or "hh-owner" (Linux).</param>
+/// <param name="UserName">The plain account name, for example "hh-owner"; it is the guest's local account.</param>
 /// <param name="ExpiresAt">End of the reuse window.</param>
 /// <param name="PerformanceMode">The client tunes the connection for a LAN (connection type LAN, auto-detection off).</param>
 /// <param name="GuestOs">Linux guests use xrdp, which signs in over TLS instead of CredSSP.</param>

@@ -1714,7 +1714,7 @@ components:
       properties:
         userName:
           type: string
-          description: Account to sign in with, for example ".\\hh-owner" (Windows) or "hh-owner" (Linux).
+          description: The plain account name to sign in with, for example "hh-owner"; it is the guest's local account.
         password:
           type: string
           description: |

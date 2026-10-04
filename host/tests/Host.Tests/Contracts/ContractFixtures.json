@@ -320,7 +320,7 @@
     "job": null
   },
   "VmConnection": {
-    "userName": ".\\hh-owner",
+    "userName": "hh-owner",
     "password": "Fixture-Pass1!",
     "address": "192.168.0.50",
     "port": 3389,

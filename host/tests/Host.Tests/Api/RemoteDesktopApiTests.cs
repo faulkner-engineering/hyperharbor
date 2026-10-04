@@ -54,7 +54,7 @@ public sealed class RemoteDesktopApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, connect.StatusCode);
         Assert.True(connect.Headers.CacheControl?.NoStore);
         var body = (await connect.Content.ReadFromJsonAsync<JsonObject>())!;
-        Assert.Equal(@".\hh-owner", (string?)body["userName"]);
+        Assert.Equal("hh-owner", (string?)body["userName"]);
         Assert.Equal("192.168.0.50", (string?)body["address"]);
         Assert.Equal(3389, (int?)body["port"]);
         Assert.Equal(_host.Guest.PasswordsSet.Last().Password, (string?)body["password"]);

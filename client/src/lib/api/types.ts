@@ -942,7 +942,7 @@ export interface components {
             provisionedAt: string;
         };
         VmConnection: {
-            /** @description Account to sign in with, for example ".\\hh-owner" (Windows) or "hh-owner" (Linux). */
+            /** @description The plain account name to sign in with, for example "hh-owner"; it is the guest's local account. */
             userName: string;
             /**
              * @description Current password for the account. Valid until the next rotation; requests within
