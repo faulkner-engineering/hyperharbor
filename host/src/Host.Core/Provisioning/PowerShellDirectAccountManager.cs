@@ -1,15 +1,11 @@
-using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace HyperHarbor.Host.Core.Provisioning;
 
 /// <summary>
-/// Runs PowerShell Direct (New-PSSession -VMId) through Windows PowerShell, which is present on every
-/// Hyper-V host. The script is passed with -EncodedCommand and contains no secrets; credentials and
-/// passwords travel through the child process's standard input as JSON and are converted to
-/// SecureString before use, so they never appear on a command line, on disk, or in logs.
+/// Manages guest accounts with PowerShell Direct (New-PSSession -VMId) through <see cref="PowerShellDirectRunner"/>.
+/// Credentials and passwords travel on standard input as JSON and are converted to SecureString before
+/// use, so they never appear on a command line, on disk, or in logs.
 /// </summary>
 public sealed class PowerShellDirectAccountManager : IGuestAccountManager
 {
@@ -44,84 +40,13 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
         await RunAsync(new { operation = "setPassword", vmId = target.VmId, admin.UserName, admin.Password, accountName, accountPassword = password }, cancellationToken);
     }
 
-    private static async Task<JsonNode?> RunAsync(object payload, CancellationToken cancellationToken)
-    {
-        var start = new ProcessStartInfo("powershell.exe")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-        };
-        foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", EncodedScript })
-        {
-            start.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(start) ?? throw new GuestOperationException("Windows PowerShell could not be started.");
-        await process.StandardInput.WriteAsync(JsonSerializer.Serialize(payload).AsMemory(), cancellationToken);
-        process.StandardInput.Close();
-
-        var output = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var errors = process.StandardError.ReadToEndAsync(cancellationToken);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(Timeout);
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new GuestUnavailableException("PowerShell Direct did not respond in time. The guest may still be starting.");
-        }
-
-        return Interpret(await output, await errors);
-    }
+    private static Task<JsonNode?> RunAsync(object payload, CancellationToken cancellationToken) =>
+        PowerShellDirectRunner.RunAsync(EncodedScript, payload, Timeout, cancellationToken);
 
     /// <summary>Maps the script's JSON result to a value or a typed exception.</summary>
-    internal static JsonNode? Interpret(string output, string errors)
-    {
-        var line = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault();
-        JsonNode? result;
-        try
-        {
-            result = line is null ? null : JsonNode.Parse(line);
-        }
-        catch (JsonException)
-        {
-            result = null;
-        }
+    internal static JsonNode? Interpret(string output, string errors) => PowerShellDirectRunner.Interpret(output, errors);
 
-        if (result is null)
-        {
-            throw new GuestOperationException($"Unexpected output from PowerShell Direct. {errors.Trim()}".Trim());
-        }
-
-        if ((bool?)result["ok"] == true)
-        {
-            return result["result"];
-        }
-
-        var message = (string?)result["error"] ?? "Unknown error.";
-        throw (string?)result["stage"] switch
-        {
-            "connect" when IsCredentialError(message) => new GuestCredentialRejectedException($"The guest rejected the administrator credential. {message}"),
-            "connect" => new GuestUnavailableException($"PowerShell Direct could not connect to the guest. It must be a running Windows guest that has finished starting. {message}"),
-            "notLocal" => new GuestAccountConflictException(message),
-            _ => new GuestOperationException(message),
-        };
-    }
-
-    private static bool IsCredentialError(string message) =>
-        message.Contains("credential", StringComparison.OrdinalIgnoreCase)
-        || message.Contains("password", StringComparison.OrdinalIgnoreCase)
-        || message.Contains("logon failure", StringComparison.OrdinalIgnoreCase)
-        || message.Contains("access is denied", StringComparison.OrdinalIgnoreCase);
-
-    private static readonly string EncodedScript = Convert.ToBase64String(Encoding.Unicode.GetBytes(Script));
+    private static readonly string EncodedScript = PowerShellDirectRunner.Encode(Script);
 
     /// <summary>
     /// Host-side script. Reads one JSON request from stdin and writes one JSON line:
