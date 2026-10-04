@@ -62,14 +62,18 @@ per-device VM accounts and a user management UI.
 - host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/,
   Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile),
   Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService), Lifecycle/ (create, delete,
-  compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers)
+  compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
+  VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants)
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
-  elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/)
+  elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/),
+  ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console)
 - host/src/Host.Tray: WinForms tray. HostForm (double-click the icon) shows service status, the admin passphrase
-  (set or change), paired devices, and opens the logs; PinForm, DevicesForm, AdminPassphraseForm
+  (set or change), paired devices, console access (Set up console access runs the elevated helper), and opens
+  the logs; PinForm, DevicesForm, AdminPassphraseForm
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
-  identity.rs (key in Credential Manager), paired.rs; client/src: SvelteKit SPA. Lifecycle UI:
+  identity.rs (key in Credential Manager), paired.rs, rdp.rs (mstsc launch), console.rs (loopback listener and
+  tunnels for the VM console); client/src: SvelteKit SPA. Lifecycle UI:
   lib/lifecycle.svelte.ts (elevation prompt, job polling) and lib/components/*Dialog.svelte on a shared Dialog
 - docs/pairing.md: the SPAKE2 pairing protocol; both implementations must match it and Spake2Vectors.json
 
@@ -188,6 +192,15 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     gives 2221 (NERR_UserNotFound) for a Microsoft-account caller. Rotating mid-session keeps the session.
   - Logging on creates a host profile (C:\Users\<name>); removing the account does not remove it.
   - mstsc shows an "unknown publisher" prompt for the unsigned .rdp file the first time.
+  - Implementation (9.1): the console account hhc-<user> is created by the elevated helper
+    `HyperHarbor.Host.Service.exe --setup-console [data dir] [result file]` (tray: Set up console access;
+    Start-HyperHarbor.ps1 runs it when console-accounts.json.protected is missing) and removed with
+    --remove-console. It denies interactive, Remote Desktop, batch, and service logon; network logon stays.
+  - TestServer cannot upgrade connections (IsUpgradableRequest is always false), so the API tests stop at 426
+    and ConsoleTunnelTests run the tunnel handler on real Kestrel with an echo server for VMMS.
+  - reqwest's request timeout does not end an upgraded stream (console_tunnel_outlives_the_request_timeout,
+    ignored because it is slow).
+  - Concurrent consoles share the TERMSRV/127.0.0.1 credential until each session opens.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):
