@@ -35,6 +35,9 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    shared parent disks); host resources, ISO library, switches; create Gen 2 VM from ISO (Secure Boot, vTPM)
    as a job; compute settings (vCPU, memory, nested virtualization, MAC spoofing) with shut down and apply;
    client power controls and dialogs for all of it.
+9. Console access and unattended provisioning, added at the user's request (in progress): VM console through a
+   tunnel to the host's port 2179 with a per-User standard host account (hhc-<username>); autounattend and
+   cloud-init seed ISOs on create; KVP readiness watcher that provisions automatically once RDP answers.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -170,6 +173,21 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     a changed key is a 409 unless the request sets trustNewHostKey (the dialog offers it for set-up VMs).
   - xrdp has no NLA, so Linux .rdp files set enablecredsspsupport:i:0 and mstsc sends the stored
     credential in the TLS logon packet. Remote Desktop needs a desktop session; setup can install Xfce.
+- VM console (Phase 9; verified on this host 2026-10-04 with mstsc against TestWindows):
+  - VMMS on TCP 2179 reads an RDP_PRECONNECTION_PDU_V2 whose blob is the VM GUID, then starts TLS directly
+    (no X.224 negotiation). A bare GUID or "<GUID>;EnhancedMode=0" gives a basic session; ";EnhancedMode=1"
+    takes a different handshake; an unknown GUID or a malformed blob gets a reset.
+  - The .rdp file needs pcb:s:<VM GUID> and negotiate security layer:i:0. Without the latter mstsc hangs at
+    "Configuring remote session". The certificate is VMMS's self-signed CN=<host name>.
+  - A standard local user (no Hyper-V Administrators membership) can open the console after
+    Msvm_TerminalService.GrantInteractiveSessionAccess (Trustees "<HOST>\name"); the grant works unelevated
+    from a Hyper-V Administrators member and returns 0 synchronously. RevokeInteractiveSessionAccess undoes it.
+  - mstsc works through a loopback relay (127.0.0.1:<random> to 2179) with a Generic TERMSRV/127.0.0.1
+    credential "<HOST>\name", so the client tunnel needs nothing else.
+  - NetUserChangePassword(old, new) works unelevated, but only with the computer name as the domain; null
+    gives 2221 (NERR_UserNotFound) for a Microsoft-account caller. Rotating mid-session keeps the session.
+  - Logging on creates a host profile (C:\Users\<name>); removing the account does not remove it.
+  - mstsc shows an "unknown publisher" prompt for the unsigned .rdp file the first time.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):
