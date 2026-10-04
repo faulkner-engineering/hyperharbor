@@ -25,6 +25,7 @@ public class OpenApiEnumTests
     [InlineData("ComputeSetting", typeof(ComputeSetting))]
     [InlineData("InstallOs", typeof(Shared.Contracts.Unattend.InstallOs))]
     [InlineData("UnattendedInstallState", typeof(Shared.Contracts.Unattend.UnattendedInstallState))]
+    [InlineData("GpuVendor", typeof(GpuVendor))]
     public void EnumWireValues_MatchOpenApiSchema(string schemaName, Type enumType)
     {
         var schema = (YamlMappingNode)Schemas[schemaName];

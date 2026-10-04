@@ -15,6 +15,7 @@ function vm(state: VmState, overrides: Partial<Vm> = {}): Vm {
     provisioned: false,
     remoteDesktop: { address: null, reachableFromHost: false },
     guestOs: { family: "unknown", name: null },
+    performanceMode: false,
     ...overrides,
   };
 }

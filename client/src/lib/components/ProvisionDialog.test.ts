@@ -33,6 +33,7 @@ function vm(family: "windows" | "linux", provisioned: boolean): Vm {
     provisioned,
     remoteDesktop: { address: "192.168.0.50", reachableFromHost: true },
     guestOs: { family, name: family === "linux" ? "Ubuntu" : "Windows 11" },
+    performanceMode: false,
   };
 }
 

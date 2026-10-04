@@ -27,8 +27,9 @@ public sealed record VmProvisioning(Guid VmId, string AccountName, DateTimeOffse
 /// <summary>Remote Desktop credentials. Schema: VmConnection.</summary>
 /// <param name="UserName">For example ".\hh-owner" (Windows) or "hh-owner" (Linux).</param>
 /// <param name="ExpiresAt">End of the reuse window.</param>
+/// <param name="PerformanceMode">The client tunes the connection for a LAN (connection type LAN, auto-detection off).</param>
 /// <param name="GuestOs">Linux guests use xrdp, which signs in over TLS instead of CredSSP.</param>
-public sealed record VmConnection(string UserName, string Password, string Address, int Port, DateTimeOffset ExpiresAt, GuestOsFamily GuestOs)
+public sealed record VmConnection(string UserName, string Password, string Address, int Port, DateTimeOffset ExpiresAt, GuestOsFamily GuestOs, bool PerformanceMode = false)
 {
     /// <summary>Keeps the password out of logs and exception messages.</summary>
     public override string ToString() => $"VmConnection {{ UserName = {UserName}, Address = {Address}, Port = {Port}, ExpiresAt = {ExpiresAt:u}, GuestOs = {GuestOs} }}";

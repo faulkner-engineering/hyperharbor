@@ -17,9 +17,11 @@ public sealed class ConnectService
     private readonly ProvisioningStore _provisioning;
     private readonly PasswordRotator _rotator;
     private readonly ILogger<ConnectService> _logger;
+    private readonly Performance.PerformanceStore? _performance;
 
-    public ConnectService(IVmInventory inventory, ProvisioningStore provisioning, PasswordRotator rotator, ILogger<ConnectService> logger)
+    public ConnectService(IVmInventory inventory, ProvisioningStore provisioning, PasswordRotator rotator, ILogger<ConnectService> logger, Performance.PerformanceStore? performance = null)
     {
+        _performance = performance;
         _inventory = inventory;
         _provisioning = provisioning;
         _rotator = rotator;
@@ -52,7 +54,7 @@ public sealed class ConnectService
 
         // Windows needs ".\" to select the local account; xrdp expects the plain Linux user name.
         var userName = account.GuestOs == GuestOsFamily.Linux ? account.AccountName : $@".\{account.AccountName}";
-        return new VmConnection(userName, rotated.Password, address, RemoteDesktopPort, rotated.ExpiresAt, account.GuestOs);
+        return new VmConnection(userName, rotated.Password, address, RemoteDesktopPort, rotated.ExpiresAt, account.GuestOs, _performance?.Find(vmId) is not null);
     }
 
     /// <summary>The Remote Desktop address reported for the VM, else its first IPv4 address.</summary>

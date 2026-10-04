@@ -42,6 +42,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/gpu": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the host's GPUs and recent GPU driver errors. */
+        get: operations["getHostGpu"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/isos": {
         parameters: {
             query?: never;
@@ -438,6 +455,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a VM's Performance mode and its guest GPU driver.
+         * @description `driver.drift` is true when the host's GPU driver changed since it was copied into the
+         *     guest; run guest setup with `driversOnly` to copy it again.
+         */
+        get: operations["getVmPerformance"];
+        /**
+         * Turn Performance mode on, or change it, for an off VM.
+         * @description Starts an `applyPerformance` job. It sets fixed memory (dynamic memory off) and the processor
+         *     count, adds a GPU partition adapter with the chosen shares (or updates the existing one),
+         *     turns checkpoints off, sets the automatic stop action to Turn Off, lets the guest control
+         *     cache types, sets the MMIO gaps, and optionally moves the VM's storage. The VM must be off;
+         *     there is no shut-down-and-apply.
+         */
+        put: operations["applyVmPerformance"];
+        post?: never;
+        /**
+         * Turn Performance mode off for an off VM.
+         * @description Removes the GPU partition adapter and restores the default MMIO gaps, cache types, and the Save
+         *     stop action. Memory stays fixed and checkpoints stay off; change those in the compute settings.
+         */
+        delete: operations["removeVmPerformance"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/compute": {
         parameters: {
             query?: never;
@@ -718,7 +772,7 @@ export interface components {
              * @description Set for errors a client handles differently from others with the same status:
              *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
              *     `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
-             *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`.
+             *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`.
              */
             code?: string;
             /** @description Field-level validation problems (400). */
@@ -838,6 +892,11 @@ export interface components {
              *     from the console and once the install is ready.
              */
             installState?: components["schemas"]["UnattendedInstallState"] | null;
+            /**
+             * @description True when Performance mode (GPU partition and Remote Desktop tuning) is on.
+             * @default false
+             */
+            performanceMode: boolean;
         };
         VmRemoteDesktop: {
             /** @description The guest address clients connect to, or null when the guest reports none. */
@@ -900,6 +959,11 @@ export interface components {
             expiresAt: string;
             /** @description Linux guests use xrdp, which signs in over TLS instead of CredSSP (NLA). */
             guestOs: components["schemas"]["GuestOsFamily"];
+            /**
+             * @description The client tunes the connection for a LAN (connection type LAN, auto-detection off).
+             * @default false
+             */
+            performanceMode: boolean;
         };
         ConsoleSession: {
             /** @description Opens tunnels with `POST /vms/{vmId}/console/tunnel`. Clients must not persist it. */
@@ -1106,7 +1170,7 @@ export interface components {
             blockers: components["schemas"]["DeleteBlocker"][];
         };
         /** @enum {string} */
-        VmJobKind: "createVm" | "deleteVm" | "applyCompute";
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks";
         /** @enum {string} */
         VmJobState: "running" | "succeeded" | "failed";
         JobError: {
@@ -1308,6 +1372,95 @@ export interface components {
          * @enum {string}
          */
         UnattendedInstallState: "installing" | "awaitingConfirmation" | "waitingForGuest" | "waitingForRemoteAccess" | "configuring" | "ready" | "failed" | "canceled";
+        /** @enum {string} */
+        GpuVendor: "nvidia" | "amd" | "intel" | "other";
+        /** @description Each percent sets the partition's minimum, maximum, and optimal values to that share of what the GPU offers. */
+        GpuPartitionShare: {
+            /** @description A partitionable GPU's `instancePath` from `GET /host/gpu`. Null means the host's first partitionable GPU. */
+            instancePath?: string | null;
+            /** @default 50 */
+            vramPercent: number;
+            /** @default 50 */
+            encodePercent: number;
+            /** @default 50 */
+            decodePercent: number;
+            /** @default 50 */
+            computePercent: number;
+        };
+        MmioSettings: {
+            /** @default 1024 */
+            lowGapMb: number;
+            /** @default 32768 */
+            highGapMb: number;
+        };
+        PerformanceRdpSettings: {
+            /**
+             * @description Experimental. Prefer the GPU for H.264/AVC encoding in the guest's Remote Desktop.
+             * @default false
+             */
+            hardwareEncoding: boolean;
+        };
+        PerformanceSettings: {
+            processorCount: number;
+            /**
+             * Format: int64
+             * @description Fixed memory; dynamic memory is turned off.
+             */
+            memoryMb: number;
+            gpu?: components["schemas"]["GpuPartitionShare"] | null;
+            mmio?: components["schemas"]["MmioSettings"] | null;
+            /** @description Moves the VM's configuration and disks to this folder on the host. Null keeps them where they are. */
+            moveStorageTo?: string | null;
+            rdp?: components["schemas"]["PerformanceRdpSettings"] | null;
+            /** @default false */
+            acknowledgeWarnings: boolean;
+        };
+        GuestDriverStatus: {
+            vendor: components["schemas"]["GpuVendor"];
+            hostVersion: string | null;
+            guestVersion: string | null;
+            /** Format: date-time */
+            copiedAt: string | null;
+            /** @description True when the host's driver changed since it was copied into the guest. */
+            drift: boolean;
+            /** @description Some guest files were in use; they are replaced when the guest restarts. */
+            rebootRequired: boolean;
+        };
+        VmPerformance: {
+            /** Format: uuid */
+            vmId: string;
+            enabled: boolean;
+            /** @description As applied; null when Performance mode is off. */
+            settings: components["schemas"]["PerformanceSettings"] | null;
+            /** @description True when the VM has a GPU partition adapter. */
+            gpuAttached: boolean;
+            /** @description Null until the guest has been set up. */
+            driver: components["schemas"]["GuestDriverStatus"] | null;
+            warnings: components["schemas"]["ValidationIssue"][];
+        };
+        HostGpuDevice: {
+            name: string;
+            vendor: components["schemas"]["GpuVendor"];
+            driverVersion: string | null;
+            partitionable: boolean;
+            partitionCount: number;
+            /** @description The value for `GpuPartitionShare.instancePath`; null when the GPU cannot be partitioned. */
+            instancePath: string | null;
+        };
+        GpuDriverWarning: {
+            /** @description The event provider, for example nvlddmkm. */
+            provider: string;
+            eventId: number;
+            count: number;
+            /** Format: date-time */
+            lastSeen: string;
+            message: string;
+        };
+        HostGpu: {
+            gpus: components["schemas"]["HostGpuDevice"][];
+            /** @description GPU driver errors in the host's System log in the last seven days. */
+            warnings: components["schemas"]["GpuDriverWarning"][];
+        };
         /** @enum {string} */
         ComputeSetting: "processorCount" | "startupMemoryMb" | "maximumMemoryMb" | "dynamicMemory" | "nestedVirtualization" | "macAddressSpoofing";
         VmComputeSettings: {
@@ -1516,6 +1669,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HostResources"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    getHostGpu: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The GPUs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostGpu"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -2278,6 +2453,109 @@ export interface operations {
             };
             /** @description The host's Virtual Machine Connection service did not answer. */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    getVmPerformance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Performance mode. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmPerformance"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    applyVmPerformance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PerformanceSettings"];
+            };
+        };
+        responses: {
+            /** @description The job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not off (`code` is `vmMustBeOff`), the host has no partitionable GPU (`gpuUnavailable`),
+             *     host resource warnings need acknowledging (`resourceWarnings`), or another operation holds the VM.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    removeVmPerformance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Performance mode is off. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description The VM is not off (`code` is `vmMustBeOff`), or another operation holds it. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

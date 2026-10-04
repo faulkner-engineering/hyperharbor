@@ -73,6 +73,17 @@ internal static class CimVmSettings
         return ObjectPath(added.CimSystemProperties.ClassName, (string)added.CimInstanceProperties["InstanceID"].Value);
     }
 
+    /// <summary>Removes devices from the VM (RemoveResourceSettings).</summary>
+    public static async Task RemoveResourcesAsync(CimSession session, IReadOnlyList<CimInstance> resources, CancellationToken cancellationToken)
+    {
+        using var service = HyperVCim.ManagementService(session);
+        var parameters = new CimMethodParametersCollection
+        {
+            CimMethodParameter.Create("ResourceSettings", resources.ToArray(), CimType.ReferenceArray, CimFlags.In),
+        };
+        using var result = await HyperVCim.InvokeAsync(session, service, "RemoveResourceSettings", parameters, "RemoveResourceSettings", cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>A WMI object path of the form Hyper-V stores in Parent and HostResource.</summary>
     public static string ObjectPath(string className, string instanceId) =>
         $@"\\{Environment.MachineName}\root\virtualization\v2:{className}.InstanceID=""{instanceId.Replace(@"\", @"\\", StringComparison.Ordinal)}""";

@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.6.0";
+    public const string ApiVersion = "1.7.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -32,5 +32,8 @@ public static class ContractInfo
         public const string ConsoleSetupRequired = "consoleSetupRequired";
         public const string VmNotRunning = "vmNotRunning";
         public const string ConsolePasswordPolicy = "consolePasswordPolicy";
+        public const string VmMustBeOff = "vmMustBeOff";
+        public const string GpuUnavailable = "gpuUnavailable";
+        public const string CredentialRequired = "credentialRequired";
     }
 }

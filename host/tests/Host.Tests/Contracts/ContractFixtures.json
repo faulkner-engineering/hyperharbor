@@ -41,11 +41,54 @@
     "active": false,
     "expiresAt": null
   },
+  "GpuDriverWarning": {
+    "provider": "nvlddmkm",
+    "eventId": 153,
+    "count": 2,
+    "lastSeen": "2026-10-03T12:00:00\u002B00:00",
+    "message": "Display driver nvlddmkm stopped responding and has successfully recovered."
+  },
+  "GpuPartitionShare": {
+    "instancePath": "\\\\?\\PCI#VEN_8086\u0026DEV_9B41#3\u00261#{064092b3-625e-43bf-9eb5-dc845897dd59}\\GPUPARAV",
+    "vramPercent": 60,
+    "encodePercent": 50,
+    "decodePercent": 50,
+    "computePercent": 40
+  },
+  "GuestDriverStatus": {
+    "vendor": "nvidia",
+    "hostVersion": "32.0.15.6094",
+    "guestVersion": "31.0.15.5222",
+    "copiedAt": "2026-10-03T12:00:00\u002B00:00",
+    "drift": true,
+    "rebootRequired": false
+  },
+  "HostGpu": {
+    "gpus": [
+      {
+        "name": "Intel(R) UHD Graphics",
+        "vendor": "intel",
+        "driverVersion": "30.0.101.1122",
+        "partitionable": true,
+        "partitionCount": 32,
+        "instancePath": null
+      }
+    ],
+    "warnings": []
+  },
+  "HostGpuDevice": {
+    "name": "NVIDIA GeForce RTX 4080",
+    "vendor": "nvidia",
+    "driverVersion": "32.0.15.6094",
+    "partitionable": true,
+    "partitionCount": 32,
+    "instancePath": "\\\\?\\PCI#VEN_10DE\u0026DEV_2704#4\u00262#{064092b3-625e-43bf-9eb5-dc845897dd59}\\GPUPARAV"
+  },
   "HostInfo": {
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.6.0",
+    "apiVersion": "1.7.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostResources": {
@@ -84,6 +127,10 @@
     ],
     "installDesktop": true
   },
+  "MmioSettings": {
+    "lowGapMb": 1024,
+    "highGapMb": 32768
+  },
   "PairingConfirmation": {
     "clientShare": "BAUG",
     "clientConfirmation": "BwgJ"
@@ -103,6 +150,28 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostCertificatePem": "-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n",
     "hostConfirmation": "CgsM"
+  },
+  "PerformanceRdpSettings": {
+    "hardwareEncoding": false
+  },
+  "PerformanceSettings": {
+    "processorCount": 8,
+    "memoryMb": 16384,
+    "gpu": {
+      "vramPercent": 60,
+      "encodePercent": 50,
+      "decodePercent": 50,
+      "computePercent": 40
+    },
+    "mmio": {
+      "lowGapMb": 1024,
+      "highGapMb": 32768
+    },
+    "moveStorageTo": "E:\\Fast VMs\\Dev Box",
+    "rdp": {
+      "hardwareEncoding": true
+    },
+    "acknowledgeWarnings": false
   },
   "ProvisionVmRequest": {
     "adminUserName": "hhadmin",
@@ -199,7 +268,8 @@
     "guestOs": {
       "family": "linux",
       "name": "Ubuntu"
-    }
+    },
+    "performanceMode": false
   },
   "VmActionRequest": {
     "action": "turnOff"
@@ -255,7 +325,8 @@
     "address": "192.168.0.50",
     "port": 3389,
     "expiresAt": "2026-10-03T12:00:00\u002B00:00",
-    "guestOs": "windows"
+    "guestOs": "windows",
+    "performanceMode": false
   },
   "VmDeletePreview": {
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
@@ -292,6 +363,18 @@
     "createdAt": "2026-10-03T12:00:00\u002B00:00",
     "updatedAt": "2026-10-03T12:00:00\u002B00:00",
     "error": null
+  },
+  "VmPerformance": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "enabled": true,
+    "settings": {
+      "processorCount": 8,
+      "memoryMb": 16384,
+      "acknowledgeWarnings": false
+    },
+    "gpuAttached": true,
+    "driver": null,
+    "warnings": []
   },
   "VmProvisioning": {
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",

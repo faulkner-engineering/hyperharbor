@@ -32,6 +32,7 @@ const vm: Vm = {
   provisioned: false,
   remoteDesktop: { address: null, reachableFromHost: false },
   guestOs: { family: "linux", name: "Ubuntu" },
+  performanceMode: false,
 };
 
 function settings(state: VmComputeSettings["state"]): VmComputeSettings {

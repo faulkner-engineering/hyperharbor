@@ -68,6 +68,8 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IConsoleAccessGranter>(ConsoleAccess);
                 services.AddSingleton<Core.Unattend.IVmKeyboard>(Keyboard);
                 services.AddSingleton<Core.Unattend.IVmMedia>(Media);
+                services.AddSingleton<Core.Performance.IHyperVPerformance>(Performance);
+                services.AddSingleton<Core.Performance.IHostGpuReader>(HostGpus);
                 services.AddSingleton<Core.Unattend.IRemoteAccessProbe>(RemoteAccess);
                 services.AddSingleton(provider => new Core.Unattend.UnattendedSetup(
                     provider.GetRequiredService<Core.Unattend.UnattendProfileStore>(),
@@ -118,6 +120,10 @@ internal sealed class TestHost : IDisposable
     public Unattend.FakeVmKeyboard Keyboard { get; } = new();
 
     public Unattend.FakeVmMedia Media { get; } = new();
+
+    public Performance.FakeHyperVPerformance Performance { get; } = new();
+
+    public Performance.FakeHostGpuReader HostGpus { get; } = new();
 
     public Unattend.FakeRemoteAccessProbe RemoteAccess { get; } = new();
 

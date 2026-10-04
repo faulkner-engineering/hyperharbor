@@ -3,6 +3,7 @@ using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Power;
+using HyperHarbor.Host.Core.Performance;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Service.Security;
@@ -65,12 +66,13 @@ public static class VmEndpoints
         IVmInventory inventory,
         ProvisioningStore provisioning,
         UnattendedInstallStore installs,
+        PerformanceStore performance,
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var userId = user.UserId();
         var vms = await inventory.ListAsync(cancellationToken);
-        return TypedResults.Ok<IReadOnlyList<Vm>>(vms.Select(vm => ForUser(vm, userId, provisioning, installs)).ToList());
+        return TypedResults.Ok<IReadOnlyList<Vm>>(vms.Select(vm => ForUser(vm, userId, provisioning, installs, performance)).ToList());
     }
 
     private static async Task<Results<Ok<Vm>, ProblemHttpResult>> GetVmAsync(
@@ -78,13 +80,14 @@ public static class VmEndpoints
         IVmInventory inventory,
         ProvisioningStore provisioning,
         UnattendedInstallStore installs,
+        PerformanceStore performance,
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var vm = await inventory.GetAsync(vmId, cancellationToken);
         return vm is null
             ? TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: "Virtual machine not found", detail: $"Virtual machine {vmId} was not found.")
-            : TypedResults.Ok(ForUser(vm, user.UserId(), provisioning, installs));
+            : TypedResults.Ok(ForUser(vm, user.UserId(), provisioning, installs, performance));
     }
 
     private static async Task<Accepted<VmActionResult>> PerformVmActionAsync(
@@ -171,8 +174,9 @@ public static class VmEndpoints
     }
 
     /// <summary>Adds the per-User fields; the inventory itself is shared by all Users.</summary>
-    private static Vm ForUser(Vm vm, Guid userId, ProvisioningStore provisioning, UnattendedInstallStore installs) => vm with
+    private static Vm ForUser(Vm vm, Guid userId, ProvisioningStore provisioning, UnattendedInstallStore installs, PerformanceStore performance) => vm with
     {
+        PerformanceMode = performance.Find(vm.Id) is not null,
         Provisioned = provisioning.Find(vm.Id, userId) is not null,
         InstallState = installs.Find(vm.Id) is { } install && (install.IsActive || install.State == UnattendedInstallState.Failed) ? install.State : null,
         RemoteDesktop = vm.RemoteDesktop ?? new VmRemoteDesktop(vm.IpAddresses.FirstOrDefault(), vm.RdpAvailable),

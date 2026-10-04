@@ -27,10 +27,12 @@ public sealed class VmDeletionService
 
     /// <summary>Forgets an unattended install, its answer file, and the stored administrator credential of a deleted VM.</summary>
     private readonly Unattend.UnattendedSetup? _unattended;
+    private readonly Performance.PerformanceStore? _performance;
 
-    public VmDeletionService(IVmInventory inventory, IHyperVStorage storage, IDiskFiles files, VmJobStore jobs, ILogger<VmDeletionService> logger, Unattend.UnattendedSetup? unattended = null)
+    public VmDeletionService(IVmInventory inventory, IHyperVStorage storage, IDiskFiles files, VmJobStore jobs, ILogger<VmDeletionService> logger, Unattend.UnattendedSetup? unattended = null, Performance.PerformanceStore? performance = null)
     {
         _unattended = unattended;
+        _performance = performance;
         _inventory = inventory;
         _storage = storage;
         _files = files;
@@ -129,6 +131,7 @@ public sealed class VmDeletionService
         await _storage.DeleteVmAsync(vmId, context.Stopping).ConfigureAwait(false);
         _logger.LogInformation("Deleted virtual machine {Name} ({VmId}).", preview.VmName, vmId);
         _unattended?.Forget(vmId);
+        _performance?.Remove(vmId);
 
         if (!request.DeleteDisks)
         {

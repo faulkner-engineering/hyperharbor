@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.6.0
+  version: 1.7.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -34,6 +34,8 @@ security:
 tags:
   - name: Host
     description: Host identity and version.
+  - name: Performance
+    description: GPU partitioning, fixed resources, and Remote Desktop tuning for Windows VMs.
   - name: Unattended
     description: Profiles and image inspection for installing an OS without anyone at the console.
   - name: VMs
@@ -105,6 +107,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HostResources"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
+  /host/gpu:
+    get:
+      tags: [Performance]
+      operationId: getHostGpu
+      summary: List the host's GPUs and recent GPU driver errors.
+      responses:
+        "200":
+          description: The GPUs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostGpu"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -845,6 +864,100 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
 
+  /vms/{vmId}/performance:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [Performance]
+      operationId: getVmPerformance
+      summary: Get a VM's Performance mode and its guest GPU driver.
+      description: |
+        `driver.drift` is true when the host's GPU driver changed since it was copied into the
+        guest; run guest setup with `driversOnly` to copy it again.
+      responses:
+        "200":
+          description: Performance mode.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmPerformance"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Performance]
+      operationId: applyVmPerformance
+      summary: Turn Performance mode on, or change it, for an off VM.
+      description: |
+        Starts an `applyPerformance` job. It sets fixed memory (dynamic memory off) and the processor
+        count, adds a GPU partition adapter with the chosen shares (or updates the existing one),
+        turns checkpoints off, sets the automatic stop action to Turn Off, lets the guest control
+        cache types, sets the MMIO gaps, and optionally moves the VM's storage. The VM must be off;
+        there is no shut-down-and-apply.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PerformanceSettings"
+      responses:
+        "202":
+          description: The job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            The VM is not off (`code` is `vmMustBeOff`), the host has no partitionable GPU (`gpuUnavailable`),
+            host resource warnings need acknowledging (`resourceWarnings`), or another operation holds the VM.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags: [Performance]
+      operationId: removeVmPerformance
+      summary: Turn Performance mode off for an off VM.
+      description: |
+        Removes the GPU partition adapter and restores the default MMIO gaps, cache types, and the Save
+        stop action. Memory stays fixed and checkpoints stay off; change those in the compute settings.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "204":
+          description: Performance mode is off.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The VM is not off (`code` is `vmMustBeOff`), or another operation holds it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
   /vms/{vmId}/compute:
     parameters:
       - $ref: "#/components/parameters/VmId"
@@ -1377,7 +1490,7 @@ components:
             Set for errors a client handles differently from others with the same status:
             `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
             `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
-            `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`.
+            `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`.
         errors:
           type: array
           description: Field-level validation problems (400).
@@ -1513,6 +1626,10 @@ components:
           oneOf:
             - $ref: "#/components/schemas/UnattendedInstallState"
             - type: "null"
+        performanceMode:
+          type: boolean
+          default: false
+          description: True when Performance mode (GPU partition and Remote Desktop tuning) is on.
       example:
         id: 0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b
         name: Dev Workstation
@@ -1615,6 +1732,10 @@ components:
         guestOs:
           $ref: "#/components/schemas/GuestOsFamily"
           description: Linux guests use xrdp, which signs in over TLS instead of CredSSP (NLA).
+        performanceMode:
+          type: boolean
+          default: false
+          description: The client tunes the connection for a LAN (connection type LAN, auto-detection off).
 
     ConsoleSession:
       type: object
@@ -1933,7 +2054,7 @@ components:
 
     VmJobKind:
       type: string
-      enum: [createVm, deleteVm, applyCompute]
+      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks]
 
     VmJobState:
       type: string
@@ -2273,6 +2394,186 @@ components:
         `waitingForGuest` (no address yet), `waitingForRemoteAccess` (Remote Desktop or SSH not answering
         yet), `configuring` (the host sets up the User account), then `ready`, `failed`, or `canceled`.
       enum: [installing, awaitingConfirmation, waitingForGuest, waitingForRemoteAccess, configuring, ready, failed, canceled]
+
+    GpuVendor:
+      type: string
+      enum: [nvidia, amd, intel, other]
+
+    GpuPartitionShare:
+      type: object
+      description: Each percent sets the partition's minimum, maximum, and optimal values to that share of what the GPU offers.
+      properties:
+        instancePath:
+          type: [string, "null"]
+          description: A partitionable GPU's `instancePath` from `GET /host/gpu`. Null means the host's first partitionable GPU.
+        vramPercent:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        encodePercent:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        decodePercent:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        computePercent:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+
+    MmioSettings:
+      type: object
+      properties:
+        lowGapMb:
+          type: integer
+          minimum: 128
+          maximum: 3584
+          default: 1024
+        highGapMb:
+          type: integer
+          minimum: 1024
+          maximum: 524288
+          default: 32768
+
+    PerformanceRdpSettings:
+      type: object
+      properties:
+        hardwareEncoding:
+          type: boolean
+          default: false
+          description: Experimental. Prefer the GPU for H.264/AVC encoding in the guest's Remote Desktop.
+
+    PerformanceSettings:
+      type: object
+      required: [processorCount, memoryMb]
+      properties:
+        processorCount:
+          type: integer
+          minimum: 1
+        memoryMb:
+          type: integer
+          format: int64
+          description: Fixed memory; dynamic memory is turned off.
+        gpu:
+          oneOf:
+            - $ref: "#/components/schemas/GpuPartitionShare"
+            - type: "null"
+        mmio:
+          oneOf:
+            - $ref: "#/components/schemas/MmioSettings"
+            - type: "null"
+        moveStorageTo:
+          type: [string, "null"]
+          description: Moves the VM's configuration and disks to this folder on the host. Null keeps them where they are.
+        rdp:
+          oneOf:
+            - $ref: "#/components/schemas/PerformanceRdpSettings"
+            - type: "null"
+        acknowledgeWarnings:
+          type: boolean
+          default: false
+
+    GuestDriverStatus:
+      type: object
+      required: [vendor, hostVersion, guestVersion, copiedAt, drift, rebootRequired]
+      properties:
+        vendor:
+          $ref: "#/components/schemas/GpuVendor"
+        hostVersion:
+          type: [string, "null"]
+        guestVersion:
+          type: [string, "null"]
+        copiedAt:
+          type: [string, "null"]
+          format: date-time
+        drift:
+          type: boolean
+          description: True when the host's driver changed since it was copied into the guest.
+        rebootRequired:
+          type: boolean
+          description: Some guest files were in use; they are replaced when the guest restarts.
+
+    VmPerformance:
+      type: object
+      required: [vmId, enabled, settings, gpuAttached, driver, warnings]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        settings:
+          description: As applied; null when Performance mode is off.
+          oneOf:
+            - $ref: "#/components/schemas/PerformanceSettings"
+            - type: "null"
+        gpuAttached:
+          type: boolean
+          description: True when the VM has a GPU partition adapter.
+        driver:
+          description: Null until the guest has been set up.
+          oneOf:
+            - $ref: "#/components/schemas/GuestDriverStatus"
+            - type: "null"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+
+    HostGpuDevice:
+      type: object
+      required: [name, vendor, driverVersion, partitionable, partitionCount, instancePath]
+      properties:
+        name:
+          type: string
+        vendor:
+          $ref: "#/components/schemas/GpuVendor"
+        driverVersion:
+          type: [string, "null"]
+        partitionable:
+          type: boolean
+        partitionCount:
+          type: integer
+        instancePath:
+          type: [string, "null"]
+          description: The value for `GpuPartitionShare.instancePath`; null when the GPU cannot be partitioned.
+
+    GpuDriverWarning:
+      type: object
+      required: [provider, eventId, count, lastSeen, message]
+      properties:
+        provider:
+          type: string
+          description: The event provider, for example nvlddmkm.
+        eventId:
+          type: integer
+        count:
+          type: integer
+        lastSeen:
+          type: string
+          format: date-time
+        message:
+          type: string
+
+    HostGpu:
+      type: object
+      required: [gpus, warnings]
+      properties:
+        gpus:
+          type: array
+          items:
+            $ref: "#/components/schemas/HostGpuDevice"
+        warnings:
+          type: array
+          description: GPU driver errors in the host's System log in the last seven days.
+          items:
+            $ref: "#/components/schemas/GpuDriverWarning"
 
     ComputeSetting:
       type: string

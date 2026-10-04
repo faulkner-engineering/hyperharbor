@@ -63,7 +63,8 @@ public class ContractJsonTests
               "rdpAvailable": true,
               "ipAddresses": ["192.168.1.50"],
               "provisioned": true,
-              "remoteDesktop": { "address": "192.168.1.50", "reachableFromHost": true }
+              "remoteDesktop": { "address": "192.168.1.50", "reachableFromHost": true },
+              "performanceMode": false
             }
             """;
 

@@ -8,6 +8,9 @@ public enum VmJobKind
     CreateVm,
     DeleteVm,
     ApplyCompute,
+    ApplyPerformance,
+    PerformanceGuestSetup,
+    ExportDisks,
 }
 
 /// <summary>Schema: VmJobState.</summary>

@@ -7,6 +7,7 @@ using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
+using HyperHarbor.Host.Core.Performance;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Unattend;
@@ -177,6 +178,12 @@ builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<VmCr
 builder.Services.AddSingleton<IHyperVCompute, CimHyperVCompute>();
 builder.Services.AddSingleton<VmComputeService>();
 
+// Performance mode: GPU partitioning and fixed resources for Windows VMs.
+builder.Services.AddSingleton(new PerformanceStore(dataDirectory));
+builder.Services.AddSingleton<IHyperVPerformance, CimHyperVPerformance>();
+builder.Services.AddSingleton<IHostGpuReader, CimHostGpuReader>();
+builder.Services.AddSingleton<VmPerformanceService>();
+
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))
     .ValidateDataAnnotations()
@@ -236,6 +243,7 @@ app.MapAuthEndpoints();
 app.MapVmEndpoints();
 app.MapConsoleEndpoints();
 app.MapUnattendEndpoints();
+app.MapPerformanceEndpoints();
 app.MapJobEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();

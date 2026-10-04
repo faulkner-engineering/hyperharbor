@@ -32,6 +32,7 @@ const vm: Vm = {
   provisioned: false,
   remoteDesktop: { address: null, reachableFromHost: false },
   guestOs: { family: "windows", name: null },
+  performanceMode: false,
 };
 
 function preview(overrides: Partial<VmDeletePreview> = {}): VmDeletePreview {

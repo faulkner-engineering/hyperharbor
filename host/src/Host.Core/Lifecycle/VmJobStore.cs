@@ -152,6 +152,9 @@ public sealed class VmJobStore : IDisposable
         VmJobKind.CreateVm => "creating the virtual machine",
         VmJobKind.DeleteVm => "deleting the virtual machine",
         VmJobKind.ApplyCompute => "applying settings",
+        VmJobKind.ApplyPerformance => "applying Performance mode",
+        VmJobKind.PerformanceGuestSetup => "setting up the guest for Performance mode",
+        VmJobKind.ExportDisks => "exporting the disks",
         _ => kind.ToString(),
     };
 
