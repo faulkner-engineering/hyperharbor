@@ -31,6 +31,7 @@ public sealed class VmCreationService
     private readonly IsoLibrary _isos;
     private readonly VmJobStore _jobs;
     private readonly LifecycleOptions _options;
+    private readonly VmStorageLocation _location;
     private readonly ILogger<VmCreationService> _logger;
     private readonly HashSet<string> _namesInProgress = new(StringComparer.OrdinalIgnoreCase);
 
@@ -44,8 +45,10 @@ public sealed class VmCreationService
         IsoLibrary isos,
         VmJobStore jobs,
         LifecycleOptions options,
-        ILogger<VmCreationService> logger)
+        ILogger<VmCreationService> logger,
+        VmStorageLocation? location = null)
     {
+        _location = location ?? new VmStorageLocation(null, options, hyperV);
         _inventory = inventory;
         _builder = builder;
         _storage = storage;
@@ -260,14 +263,8 @@ public sealed class VmCreationService
 
     private async Task<(string? ConfigurationFolder, string DiskPath)> FoldersAsync(string name, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(_options.VmRootFolder))
-        {
-            var folder = Path.Combine(Path.GetFullPath(_options.VmRootFolder), name);
-            return (folder, Path.Combine(folder, "Virtual Hard Disks", name + ".vhdx"));
-        }
-
-        var defaults = await _hyperV.GetDefaultsAsync(cancellationToken).ConfigureAwait(false);
-        return (null, Path.Combine(defaults.VirtualHardDiskFolder, name + ".vhdx"));
+        var folders = await _location.ForAsync(name, cancellationToken).ConfigureAwait(false);
+        return (folders.ConfigurationFolder, folders.DiskPath);
     }
 
     private static void CheckName(string name, List<ValidationIssue> errors)

@@ -69,7 +69,7 @@ describe("IsoLibrary", () => {
     render(IsoLibrary, { host });
 
     await screen.findByText("ubuntu.iso");
-    expect(screen.getByText(/stored on TC-PC in D:\\ISOs/)).not.toBeNull();
+    expect(screen.getByText(/Stored in D:\\ISOs\./)).not.toBeNull();
     expect(row("ubuntu.iso").getByText("Not in use")).not.toBeNull();
     expect(row("Win11.iso").getByText("Dev Box")).not.toBeNull();
     expect((row("Win11.iso").getByRole("button", { name: "Delete" }) as HTMLButtonElement).disabled).toBe(true);

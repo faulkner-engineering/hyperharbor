@@ -1675,7 +1675,7 @@ components:
           description: The host warns when a VM would leave less than this free.
         virtualHardDiskFolder:
           type: string
-          description: Where new VMs' disks are created.
+          description: Where new VMs are created, chosen in the host tray (each VM gets its own folder there), or Hyper-V's default disk folder.
         isoFolder:
           type: string
           description: The ISO library folder on the host, chosen in the host tray.

@@ -10,8 +10,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HyperHarbor.Host.Tests.Tray;
 
-/// <summary>Moving the ISO library from the tray, over a uniquely named pipe.</summary>
-public sealed class TrayIsoFolderTests : IAsyncLifetime
+/// <summary>Moving the ISO library and the VM storage folder from the tray, over a uniquely named pipe.</summary>
+public sealed class TrayFolderTests : IAsyncLifetime
 {
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "hyperharbor-tests", Guid.NewGuid().ToString("N"));
     private readonly string _pipeName = "HyperHarbor.Tests." + Guid.NewGuid().ToString("N");
@@ -32,6 +32,7 @@ public sealed class TrayIsoFolderTests : IAsyncLifetime
             .AddSingleton<IAuditLog>(new FileAuditLog(_dataDirectory))
             .AddSingleton(_settings)
             .AddSingleton(new IsoLibrary(() => _settings.IsoFolder ?? DefaultFolder))
+            .AddSingleton(new VmStorageLocation(_settings, new LifecycleOptions(), new Lifecycle.FakeHyperVHost()))
             .BuildServiceProvider();
         _server = new TrayPipeServer(devices, services, NullLogger<TrayPipeServer>.Instance, _pipeName);
         await _server.StartAsync(_stop.Token);
@@ -56,6 +57,41 @@ public sealed class TrayIsoFolderTests : IAsyncLifetime
 
         Assert.IsType<DeviceListMessage>(await tray.ReceiveAsync());
         Assert.Equal(DefaultFolder, Assert.IsType<IsoFolderMessage>(await tray.ReceiveAsync()).Folder);
+        var vms = Assert.IsType<VmFolderMessage>(await tray.ReceiveAsync());
+        Assert.Equal(@"C:\Hyper-V\Virtual Hard Disks", vms.Folder);
+        Assert.True(vms.IsDefault);
+    }
+
+    [Fact]
+    public async Task SetVmFolder_CreatesSavesAndReportsIt()
+    {
+        var folder = Path.Combine(_dataDirectory, "vms");
+        await using var tray = await ConnectAndSkipInitialAsync();
+
+        await tray.SendAsync(new SetVmFolderMessage(folder));
+
+        var reply = Assert.IsType<VmFolderMessage>(await tray.ReceiveAsync());
+        Assert.Equal(folder, reply.Folder);
+        Assert.False(reply.IsDefault);
+        Assert.Null(reply.Error);
+        Assert.True(Directory.Exists(folder));
+        Assert.Equal(folder, new HostSettingsStore(_dataDirectory).VmFolder);
+        Assert.Contains("traySetVmFolder", await File.ReadAllTextAsync(Path.Combine(_dataDirectory, FileAuditLog.FileName)), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(@"\\server\share\vms")]
+    [InlineData("vms")]
+    public async Task SetVmFolder_RefusesNetworkAndRelativeFolders(string folder)
+    {
+        await using var tray = await ConnectAndSkipInitialAsync();
+
+        await tray.SendAsync(new SetVmFolderMessage(folder));
+
+        var reply = Assert.IsType<VmFolderMessage>(await tray.ReceiveAsync());
+        Assert.True(reply.IsDefault);
+        Assert.NotNull(reply.Error);
+        Assert.Null(_settings.VmFolder);
     }
 
     [Fact]
@@ -103,6 +139,7 @@ public sealed class TrayIsoFolderTests : IAsyncLifetime
         var tray = await ConnectAsync();
         Assert.IsType<DeviceListMessage>(await tray.ReceiveAsync());
         Assert.IsType<IsoFolderMessage>(await tray.ReceiveAsync());
+        Assert.IsType<VmFolderMessage>(await tray.ReceiveAsync());
         return tray;
     }
 }

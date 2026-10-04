@@ -51,22 +51,18 @@ public static class HostEndpoints
 
     private static async Task<Ok<HostResources>> GetResourcesAsync(
         IHostCapacityReader capacity,
-        IHyperVHost hyperV,
+        VmStorageLocation location,
         IOptions<LifecycleOptions> options,
         IsoLibrary library,
         CancellationToken cancellationToken)
     {
         var host = capacity.Read();
-        var settings = options.Value;
-        var diskFolder = string.IsNullOrWhiteSpace(settings.VmRootFolder)
-            ? (await hyperV.GetDefaultsAsync(cancellationToken)).VirtualHardDiskFolder
-            : Path.GetFullPath(settings.VmRootFolder);
         return TypedResults.Ok(new HostResources(
             host.LogicalProcessorCount,
             host.TotalMemoryMb,
             host.AvailableMemoryMb,
-            settings.HostMemoryReserveMb,
-            diskFolder,
+            options.Value.HostMemoryReserveMb,
+            await location.DisplayFolderAsync(cancellationToken),
             library.Folder));
     }
 

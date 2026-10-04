@@ -20,8 +20,10 @@ internal sealed class HostForm : Form
     private readonly Button _manageDevices;
     private readonly Label _isoFolder;
     private readonly Button _changeIsoFolder;
+    private readonly Label _vmFolder;
+    private readonly Button _changeVmFolder;
 
-    public HostForm(Action setPassphrase, Action manageDevices, Action changeIsoFolder)
+    public HostForm(Action setPassphrase, Action manageDevices, Action changeIsoFolder, Action changeVmFolder)
     {
         // Design at 96 DPI; WinForms scales fonts and padding to the monitor's DPI.
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -54,6 +56,7 @@ internal sealed class HostForm : Form
 
         _passphrase = AddRow(layout, "Admin passphrase", out _setPassphrase, "Set admin passphrase…", setPassphrase);
         _devices = AddRow(layout, "Paired devices", out _manageDevices, "Manage devices…", manageDevices);
+        _vmFolder = AddRow(layout, "VM storage", out _changeVmFolder, "Change folder…", changeVmFolder);
         _isoFolder = AddRow(layout, "ISO library", out _changeIsoFolder, "Change folder…", changeIsoFolder);
         AddRow(layout, "Host log", out _, "Open logs folder", () => Open(Path.Combine(DataDirectory, "logs"), folder: true), $"Daily files in {Path.Combine(DataDirectory, "logs")}");
         AddRow(layout, "Audit log", out _, "Open audit log", () => Open(Path.Combine(DataDirectory, "audit.log"), folder: false), "Every change made from a client or this tray");
@@ -65,15 +68,19 @@ internal sealed class HostForm : Form
         CancelButton = close;
 
         Controls.Add(layout);
-        ShowStatus(connected: false, passphraseConfigured: null, deviceCount: 0, isoFolder: null);
+        ShowStatus(new HostStatus(Connected: false, PassphraseConfigured: null, DeviceCount: 0, IsoFolder: null, VmFolder: null));
     }
 
-    /// <param name="passphraseConfigured">Null until the service has reported it.</param>
-    /// <param name="isoFolder">Null until the service reports it.</param>
-    public void ShowStatus(bool connected, bool? passphraseConfigured, int deviceCount, string? isoFolder)
+    public void ShowStatus(HostStatus status)
     {
+        var (connected, passphraseConfigured, deviceCount, isoFolder, vmFolder) = status;
         _service.Text = connected ? "Host service running" : "Host service not running. Start it with Start-HyperHarbor.ps1.";
         _service.ForeColor = connected ? SystemColors.ControlText : Color.Firebrick;
+
+        _vmFolder.Text = connected && vmFolder is not null
+            ? $"New VMs are created in {vmFolder.Folder}{(vmFolder.IsDefault ? " (the Hyper-V default)" : string.Empty)}. Existing VMs stay where they are."
+            : "Unknown while the service is not running.";
+        _changeVmFolder.Enabled = connected && vmFolder is not null;
 
         _passphrase.Text = passphraseConfigured switch
         {
@@ -140,3 +147,11 @@ internal sealed class HostForm : Form
         }
     }
 }
+
+/// <summary>What the host window shows. Values the service has not reported yet are null.</summary>
+internal sealed record HostStatus(
+    bool Connected,
+    bool? PassphraseConfigured,
+    int DeviceCount,
+    string? IsoFolder,
+    Shared.Contracts.Ipc.VmFolderMessage? VmFolder);

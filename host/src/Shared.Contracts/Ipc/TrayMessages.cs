@@ -20,6 +20,8 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(SetAdminPassphraseMessage), "setAdminPassphrase")]
 [JsonDerivedType(typeof(IsoFolderMessage), "isoFolder")]
 [JsonDerivedType(typeof(SetIsoFolderMessage), "setIsoFolder")]
+[JsonDerivedType(typeof(VmFolderMessage), "vmFolder")]
+[JsonDerivedType(typeof(SetVmFolderMessage), "setVmFolder")]
 public abstract record TrayMessage;
 
 // Service to tray.
@@ -54,6 +56,11 @@ public sealed record AdminPassphraseStatusMessage(bool Configured) : TrayMessage
 /// <param name="Error">Why the last change request was refused, if it was.</param>
 public sealed record IsoFolderMessage(string Folder, string? Error = null) : TrayMessage;
 
+/// <summary>Where new VMs are created. Sent on connect and after every change request.</summary>
+/// <param name="IsDefault">True when no folder is chosen and Hyper-V's default folders are used.</param>
+/// <param name="Error">Why the last change request was refused, if it was.</param>
+public sealed record VmFolderMessage(string Folder, bool IsDefault, string? Error = null) : TrayMessage;
+
 // Tray to service.
 
 public sealed record ListDevicesMessage : TrayMessage;
@@ -64,6 +71,9 @@ public sealed record CancelPairingMessage : TrayMessage;
 
 /// <summary>Moves the ISO library to a local folder, which is created if missing. Existing images are not moved.</summary>
 public sealed record SetIsoFolderMessage(string Folder) : TrayMessage;
+
+/// <summary>Creates new VMs under a local folder, which is created if missing. Existing VMs are not moved.</summary>
+public sealed record SetVmFolderMessage(string Folder) : TrayMessage;
 
 /// <param name="Outcome">applied, declined, or failed.</param>
 public sealed record WakeFixCompletedMessage(Guid RequestId, string Outcome, string? Detail) : TrayMessage;

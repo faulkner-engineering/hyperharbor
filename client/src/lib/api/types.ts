@@ -952,7 +952,7 @@ export interface components {
              * @description The host warns when a VM would leave less than this free.
              */
             memoryReserveMb: number;
-            /** @description Where new VMs' disks are created. */
+            /** @description Where new VMs are created, chosen in the host tray (each VM gets its own folder there), or Hyper-V's default disk folder. */
             virtualHardDiskFolder: string;
             /** @description The ISO library folder on the host, chosen in the host tray. */
             isoFolder: string;

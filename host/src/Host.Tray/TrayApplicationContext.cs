@@ -19,6 +19,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private bool _connected;
     private string? _isoFolder;
     private bool _isoFolderChanging;
+    private VmFolderMessage? _vmFolder;
+    private bool _vmFolderChanging;
 
     /// <summary>Null until the service reports it.</summary>
     private bool? _passphraseConfigured;
@@ -81,6 +83,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             _passphraseConfigured = null;
             _isoFolder = null;
+            _vmFolder = null;
         }
 
         RefreshHost();
@@ -104,6 +107,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 _devices = list.Devices;
                 _devicesForm?.ShowDevices(_devices);
                 RefreshHost();
+                break;
+            case VmFolderMessage vmFolder:
+                OnVmFolder(vmFolder);
                 break;
             case IsoFolderMessage isoFolder:
                 OnIsoFolder(isoFolder);
@@ -195,7 +201,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (_hostForm is null)
         {
-            _hostForm = new HostForm(ShowPassphrase, ShowDevices, ChangeIsoFolder);
+            _hostForm = new HostForm(ShowPassphrase, ShowDevices, ChangeIsoFolder, ChangeVmFolder);
             _hostForm.FormClosed += (_, _) => _hostForm = null;
             RefreshHost();
         }
@@ -206,18 +212,36 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void ChangeIsoFolder()
     {
-        using var dialog = new FolderBrowserDialog
-        {
-            Description = "Choose where the host stores the ISO images clients add. Images already in the current folder stay there.",
-            UseDescriptionForTitle = true,
-            SelectedPath = _isoFolder ?? string.Empty,
-            ShowNewFolderButton = true,
-        };
-        if (dialog.ShowDialog(_hostForm) == DialogResult.OK && !string.Equals(dialog.SelectedPath, _isoFolder, StringComparison.OrdinalIgnoreCase))
+        if (ChooseFolder("Choose where the host stores the ISO images clients add. Images already in the current folder stay there.", _isoFolder) is { } folder)
         {
             _isoFolderChanging = true;
-            _ = _pipe.SendAsync(new SetIsoFolderMessage(dialog.SelectedPath));
+            _ = _pipe.SendAsync(new SetIsoFolderMessage(folder));
         }
+    }
+
+    private void ChangeVmFolder()
+    {
+        var current = _vmFolder is { IsDefault: false } chosen ? chosen.Folder : null;
+        if (ChooseFolder("Choose where the host creates new VMs. Each VM gets its own folder here; existing VMs stay where they are.", current) is { } folder)
+        {
+            _vmFolderChanging = true;
+            _ = _pipe.SendAsync(new SetVmFolderMessage(folder));
+        }
+    }
+
+    /// <returns>The chosen folder, or null when the user cancelled or kept the current one.</returns>
+    private string? ChooseFolder(string description, string? current)
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = description,
+            UseDescriptionForTitle = true,
+            SelectedPath = current ?? string.Empty,
+            ShowNewFolderButton = true,
+        };
+        return dialog.ShowDialog(_hostForm) == DialogResult.OK && !string.Equals(dialog.SelectedPath, current, StringComparison.OrdinalIgnoreCase)
+            ? dialog.SelectedPath
+            : null;
     }
 
     private void OnIsoFolder(IsoFolderMessage message)
@@ -227,18 +251,35 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (_isoFolderChanging)
         {
             _isoFolderChanging = false;
-            if (message.Error is { } error)
-            {
-                MessageBox.Show(_hostForm, error, "HyperHarbor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-            else
-            {
-                _notifyIcon.ShowBalloonTip(5000, "ISO library moved", $"New images are stored in {message.Folder}.", ToolTipIcon.Info);
-            }
+            ReportFolderChange(message.Error, "ISO library moved", $"New images are stored in {message.Folder}.");
         }
     }
 
-    private void RefreshHost() => _hostForm?.ShowStatus(_connected, _passphraseConfigured, _devices.Count, _isoFolder);
+    private void OnVmFolder(VmFolderMessage message)
+    {
+        _vmFolder = message;
+        RefreshHost();
+        if (_vmFolderChanging)
+        {
+            _vmFolderChanging = false;
+            ReportFolderChange(message.Error, "VM storage changed", $"New VMs are created in {message.Folder}.");
+        }
+    }
+
+    private void ReportFolderChange(string? error, string title, string text)
+    {
+        if (error is not null)
+        {
+            MessageBox.Show(_hostForm, error, "HyperHarbor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        else
+        {
+            _notifyIcon.ShowBalloonTip(5000, title, text, ToolTipIcon.Info);
+        }
+    }
+
+    private void RefreshHost() =>
+        _hostForm?.ShowStatus(new HostStatus(_connected, _passphraseConfigured, _devices.Count, _isoFolder, _vmFolder));
 
     private void OnPassphraseStatus(AdminPassphraseStatusMessage status)
     {

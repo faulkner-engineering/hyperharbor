@@ -20,8 +20,13 @@ namespace HyperHarbor.Host.Tests.Api;
 public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
 {
     private readonly ServiceProcess _service;
+    private readonly Xunit.Abstractions.ITestOutputHelper _output;
 
-    public RealTlsTests(ServiceProcess service) => _service = service;
+    public RealTlsTests(ServiceProcess service, Xunit.Abstractions.ITestOutputHelper output)
+    {
+        _service = service;
+        _output = output;
+    }
 
     [Fact]
     public async Task PairedCertificate_IsAccepted()
@@ -81,6 +86,50 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal(content.Length, new FileInfo(Path.Combine(_service.IsoFolder, "large.iso")).Length);
+    }
+
+    /// <summary>
+    /// Upload throughput through the real service on loopback, for comparing changes to the upload path.
+    /// HH_BENCHMARK=1 dotnet test --filter IsoUpload_Throughput --logger "console;verbosity=detailed"
+    /// </summary>
+    [EnvironmentFact("HH_BENCHMARK")]
+    public async Task IsoUpload_Throughput()
+    {
+        const long size = 1024L * 1024 * 1024;
+        var source = Path.Combine(Path.GetTempPath(), $"hh-bench-{Guid.NewGuid():N}.iso");
+        await using (var file = File.Create(source))
+        {
+            var block = new byte[4 * 1024 * 1024];
+            Random.Shared.NextBytes(block);
+            for (long written = 0; written < size; written += block.Length)
+            {
+                await file.WriteAsync(block);
+            }
+        }
+
+        try
+        {
+            using var client = _service.CreateClient(_service.PairedCertificate);
+            client.Timeout = TimeSpan.FromMinutes(10);
+            var elevate = await client.PostAsJsonAsync("/api/v1/auth/elevation", new { passphrase = ServiceProcess.Passphrase });
+            var token = (string)(await elevate.Content.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>())!["token"]!;
+
+            await using var body = File.OpenRead(source);
+            using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/isos/bench-{Guid.NewGuid():N}.iso") { Content = new StreamContent(body, 4 * 1024 * 1024) };
+            request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+            request.Content.Headers.ContentLength = size;
+            request.Headers.Add(Shared.Contracts.ContractInfo.ElevationHeader, token);
+            var timer = Stopwatch.StartNew();
+            var response = await client.SendAsync(request);
+            timer.Stop();
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            _output.WriteLine($"Uploaded 1 GB in {timer.Elapsed.TotalSeconds:F1} s: {size / 1024.0 / 1024 / timer.Elapsed.TotalSeconds:F0} MB/s");
+        }
+        finally
+        {
+            File.Delete(source);
+        }
     }
 
     [Fact]

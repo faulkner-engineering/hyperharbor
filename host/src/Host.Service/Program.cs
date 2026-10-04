@@ -129,7 +129,11 @@ builder.Services.AddSingleton(services =>
 });
 builder.Services.AddSingleton<IsoLibraryService>();
 builder.Services.AddSingleton<IHyperVBuilder, CimHyperVBuilder>();
-builder.Services.AddSingleton<VmCreationService>();
+builder.Services.AddSingleton(services => new VmStorageLocation(
+    services.GetRequiredService<HostSettingsStore>(),
+    services.GetRequiredService<LifecycleOptions>(),
+    services.GetRequiredService<IHyperVHost>()));
+builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<VmCreationService>(services, services.GetRequiredService<VmStorageLocation>()));
 builder.Services.AddSingleton<IHyperVCompute, CimHyperVCompute>();
 builder.Services.AddSingleton<VmComputeService>();
 

@@ -1,5 +1,13 @@
+<script lang="ts" module>
+  import type { IsoImage as CachedImage } from "$lib/api/client";
+
+  /** The last library seen for each host, so returning to the screen shows it at once. */
+  const libraryCache = new Map<string, { images: CachedImage[]; folder: string | null }>();
+</script>
+
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
+  import { fade } from "svelte/transition";
   import {
     cancelIsoUpload,
     deleteIso,
@@ -24,8 +32,10 @@
 
   let { host }: Props = $props();
 
-  let images = $state<IsoImage[] | null>(null);
-  let folder = $state<string | null>(null);
+  // Shown at once from the last visit, then refreshed; the first visit shows nothing until both arrive.
+  const cached = libraryCache.get(untrack(() => host.key));
+  let images = $state<IsoImage[] | null>(cached?.images ?? null);
+  let folder = $state<string | null>(cached?.folder ?? null);
   let error = $state<string | null>(null);
   let status = $state<string | null>(null);
   let upload = $state<{ picked: PickedIso; sent: number; cancelling: boolean } | null>(null);
@@ -37,20 +47,26 @@
     upload && upload.picked.sizeBytes > 0 ? Math.floor((upload.sent / upload.picked.sizeBytes) * 100) : 0,
   );
 
+  /** Loads the list and the folder together, so the screen changes once rather than piece by piece. */
   async function refresh() {
+    const key = host.key;
     try {
-      images = await listIsos(host.key);
+      const [list, resources] = await Promise.all([
+        listIsos(key),
+        getHostResources(key).catch(() => null),
+      ]);
+      images = list;
+      folder = resources?.isoFolder ?? folder;
+      libraryCache.set(key, { images: list, folder });
       error = null;
     } catch (e) {
       error = errorMessage(e);
+      images ??= [];
     }
   }
 
   onMount(() => {
     refresh();
-    getHostResources(host.key)
-      .then((resources) => (folder = resources.isoFolder))
-      .catch(() => (folder = null));
     const unlisten = onIsoUploadProgress((progress) => {
       if (upload && progress.pickId === upload.picked.pickId) upload.sent = progress.sent;
     });
@@ -150,10 +166,7 @@
 
 <section>
   <div class="toolbar">
-    <p class="muted">
-      Images are stored on {host.displayName}{folder ? ` in ${folder}` : ""}, so every paired device sees the same
-      library. The folder can be changed in the HyperHarbor Host window on the host.
-    </p>
+    <p class="muted">Images are stored on {host.displayName} and shared by every paired device.</p>
     <button type="button" class="primary" onclick={add} disabled={upload !== null}>+ Add ISO</button>
   </div>
 
@@ -174,65 +187,75 @@
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 
   {#if images === null}
-    <p class="muted">Loading the library…</p>
-  {:else if images.length === 0}
-    <p class="empty">The library is empty. Use + Add ISO to upload an installation image from this device.</p>
+    <!-- Holds the table's space while loading, so nothing below jumps when it arrives. -->
+    <div class="placeholder" role="status" aria-label="Loading the library">
+      {#each [0, 1, 2] as row (row)}<div class="placeholder-row"></div>{/each}
+    </div>
   {:else}
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Name</th>
-          <th scope="col" class="num">Size</th>
-          <th scope="col">Added</th>
-          <th scope="col">Used by</th>
-          <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each images as image (image.name)}
-          <tr>
-            <td class="name">
-              {#if renaming?.name === image.name}
-                <form class="rename" onsubmit={saveRename}>
-                  <input
-                    aria-label="New name for {image.name}"
-                    bind:value={renaming.value}
-                    spellcheck="false"
-                    disabled={busyName !== null}
-                  />
-                  <button type="submit" class="primary" disabled={busyName !== null || !renaming.value.trim().toLowerCase().endsWith(".iso")}>
-                    Save
-                  </button>
-                  <button type="button" onclick={() => (renaming = null)} disabled={busyName !== null}>Cancel</button>
-                </form>
-              {:else}
-                {image.name}
-              {/if}
-            </td>
-            <td class="num">{formatSize(image.sizeBytes)}</td>
-            <td>{formatDate(image.modifiedAt)}</td>
-            <td>{image.usedBy.length === 0 ? "Not in use" : image.usedBy.join(", ")}</td>
-            <td class="actions">
-              {#if renaming?.name !== image.name}
-                <button
-                  type="button"
-                  disabled={busyName !== null || image.usedBy.length > 0}
-                  title={image.usedBy.length > 0 ? "Remove it from the VM's DVD drive first" : ""}
-                  onclick={() => (renaming = { name: image.name, value: image.name })}>Rename</button
-                >
-                <button
-                  type="button"
-                  class="danger"
-                  disabled={busyName !== null || image.usedBy.length > 0}
-                  title={image.usedBy.length > 0 ? "Remove it from the VM's DVD drive first" : ""}
-                  onclick={() => (confirmDelete = image)}>{busyName === image.name ? "Deleting…" : "Delete"}</button
-                >
-              {/if}
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+    <div in:fade={{ duration: 150 }}>
+      {#if images.length === 0}
+        <p class="empty">The library is empty. Use + Add ISO to upload an installation image from this device.</p>
+      {:else}
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col" class="num">Size</th>
+              <th scope="col">Added</th>
+              <th scope="col">Used by</th>
+              <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each images as image (image.name)}
+              <tr>
+                <td class="name">
+                  {#if renaming?.name === image.name}
+                    <form class="rename" onsubmit={saveRename}>
+                      <input
+                        aria-label="New name for {image.name}"
+                        bind:value={renaming.value}
+                        spellcheck="false"
+                        disabled={busyName !== null}
+                      />
+                      <button type="submit" class="primary" disabled={busyName !== null || !renaming.value.trim().toLowerCase().endsWith(".iso")}>
+                        Save
+                      </button>
+                      <button type="button" onclick={() => (renaming = null)} disabled={busyName !== null}>Cancel</button>
+                    </form>
+                  {:else}
+                    {image.name}
+                  {/if}
+                </td>
+                <td class="num">{formatSize(image.sizeBytes)}</td>
+                <td>{formatDate(image.modifiedAt)}</td>
+                <td>{image.usedBy.length === 0 ? "Not in use" : image.usedBy.join(", ")}</td>
+                <td class="actions">
+                  {#if renaming?.name !== image.name}
+                    <button
+                      type="button"
+                      disabled={busyName !== null || image.usedBy.length > 0}
+                      title={image.usedBy.length > 0 ? "Remove it from the VM's DVD drive first" : ""}
+                      onclick={() => (renaming = { name: image.name, value: image.name })}>Rename</button
+                    >
+                    <button
+                      type="button"
+                      class="danger"
+                      disabled={busyName !== null || image.usedBy.length > 0}
+                      title={image.usedBy.length > 0 ? "Remove it from the VM's DVD drive first" : ""}
+                      onclick={() => (confirmDelete = image)}>{busyName === image.name ? "Deleting…" : "Delete"}</button
+                    >
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+      {#if folder}
+        <p class="muted folder">Stored in {folder}. The folder can be changed in the HyperHarbor Host window on the host.</p>
+      {/if}
+    </div>
   {/if}
 </section>
 
@@ -262,6 +285,37 @@
 
   .empty {
     color: var(--muted);
+  }
+
+  .folder {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .placeholder {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-top: 0.6rem;
+  }
+
+  .placeholder-row {
+    height: 1.6rem;
+    border-radius: 6px;
+    background: var(--hover);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .placeholder-row {
+      animation: none;
+    }
   }
 
   .status {

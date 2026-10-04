@@ -58,11 +58,27 @@ public sealed class HostSettingsStore
         }
     }
 
-    public void SetIsoFolder(string? folder)
+    public void SetIsoFolder(string? folder) => Update(settings => settings with { IsoFolder = folder });
+
+    /// <summary>The folder for new VMs chosen in the tray, or null to use the configured default.</summary>
+    public string? VmFolder
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return Load().VmFolder;
+            }
+        }
+    }
+
+    public void SetVmFolder(string? folder) => Update(settings => settings with { VmFolder = folder });
+
+    private void Update(Func<Settings, Settings> change)
     {
         lock (_gate)
         {
-            _settings = Load() with { IsoFolder = folder };
+            _settings = change(Load());
             ProtectedFile.WriteAllBytes(_path, JsonSerializer.SerializeToUtf8Bytes(_settings, JsonOptions));
         }
 
@@ -70,10 +86,10 @@ public sealed class HostSettingsStore
     }
 
     private Settings Load() => _settings ??= File.Exists(_path)
-        ? JsonSerializer.Deserialize<Settings>(File.ReadAllBytes(_path), JsonOptions) ?? new Settings(null)
-        : new Settings(null);
+        ? JsonSerializer.Deserialize<Settings>(File.ReadAllBytes(_path), JsonOptions) ?? new Settings()
+        : new Settings();
 
-    private sealed record Settings(string? IsoFolder);
+    private sealed record Settings(string? IsoFolder = null, string? VmFolder = null);
 }
 
 /// <summary>

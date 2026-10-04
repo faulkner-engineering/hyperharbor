@@ -128,6 +128,7 @@
         Generation 2 with Secure Boot, a new dynamic disk, and the ISO first in the boot order. The VM is
         created off; start it and install the operating system from the host's console.
       </p>
+      <p class="muted">Stored on the host in {resources.virtualHardDiskFolder}.</p>
 
       <label for="vm-name">Name</label>
       <input id="vm-name" bind:value={name} maxlength="100" autocomplete="off" spellcheck="false" disabled={job !== null} />

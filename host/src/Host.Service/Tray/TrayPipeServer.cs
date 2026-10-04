@@ -114,6 +114,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 await connection.SendAsync(new IsoFolderMessage(isos.Folder));
             }
 
+            if (_services.GetService<VmStorageLocation>() is { } location)
+            {
+                await connection.SendAsync(await VmFolderAsync(location));
+            }
+
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
             var lines = new BoundedLineReader(reader, MaxMessageLength);
             while (!stoppingToken.IsCancellationRequested && await lines.ReadLineAsync(stoppingToken) is { } line)
@@ -181,6 +186,9 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                     completed.Outcome == "applied" ? AuditOutcome.Succeeded : AuditOutcome.Failed);
                 _services.GetRequiredService<Wake.WakeFixCoordinator>().OnCompleted(completed);
                 break;
+            case SetVmFolderMessage vmFolder:
+                await SetVmFolderAsync(vmFolder);
+                break;
             case SetIsoFolderMessage isoFolder:
                 SetIsoFolder(isoFolder);
                 break;
@@ -203,29 +211,68 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             return;
         }
 
-        string? error = null;
-        var folder = request.Folder?.Trim() ?? string.Empty;
-        if (!Path.IsPathFullyQualified(folder) || folder.StartsWith(@"\\", StringComparison.Ordinal))
+        var error = UseLocalFolder(request.Folder, @"D:\ISOs", folder =>
         {
-            error = "Choose a folder on a local drive, for example D:\\ISOs.";
-        }
-        else
+            settings.SetIsoFolder(folder);
+            _logger.LogInformation("The ISO library folder was changed to {Folder} from the tray.", folder);
+            AuditTrayAction("traySetIsoFolder", null, null, null, $"folder={folder}");
+        });
+        Broadcast(new IsoFolderMessage(isos.Folder, error));
+    }
+
+    /// <summary>
+    /// Creates new VMs under a local folder chosen at the host. Existing VMs stay where they are. Network
+    /// paths are refused: Hyper-V needs extra delegation to run VMs from a share.
+    /// </summary>
+    private async Task SetVmFolderAsync(SetVmFolderMessage request)
+    {
+        if (_services.GetService<HostSettingsStore>() is not { } settings || _services.GetService<VmStorageLocation>() is not { } location)
         {
-            try
-            {
-                folder = Path.GetFullPath(folder);
-                Directory.CreateDirectory(folder);
-                settings.SetIsoFolder(folder);
-                _logger.LogInformation("The ISO library folder was changed to {Folder} from the tray.", folder);
-                AuditTrayAction("traySetIsoFolder", null, null, null, $"folder={folder}");
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            {
-                error = $"The folder could not be used: {ex.Message}";
-            }
+            return;
         }
 
-        Broadcast(new IsoFolderMessage(isos.Folder, error));
+        var error = UseLocalFolder(request.Folder, @"D:\VMs", folder =>
+        {
+            settings.SetVmFolder(folder);
+            _logger.LogInformation("The folder for new VMs was changed to {Folder} from the tray.", folder);
+            AuditTrayAction("traySetVmFolder", null, null, null, $"folder={folder}");
+        });
+        Broadcast(await VmFolderAsync(location, error));
+    }
+
+    private static async Task<VmFolderMessage> VmFolderAsync(VmStorageLocation location, string? error = null)
+    {
+        try
+        {
+            return new VmFolderMessage(await location.DisplayFolderAsync(CancellationToken.None), location.RootFolder is null, error);
+        }
+        catch (Core.HyperV.HyperVUnavailableException ex)
+        {
+            return new VmFolderMessage(location.RootFolder ?? "Hyper-V default (Hyper-V is not available)", location.RootFolder is null, error ?? ex.Message);
+        }
+    }
+
+    /// <summary>Checks that <paramref name="requested"/> is a local folder, creates it, and saves it.</summary>
+    /// <returns>Null on success, else why the folder was refused.</returns>
+    private static string? UseLocalFolder(string? requested, string example, Action<string> save)
+    {
+        var folder = requested?.Trim() ?? string.Empty;
+        if (!Path.IsPathFullyQualified(folder) || folder.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return $"Choose a folder on a local drive, for example {example}.";
+        }
+
+        try
+        {
+            folder = Path.GetFullPath(folder);
+            Directory.CreateDirectory(folder);
+            save(folder);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return $"The folder could not be used: {ex.Message}";
+        }
     }
 
     private void SetAdminPassphrase(SetAdminPassphraseMessage set)

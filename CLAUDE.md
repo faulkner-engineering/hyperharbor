@@ -193,6 +193,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     attaches (usedBy) cannot be renamed or deleted. The folder is a host setting: the tray's HyperHarbor Host
     window sends SetIsoFolderMessage, saved in host-settings.json (HostSettingsStore), which overrides
     Lifecycle:IsoFolder. Images in an old folder are not moved.
+  - VM storage works the same way: the host window sends SetVmFolderMessage, saved as VmFolder in
+    host-settings.json, which overrides Lifecycle:VmRootFolder. VmStorageLocation decides the folders (root\name
+    with a "Virtual Hard Disks" subfolder, or Hyper-V defaults when nothing is chosen). Existing VMs never move.
   - Client uploads: the Rust side shows the file picker (tauri-plugin-dialog) and keeps the path; the webview
     gets a pick ID and progress events (iso-upload-progress). The client checks elevation before sending,
     because the host refuses an unelevated upload before reading its body.
