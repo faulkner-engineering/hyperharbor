@@ -121,6 +121,11 @@ pub fn rdp_file(
         "authentication level:i:2".to_string(),
         "audiomode:i:0".to_string(),
         "audiocapturemode:i:1".to_string(),
+        // The guest resolution follows the window as it is resized, maximized, or moved to another
+        // monitor, rather than the session being scaled. Servers without support (xrdp before 0.10)
+        // keep their first resolution.
+        "dynamic resolution:i:1".to_string(),
+        "smart sizing:i:0".to_string(),
     ];
     if !linux {
         lines.push("redirectwebauthn:i:1".to_string());
@@ -439,6 +444,8 @@ mod tests {
             "redirectwebauthn:i:1",
             "audiocapturemode:i:1",
             "camerastoredirect:s:*",
+            "dynamic resolution:i:1",
+            "smart sizing:i:0",
         ] {
             assert!(lines.contains(&expected), "missing {expected}");
         }
@@ -470,6 +477,7 @@ mod tests {
         assert!(lines.contains(&"username:s:hh-owner"));
         assert!(lines.contains(&"enablecredsspsupport:i:0"));
         assert!(lines.contains(&"audiocapturemode:i:1"));
+        assert!(lines.contains(&"dynamic resolution:i:1"));
         assert!(!file.contains("redirectwebauthn"));
         assert!(!file.contains("camerastoredirect"));
     }
