@@ -93,6 +93,19 @@ public static class WakeFixHelper
     public const string Switch = "--apply-wake-fixes";
 }
 
+/// <summary>
+/// Command-line switches for the elevated console account helper:
+/// --setup-console [data directory] [result file] and --remove-console [data directory] [result file].
+/// </summary>
+public static class ConsoleSetupHelper
+{
+    public const string SetupSwitch = "--setup-console";
+    public const string RemoveSwitch = "--remove-console";
+
+    /// <summary>The DPAPI-protected credential file the helper writes in the data directory; its presence means console access is set up.</summary>
+    public const string AccountsFileName = "console-accounts.json.protected";
+}
+
 public static class TrayPipe
 {
     public const string Name = "HyperHarbor.Host.Tray";

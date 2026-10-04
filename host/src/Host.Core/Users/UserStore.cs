@@ -92,7 +92,10 @@ public static class VmAccountName
     public const string Prefix = "hh-";
     public const int MaxLength = 20;
 
-    public static string For(string userName)
+    public static string For(string userName) => Build(Prefix, userName);
+
+    /// <summary><paramref name="prefix"/> plus the cleaned user name, within <see cref="MaxLength"/>.</summary>
+    internal static string Build(string prefix, string userName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userName);
 
@@ -111,7 +114,7 @@ public static class VmAccountName
             throw new ArgumentException("The user name has no characters that are valid in an account name.", nameof(userName));
         }
 
-        var name = Prefix + body;
+        var name = prefix + body;
         return name.Length > MaxLength ? name[..MaxLength].TrimEnd('-') : name;
     }
 }

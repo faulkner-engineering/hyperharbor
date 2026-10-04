@@ -7,7 +7,9 @@ Requirements
 Start
   Right-click Start-HyperHarbor.ps1 and choose "Run with PowerShell".
   The first run asks for administrator rights once, to add a firewall rule
-  (TCP 48443, Private networks) and add you to Hyper-V Administrators.
+  (TCP 48443, Private networks), add you to Hyper-V Administrators, and create
+  the local account paired devices use for VM consoles (hhc-owner). That account
+  cannot sign in to Windows, and its password changes on every console request.
   If you were added to that group, sign out and back in, then run it again.
 
 Pair a device
@@ -22,7 +24,10 @@ Data
   %ProgramData%\HyperHarbor. Delete that folder to reset the host.
 
 Remove
-  Stop the host, delete this folder and %ProgramData%\HyperHarbor, and remove the
+  Stop the host, then remove the console account by running this from this
+  folder in an administrator PowerShell:
+    .\HyperHarbor.Host.Service.exe --remove-console
+  Then delete this folder and %ProgramData%\HyperHarbor, and remove the
   firewall rule "HyperHarbor Host API" (Windows Defender Firewall, Inbound Rules).
 
 This build is not code signed, so Windows SmartScreen may warn on first run.

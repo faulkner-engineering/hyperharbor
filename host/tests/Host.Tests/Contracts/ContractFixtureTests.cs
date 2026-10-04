@@ -51,6 +51,7 @@ public class ContractFixtureTests
         ["ProvisionVmRequest"] = new ProvisionVmRequest("hhadmin", "Fixture-Admin1!", true, true, true),
         ["VmProvisioning"] = new VmProvisioning(VmId, "hh-owner", Time),
         ["VmConnection"] = new VmConnection(@".\hh-owner", "Fixture-Pass1!", "192.168.0.50", 3389, Time, GuestOsFamily.Windows),
+        ["ConsoleSession"] = new ConsoleSession("fixture-ticket", @"HOSTPC\hhc-owner", "Fixture-Console1!", VmId.ToString("D"), Time, Time.AddMinutes(1)),
         ["PairingRequest"] = new PairingRequest("Laptop", "-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n"),
         ["PairingRequestCreated"] = new PairingRequestCreated(Guid.Parse("3f2a9c1d-4b5e-4f70-8192-a3b4c5d6e7f8"), [1, 2, 3], Time),
         ["PairingConfirmation"] = new PairingConfirmation([4, 5, 6], [7, 8, 9]),

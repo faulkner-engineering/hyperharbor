@@ -6,6 +6,7 @@ using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Shared.Contracts;
@@ -87,6 +88,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         ElevationRateLimitedException => ContractInfo.ProblemCodes.TooManyAttempts,
         ResourceWarningsException => ContractInfo.ProblemCodes.ResourceWarnings,
         LifecycleConflictException { Code: { } code } => code,
+        ConsoleConflictException conflict => conflict.Code,
         _ => null,
     };
 
@@ -118,6 +120,9 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             InvalidWakeRequestException => (StatusCodes.Status400BadRequest, "Invalid request"),
             GuestCredentialRejectedException => (StatusCodes.Status422UnprocessableEntity, "Administrator credential rejected"),
             GuestAccountConflictException => (StatusCodes.Status409Conflict, "Cannot provision"),
+            ConsoleConflictException => (StatusCodes.Status409Conflict, "Cannot open the console"),
+            ConsoleTicketRejectedException => (StatusCodes.Status403Forbidden, "Console ticket rejected"),
+            ConsoleUnavailableException => (StatusCodes.Status502BadGateway, "Console unavailable"),
             GuestUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Guest unavailable"),
             GuestOperationException => (StatusCodes.Status502BadGateway, "Guest operation failed"),
             PairingException pairing => pairing.Error switch

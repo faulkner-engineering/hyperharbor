@@ -4,8 +4,10 @@
 
 .DESCRIPTION
     On first run, asks for elevation once to:
-      - add an inbound firewall rule for the API port (Private networks only), and
-      - add the current user to the Hyper-V Administrators group.
+      - add an inbound firewall rule for the API port (Private networks only),
+      - add the current user to the Hyper-V Administrators group, and
+      - create the standard local account paired devices use for VM consoles (hhc-<user>).
+        It cannot sign in to Windows; the host rotates its password on every console request.
     Group membership takes effect after you sign out and back in.
 
     The service runs in its own console window so its log is visible. Close that window or
@@ -24,6 +26,8 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ruleName = 'HyperHarbor Host API'
 $hyperVAdminsSid = 'S-1-5-32-578'
+$consoleAccounts = Join-Path $env:ProgramData 'HyperHarbor\console-accounts.json.protected'
+$serviceExe = Join-Path $here 'HyperHarbor.Host.Service.exe'
 
 if ($ElevatedSetup) {
     if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
@@ -36,6 +40,13 @@ if ($ElevatedSetup) {
     if (-not (Get-LocalGroupMember -Group $group | Where-Object Name -eq $ForUser)) {
         Add-LocalGroupMember -Group $group -Member $ForUser
         Write-Host "Added $ForUser to $($group.Name). Sign out and back in for this to take effect."
+    }
+
+    if (-not (Test-Path $consoleAccounts)) {
+        & $serviceExe --setup-console
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Console access was not set up (exit code $LASTEXITCODE). Use Set up console access in the HyperHarbor Host window."
+        }
     }
 
     Start-Sleep -Seconds 3
@@ -52,9 +63,10 @@ if (-not (Get-Service -Name vmms -ErrorAction SilentlyContinue)) {
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $inHyperVAdmins = $identity.Groups.Value -contains $hyperVAdminsSid
 $hasRule = [bool](Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)
+$hasConsole = Test-Path $consoleAccounts
 
-if (-not $inHyperVAdmins -or -not $hasRule) {
-    Write-Host 'First-run setup needs administrator rights (firewall rule and Hyper-V Administrators group).'
+if (-not $inHyperVAdmins -or -not $hasRule -or -not $hasConsole) {
+    Write-Host 'First-run setup needs administrator rights (firewall rule, Hyper-V Administrators group, and the console account).'
     $arguments = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$($MyInvocation.MyCommand.Path)`"",
         '-ElevatedSetup', '-Port', $Port, '-ForUser', "`"$($identity.Name)`""
@@ -72,14 +84,13 @@ if (-not $inHyperVAdmins -or -not $hasRule) {
     }
 }
 
-$service = Join-Path $here 'HyperHarbor.Host.Service.exe'
 $tray = Join-Path $here 'HyperHarbor.Host.Tray.exe'
 
 if (Get-Process -Name 'HyperHarbor.Host.Service' -ErrorAction SilentlyContinue) {
     Write-Host 'The HyperHarbor service is already running.'
 }
 else {
-    Start-Process -FilePath $service -WorkingDirectory $here -ArgumentList "--Api:Port=$Port"
+    Start-Process -FilePath $serviceExe -WorkingDirectory $here -ArgumentList "--Api:Port=$Port"
     Write-Host "Started the HyperHarbor service on port $Port."
 }
 

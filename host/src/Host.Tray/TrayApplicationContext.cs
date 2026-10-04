@@ -201,13 +201,36 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (_hostForm is null)
         {
-            _hostForm = new HostForm(ShowPassphrase, ShowDevices, ChangeIsoFolder, ChangeVmFolder);
+            _hostForm = new HostForm(ShowPassphrase, ShowDevices, ChangeIsoFolder, ChangeVmFolder, () => _ = SetUpConsoleAsync());
             _hostForm.FormClosed += (_, _) => _hostForm = null;
             RefreshHost();
         }
 
         _hostForm.Show();
         _hostForm.Activate();
+    }
+
+    private async Task SetUpConsoleAsync()
+    {
+        var answer = MessageBox.Show(
+            _hostForm,
+            "HyperHarbor will create a standard local account on this PC for each HyperHarbor user (for example hhc-owner). " +
+            "It cannot sign in to Windows; paired devices use it only to open the consoles of VMs, and its password changes every time they do." +
+            $"{Environment.NewLine}{Environment.NewLine}Windows will ask for administrator permission. Continue?",
+            "Set up console access",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1);
+        if (answer != DialogResult.Yes)
+        {
+            return;
+        }
+
+        // The service executable sits beside the tray in the packaged host, so setup also works while the service is stopped.
+        var executable = _pipe.ServerExecutablePath() ?? Path.Combine(AppContext.BaseDirectory, "HyperHarbor.Host.Service.exe");
+        var (succeeded, message) = await ConsoleAccessSetup.RunAsync(executable, HostForm.DataDirectory);
+        RefreshHost();
+        MessageBox.Show(_hostForm, message, "Set up console access", MessageBoxButtons.OK, succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
 
     private void ChangeIsoFolder()

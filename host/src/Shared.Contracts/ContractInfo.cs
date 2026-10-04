@@ -6,13 +6,19 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.3.0";
+    public const string ApiVersion = "1.4.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
 
     /// <summary>Request header that carries an elevation token (the elevation security scheme).</summary>
     public const string ElevationHeader = "X-HyperHarbor-Elevation";
+
+    /// <summary>Request header that carries a console ticket when opening a console tunnel.</summary>
+    public const string ConsoleTicketHeader = "X-HyperHarbor-Console-Ticket";
+
+    /// <summary>The Upgrade protocol of a console tunnel: raw bytes to the VM's console after 101.</summary>
+    public const string ConsoleUpgradeProtocol = "hyperharbor-console";
 
     /// <summary>The "code" member of problem details, for errors a client handles differently.</summary>
     public static class ProblemCodes
@@ -23,5 +29,8 @@ public static class ContractInfo
         public const string TooManyAttempts = "tooManyAttempts";
         public const string ResourceWarnings = "resourceWarnings";
         public const string RequiresShutdown = "requiresShutdown";
+        public const string ConsoleSetupRequired = "consoleSetupRequired";
+        public const string VmNotRunning = "vmNotRunning";
+        public const string ConsolePasswordPolicy = "consolePasswordPolicy";
     }
 }

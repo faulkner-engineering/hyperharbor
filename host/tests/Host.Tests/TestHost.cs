@@ -8,9 +8,11 @@ using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
+using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Host.Tests.Lifecycle;
+using HyperHarbor.Host.Tests.VmConsole;
 using HyperHarbor.Shared.Contracts.Ipc;
 using HyperHarbor.Shared.Contracts.Pairing;
 using Microsoft.AspNetCore.Builder;
@@ -62,6 +64,8 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IHyperVHost>(HyperVHost);
                 services.AddSingleton<IHyperVBuilder>(Builder);
                 services.AddSingleton<IHyperVCompute>(Compute);
+                services.AddSingleton<IConsolePasswordChanger>(ConsolePasswords);
+                services.AddSingleton<IConsoleAccessGranter>(ConsoleAccess);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
             }));
@@ -92,6 +96,10 @@ internal sealed class TestHost : IDisposable
     public FakeHyperVBuilder Builder { get; } = new();
 
     public FakeHyperVCompute Compute { get; } = new();
+
+    public FakeConsolePasswordChanger ConsolePasswords { get; } = new();
+
+    public FakeConsoleAccess ConsoleAccess { get; } = new();
 
     /// <summary>The ISO library folder, inside the data directory.</summary>
     public string IsoFolder => Path.Combine(DataDirectory, "isos");
@@ -127,6 +135,16 @@ internal sealed class TestHost : IDisposable
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add(ClientCertificateHeader, Convert.ToBase64String(certificate.RawData));
         return client;
+    }
+
+    /// <summary>Does what the elevated setup command does for the default User, with a fake account.</summary>
+    public ConsoleCredential SetUpConsoleAccount(string password = "Console-Initial1!")
+    {
+        var user = Services.GetRequiredService<UserStore>().GetOrCreateDefault();
+        var credential = new ConsoleCredential(ConsoleAccountName.For(user.Name), password);
+        ConsolePasswords.Passwords[credential.AccountName] = password;
+        Services.GetRequiredService<ConsoleAccountStore>().Save(user.UserId, credential);
+        return credential;
     }
 
     /// <summary>Adds <paramref name="certificate"/> to the paired device store directly.</summary>

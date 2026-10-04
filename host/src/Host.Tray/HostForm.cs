@@ -3,7 +3,8 @@ using System.Diagnostics;
 namespace HyperHarbor.Host.Tray;
 
 /// <summary>
-/// The tray's main window: service status, the admin passphrase, paired devices, and the host's logs.
+/// The tray's main window: service status, the admin passphrase, paired devices, console access,
+/// storage folders, and the host's logs.
 /// Opened by double-clicking the tray icon. The layout sizes itself from its contents so it stays
 /// readable at any display scaling.
 /// </summary>
@@ -22,8 +23,10 @@ internal sealed class HostForm : Form
     private readonly Button _changeIsoFolder;
     private readonly Label _vmFolder;
     private readonly Button _changeVmFolder;
+    private readonly Label _console;
+    private readonly Button _setUpConsole;
 
-    public HostForm(Action setPassphrase, Action manageDevices, Action changeIsoFolder, Action changeVmFolder)
+    public HostForm(Action setPassphrase, Action manageDevices, Action changeIsoFolder, Action changeVmFolder, Action setUpConsole)
     {
         // Design at 96 DPI; WinForms scales fonts and padding to the monitor's DPI.
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -56,6 +59,7 @@ internal sealed class HostForm : Form
 
         _passphrase = AddRow(layout, "Admin passphrase", out _setPassphrase, "Set admin passphrase…", setPassphrase);
         _devices = AddRow(layout, "Paired devices", out _manageDevices, "Manage devices…", manageDevices);
+        _console = AddRow(layout, "VM console", out _setUpConsole, "Set up console access…", setUpConsole);
         _vmFolder = AddRow(layout, "VM storage", out _changeVmFolder, "Change folder…", changeVmFolder);
         _isoFolder = AddRow(layout, "ISO library", out _changeIsoFolder, "Change folder…", changeIsoFolder);
         AddRow(layout, "Host log", out _, "Open logs folder", () => Open(Path.Combine(DataDirectory, "logs"), folder: true), $"Daily files in {Path.Combine(DataDirectory, "logs")}");
@@ -100,6 +104,14 @@ internal sealed class HostForm : Form
             ? $"Images clients add are stored in {isoFolder}."
             : "Unknown while the service is not running.";
         _changeIsoFolder.Enabled = connected && isoFolder is not null;
+
+        // The setup helper writes this file itself, so the status does not depend on the service.
+        var consoleReady = ConsoleAccessSetup.IsSetUp(DataDirectory);
+        _console.Text = consoleReady
+            ? "Set up. Paired devices can open the console of any running VM."
+            : "Not set up. Paired devices cannot open VM consoles until you set it up. Windows asks for administrator permission.";
+        _console.ForeColor = consoleReady ? SystemColors.ControlText : Color.Firebrick;
+        _setUpConsole.Text = consoleReady ? "Set up again…" : "Set up console access…";
     }
 
     private static Label AddRow(TableLayoutPanel layout, string heading, out Button button, string buttonText, Action onClick, string? description = null)

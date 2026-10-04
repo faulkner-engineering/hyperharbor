@@ -1,0 +1,6 @@
+# This file instructs Redocly's linter to ignore the rules contained for specific parts of your API.
+# See https://redocly.com/docs/cli/ for more information.
+docs/api.yaml:
+  # The console tunnel answers 101 Switching Protocols instead of a 2xx response.
+  operation-2xx-response:
+    - '#/paths/~1vms~1{vmId}~1console~1tunnel/post/responses'

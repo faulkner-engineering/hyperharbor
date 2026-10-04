@@ -10,6 +10,7 @@ using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
+using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
@@ -17,6 +18,7 @@ using HyperHarbor.Host.Service.Discovery;
 using HyperHarbor.Host.Service.Logging;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Host.Service.Tray;
+using HyperHarbor.Host.Service.VmConsole;
 using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Ipc;
@@ -30,6 +32,12 @@ using Microsoft.Extensions.Options;
 if (args.Length is 2 or 3 && args[0] == WakeFixHelper.Switch)
 {
     return await WakeFixCommand.RunAsync(args[1], args.Length == 3 ? args[2] : null);
+}
+
+// Elevated helper that creates or removes the host console accounts (tray or Start-HyperHarbor.ps1).
+if (ConsoleSetupCommand.Matches(args))
+{
+    return await ConsoleSetupCommand.RunAsync(args);
 }
 
 var builder = WebApplication.CreateBuilder(args);
@@ -107,6 +115,26 @@ builder.Services.AddSingleton(services => new PasswordRotator(
     TimeSpan.FromSeconds(builder.Configuration.GetValue("Rdp:ReuseWindowSeconds", (int)PasswordRotator.DefaultReuseWindow.TotalSeconds)),
     services.GetRequiredService<ILogger<PasswordRotator>>()));
 builder.Services.AddSingleton<ConnectService>();
+
+builder.Services.AddOptions<ConsoleOptions>()
+    .Bind(builder.Configuration.GetSection(ConsoleOptions.SectionName))
+    .ValidateDataAnnotations()
+    .Validate(options => System.Net.IPEndPoint.TryParse(options.Endpoint, out _), "Console:Endpoint must be an IP address and port.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(new ConsoleAccountStore(dataDirectory));
+builder.Services.AddSingleton<IConsolePasswordChanger, WindowsLocalAccounts>();
+builder.Services.AddSingleton<IConsoleAccessGranter, CimConsoleAccess>();
+builder.Services.AddSingleton(services => new ConsolePasswordRotator(
+    services.GetRequiredService<ConsoleAccountStore>(),
+    services.GetRequiredService<IConsolePasswordChanger>(),
+    services.GetRequiredService<TimeProvider>(),
+    TimeSpan.FromSeconds(services.GetRequiredService<IOptions<ConsoleOptions>>().Value.ReuseWindowSeconds),
+    services.GetRequiredService<ILogger<ConsolePasswordRotator>>()));
+builder.Services.AddSingleton(services => new ConsoleTicketStore(
+    services.GetRequiredService<TimeProvider>(),
+    TimeSpan.FromSeconds(services.GetRequiredService<IOptions<ConsoleOptions>>().Value.TicketLifetimeSeconds),
+    services.GetRequiredService<PairedDeviceStore>()));
+builder.Services.AddSingleton<ConsoleService>();
 
 builder.Services.AddSingleton<IHyperVStorage, CimHyperVStorage>();
 builder.Services.AddSingleton<IDiskFiles, WindowsDiskFiles>();
@@ -194,6 +222,7 @@ app.UseAuthorization();
 app.MapHostEndpoints();
 app.MapAuthEndpoints();
 app.MapVmEndpoints();
+app.MapConsoleEndpoints();
 app.MapJobEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();

@@ -273,6 +273,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/console": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open the VM's console (its video output, before and after the guest OS starts).
+         * @description Returns the calling User's host console account (for example `MYPC\hhc-owner`) with a
+         *     freshly rotated password, the pre-connection blob that selects the VM, and a ticket for
+         *     `POST /vms/{vmId}/console/tunnel`. The account is a standard local account on the host,
+         *     created by "Set up console access" in the host's tray, and is granted access to this VM's
+         *     console only. The host rotates its password again when the reuse window (60 seconds by
+         *     default) ends; Remote Desktop sessions already signed in stay open.
+         *
+         *     The client connects a Remote Desktop client to a local listener that forwards each
+         *     connection through a tunnel, with `pcb:s:<pcb>` and `negotiate security layer:i:0`.
+         *     The response is sent with `Cache-Control: no-store`.
+         */
+        post: operations["openVmConsole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/console/tunnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a byte tunnel to the host's Virtual Machine Connection service.
+         * @description An HTTP/1.1 upgrade. Send `Connection: Upgrade`, `Upgrade: hyperharbor-console`, and the
+         *     ticket from `openVmConsole` in `X-HyperHarbor-Console-Ticket`, with no body. After the
+         *     101 response the connection carries raw Remote Desktop bytes to and from the host's port
+         *     2179 on loopback, until either side closes. A ticket opens any number of tunnels for the
+         *     same device, User, and VM until it expires. The audit entry for the outcome is written
+         *     when the tunnel closes, with its duration and byte counts.
+         */
+        post: operations["openVmConsoleTunnel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/compute": {
         parameters: {
             query?: never;
@@ -552,7 +612,8 @@ export interface components {
             /**
              * @description Set for errors a client handles differently from others with the same status:
              *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
-             *     `resourceWarnings` (see `warnings`), `requiresShutdown`.
+             *     `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
+             *     `vmNotRunning`, `consolePasswordPolicy`.
              */
             code?: string;
             /** @description Field-level validation problems (400). */
@@ -729,6 +790,29 @@ export interface components {
             expiresAt: string;
             /** @description Linux guests use xrdp, which signs in over TLS instead of CredSSP (NLA). */
             guestOs: components["schemas"]["GuestOsFamily"];
+        };
+        ConsoleSession: {
+            /** @description Opens tunnels with `POST /vms/{vmId}/console/tunnel`. Clients must not persist it. */
+            ticket: string;
+            /** @description The host console account, qualified with the host's computer name, for example "MYPC\hhc-owner". */
+            userName: string;
+            /**
+             * @description Valid until the reuse window ends, when the host rotates it again. Requests within the
+             *     window receive the same password. Clients must not persist it.
+             */
+            password: string;
+            /** @description The Remote Desktop pre-connection blob that selects the VM (its ID). */
+            pcb: string;
+            /**
+             * Format: date-time
+             * @description End of the password's reuse window.
+             */
+            expiresAt: string;
+            /**
+             * Format: date-time
+             * @description After this, the ticket opens no more tunnels. Open tunnels stay open.
+             */
+            ticketExpiresAt: string;
         };
         VmActionRequest: {
             action: components["schemas"]["VmAction"];
@@ -1682,6 +1766,100 @@ export interface operations {
             };
             502: components["responses"]["GuestOperationFailed"];
             503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    openVmConsole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Console credentials and a tunnel ticket. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsoleSession"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not running or paused (`code: vmNotRunning`), console access is not set up
+             *     on the host or its stored password is out of date (`code: consoleSetupRequired`), or
+             *     the host's password policy refused a new password (`code: consolePasswordPolicy`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["HyperVOperationFailed"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    openVmConsoleTunnel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ticket from `openVmConsole`. */
+                "X-HyperHarbor-Console-Ticket": string;
+                Upgrade: "hyperharbor-console";
+            };
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switching protocols; the connection is now the tunnel. */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description The ticket is missing, expired, or was issued for another device, User, or VM. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The request is not an HTTP/1.1 upgrade to `hyperharbor-console`. */
+            426: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The host's Virtual Machine Connection service did not answer. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     getVmCompute: {
