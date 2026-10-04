@@ -112,3 +112,17 @@ internal sealed class FakeGuestPerformanceSetup : IGuestPerformanceSetup
         return Task.FromResult(new GuestSetupResult(RebootRequired));
     }
 }
+
+/// <summary>System log GPU events, counting reads.</summary>
+internal sealed class FakeGpuEventSource : IGpuEventSource
+{
+    public List<GpuEvent> Events { get; } = [];
+
+    public int Reads { get; private set; }
+
+    public IReadOnlyList<GpuEvent> Read(DateTimeOffset since)
+    {
+        Reads++;
+        return Events.Where(record => record.TimeCreated >= since).ToList();
+    }
+}

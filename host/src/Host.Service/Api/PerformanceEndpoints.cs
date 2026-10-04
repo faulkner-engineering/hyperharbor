@@ -69,9 +69,9 @@ public static class PerformanceEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<Ok<HostGpu>> GetHostGpuAsync(IHostGpuReader gpus, CancellationToken cancellationToken)
+    private static async Task<Ok<HostGpu>> GetHostGpuAsync(IHostGpuReader gpus, GpuEventReader events, CancellationToken cancellationToken)
     {
         var devices = await gpus.ReadAsync(cancellationToken);
-        return TypedResults.Ok(new HostGpu(devices.Select(gpu => gpu.ToContract()).ToList(), []));
+        return TypedResults.Ok(new HostGpu(devices.Select(gpu => gpu.ToContract()).ToList(), events.Warnings()));
     }
 }

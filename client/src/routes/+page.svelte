@@ -29,6 +29,7 @@
   import CreateVmDialog from "$lib/components/CreateVmDialog.svelte";
   import ComputeDialog from "$lib/components/ComputeDialog.svelte";
   import PerformanceDialog from "$lib/components/PerformanceDialog.svelte";
+  import GpuWarnings from "$lib/components/GpuWarnings.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { elevation, ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
@@ -340,6 +341,9 @@
       {:else if vms === null}
         <p class="placeholder">Loading…</p>
       {:else}
+        {#key selectedHost.key}
+          <GpuWarnings host={selectedHost} />
+        {/key}
         <div class="views" role="tablist" aria-label="Host views">
           <button type="button" role="tab" aria-selected={view === "vms"} class:active={view === "vms"} onclick={() => (view = "vms")}>
             Virtual machines

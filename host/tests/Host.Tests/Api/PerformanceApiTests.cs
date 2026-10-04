@@ -107,6 +107,21 @@ public sealed class PerformanceApiTests : IDisposable
     }
 
     [Fact]
+    public async Task HostGpu_ReportsRecentDriverErrors()
+    {
+        using var host = new TestHost();
+        host.Pair(_certificate, "Laptop");
+        using var client = host.CreateClient(_certificate);
+        host.GpuEvents.Events.Add(new Core.Performance.GpuEvent("Display", 4101, DateTimeOffset.UtcNow.AddHours(-1), null));
+
+        var warning = (await client.GetFromJsonAsync<JsonObject>("/api/v1/host/gpu"))!["warnings"]![0]!;
+
+        Assert.Equal("Display", (string?)warning["provider"]);
+        Assert.Equal(4101, (int?)warning["eventId"]);
+        Assert.Equal(1, (int?)warning["count"]);
+    }
+
+    [Fact]
     public async Task GuestSetup_NeedsElevation_AndACredential()
     {
         var applied = await SendElevated(HttpMethod.Put, $"/api/v1/vms/{VmId}/performance", Settings());
