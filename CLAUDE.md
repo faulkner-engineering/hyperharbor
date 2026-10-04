@@ -47,6 +47,10 @@ per-device VM accounts and a user management UI.
 - Rotated VM passwords live in host memory only for the reuse window and are never logged or persisted.
   VM admin credentials for provisioning are stored only with DPAPI through ProtectedFile.
 - Ask before any destructive Hyper-V operation.
+- After any change, without asking (the user's standing instruction): stop everything running from dist/
+  (HyperHarbor.Host.Service, HyperHarbor.Host.Tray, the portable client), rebuild with
+  scripts\package.ps1 -Fast, then relaunch: dist\host\Start-HyperHarbor.ps1 (service and tray) and
+  dist\HyperHarbor-Client-<ver>-portable.exe. Report it if the rebuild fails, and leave things stopped.
 
 ## Layout
 - docs/api.yaml: OpenAPI 3.1 contract, the source of truth for host and client
