@@ -5,6 +5,7 @@ using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Auth;
 using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Pairing;
+using HyperHarbor.Shared.Contracts.Unattend;
 using HyperHarbor.Shared.Contracts.Vms;
 using HyperHarbor.Shared.Contracts.Wake;
 using YamlDotNet.RepresentationModel;
@@ -75,7 +76,16 @@ public class ContractFixtureTests
         ["VmComputeSettings"] = ComputeSample,
         ["UpdateVmComputeRequest"] = new UpdateVmComputeRequest(4, null, null, false, true, true, ShutDownToApply: true),
         ["VmComputeUpdate"] = new VmComputeUpdate(ComputeSample, null),
-        ["CreateVmRequest"] = new CreateVmRequest("Win11 Dev", "Win11_24H2.iso", 64, 4, 4096, 8192, true, "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", true, false),
+        ["CreateVmRequest"] = new CreateVmRequest("Win11 Dev", "Win11_24H2.iso", 64, 4, 4096, 8192, true, "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", true, false,
+            new UnattendedInstallRequest("windows-workstation", "Windows 11 Pro", "WIN11-DEV")),
+        ["UnattendedInstallRequest"] = new UnattendedInstallRequest("ubuntu-dev-server"),
+        ["UnattendProfile"] = new UnattendProfile("windows-burner", "Windows Burner", true, InstallOs.Windows, "hhadmin", "Central Standard Time", "en-US",
+            new WindowsInstallSettings("Windows 11 Pro", BypassHardwareChecks: true), null),
+        ["UnattendProfileRequest"] = new UnattendProfileRequest("Build Server", InstallOs.Linux, "builder", "America/Chicago", "en-US", null,
+            new LinuxInstallSettings(["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixture user@laptop"], ["git"], InstallDesktop: false)),
+        ["WindowsInstallSettings"] = new WindowsInstallSettings("Windows 11 Pro", false, true, true, false, true),
+        ["LinuxInstallSettings"] = new LinuxInstallSettings([], ["git", "curl"], true),
+        ["IsoInspection"] = new IsoInspection(InstallOs.Windows, "Windows", ["Windows 11 Home", "Windows 11 Pro"]),
         ["ValidationIssue"] = new ValidationIssue("processorCount", "Use at most 16 virtual processors."),
         ["VmDeleteRequest"] = new VmDeleteRequest(true, true, "Ubuntu Dev"),
         ["DeleteBlocker"] = new DeleteBlocker(DeleteBlockerCode.SharedDisk, DeleteBlockerScope.DeleteDisksOrCheckpoints, @"C:\VMs\Base.vhdx is also used by Web."),

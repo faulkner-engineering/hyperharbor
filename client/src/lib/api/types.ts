@@ -95,6 +95,78 @@ export interface paths {
         patch: operations["renameIso"];
         trace?: never;
     };
+    "/isos/{name}/inspection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+                name: components["parameters"]["IsoName"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read what an image installs.
+         * @description Reads the image without mounting it. Windows Setup media (UDF or ISO 9660) report their
+         *     editions from sources\install.wim or install.esd; Ubuntu installers report their
+         *     distribution from .disk\info. Anything else has `os` null, and can only be installed from
+         *     the console. Results are cached until the file changes.
+         */
+        get: operations["inspectIso"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/unattend-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the unattended install profiles the calling User can use.
+         * @description The three built-in profiles first, then the User's own profiles by name.
+         */
+        get: operations["listUnattendProfiles"];
+        put?: never;
+        /**
+         * Create an unattended install profile for the calling User.
+         * @description Needs elevation, because a profile decides what future VMs get (for example which SSH keys
+         *     can sign in). The audit entry records only the name and OS.
+         */
+        post: operations["createUnattendProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/unattend-profiles/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An unattended profile ID. */
+                profileId: components["parameters"]["ProfileId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace one of the calling User's profiles. */
+        put: operations["updateUnattendProfile"];
+        post?: never;
+        /** Delete one of the calling User's profiles. */
+        delete: operations["deleteUnattendProfile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/switches": {
         parameters: {
             query?: never;
@@ -613,7 +685,7 @@ export interface components {
              * @description Set for errors a client handles differently from others with the same status:
              *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
              *     `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
-             *     `vmNotRunning`, `consolePasswordPolicy`.
+             *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`.
              */
             code?: string;
             /** @description Field-level validation problems (400). */
@@ -728,6 +800,11 @@ export interface components {
             provisioned: boolean;
             remoteDesktop: components["schemas"]["VmRemoteDesktop"];
             guestOs: components["schemas"]["VmGuestOs"];
+            /**
+             * @description The unattended install of this VM while it runs or after it failed. Absent for VMs installed
+             *     from the console and once the install is ready.
+             */
+            installState?: components["schemas"]["UnattendedInstallState"] | null;
         };
         VmRemoteDesktop: {
             /** @description The guest address clients connect to, or null when the guest reports none. */
@@ -1089,7 +1166,100 @@ export interface components {
             enableTpm: boolean;
             /** @default false */
             acknowledgeWarnings: boolean;
+            /**
+             * @description Install the OS unattended with a profile. The job writes an answer file ISO, attaches it as
+             *     a second DVD, and starts the VM. Null means the OS is installed from the console.
+             */
+            install?: components["schemas"]["UnattendedInstallRequest"] | null;
         };
+        /** @enum {string} */
+        InstallOs: "windows" | "linux";
+        IsoInspection: {
+            /** @description Null when the image is neither Windows Setup media nor an Ubuntu installer. */
+            os: components["schemas"]["InstallOs"] | null;
+            /** @description For example "Windows" or "Ubuntu-Server 24.04.1 LTS". */
+            distribution: string | null;
+            /** @description Windows image names in install.wim, for example "Windows 11 Pro". Empty for Linux. */
+            editions: string[];
+        };
+        WindowsInstallSettings: {
+            /** @description The image to install, by its name in install.wim. The create request can choose another. */
+            defaultEdition: string;
+            /**
+             * @description Skip the Windows 11 TPM, Secure Boot, and memory checks (for VMs without a TPM).
+             * @default false
+             */
+            bypassHardwareChecks: boolean;
+            /** @default true */
+            disableTelemetry: boolean;
+            /** @default true */
+            disableAdvertisingId: boolean;
+            /** @default true */
+            disableLocation: boolean;
+            /**
+             * @description Turn off suggested apps and other consumer experiences.
+             * @default true
+             */
+            disableConsumerFeatures: boolean;
+        };
+        LinuxInstallSettings: {
+            /** @description OpenSSH public keys (ssh-ed25519, ecdsa-sha2-nistp*, ssh-rsa) for the administrator. */
+            sshAuthorizedKeys?: string[];
+            /** @description Extra apt packages. linux-cloud-tools-virtual is always added, so Hyper-V can read the guest address. */
+            packages?: string[];
+            /**
+             * @description Install Xfce and xrdp, so Remote Desktop works.
+             * @default true
+             */
+            installDesktop: boolean;
+        };
+        UnattendProfileRequest: {
+            name: string;
+            os: components["schemas"]["InstallOs"];
+            /**
+             * @description The local administrator Setup creates. The host gives it a one-time password and rotates
+             *     it once setup is done. Windows names have up to 20 characters; Linux names are lowercase.
+             * @default hhadmin
+             */
+            adminAccountName: string;
+            /** @description A Windows time zone ID for Windows, an IANA ID for Linux. Null means the host time zone. */
+            timeZone?: string | null;
+            /** @default en-US */
+            locale: string;
+            /** @description Required when `os` is windows. */
+            windows?: components["schemas"]["WindowsInstallSettings"] | null;
+            /** @description Required when `os` is linux. */
+            linux?: components["schemas"]["LinuxInstallSettings"] | null;
+        };
+        /** @description Settings for installing an OS without anyone at the console. Profiles never hold passwords. */
+        UnattendProfile: {
+            /** @description A slug for built-in profiles, a GUID for the User's own. */
+            id: string;
+            name: string;
+            /** @description Built-in profiles cannot be changed or deleted. */
+            builtIn: boolean;
+            os: components["schemas"]["InstallOs"];
+            adminAccountName: string;
+            timeZone: string;
+            locale: string;
+            windows: components["schemas"]["WindowsInstallSettings"] | null;
+            linux: components["schemas"]["LinuxInstallSettings"] | null;
+        };
+        UnattendedInstallRequest: {
+            /** @description An `id` from `GET /unattend-profiles`. */
+            profileId: string;
+            /** @description An edition from `GET /isos/{name}/inspection`. Null means the default edition of the profile. */
+            windowsEdition?: string | null;
+            /** @description Windows only, at most 15 letters, digits, or hyphens. Null means derived from the VM name. */
+            computerName?: string | null;
+        };
+        /**
+         * @description `installing` (Setup is running), `awaitingConfirmation` (Ubuntu waits for "yes" at the console),
+         *     `waitingForGuest` (no address yet), `waitingForRemoteAccess` (Remote Desktop or SSH not answering
+         *     yet), `configuring` (the host sets up the User account), then `ready`, `failed`, or `canceled`.
+         * @enum {string}
+         */
+        UnattendedInstallState: "installing" | "awaitingConfirmation" | "waitingForGuest" | "waitingForRemoteAccess" | "configuring" | "ready" | "failed" | "canceled";
         /** @enum {string} */
         ComputeSetting: "processorCount" | "startupMemoryMb" | "maximumMemoryMb" | "dynamicMemory" | "nestedVirtualization" | "macAddressSpoofing";
         VmComputeSettings: {
@@ -1248,6 +1418,8 @@ export interface components {
     parameters: {
         /** @description Hyper-V virtual machine ID. */
         VmId: string;
+        /** @description An unattended profile ID. */
+        ProfileId: string;
         /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
         IsoName: string;
         /** @description Job ID returned when the job was started. */
@@ -1437,6 +1609,155 @@ export interface operations {
             403: components["responses"]["ElevationRequired"];
             404: components["responses"]["NotFound"];
             /** @description Another image has the new name, or a VM has this image attached. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    inspectIso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+                name: components["parameters"]["IsoName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the image installs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IsoInspection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listUnattendProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profiles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnattendProfile"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createUnattendProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnattendProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The new profile. */
+            201: {
+                headers: {
+                    /** @description URL of the profile. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnattendProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
+    updateUnattendProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An unattended profile ID. */
+                profileId: components["parameters"]["ProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnattendProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnattendProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description The profile is built in (`code` is `profileReadOnly`); copy it instead. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    deleteUnattendProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An unattended profile ID. */
+                profileId: components["parameters"]["ProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile was deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description The profile is built in (`code` is `profileReadOnly`). */
             409: {
                 headers: {
                     [name: string]: unknown;

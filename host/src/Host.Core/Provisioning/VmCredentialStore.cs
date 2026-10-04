@@ -41,6 +41,21 @@ public sealed class VmCredentialStore
         }
     }
 
+    public bool Remove(Guid vmId)
+    {
+        lock (_gate)
+        {
+            var credentials = Load();
+            if (!credentials.Remove(vmId))
+            {
+                return false;
+            }
+
+            Write(credentials);
+            return true;
+        }
+    }
+
     private Dictionary<Guid, GuestCredential> Load()
     {
         if (!File.Exists(_path))

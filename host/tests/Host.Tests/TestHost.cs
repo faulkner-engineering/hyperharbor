@@ -66,6 +66,18 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IHyperVCompute>(Compute);
                 services.AddSingleton<IConsolePasswordChanger>(ConsolePasswords);
                 services.AddSingleton<IConsoleAccessGranter>(ConsoleAccess);
+                services.AddSingleton<Core.Unattend.IVmKeyboard>(Keyboard);
+                services.AddSingleton(provider => new Core.Unattend.UnattendedSetup(
+                    provider.GetRequiredService<Core.Unattend.UnattendProfileStore>(),
+                    provider.GetRequiredService<Core.Unattend.IsoInspector>(),
+                    provider.GetRequiredService<UserStore>(),
+                    provider.GetRequiredService<VmCredentialStore>(),
+                    provider.GetRequiredService<Core.Unattend.UnattendedInstallStore>(),
+                    provider.GetRequiredService<IHyperVPowerInvoker>(),
+                    Keyboard,
+                    TimeProvider.System,
+                    provider.GetRequiredService<ILogger<Core.Unattend.UnattendedSetup>>(),
+                    keyInterval: TimeSpan.Zero));
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
             }));
@@ -100,6 +112,8 @@ internal sealed class TestHost : IDisposable
     public FakeConsolePasswordChanger ConsolePasswords { get; } = new();
 
     public FakeConsoleAccess ConsoleAccess { get; } = new();
+
+    public Unattend.FakeVmKeyboard Keyboard { get; } = new();
 
     /// <summary>The ISO library folder, inside the data directory.</summary>
     public string IsoFolder => Path.Combine(DataDirectory, "isos");

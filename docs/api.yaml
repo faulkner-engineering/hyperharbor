@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.4.0
+  version: 1.5.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -34,6 +34,8 @@ security:
 tags:
   - name: Host
     description: Host identity and version.
+  - name: Unattended
+    description: Profiles and image inspection for installing an OS without anyone at the console.
   - name: VMs
     description: Virtual machine inventory and power actions.
   - name: Pairing
@@ -238,6 +240,144 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: A VM has this image attached.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /isos/{name}/inspection:
+    parameters:
+      - $ref: "#/components/parameters/IsoName"
+    get:
+      tags: [Unattended]
+      operationId: inspectIso
+      summary: Read what an image installs.
+      description: |
+        Reads the image without mounting it. Windows Setup media (UDF or ISO 9660) report their
+        editions from sources\install.wim or install.esd; Ubuntu installers report their
+        distribution from .disk\info. Anything else has `os` null, and can only be installed from
+        the console. Results are cached until the file changes.
+      responses:
+        "200":
+          description: What the image installs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IsoInspection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /unattend-profiles:
+    get:
+      tags: [Unattended]
+      operationId: listUnattendProfiles
+      summary: List the unattended install profiles the calling User can use.
+      description: The three built-in profiles first, then the User's own profiles by name.
+      responses:
+        "200":
+          description: The profiles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UnattendProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Unattended]
+      operationId: createUnattendProfile
+      summary: Create an unattended install profile for the calling User.
+      description: |
+        Needs elevation, because a profile decides what future VMs get (for example which SSH keys
+        can sign in). The audit entry records only the name and OS.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnattendProfileRequest"
+      responses:
+        "201":
+          description: The new profile.
+          headers:
+            Location:
+              description: URL of the profile.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnattendProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+
+  /unattend-profiles/{profileId}:
+    parameters:
+      - $ref: "#/components/parameters/ProfileId"
+    put:
+      tags: [Unattended]
+      operationId: updateUnattendProfile
+      summary: Replace one of the calling User's profiles.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnattendProfileRequest"
+      responses:
+        "200":
+          description: The updated profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnattendProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The profile is built in (`code` is `profileReadOnly`); copy it instead.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags: [Unattended]
+      operationId: deleteUnattendProfile
+      summary: Delete one of the calling User's profiles.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "204":
+          description: The profile was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The profile is built in (`code` is `profileReadOnly`).
           content:
             application/problem+json:
               schema:
@@ -1071,6 +1211,14 @@ components:
       schema:
         type: string
         format: uuid
+    ProfileId:
+      name: profileId
+      in: path
+      required: true
+      description: An unattended profile ID.
+      schema:
+        type: string
+        maxLength: 64
     IsoName:
       name: name
       in: path
@@ -1185,7 +1333,7 @@ components:
             Set for errors a client handles differently from others with the same status:
             `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
             `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
-            `vmNotRunning`, `consolePasswordPolicy`.
+            `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`.
         errors:
           type: array
           description: Field-level validation problems (400).
@@ -1314,6 +1462,13 @@ components:
           $ref: "#/components/schemas/VmRemoteDesktop"
         guestOs:
           $ref: "#/components/schemas/VmGuestOs"
+        installState:
+          description: |
+            The unattended install of this VM while it runs or after it failed. Absent for VMs installed
+            from the console and once the install is ready.
+          oneOf:
+            - $ref: "#/components/schemas/UnattendedInstallState"
+            - type: "null"
       example:
         id: 0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b
         name: Dev Workstation
@@ -1888,6 +2043,166 @@ components:
         acknowledgeWarnings:
           type: boolean
           default: false
+        install:
+          description: |
+            Install the OS unattended with a profile. The job writes an answer file ISO, attaches it as
+            a second DVD, and starts the VM. Null means the OS is installed from the console.
+          oneOf:
+            - $ref: "#/components/schemas/UnattendedInstallRequest"
+            - type: "null"
+
+    InstallOs:
+      type: string
+      enum: [windows, linux]
+
+    IsoInspection:
+      type: object
+      required: [os, distribution, editions]
+      properties:
+        os:
+          description: Null when the image is neither Windows Setup media nor an Ubuntu installer.
+          oneOf:
+            - $ref: "#/components/schemas/InstallOs"
+            - type: "null"
+        distribution:
+          type: [string, "null"]
+          description: For example "Windows" or "Ubuntu-Server 24.04.1 LTS".
+        editions:
+          type: array
+          description: Windows image names in install.wim, for example "Windows 11 Pro". Empty for Linux.
+          items:
+            type: string
+
+    WindowsInstallSettings:
+      type: object
+      required: [defaultEdition]
+      properties:
+        defaultEdition:
+          type: string
+          maxLength: 100
+          description: The image to install, by its name in install.wim. The create request can choose another.
+        bypassHardwareChecks:
+          type: boolean
+          default: false
+          description: Skip the Windows 11 TPM, Secure Boot, and memory checks (for VMs without a TPM).
+        disableTelemetry:
+          type: boolean
+          default: true
+        disableAdvertisingId:
+          type: boolean
+          default: true
+        disableLocation:
+          type: boolean
+          default: true
+        disableConsumerFeatures:
+          type: boolean
+          default: true
+          description: Turn off suggested apps and other consumer experiences.
+
+    LinuxInstallSettings:
+      type: object
+      properties:
+        sshAuthorizedKeys:
+          type: array
+          maxItems: 10
+          description: OpenSSH public keys (ssh-ed25519, ecdsa-sha2-nistp*, ssh-rsa) for the administrator.
+          items:
+            type: string
+        packages:
+          type: array
+          maxItems: 50
+          description: Extra apt packages. linux-cloud-tools-virtual is always added, so Hyper-V can read the guest address.
+          items:
+            type: string
+        installDesktop:
+          type: boolean
+          default: true
+          description: Install Xfce and xrdp, so Remote Desktop works.
+
+    UnattendProfileRequest:
+      type: object
+      required: [name, os]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        os:
+          $ref: "#/components/schemas/InstallOs"
+        adminAccountName:
+          type: string
+          default: hhadmin
+          description: |
+            The local administrator Setup creates. The host gives it a one-time password and rotates
+            it once setup is done. Windows names have up to 20 characters; Linux names are lowercase.
+        timeZone:
+          type: [string, "null"]
+          description: A Windows time zone ID for Windows, an IANA ID for Linux. Null means the host time zone.
+        locale:
+          type: string
+          default: en-US
+        windows:
+          description: Required when `os` is windows.
+          oneOf:
+            - $ref: "#/components/schemas/WindowsInstallSettings"
+            - type: "null"
+        linux:
+          description: Required when `os` is linux.
+          oneOf:
+            - $ref: "#/components/schemas/LinuxInstallSettings"
+            - type: "null"
+
+    UnattendProfile:
+      type: object
+      description: Settings for installing an OS without anyone at the console. Profiles never hold passwords.
+      required: [id, name, builtIn, os, adminAccountName, timeZone, locale, windows, linux]
+      properties:
+        id:
+          type: string
+          description: A slug for built-in profiles, a GUID for the User's own.
+        name:
+          type: string
+        builtIn:
+          type: boolean
+          description: Built-in profiles cannot be changed or deleted.
+        os:
+          $ref: "#/components/schemas/InstallOs"
+        adminAccountName:
+          type: string
+        timeZone:
+          type: string
+        locale:
+          type: string
+        windows:
+          oneOf:
+            - $ref: "#/components/schemas/WindowsInstallSettings"
+            - type: "null"
+        linux:
+          oneOf:
+            - $ref: "#/components/schemas/LinuxInstallSettings"
+            - type: "null"
+
+    UnattendedInstallRequest:
+      type: object
+      required: [profileId]
+      properties:
+        profileId:
+          type: string
+          description: An `id` from `GET /unattend-profiles`.
+        windowsEdition:
+          type: [string, "null"]
+          description: An edition from `GET /isos/{name}/inspection`. Null means the default edition of the profile.
+        computerName:
+          type: [string, "null"]
+          description: Windows only, at most 15 letters, digits, or hyphens. Null means derived from the VM name.
+
+    UnattendedInstallState:
+      type: string
+      description: |
+        `installing` (Setup is running), `awaitingConfirmation` (Ubuntu waits for "yes" at the console),
+        `waitingForGuest` (no address yet), `waitingForRemoteAccess` (Remote Desktop or SSH not answering
+        yet), `configuring` (the host sets up the User account), then `ready`, `failed`, or `canceled`.
+      enum: [installing, awaitingConfirmation, waitingForGuest, waitingForRemoteAccess, configuring, ready, failed, canceled]
 
     ComputeSetting:
       type: string

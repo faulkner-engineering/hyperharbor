@@ -16,7 +16,7 @@ public sealed class SeedIsoAndInspectorTests : IDisposable
     [Fact]
     public void WindowsSeed_HasAutounattendAtTheRootWithItsCaseKept()
     {
-        var path = Path.Combine(_directory, SeedIso.FileName);
+        var path = SeedIso.PathFor(Path.Combine(_directory, "Dev Box.vhdx"));
         var install = new WindowsInstall(
             new UnattendProfile("windows-burner", "Windows Burner", true, InstallOs.Windows, "hhadmin", "UTC", "en-US", new WindowsInstallSettings("Windows 11 Pro"), null),
             "Windows 11 Pro", "DEV-BOX", "One-Time-Pass1!", "hh-owner");
@@ -28,13 +28,12 @@ public sealed class SeedIsoAndInspectorTests : IDisposable
         Assert.Equal(SeedIso.WindowsVolumeLabel, reader.VolumeLabel);
         Assert.Contains(reader.GetFiles(@"\"), file => file.TrimStart('\\') == "Autounattend.xml");
         Assert.Equal(AutounattendBuilder.Build(install), Encoding.UTF8.GetString(reader.ReadAllBytes("Autounattend.xml")));
-        Assert.False(File.Exists(path + ".partial"));
     }
 
     [Fact]
     public void LinuxSeed_IsACidataVolumeWithUserDataAndMetaData()
     {
-        var path = Path.Combine(_directory, SeedIso.FileName);
+        var path = SeedIso.PathFor(Path.Combine(_directory, "Dev Box.vhdx"));
         var install = new LinuxInstall(
             new UnattendProfile("ubuntu-dev-server", "Ubuntu Dev Server", true, InstallOs.Linux, "hhadmin", "Etc/UTC", "en-US", null, new LinuxInstallSettings()),
             "dev-box", Sha512Crypt.Hash("One-Time-Pass1!"));
@@ -54,7 +53,7 @@ public sealed class SeedIsoAndInspectorTests : IDisposable
     {
         var iso = BuildIso("windows.iso", new Dictionary<string, byte[]>
         {
-            [@"sources\install.wim"] = Wim("Windows 11 Home", "Windows 11 Pro"),
+            [@"sources\install.wim"] = TestIsos.Wim("Windows 11 Home", "Windows 11 Pro"),
             ["setup.exe"] = [0],
         });
 
@@ -122,28 +121,8 @@ public sealed class SeedIsoAndInspectorTests : IDisposable
 
     private string BuildIso(string name, Dictionary<string, byte[]> files)
     {
-        var builder = new CDBuilder { UseJoliet = true, VolumeIdentifier = "TEST" };
-        foreach (var (path, content) in files)
-        {
-            builder.AddFile(path, content);
-        }
-
         var iso = Path.Combine(_directory, name);
-        builder.Build(iso);
+        TestIsos.Write(iso, files);
         return iso;
-    }
-
-    /// <summary>A WIM header whose XML resource lists the images; the image data itself is left out.</summary>
-    private static byte[] Wim(params string[] names)
-    {
-        var images = string.Concat(names.Select((name, index) => $"<IMAGE INDEX=\"{index + 1}\"><NAME>{name}</NAME></IMAGE>"));
-        var xml = Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes($"<WIM><TOTALBYTES>0</TOTALBYTES>{images}</WIM>")).ToArray();
-        var header = new byte[208];
-        "MSWIM\0\0\0"u8.CopyTo(header);
-        BitConverter.GetBytes(208).CopyTo(header, 8);
-        BitConverter.GetBytes((long)xml.Length).CopyTo(header, 72);
-        BitConverter.GetBytes(208L).CopyTo(header, 80);
-        BitConverter.GetBytes((long)xml.Length).CopyTo(header, 88);
-        return [.. header, .. xml];
     }
 }

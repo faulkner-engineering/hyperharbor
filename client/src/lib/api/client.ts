@@ -27,9 +27,12 @@ export interface DeleteVmRequest {
   confirmName: string;
 }
 
+/** Every field is sent; `install` is left out for a manual install. */
 export type CreateVmRequest = Required<
-  Omit<components["schemas"]["CreateVmRequest"], "switchId">
-> & { switchId: string | null };
+  Omit<components["schemas"]["CreateVmRequest"], "switchId" | "install">
+> & { switchId: string | null; install?: UnattendedInstallRequest | null };
+
+export type UnattendedInstallRequest = components["schemas"]["UnattendedInstallRequest"];
 
 export type UpdateComputeRequest = {
   processorCount?: number;

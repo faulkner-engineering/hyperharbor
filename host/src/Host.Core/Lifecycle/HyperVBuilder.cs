@@ -7,6 +7,8 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// <summary>What a new VM is made of.</summary>
 /// <param name="ConfigurationFolder">Null: Hyper-V's default folder.</param>
 /// <param name="SwitchId">Null: no network adapter.</param>
+/// <param name="SecureBootTemplateId">Microsoft Windows, or Microsoft UEFI CA for Linux installers.</param>
+/// <param name="SeedIsoPath">An unattended install's answer file ISO, attached as a second DVD; null for none.</param>
 public sealed record VmBlueprint(
     string Name,
     string? ConfigurationFolder,
@@ -16,7 +18,9 @@ public sealed record VmBlueprint(
     long StartupMemoryMb,
     long MaximumMemoryMb,
     bool DynamicMemory,
-    string? SwitchId);
+    string? SwitchId,
+    string SecureBootTemplateId = CimHyperVBuilder.MicrosoftWindowsTemplateId,
+    string? SeedIsoPath = null);
 
 /// <summary>The Hyper-V steps of creating a VM. Each step either completes or throws.</summary>
 public interface IHyperVBuilder
@@ -24,11 +28,14 @@ public interface IHyperVBuilder
     /// <summary>Creates a new dynamic VHDX. The file must not exist.</summary>
     Task CreateDiskAsync(string path, long sizeBytes, Action<int> progress, CancellationToken cancellationToken);
 
-    /// <summary>Defines a Generation 2 VM with Secure Boot (Microsoft Windows template) and the given notes.</summary>
+    /// <summary>Defines a Generation 2 VM with Secure Boot (the blueprint's template) and the given notes.</summary>
     /// <returns>The new VM's ID.</returns>
     Task<Guid> DefineAsync(VmBlueprint blueprint, string notes, CancellationToken cancellationToken);
 
-    /// <summary>Sets processors and memory, adds the disk, the ISO (first in boot order), and the network adapter.</summary>
+    /// <summary>
+    /// Sets processors and memory, adds the disk, the ISO (first in boot order), the answer file ISO if any (not
+    /// in front of the boot order), and the network adapter.
+    /// </summary>
     Task ConfigureAsync(Guid vmId, VmBlueprint blueprint, CancellationToken cancellationToken);
 
     /// <summary>Adds a virtual TPM protected by the host's local (untrusted) guardian.</summary>
@@ -82,7 +89,7 @@ public sealed class CimHyperVBuilder : IHyperVBuilder
                 new("ElementName", CimType.String, blueprint.Name),
                 new("VirtualSystemSubType", CimType.String, "Microsoft:Hyper-V:SubType:2"),
                 new("SecureBootEnabled", CimType.Boolean, true),
-                new("SecureBootTemplateId", CimType.String, MicrosoftWindowsTemplateId),
+                new("SecureBootTemplateId", CimType.String, blueprint.SecureBootTemplateId),
                 new("Notes", CimType.StringArray, new[] { notes }),
             };
             if (blueprint.ConfigurationFolder is { } folder)
@@ -147,6 +154,17 @@ public sealed class CimHyperVBuilder : IHyperVBuilder
             await CimVmSettings.AddResourceAsync(session, settings, diskTemplate, cancellationToken,
                 new("Parent", CimType.String, drive),
                 new("HostResource", CimType.StringArray, new[] { blueprint.DiskPath }));
+
+            if (blueprint.SeedIsoPath is { } seed)
+            {
+                // Windows Setup and cloud-init look for their answer files on any DVD.
+                var seedDrive = await CimVmSettings.AddResourceAsync(session, settings, dvdTemplate, cancellationToken,
+                    new("Parent", CimType.String, controller),
+                    new("AddressOnParent", CimType.String, "2"));
+                await CimVmSettings.AddResourceAsync(session, settings, isoTemplate, cancellationToken,
+                    new("Parent", CimType.String, seedDrive),
+                    new("HostResource", CimType.StringArray, new[] { seed }));
+            }
 
             if (blueprint.SwitchId is { } switchId)
             {

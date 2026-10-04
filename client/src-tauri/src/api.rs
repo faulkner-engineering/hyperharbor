@@ -65,6 +65,20 @@ pub struct CreateVmRequest {
     pub switch_id: Option<String>,
     pub enable_tpm: bool,
     pub acknowledge_warnings: bool,
+    /// Install the OS unattended with a profile; none means a manual install from the console.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub install: Option<UnattendedInstallRequest>,
+}
+
+/// api.yaml UnattendedInstallRequest. Unset fields use the profile's defaults.
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnattendedInstallRequest {
+    pub profile_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub windows_edition: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub computer_name: Option<String>,
 }
 
 /// Body of PATCH /vms/{vmId}/compute (api.yaml UpdateVmComputeRequest). Unset fields stay as they are.
@@ -1964,6 +1978,7 @@ mod server_tests {
             switch_id: None,
             enable_tpm: true,
             acknowledge_warnings: false,
+            install: None,
         };
 
         let result = api()

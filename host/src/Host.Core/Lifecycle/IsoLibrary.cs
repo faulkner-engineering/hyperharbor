@@ -185,6 +185,11 @@ public sealed class IsoLibrary
         }
     }
 
+    /// <summary>The full path of an image in the library.</summary>
+    /// <exception cref="IsoNotFoundException">No image has this name.</exception>
+    /// <exception cref="LifecycleValidationException">The name is invalid.</exception>
+    public string PathOf(string name) => Existing(name);
+
     /// <summary>The image's details.</summary>
     /// <exception cref="IsoNotFoundException">No image has this name.</exception>
     public IsoImage Get(string name) => ToImage(new FileInfo(Existing(name)));

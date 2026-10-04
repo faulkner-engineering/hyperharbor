@@ -17,7 +17,12 @@
     "dynamicMemory": true,
     "switchId": "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444",
     "enableTpm": true,
-    "acknowledgeWarnings": false
+    "acknowledgeWarnings": false,
+    "install": {
+      "profileId": "windows-workstation",
+      "windowsEdition": "Windows 11 Pro",
+      "computerName": "WIN11-DEV"
+    }
   },
   "DeleteBlocker": {
     "code": "sharedDisk",
@@ -40,7 +45,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.4.0",
+    "apiVersion": "1.5.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostResources": {
@@ -59,9 +64,25 @@
       "Win11 Dev"
     ]
   },
+  "IsoInspection": {
+    "os": "windows",
+    "distribution": "Windows",
+    "editions": [
+      "Windows 11 Home",
+      "Windows 11 Pro"
+    ]
+  },
   "JobError": {
     "title": "Deleting disks failed",
     "detail": "The file is in use."
+  },
+  "LinuxInstallSettings": {
+    "sshAuthorizedKeys": [],
+    "packages": [
+      "git",
+      "curl"
+    ],
+    "installDesktop": true
   },
   "PairingConfirmation": {
     "clientShare": "BAUG",
@@ -92,6 +113,43 @@
   },
   "RenameIsoRequest": {
     "newName": "Windows 11 24H2.iso"
+  },
+  "UnattendProfile": {
+    "id": "windows-burner",
+    "name": "Windows Burner",
+    "builtIn": true,
+    "os": "windows",
+    "adminAccountName": "hhadmin",
+    "timeZone": "Central Standard Time",
+    "locale": "en-US",
+    "windows": {
+      "defaultEdition": "Windows 11 Pro",
+      "bypassHardwareChecks": true,
+      "disableTelemetry": true,
+      "disableAdvertisingId": true,
+      "disableLocation": true,
+      "disableConsumerFeatures": true
+    },
+    "linux": null
+  },
+  "UnattendProfileRequest": {
+    "name": "Build Server",
+    "os": "linux",
+    "adminAccountName": "builder",
+    "timeZone": "America/Chicago",
+    "locale": "en-US",
+    "linux": {
+      "sshAuthorizedKeys": [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixture user@laptop"
+      ],
+      "packages": [
+        "git"
+      ],
+      "installDesktop": false
+    }
+  },
+  "UnattendedInstallRequest": {
+    "profileId": "ubuntu-dev-server"
   },
   "UpdateVmComputeRequest": {
     "processorCount": 4,
@@ -278,5 +336,13 @@
   },
   "WakeTestScheduled": {
     "sleepAt": "2026-10-03T12:00:00\u002B00:00"
+  },
+  "WindowsInstallSettings": {
+    "defaultEdition": "Windows 11 Pro",
+    "bypassHardwareChecks": false,
+    "disableTelemetry": true,
+    "disableAdvertisingId": true,
+    "disableLocation": false,
+    "disableConsumerFeatures": true
   }
 }

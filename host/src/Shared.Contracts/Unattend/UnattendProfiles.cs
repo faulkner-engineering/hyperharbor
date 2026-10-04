@@ -74,3 +74,35 @@ public sealed record IsoInspection(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] InstallOs? Os,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Distribution,
     IReadOnlyList<string> Editions);
+
+/// <summary>Installs the OS without anyone at the console when a VM is created. Schema: UnattendedInstallRequest.</summary>
+/// <param name="ProfileId">An ID from GET /unattend-profiles.</param>
+/// <param name="WindowsEdition">An edition from the ISO's inspection. Null: the profile's default edition.</param>
+/// <param name="ComputerName">Windows only, at most 15 letters, digits, or hyphens. Null: derived from the VM name.</param>
+public sealed record UnattendedInstallRequest(
+    [property: JsonRequired] string ProfileId,
+    string? WindowsEdition = null,
+    string? ComputerName = null);
+
+/// <summary>Where an unattended install is. Schema: UnattendedInstallState.</summary>
+public enum UnattendedInstallState
+{
+    /// <summary>Setup is running; the guest has not reported a heartbeat yet.</summary>
+    Installing,
+
+    /// <summary>Ubuntu waits for "yes" at the console before it changes the disk.</summary>
+    AwaitingConfirmation,
+
+    /// <summary>The guest OS runs but has not reported an address yet.</summary>
+    WaitingForGuest,
+
+    /// <summary>The guest has an address; Remote Desktop (Windows) or SSH (Linux) does not answer yet.</summary>
+    WaitingForRemoteAccess,
+
+    /// <summary>The host is setting up the User's account.</summary>
+    Configuring,
+
+    Ready,
+    Failed,
+    Canceled,
+}

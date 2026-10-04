@@ -1,4 +1,6 @@
+using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Unattend;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging;
 
@@ -32,6 +34,7 @@ public sealed class VmCreationService
     private readonly VmJobStore _jobs;
     private readonly LifecycleOptions _options;
     private readonly VmStorageLocation _location;
+    private readonly UnattendedSetup? _unattended;
     private readonly ILogger<VmCreationService> _logger;
     private readonly HashSet<string> _namesInProgress = new(StringComparer.OrdinalIgnoreCase);
 
@@ -46,8 +49,10 @@ public sealed class VmCreationService
         VmJobStore jobs,
         LifecycleOptions options,
         ILogger<VmCreationService> logger,
-        VmStorageLocation? location = null)
+        VmStorageLocation? location = null,
+        UnattendedSetup? unattended = null)
     {
+        _unattended = unattended;
         _location = location ?? new VmStorageLocation(null, options, hyperV);
         _inventory = inventory;
         _builder = builder;
@@ -67,7 +72,7 @@ public sealed class VmCreationService
     public async Task<VmJobSnapshot> StartAsync(Guid userId, CreateVmRequest request, Action<VmJobSnapshot>? onFinished, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var blueprint = await PlanAsync(request, cancellationToken).ConfigureAwait(false);
+        var (blueprint, install) = await PlanAsync(userId, request, cancellationToken).ConfigureAwait(false);
 
         lock (_namesInProgress)
         {
@@ -79,7 +84,7 @@ public sealed class VmCreationService
 
         try
         {
-            return _jobs.Start(VmJobKind.CreateVm, null, userId, "Creating the virtual hard disk", context => RunAsync(blueprint, request, context), job =>
+            return _jobs.Start(VmJobKind.CreateVm, null, userId, "Creating the virtual hard disk", context => RunAsync(blueprint, request, install, userId, context), job =>
             {
                 lock (_namesInProgress)
                 {
@@ -100,8 +105,15 @@ public sealed class VmCreationService
         }
     }
 
-    /// <summary>Validates the request and works out the folders, ISO path, and switch.</summary>
-    internal async Task<VmBlueprint> PlanAsync(CreateVmRequest request, CancellationToken cancellationToken)
+    /// <summary>Validates a request without an unattended install, for tests.</summary>
+    internal async Task<VmBlueprint> PlanAsync(CreateVmRequest request, CancellationToken cancellationToken) =>
+        (await PlanAsync(Guid.Empty, request, cancellationToken).ConfigureAwait(false)).Blueprint;
+
+    /// <summary>
+    /// Validates the request and works out the folders, ISO path, switch, Secure Boot template, and the
+    /// unattended install, if any.
+    /// </summary>
+    internal async Task<(VmBlueprint Blueprint, InstallPlan? Install)> PlanAsync(Guid userId, CreateVmRequest request, CancellationToken cancellationToken)
     {
         var errors = new List<ValidationIssue>();
         var warnings = new List<ValidationIssue>();
@@ -176,6 +188,23 @@ public sealed class VmCreationService
             }
         }
 
+        // Linux shims are signed by the Microsoft UEFI CA, which the Windows template does not trust.
+        var inspection = isoPath is not null && _unattended is not null ? _unattended.Inspect(isoPath) : null;
+        var template = inspection?.Os == InstallOs.Linux ? UnattendedSetup.MicrosoftUefiCaTemplateId : CimHyperVBuilder.MicrosoftWindowsTemplateId;
+
+        InstallPlan? install = null;
+        if (request.Install is { } installRequest)
+        {
+            if (_unattended is null)
+            {
+                errors.Add(new("install", "Unattended installs are not available on this host."));
+            }
+            else if (inspection is not null && diskPath.Length > 0)
+            {
+                install = _unattended.Plan(userId, installRequest, isoPath!, inspection, name, SeedIso.PathFor(diskPath), request.EnableTpm, errors, warnings);
+            }
+        }
+
         if (errors.Count > 0)
         {
             throw new LifecycleValidationException(errors[0].Message, errors);
@@ -186,7 +215,7 @@ public sealed class VmCreationService
             throw new ResourceWarningsException(warnings);
         }
 
-        return new VmBlueprint(
+        var blueprint = new VmBlueprint(
             name,
             configurationFolder,
             diskPath,
@@ -195,15 +224,26 @@ public sealed class VmCreationService
             request.StartupMemoryMb,
             request.DynamicMemory ? request.MaximumMemoryMb : request.StartupMemoryMb,
             request.DynamicMemory,
-            switchId);
+            switchId,
+            template,
+            install?.SeedPath);
+        return (blueprint, install);
     }
 
-    private async Task RunAsync(VmBlueprint blueprint, CreateVmRequest request, VmJobContext context)
+    private async Task RunAsync(VmBlueprint blueprint, CreateVmRequest request, InstallPlan? install, Guid userId, VmJobContext context)
     {
         var diskCreated = false;
         Guid? vmId = null;
         try
         {
+            // The answer file is written first, so the configure step can attach it.
+            string? adminPassword = null;
+            if (install is not null)
+            {
+                context.Report("Writing the answer file", 1);
+                adminPassword = _unattended!.WriteSeed(install);
+            }
+
             await _builder.CreateDiskAsync(blueprint.DiskPath, (long)request.DiskSizeGb * 1024 * 1024 * 1024,
                 percent => context.Report("Creating the virtual hard disk", percent * 30 / 100), context.Stopping).ConfigureAwait(false);
             diskCreated = true;
@@ -212,7 +252,7 @@ public sealed class VmCreationService
             vmId = await _builder.DefineAsync(blueprint, IncompleteNote, context.Stopping).ConfigureAwait(false);
             context.AttachVm(vmId.Value);
 
-            context.Report("Adding processors, memory, disk, DVD, and network", 50);
+            context.Report(install is null ? "Adding processors, memory, disk, DVD, and network" : "Adding processors, memory, disk, DVDs, and network", 50);
             await _builder.ConfigureAsync(vmId.Value, blueprint, context.Stopping).ConfigureAwait(false);
 
             if (request.EnableTpm)
@@ -224,11 +264,21 @@ public sealed class VmCreationService
             context.Report("Finishing", 95);
             await _builder.SetNotesAsync(vmId.Value, string.Empty, context.Stopping).ConfigureAwait(false);
             _logger.LogInformation("Created virtual machine {Name} ({VmId}).", blueprint.Name, vmId);
+
+            if (install is not null)
+            {
+                await _unattended!.BeginAsync(vmId.Value, userId, install, adminPassword!, step => context.Report(step, 97), context.Stopping).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Creating {Name} failed; removing what was created.", blueprint.Name);
             await RollBackAsync(blueprint, vmId, diskCreated).ConfigureAwait(false);
+            if (install is not null)
+            {
+                _unattended!.RollBack(install, vmId);
+            }
+
             throw;
         }
     }

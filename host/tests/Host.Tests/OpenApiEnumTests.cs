@@ -23,6 +23,8 @@ public class OpenApiEnumTests
     [InlineData("VmJobKind", typeof(VmJobKind))]
     [InlineData("VmJobState", typeof(VmJobState))]
     [InlineData("ComputeSetting", typeof(ComputeSetting))]
+    [InlineData("InstallOs", typeof(Shared.Contracts.Unattend.InstallOs))]
+    [InlineData("UnattendedInstallState", typeof(Shared.Contracts.Unattend.UnattendedInstallState))]
     public void EnumWireValues_MatchOpenApiSchema(string schemaName, Type enumType)
     {
         var schema = (YamlMappingNode)Schemas[schemaName];

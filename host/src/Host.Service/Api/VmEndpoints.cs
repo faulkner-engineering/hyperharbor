@@ -4,8 +4,10 @@ using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Unattend;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -39,7 +41,7 @@ public static class VmEndpoints
             .Audited<CreateVmRequest>(request =>
                 $"name={request.Name}, iso={request.IsoName}, diskSizeGb={request.DiskSizeGb}, processors={request.ProcessorCount}, " +
                 $"startupMemoryMb={request.StartupMemoryMb}, maximumMemoryMb={request.MaximumMemoryMb}, dynamicMemory={request.DynamicMemory}, " +
-                $"switchId={request.SwitchId ?? "default"}, tpm={request.EnableTpm}")
+                $"switchId={request.SwitchId ?? "default"}, tpm={request.EnableTpm}, install={request.Install?.ProfileId ?? "manual"}")
             .RequireElevation();
 
         vms.MapGet("/{vmId:guid}/compute", GetComputeAsync).WithName("getVmCompute");
@@ -62,25 +64,27 @@ public static class VmEndpoints
     private static async Task<Ok<IReadOnlyList<Vm>>> ListVmsAsync(
         IVmInventory inventory,
         ProvisioningStore provisioning,
+        UnattendedInstallStore installs,
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var userId = user.UserId();
         var vms = await inventory.ListAsync(cancellationToken);
-        return TypedResults.Ok<IReadOnlyList<Vm>>(vms.Select(vm => ForUser(vm, userId, provisioning)).ToList());
+        return TypedResults.Ok<IReadOnlyList<Vm>>(vms.Select(vm => ForUser(vm, userId, provisioning, installs)).ToList());
     }
 
     private static async Task<Results<Ok<Vm>, ProblemHttpResult>> GetVmAsync(
         Guid vmId,
         IVmInventory inventory,
         ProvisioningStore provisioning,
+        UnattendedInstallStore installs,
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var vm = await inventory.GetAsync(vmId, cancellationToken);
         return vm is null
             ? TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: "Virtual machine not found", detail: $"Virtual machine {vmId} was not found.")
-            : TypedResults.Ok(ForUser(vm, user.UserId(), provisioning));
+            : TypedResults.Ok(ForUser(vm, user.UserId(), provisioning, installs));
     }
 
     private static async Task<Accepted<VmActionResult>> PerformVmActionAsync(
@@ -167,9 +171,10 @@ public static class VmEndpoints
     }
 
     /// <summary>Adds the per-User fields; the inventory itself is shared by all Users.</summary>
-    private static Vm ForUser(Vm vm, Guid userId, ProvisioningStore provisioning) => vm with
+    private static Vm ForUser(Vm vm, Guid userId, ProvisioningStore provisioning, UnattendedInstallStore installs) => vm with
     {
         Provisioned = provisioning.Find(vm.Id, userId) is not null,
+        InstallState = installs.Find(vm.Id) is { } install && (install.IsActive || install.State == UnattendedInstallState.Failed) ? install.State : null,
         RemoteDesktop = vm.RemoteDesktop ?? new VmRemoteDesktop(vm.IpAddresses.FirstOrDefault(), vm.RdpAvailable),
     };
 }
