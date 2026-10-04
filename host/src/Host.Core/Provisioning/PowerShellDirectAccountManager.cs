@@ -54,7 +54,7 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
     /// Remote Desktop Users is addressed by SID S-1-5-32-555 and the firewall rule group by its
     /// resource string, so the script works on localized guests.
     /// </summary>
-    private const string Script = """
+    internal const string Script = """
         $ErrorActionPreference = 'Stop'
         $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
         function Secure([string]$text) { ConvertTo-SecureString $text -AsPlainText -Force }
@@ -96,7 +96,7 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
             }
             $user = Get-LocalUser -Name $name
             $members = @(Get-LocalGroupMember -SID 'S-1-5-32-555' -ErrorAction SilentlyContinue)
-            if (-not ($members | Where-Object { $_.SID -eq $user.SID })) { Add-LocalGroupMember -SID 'S-1-5-32-555' -Member $user.SID }
+            if (-not ($members | Where-Object { $_.SID -eq $user.SID })) { Add-LocalGroupMember -SID 'S-1-5-32-555' -Member $user }
             if ($enableRemoteDesktop) {
                 Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
                 Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'
