@@ -153,5 +153,19 @@ internal static class HyperVCim
         {
             throw new HyperVUnavailableException("Access to Hyper-V was denied. Run elevated or add the account to the Hyper-V Administrators group.", ex);
         }
+        catch (CimException ex)
+        {
+            // Any other CIM error (a bad parameter, a missing object) keeps Hyper-V's own text for the client and log.
+            throw new HyperVCallException(ex);
+        }
+    }
+}
+
+/// <summary>A CIM call to Hyper-V failed; the message is the one CIM reported.</summary>
+public sealed class HyperVCallException : Exception
+{
+    public HyperVCallException(CimException inner)
+        : base($"Hyper-V rejected the request: {inner.Message.Trim()} ({inner.NativeErrorCode}).", inner)
+    {
     }
 }

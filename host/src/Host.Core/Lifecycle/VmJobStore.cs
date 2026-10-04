@@ -191,8 +191,10 @@ public sealed class VmJobStore : IDisposable
         }
         catch (Exception ex)
         {
-            // HyperHarbor exceptions carry messages written for the client; anything else may not.
-            var expected = ex.GetType().Namespace?.StartsWith("HyperHarbor.", StringComparison.Ordinal) == true;
+            // HyperHarbor exceptions carry messages written for the client, and file errors name the file and
+            // the problem (for example access denied); anything else may not be meant for the client.
+            var expected = ex.GetType().Namespace?.StartsWith("HyperHarbor.", StringComparison.Ordinal) == true
+                || ex is IOException or UnauthorizedAccessException;
             if (expected)
             {
                 _logger.LogWarning("Job {JobId} ({Kind}) failed: {Message}", entry.Snapshot.Id, entry.Snapshot.Kind, ex.Message);

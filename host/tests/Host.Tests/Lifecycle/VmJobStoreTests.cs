@@ -100,6 +100,16 @@ public sealed class VmJobStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task FileErrors_KeepTheirMessage()
+    {
+        var job = _jobs.Start(VmJobKind.CreateVm, null, UserId, "Creating the virtual hard disk",
+            _ => throw new UnauthorizedAccessException(@"Access to the path 'D:\VMs\Dev' is denied."));
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Contains(@"D:\VMs\Dev", _jobs.Get(job.Id, UserId)!.ErrorDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task OnFinished_ReceivesTheFinalSnapshot()
     {
         VmJobSnapshot? finished = null;

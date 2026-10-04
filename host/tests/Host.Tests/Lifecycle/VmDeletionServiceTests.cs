@@ -190,6 +190,22 @@ public sealed class VmDeletionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AttachedIsoAndOtherNonDiskFiles_AreNeverDeleted()
+    {
+        const string iso = @"C:\ISOs\Win11.iso";
+        _storage.Attach(VmId, "Dev", iso);
+        _files.Files.Add(iso);
+
+        var preview = await _deletion.PreviewAsync(VmId, CancellationToken.None);
+        var job = await StartAsync(deleteDisks: true);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal([BaseDisk], preview.Disks);
+        Assert.Equal([BaseDisk], _files.Deleted);
+        Assert.Contains(iso, _files.Files);
+    }
+
+    [Fact]
     public async Task ConfirmName_MustMatchExactly()
     {
         var ex = await Assert.ThrowsAsync<LifecycleValidationException>(() =>

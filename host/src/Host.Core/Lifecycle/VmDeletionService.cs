@@ -38,7 +38,10 @@ public sealed class VmDeletionService
     public async Task<VmDeletePreview> PreviewAsync(Guid vmId, CancellationToken cancellationToken)
     {
         var vm = await _inventory.GetAsync(vmId, cancellationToken).ConfigureAwait(false) ?? throw new VmNotFoundException(vmId);
-        var storage = await _storage.ReadAsync(cancellationToken).ConfigureAwait(false);
+        // Only virtual hard disk files can ever be deleted: an attached ISO or anything else is skipped here,
+        // even if storage reports it.
+        var read = await _storage.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var storage = read with { Disks = read.Disks.Where(disk => DiskPaths.IsDisk(disk.Path)).ToList() };
         var parents = new ParentCache(_storage, cancellationToken);
 
         var own = storage.Disks.Where(disk => disk.VmId == vmId).ToList();

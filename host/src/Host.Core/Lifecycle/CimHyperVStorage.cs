@@ -6,7 +6,7 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 
 /// <summary>
 /// <see cref="IHyperVStorage"/> through root\virtualization\v2.
-/// Disks: Msvm_StorageAllocationSettingData with ResourceType 31, grouped by the
+/// Disks: Msvm_StorageAllocationSettingData with ResourceSubType "Virtual Hard Disk" (ISOs share ResourceType 31), grouped by the
 /// Msvm_VirtualSystemSettingData (realized VM or checkpoint) whose InstanceID prefixes theirs.
 /// Parents: Msvm_ImageManagementService.GetVirtualHardDiskSettingData.
 /// Deletion: Msvm_VirtualSystemSnapshotService.DestroySnapshotTree and
@@ -16,7 +16,8 @@ public sealed class CimHyperVStorage : IHyperVStorage
 {
     private const string RealizedType = "Microsoft:Hyper-V:System:Realized";
     private const string SnapshotTypePrefix = "Microsoft:Hyper-V:Snapshot:";
-    private const ushort LogicalDiskResourceType = 31;
+    // ISO and floppy images are ResourceType 31 too; only this subtype is a virtual hard disk.
+    private const string VirtualHardDiskSubType = "Microsoft:Hyper-V:Virtual Hard Disk";
 
     public Task<StorageSnapshot> ReadAsync(CancellationToken cancellationToken) =>
         HyperVCim.RunAsync(session => Task.FromResult(Read(session)), cancellationToken);
@@ -70,7 +71,7 @@ public sealed class CimHyperVStorage : IHyperVStorage
                 var done = index;
                 var parameters = new CimMethodParametersCollection
                 {
-                    CimMethodParameter.Create("AffectedSnapshot", roots[index], CimType.Reference, CimFlags.In),
+                    CimMethodParameter.Create("SnapshotSettingData", roots[index], CimType.Reference, CimFlags.In),
                 };
                 await HyperVCim.InvokeAsync(session, service, "DestroySnapshotTree", parameters, "DestroySnapshotTree", cancellationToken,
                     percent => progress((done * 100 + percent) / roots.Count));
@@ -139,7 +140,7 @@ public sealed class CimHyperVStorage : IHyperVStorage
         }
 
         var disks = new List<DiskAttachment>();
-        foreach (var storage in HyperVCim.Query(session, $"SELECT InstanceID, HostResource FROM Msvm_StorageAllocationSettingData WHERE ResourceType = {LogicalDiskResourceType}"))
+        foreach (var storage in HyperVCim.Query(session, $"SELECT InstanceID, HostResource FROM Msvm_StorageAllocationSettingData WHERE ResourceSubType = '{VirtualHardDiskSubType}'"))
         {
             using (storage)
             {

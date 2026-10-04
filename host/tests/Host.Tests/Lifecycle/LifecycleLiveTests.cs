@@ -78,6 +78,15 @@ public sealed class LifecycleLiveTests(ITestOutputHelper output) : IDisposable
             output.WriteLine($"Applied: {applied}");
             Assert.NotNull(update.Settings);
             Assert.Equal(new ComputeState(1, 1024, 1024, false, true, true, 1), applied);
+
+            // A checkpoint, so deletion has to merge it (DestroySnapshotTree) before removing the VM.
+            await CreateCheckpointAsync(vmId);
+            var preview = await new VmDeletionService(inventory, storage, files, jobs, NullLogger<VmDeletionService>.Instance)
+                .PreviewAsync(vmId, CancellationToken.None);
+            output.WriteLine($"Before delete: {preview.CheckpointCount} checkpoint(s); disks {string.Join(", ", preview.Disks)}");
+            Assert.Equal(1, preview.CheckpointCount);
+            Assert.Empty(preview.Blockers);
+            Assert.All(preview.Disks, disk => Assert.EndsWith(".vhdx", disk, StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
@@ -91,6 +100,20 @@ public sealed class LifecycleLiveTests(ITestOutputHelper output) : IDisposable
 
         Assert.DoesNotContain(await inventory.ListAsync(CancellationToken.None), vm => vm.Id == vmId);
         Assert.False(File.Exists(Path.Combine(_root, "vms", VmName, "Virtual Hard Disks", VmName + ".vhdx")));
+        Assert.True(File.Exists(Path.Combine(isoFolder, "placeholder.iso")), "Deleting the VM's disks must keep its ISO.");
+    }
+
+    private static async Task CreateCheckpointAsync(Guid vmId)
+    {
+        using var session = CimSession.Create(null);
+        using var service = session.QueryInstances(HyperVCim.Namespace, "WQL", "SELECT * FROM Msvm_VirtualSystemSnapshotService").Single();
+        using var system = session.QueryInstances(HyperVCim.Namespace, "WQL", $"SELECT * FROM Msvm_ComputerSystem WHERE Name = '{vmId:D}'").Single();
+        var parameters = new CimMethodParametersCollection
+        {
+            CimMethodParameter.Create("AffectedSystem", system, CimType.Reference, CimFlags.In),
+            CimMethodParameter.Create("SnapshotType", (ushort)2, CimType.UInt16, CimFlags.In),
+        };
+        await HyperVCim.InvokeAsync(session, service, "CreateSnapshot", parameters, "CreateSnapshot", CancellationToken.None);
     }
 
     private void CheckSettings(Guid vmId)

@@ -108,6 +108,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             LifecycleConflictException => (StatusCodes.Status409Conflict, "Cannot complete the request"),
             ResourceWarningsException => (StatusCodes.Status409Conflict, "Check host resources"),
             HyperVJobFailedException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
+            HyperVCallException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
             HyperVUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Hyper-V unavailable"),
             HyperVOperationException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
             WakeTestAlreadyScheduledException => (StatusCodes.Status409Conflict, "Wake test already scheduled"),
