@@ -24,6 +24,10 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(SetVmFolderMessage), "setVmFolder")]
 [JsonDerivedType(typeof(BackupFolderMessage), "backupFolder")]
 [JsonDerivedType(typeof(SetBackupFolderMessage), "setBackupFolder")]
+[JsonDerivedType(typeof(GpuVmsQueryMessage), "gpuVmsQuery")]
+[JsonDerivedType(typeof(GpuVmsMessage), "gpuVms")]
+[JsonDerivedType(typeof(StopGpuVmsMessage), "stopGpuVms")]
+[JsonDerivedType(typeof(GpuVmsStoppedMessage), "gpuVmsStopped")]
 public abstract record TrayMessage;
 
 // Service to tray.
@@ -67,6 +71,12 @@ public sealed record VmFolderMessage(string Folder, bool IsDefault, string? Erro
 /// <param name="Error">Why the last change request was refused, if it was.</param>
 public sealed record BackupFolderMessage(string Folder, string? Error = null) : TrayMessage;
 
+/// <summary>The running Performance mode VMs, in answer to <see cref="GpuVmsQueryMessage"/>.</summary>
+public sealed record GpuVmsMessage(IReadOnlyList<string> Running) : TrayMessage;
+
+/// <summary>The outcome of <see cref="StopGpuVmsMessage"/>.</summary>
+public sealed record GpuVmsStoppedMessage(IReadOnlyList<string> Stopped, IReadOnlyList<string> StillRunning) : TrayMessage;
+
 // Tray to service.
 
 public sealed record ListDevicesMessage : TrayMessage;
@@ -83,6 +93,12 @@ public sealed record SetVmFolderMessage(string Folder) : TrayMessage;
 
 /// <summary>Sends disk exports to a local folder, which is created if missing. Earlier exports are not moved.</summary>
 public sealed record SetBackupFolderMessage(string Folder) : TrayMessage;
+
+/// <summary>Asks which Performance mode VMs are running, so the tray knows whether to hold up a Windows shutdown.</summary>
+public sealed record GpuVmsQueryMessage : TrayMessage;
+
+/// <summary>Shuts down the running Performance mode VMs before Windows shuts down. They are never turned off.</summary>
+public sealed record StopGpuVmsMessage : TrayMessage;
 
 /// <param name="Outcome">applied, declined, or failed.</param>
 public sealed record WakeFixCompletedMessage(Guid RequestId, string Outcome, string? Detail) : TrayMessage;

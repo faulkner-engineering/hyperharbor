@@ -23,6 +23,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private bool _vmFolderChanging;
     private string? _backupFolder;
     private bool _backupFolderChanging;
+    private readonly ShutdownGuard _shutdownGuard;
+    private readonly System.Windows.Forms.Timer _gpuVmPoll;
+    private IReadOnlyList<string> _gpuVms = [];
 
     /// <summary>Null until the service reports it.</summary>
     private bool? _passphraseConfigured;
@@ -55,6 +58,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _pipe = new TrayPipeClient();
         _pipe.ConnectionChanged += OnConnectionChanged;
         _pipe.MessageReceived += OnMessage;
+        _shutdownGuard = new ShutdownGuard(() => _connected ? _gpuVms : [], () => _ = _pipe.SendAsync(new StopGpuVmsMessage()));
+
+        // The guard must answer a shutdown at once, so it uses the last known list rather than asking then.
+        _gpuVmPoll = new System.Windows.Forms.Timer { Interval = 30_000 };
+        _gpuVmPoll.Tick += (_, _) => QueryGpuVms();
+        _gpuVmPoll.Start();
+
         _pipe.Start();
     }
 
@@ -62,6 +72,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (disposing)
         {
+            _gpuVmPoll.Dispose();
+            _shutdownGuard.Dispose();
             _pipe.Dispose();
             _pinForm?.Dispose();
             _devicesForm?.Dispose();
@@ -87,6 +99,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _isoFolder = null;
             _vmFolder = null;
             _backupFolder = null;
+            _gpuVms = [];
+        }
+        else
+        {
+            QueryGpuVms();
         }
 
         RefreshHost();
@@ -123,9 +140,46 @@ internal sealed class TrayApplicationContext : ApplicationContext
             case AdminPassphraseStatusMessage status:
                 OnPassphraseStatus(status);
                 break;
+            case GpuVmsMessage gpuVms:
+                _gpuVms = gpuVms.Running;
+                break;
+            case GpuVmsStoppedMessage stopped:
+                OnGpuVmsStopped(stopped);
+                break;
             case WakeFixRequestedMessage wakeFix:
                 _ = ApproveWakeFixAsync(wakeFix);
                 break;
+        }
+    }
+
+    private void QueryGpuVms()
+    {
+        if (_connected)
+        {
+            _ = _pipe.SendAsync(new GpuVmsQueryMessage());
+        }
+    }
+
+    private void OnGpuVmsStopped(GpuVmsStoppedMessage message)
+    {
+        _gpuVms = message.StillRunning;
+        if (!_shutdownGuard.Blocking)
+        {
+            return;
+        }
+
+        _shutdownGuard.Release();
+        if (message.StillRunning.Count == 0)
+        {
+            _notifyIcon.ShowBalloonTip(10000, "GPU VMs are off", "You can restart or shut down Windows now.", ToolTipIcon.Info);
+        }
+        else
+        {
+            _notifyIcon.ShowBalloonTip(
+                15000,
+                "GPU VMs still running",
+                $"{string.Join(", ", message.StillRunning)} did not shut down. Shut it down from the guest, or restart anyway and Hyper-V turns it off.",
+                ToolTipIcon.Warning);
         }
     }
 

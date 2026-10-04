@@ -7,6 +7,7 @@ using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
+using HyperHarbor.Host.Core.Performance;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Shared.Contracts.Ipc;
@@ -200,6 +201,13 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             case SetBackupFolderMessage backupFolder:
                 SetBackupFolder(backupFolder);
                 break;
+            case GpuVmsQueryMessage:
+                await connection.SendAsync(await GpuVmsAsync());
+                break;
+            case StopGpuVmsMessage:
+                // Shutting the guests down takes minutes; keep reading the pipe meanwhile.
+                _ = StopGpuVmsAsync();
+                break;
             case SetAdminPassphraseMessage set:
                 SetAdminPassphrase(set);
                 break;
@@ -226,6 +234,47 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             AuditTrayAction("traySetIsoFolder", null, null, null, $"folder={folder}");
         });
         Broadcast(new IsoFolderMessage(isos.Folder, error));
+    }
+
+    /// <summary>How long a tray-requested shutdown of the Performance mode VMs waits for the guests.</summary>
+    internal static readonly TimeSpan GpuVmShutdownTimeout = TimeSpan.FromMinutes(5);
+
+    private async Task<GpuVmsMessage> GpuVmsAsync()
+    {
+        if (_services.GetService<GpuVmShutdownCoordinator>() is not { } coordinator)
+        {
+            return new GpuVmsMessage([]);
+        }
+
+        try
+        {
+            return new GpuVmsMessage((await coordinator.RunningAsync(CancellationToken.None)).Select(vm => vm.Name).ToList());
+        }
+        catch (Core.HyperV.HyperVUnavailableException ex)
+        {
+            _logger.LogWarning("Could not list the running Performance mode VMs: {Message}", ex.Message);
+            return new GpuVmsMessage([]);
+        }
+    }
+
+    /// <summary>The tray is holding up a Windows shutdown: shut the Performance mode VMs down, then tell every tray.</summary>
+    private async Task StopGpuVmsAsync()
+    {
+        if (_services.GetService<GpuVmShutdownCoordinator>() is not { } coordinator)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await coordinator.StopAllAsync(GpuVmShutdownTimeout, CancellationToken.None);
+            Broadcast(new GpuVmsStoppedMessage(result.Stopped, result.StillRunning));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Shutting down the Performance mode VMs for the tray failed.");
+            Broadcast(new GpuVmsStoppedMessage([], (await GpuVmsAsync()).Running));
+        }
     }
 
     /// <summary>Sends disk exports that name no folder to a local folder chosen at the host. Earlier exports stay where they are.</summary>

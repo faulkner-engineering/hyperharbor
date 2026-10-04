@@ -59,13 +59,19 @@ builder.Services.AddWindowsService(options =>
 {
     options.ServiceName = "HyperHarbor Host";
 });
+if (Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
+{
+    // Replaces the lifetime AddWindowsService registered, to handle SERVICE_CONTROL_PRESHUTDOWN.
+    builder.Services.AddSingleton<IHostLifetime, PreshutdownServiceLifetime>();
+}
+
 builder.Services.AddHostedService<VmInventoryStartupLogger>();
 
 // Identity, certificate, and paired devices live under %ProgramData%\HyperHarbor unless DataDirectory is set.
 var dataDirectory = builder.Configuration["DataDirectory"] is { Length: > 0 } configured
     ? configured
     : HostIdentityStore.DefaultDataDirectory;
-// The console and the daily log file under <data>ogs get the same entries.
+// The console and the daily log file under <data>\logs get the same entries.
 // Registered through DI so the container disposes it, which closes the file when the service stops.
 builder.Services.AddSingleton<ILoggerProvider>(_ => new FileLoggerProvider(dataDirectory));
 builder.Services.AddSingleton(new HostIdentityStore(dataDirectory));
@@ -190,6 +196,7 @@ builder.Services.AddSingleton<GpuEventReader>();
 builder.Services.AddSingleton<IGpuDriverSource, CimGpuDriverSource>();
 builder.Services.AddSingleton<IGuestPerformanceSetup, PowerShellDirectPerformanceSetup>();
 builder.Services.AddSingleton<VmPerformanceService>();
+builder.Services.AddSingleton<GpuVmShutdownCoordinator>();
 
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))
