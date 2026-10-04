@@ -45,7 +45,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.5.0",
+    "apiVersion": "1.6.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostResources": {
@@ -150,6 +150,16 @@
   },
   "UnattendedInstallRequest": {
     "profileId": "ubuntu-dev-server"
+  },
+  "UnattendedInstallStatus": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "profileId": "windows-burner",
+    "os": "windows",
+    "state": "waitingForRemoteAccess",
+    "step": "Waiting for Remote Desktop to answer",
+    "startedAt": "2026-10-03T12:00:00\u002B00:00",
+    "updatedAt": "2026-10-03T12:12:00\u002B00:00",
+    "error": null
   },
   "UpdateVmComputeRequest": {
     "processorCount": 4,

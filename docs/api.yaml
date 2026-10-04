@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.5.0
+  version: 1.6.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -270,6 +270,50 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /vms/{vmId}/install:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [Unattended]
+      operationId: getVmInstall
+      summary: Get the unattended install of a VM.
+      description: |
+        The host follows each unattended install: it waits for the installed system to report its OS
+        and address through Hyper-V data exchange, then for Remote Desktop (Windows) or SSH (Linux) to
+        answer a real protocol greeting. It then sets up the creating User's account with the one-time
+        administrator credential, requires Remote Desktop to answer, replaces the administrator
+        password, and ejects and deletes the answer file. Time while the VM is off does not count
+        toward the install timeout (three hours of running time by default).
+      responses:
+        "200":
+          description: The install.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnattendedInstallStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Unattended]
+      operationId: cancelVmInstall
+      summary: Stop following a VM's unattended install.
+      description: |
+        The VM keeps running, and the answer file is ejected and deleted. Finish the setup from the
+        console, or with `POST /vms/{vmId}/provision`.
+      responses:
+        "204":
+          description: The install was canceled.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: The VM has no install in progress, or its account is being set up right now.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /unattend-profiles:
     get:
@@ -2195,6 +2239,32 @@ components:
         computerName:
           type: [string, "null"]
           description: Windows only, at most 15 letters, digits, or hyphens. Null means derived from the VM name.
+
+    UnattendedInstallStatus:
+      type: object
+      required: [vmId, profileId, os, state, step, startedAt, updatedAt, error]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        profileId:
+          type: string
+        os:
+          $ref: "#/components/schemas/InstallOs"
+        state:
+          $ref: "#/components/schemas/UnattendedInstallState"
+        step:
+          type: string
+          description: What is happening now, for example "Waiting for Remote Desktop to answer".
+        startedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        error:
+          type: [string, "null"]
+          description: Why the install failed.
 
     UnattendedInstallState:
       type: string

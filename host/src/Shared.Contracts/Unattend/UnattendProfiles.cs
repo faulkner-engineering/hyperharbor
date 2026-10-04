@@ -106,3 +106,16 @@ public enum UnattendedInstallState
     Failed,
     Canceled,
 }
+
+/// <summary>An unattended install and how far it is. Schema: UnattendedInstallStatus.</summary>
+/// <param name="Step">What is happening now, for example "Waiting for Remote Desktop to answer".</param>
+/// <param name="Error">Why the install failed; null otherwise.</param>
+public sealed record UnattendedInstallStatus(
+    Guid VmId,
+    string ProfileId,
+    InstallOs Os,
+    UnattendedInstallState State,
+    string Step,
+    DateTimeOffset StartedAt,
+    DateTimeOffset UpdatedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Error);

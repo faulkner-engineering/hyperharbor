@@ -63,3 +63,31 @@ internal sealed class FakeVmKeyboard : IVmKeyboard
         return Task.CompletedTask;
     }
 }
+
+/// <summary>Records ejected media.</summary>
+internal sealed class FakeVmMedia : IVmMedia
+{
+    public List<(Guid VmId, string Path)> Ejected { get; } = [];
+
+    public Task EjectAsync(Guid vmId, string isoPath, CancellationToken cancellationToken)
+    {
+        lock (Ejected)
+        {
+            Ejected.Add((vmId, isoPath));
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Answers as configured, without network access.</summary>
+internal sealed class FakeRemoteAccessProbe : IRemoteAccessProbe
+{
+    public bool Rdp { get; set; }
+
+    public bool Ssh { get; set; }
+
+    public Task<bool> RdpAnswersAsync(string address, CancellationToken cancellationToken) => Task.FromResult(Rdp);
+
+    public Task<bool> SshAnswersAsync(string address, CancellationToken cancellationToken) => Task.FromResult(Ssh);
+}

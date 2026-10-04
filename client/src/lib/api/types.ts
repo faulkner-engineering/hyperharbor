@@ -121,6 +121,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get the unattended install of a VM.
+         * @description The host follows each unattended install: it waits for the installed system to report its OS
+         *     and address through Hyper-V data exchange, then for Remote Desktop (Windows) or SSH (Linux) to
+         *     answer a real protocol greeting. It then sets up the creating User's account with the one-time
+         *     administrator credential, requires Remote Desktop to answer, replaces the administrator
+         *     password, and ejects and deletes the answer file. Time while the VM is off does not count
+         *     toward the install timeout (three hours of running time by default).
+         */
+        get: operations["getVmInstall"];
+        put?: never;
+        post?: never;
+        /**
+         * Stop following a VM's unattended install.
+         * @description The VM keeps running, and the answer file is ejected and deleted. Finish the setup from the
+         *     console, or with `POST /vms/{vmId}/provision`.
+         */
+        delete: operations["cancelVmInstall"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/unattend-profiles": {
         parameters: {
             query?: never;
@@ -1253,6 +1286,21 @@ export interface components {
             /** @description Windows only, at most 15 letters, digits, or hyphens. Null means derived from the VM name. */
             computerName?: string | null;
         };
+        UnattendedInstallStatus: {
+            /** Format: uuid */
+            vmId: string;
+            profileId: string;
+            os: components["schemas"]["InstallOs"];
+            state: components["schemas"]["UnattendedInstallState"];
+            /** @description What is happening now, for example "Waiting for Remote Desktop to answer". */
+            step: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Why the install failed. */
+            error: string | null;
+        };
         /**
          * @description `installing` (Setup is running), `awaitingConfirmation` (Ubuntu waits for "yes" at the console),
          *     `waitingForGuest` (no address yet), `waitingForRemoteAccess` (Remote Desktop or SSH not answering
@@ -1643,6 +1691,62 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getVmInstall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The install. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnattendedInstallStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelVmInstall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The install was canceled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description The VM has no install in progress, or its account is being set up right now. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     listUnattendProfiles: {

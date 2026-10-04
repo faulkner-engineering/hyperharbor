@@ -67,6 +67,8 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IConsolePasswordChanger>(ConsolePasswords);
                 services.AddSingleton<IConsoleAccessGranter>(ConsoleAccess);
                 services.AddSingleton<Core.Unattend.IVmKeyboard>(Keyboard);
+                services.AddSingleton<Core.Unattend.IVmMedia>(Media);
+                services.AddSingleton<Core.Unattend.IRemoteAccessProbe>(RemoteAccess);
                 services.AddSingleton(provider => new Core.Unattend.UnattendedSetup(
                     provider.GetRequiredService<Core.Unattend.UnattendProfileStore>(),
                     provider.GetRequiredService<Core.Unattend.IsoInspector>(),
@@ -114,6 +116,10 @@ internal sealed class TestHost : IDisposable
     public FakeConsoleAccess ConsoleAccess { get; } = new();
 
     public Unattend.FakeVmKeyboard Keyboard { get; } = new();
+
+    public Unattend.FakeVmMedia Media { get; } = new();
+
+    public Unattend.FakeRemoteAccessProbe RemoteAccess { get; } = new();
 
     /// <summary>The ISO library folder, inside the data directory.</summary>
     public string IsoFolder => Path.Combine(DataDirectory, "isos");

@@ -201,6 +201,26 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   - reqwest's request timeout does not end an upgraded stream (console_tunnel_outlives_the_request_timeout,
     ignored because it is slow).
   - Concurrent consoles share the TERMSRV/127.0.0.1 credential until each session opens.
+- Unattended installs (Phase 9.2 to 9.4):
+  - Host.Core/Unattend: profiles (three read-only built-ins plus each User's own), AutounattendBuilder,
+    CloudInitBuilder (SHA-512 crypt via Sha512Crypt), SeedIso, IsoInspector, UnattendedSetup (create job
+    steps), UnattendedInstallStore, UnattendedInstallWatcher (run by InstallWatcherService every
+    Install:PollSeconds).
+  - Microsoft's Windows ISOs are UDF only (their ISO 9660 part holds a README), so IsoInspector tries
+    DiscUtils.Udf first. Editions come from the XML resource in sources\install.wim or install.esd.
+  - DiscUtils pads the Joliet volume label with ASCII spaces (U+2020 in UCS-2); SeedIso rewrites it, because
+    cloud-init finds the seed only by the label CIDATA. Extensionless Joliet names read back from DiscUtils
+    with a trailing period (user-data.); Linux strips it. Not yet verified with a real Ubuntu install.
+  - Linux installers need the Microsoft UEFI CA Secure Boot template (also for console installs). Ubuntu asks
+    "Continue with autoinstall?" at the console, since the seed cannot change the kernel command line.
+  - The create job presses Space (Msvm_Keyboard.TypeKey) twelve times on the first boot only, to pass
+    Windows media's "Press any key to boot from CD or DVD".
+  - The watcher counts only time the VM runs toward Install:TimeoutMinutes, waits for the guest's OS and
+    address in data exchange, then for a real RDP Connection Confirm (Windows) or SSH identification line
+    (Linux), and marks the VM provisioned only after Remote Desktop answers again after setup. It then
+    rotates the one-time administrator password and ejects and deletes the seed. Failed setups back off
+    1, 2, 4, 8 minutes, then fail. A Linux profile without a desktop ends after SSH (no Remote Desktop).
+  - Not yet run end to end on a real VM.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):

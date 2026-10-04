@@ -45,7 +45,7 @@
 
   const installLabels: Record<UnattendedInstallState, string> = {
     installing: "Installing the OS…",
-    awaitingConfirmation: "Type yes in the console to install",
+    awaitingConfirmation: "Installing (type yes in the console if asked)",
     waitingForGuest: "Starting the installed OS…",
     waitingForRemoteAccess: "Waiting for Remote Desktop…",
     configuring: "Setting up your account…",

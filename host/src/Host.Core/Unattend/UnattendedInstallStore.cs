@@ -12,6 +12,9 @@ namespace HyperHarbor.Host.Core.Unattend;
 /// </summary>
 /// <param name="UserId">The User whose account is set up when the guest is ready.</param>
 /// <param name="SeedPath">The answer file ISO, deleted when the install ends.</param>
+/// <param name="Attempts">Failed attempts to set up the User's account; the watcher gives up after a few.</param>
+/// <param name="NextAttemptAt">When the watcher may try again after a failed attempt.</param>
+/// <param name="RunningSeconds">How long the VM has run during the install; time while it is off does not count.</param>
 public sealed record UnattendedInstall(
     Guid VmId,
     Guid UserId,
@@ -24,7 +27,9 @@ public sealed record UnattendedInstall(
     DateTimeOffset StartedAt,
     DateTimeOffset UpdatedAt,
     string? Error = null,
-    int Attempts = 0)
+    int Attempts = 0,
+    DateTimeOffset? NextAttemptAt = null,
+    long RunningSeconds = 0)
 {
     public bool IsActive => State is not (UnattendedInstallState.Ready or UnattendedInstallState.Failed or UnattendedInstallState.Canceled);
 }

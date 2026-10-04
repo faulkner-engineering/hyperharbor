@@ -85,6 +85,8 @@ public class ContractFixtureTests
             new LinuxInstallSettings(["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixture user@laptop"], ["git"], InstallDesktop: false)),
         ["WindowsInstallSettings"] = new WindowsInstallSettings("Windows 11 Pro", false, true, true, false, true),
         ["LinuxInstallSettings"] = new LinuxInstallSettings([], ["git", "curl"], true),
+        ["UnattendedInstallStatus"] = new UnattendedInstallStatus(VmId, "windows-burner", InstallOs.Windows, UnattendedInstallState.WaitingForRemoteAccess,
+            "Waiting for Remote Desktop to answer", Time, Time.AddMinutes(12), null),
         ["IsoInspection"] = new IsoInspection(InstallOs.Windows, "Windows", ["Windows 11 Home", "Windows 11 Pro"]),
         ["ValidationIssue"] = new ValidationIssue("processorCount", "Use at most 16 virtual processors."),
         ["VmDeleteRequest"] = new VmDeleteRequest(true, true, "Ubuntu Dev"),

@@ -150,7 +150,7 @@ describe("VmList unattended install", () => {
   it("asks Ubuntu installs to be confirmed in the console", () => {
     render(VmList, { vms: [vm("running", { installState: "awaitingConfirmation" })] });
 
-    expect(screen.getByText("Type yes in the console to install")).toBeTruthy();
+    expect(screen.getByText("Installing (type yes in the console if asked)")).toBeTruthy();
   });
 
   it("offers manual setup again after an install failed", () => {

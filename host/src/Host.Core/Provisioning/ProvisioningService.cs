@@ -42,7 +42,16 @@ public sealed class ProvisioningService
     /// <exception cref="GuestCredentialRejectedException">The guest rejected the administrator credential.</exception>
     /// <exception cref="GuestUnavailableException">PowerShell Direct or SSH could not reach the guest.</exception>
     /// <exception cref="GuestOperationException">A guest command failed or verification failed.</exception>
-    public async Task<VmProvisioning> ProvisionAsync(Guid vmId, Guid userId, ProvisionVmRequest request, CancellationToken cancellationToken)
+    /// <param name="requireRemoteDesktop">
+    /// When set, the VM is recorded as provisioned only if Remote Desktop answers at its address, so the
+    /// unattended install watcher never offers Connect too early.
+    /// </param>
+    public async Task<VmProvisioning> ProvisionAsync(
+        Guid vmId,
+        Guid userId,
+        ProvisionVmRequest request,
+        CancellationToken cancellationToken,
+        Unattend.IRemoteAccessProbe? requireRemoteDesktop = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -95,6 +104,15 @@ public sealed class ProvisioningService
             throw new GuestOperationException(
                 $"The account {user.VmAccountName} could not be verified in {vm.Name} " +
                 $"(exists: {state.Exists}, local: {state.IsLocal}, enabled: {state.Enabled}, {remoteDesktop}: {state.RemoteDesktopAllowed}).");
+        }
+
+        if (requireRemoteDesktop is not null)
+        {
+            var rdpAddress = address ?? throw new GuestOperationException($"{vm.Name} has not reported a network address yet.");
+            if (!await requireRemoteDesktop.RdpAnswersAsync(rdpAddress, cancellationToken).ConfigureAwait(false))
+            {
+                throw new GuestOperationException($"Remote Desktop on {vm.Name} does not answer yet.");
+            }
         }
 
         var now = _time.GetUtcNow();

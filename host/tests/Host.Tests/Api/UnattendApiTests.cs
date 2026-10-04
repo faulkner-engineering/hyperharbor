@@ -131,6 +131,30 @@ public sealed class UnattendApiTests : IDisposable
         Assert.Null(vm["installState"]);
     }
 
+    [Fact]
+    public async Task InstallStatus_IsReportedAndCanBeCanceled()
+    {
+        var vmId = Guid.NewGuid();
+        _host.Inventory.Vms.Add(FakeVmInventory.CreateVm(vmId, "Dev Box", VmState.Off));
+        var now = DateTimeOffset.UtcNow;
+        var seed = Path.Combine(_host.DataDirectory, "seed.iso");
+        File.WriteAllBytes(seed, [1]);
+        _host.Services.GetRequiredService<UnattendedInstallStore>().Save(new UnattendedInstall(vmId, Guid.NewGuid(), "windows-burner", InstallOs.Windows, false, seed,
+            UnattendedInstallState.Installing, "Installing Windows", now, now));
+
+        var status = (await _client.GetFromJsonAsync<JsonObject>($"/api/v1/vms/{vmId}/install"))!;
+        Assert.Equal("installing", (string?)status["state"]);
+        Assert.Equal("windows-burner", (string?)status["profileId"]);
+        Assert.Null(status["error"]);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync($"/api/v1/vms/{vmId}/install")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await _client.DeleteAsync($"/api/v1/vms/{vmId}/install")).StatusCode);
+        Assert.Equal("canceled", (string?)(await _client.GetFromJsonAsync<JsonObject>($"/api/v1/vms/{vmId}/install"))!["state"]);
+        Assert.Equal([(vmId, seed)], _host.Media.Ejected);
+        Assert.Contains(_host.AuditEntries(), entry => (string?)entry["action"] == "cancelVmInstall");
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"/api/v1/vms/{Guid.NewGuid()}/install")).StatusCode);
+    }
+
     private async Task<HttpResponseMessage> SendElevated(HttpMethod method, string path, object? body)
     {
         var elevate = await _client.PostAsJsonAsync("/api/v1/auth/elevation", new { passphrase = Passphrase });
