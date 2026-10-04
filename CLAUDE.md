@@ -71,8 +71,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service; pairing needs Host.Tray running
-- Host logs: the console window and %ProgramData%HyperHarborogshost-yyyyMMdd.log (14 days); audit trail in
-  %ProgramData%HyperHarborudit.log. Both have the ProtectedFile ACL (Administrators, SYSTEM, service account).
+- Host logs: the console window and %ProgramData%\HyperHarbor\logs\host-yyyyMMdd.log (14 days); audit trail in
+  %ProgramData%\HyperHarbor\audit.log. Both have the ProtectedFile ACL (Administrators, SYSTEM, service account).
 - Print VM inventory JSON: dotnet run --project host/src/Host.Service -- --list-vms
 - Lint contract: npx @redocly/cli lint docs/api.yaml
 - Client (from client/): npm run check | npm test (Vitest) | npm run gen:api | npm run tauri dev
