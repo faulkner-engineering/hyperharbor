@@ -140,9 +140,18 @@ internal sealed class TestHost : IDisposable
     public void Dispose()
     {
         _factory.Dispose();
-        if (Directory.Exists(DataDirectory))
+
+        // A file the host just closed (the log) can stay open briefly while antivirus scans it.
+        for (var attempt = 1; Directory.Exists(DataDirectory); attempt++)
         {
-            Directory.Delete(DataDirectory, recursive: true);
+            try
+            {
+                Directory.Delete(DataDirectory, recursive: true);
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                Thread.Sleep(100);
+            }
         }
     }
 

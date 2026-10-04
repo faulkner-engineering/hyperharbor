@@ -14,6 +14,7 @@ using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
 using HyperHarbor.Host.Service.Discovery;
+using HyperHarbor.Host.Service.Logging;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Host.Service.Tray;
 using HyperHarbor.Host.Service.Wake;
@@ -54,6 +55,9 @@ builder.Services.AddHostedService<VmInventoryStartupLogger>();
 var dataDirectory = builder.Configuration["DataDirectory"] is { Length: > 0 } configured
     ? configured
     : HostIdentityStore.DefaultDataDirectory;
+// The console and the daily log file under <data>ogs get the same entries.
+// Registered through DI so the container disposes it, which closes the file when the service stops.
+builder.Services.AddSingleton<ILoggerProvider>(_ => new FileLoggerProvider(dataDirectory));
 builder.Services.AddSingleton(new HostIdentityStore(dataDirectory));
 builder.Services.AddSingleton(new HostCertificateStore(dataDirectory, Environment.MachineName));
 var users = new UserStore(dataDirectory);
