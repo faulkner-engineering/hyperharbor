@@ -35,9 +35,14 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    shared parent disks); host resources, ISO library, switches; create Gen 2 VM from ISO (Secure Boot, vTPM)
    as a job; compute settings (vCPU, memory, nested virtualization, MAC spoofing) with shut down and apply;
    client power controls and dialogs for all of it.
-9. Console access and unattended provisioning, added at the user's request (in progress): VM console through a
+9. Console access and unattended provisioning, added at the user's request (done 2026-10-04): VM console through a
    tunnel to the host's port 2179 with a per-User standard host account (hhc-<username>); autounattend and
    cloud-init seed ISOs on create; KVP readiness watcher that provisions automatically once RDP answers.
+10. Performance mode (GPU-P and Remote Desktop tuning) for Windows VMs, added at the user's request (code done
+   2026-10-04, not yet run live): apply to an off VM (fixed memory, vCPU, GPU partition share, MMIO gaps,
+   no checkpoints, TurnOff stop action, optional storage move); guest setup over PowerShell Direct (driver
+   copy, ADMX-verified RDP policy, DWMFRAMEINTERVAL); LAN .rdp tuning; driver drift and re-sync; disk export
+   before changes; pre-shutdown of GPU VMs; GPU driver error warnings.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -125,6 +130,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
 
 ## Gotchas
 - Build Rust from PowerShell, not Git Bash: Git Bash's /usr/bin/link shadows MSVC link.exe.
+- Do not use sed or perl substitutions to edit text with backslashes (Windows paths, C# verbatim strings):
+  escapes like \l, \b, and \F were silently turned into other characters. Use a file editor instead.
 - Do not run cargo fetch; it downloads every target platform's dependencies (Android, iOS, macOS).
 - All endpoints except pairing require a paired client certificate (PairedDeviceAuthenticationHandler).
   Kestrel accepts any client cert in the handshake; the fingerprint check is in the handler.
@@ -166,6 +173,10 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   - Guest error text reaches logs and problem details. ProvisioningService and PasswordRotator pass it
     through GuestErrors.Sanitize (secrets replaced, control characters removed, length capped).
   - The client validates VmConnection (IP address, plain account name) before writing the .rdp file.
+  - The host sends the bare account name (hh-owner), not .\hh-owner: mstsc adds ".\" itself, and a doubled
+    ".\.\hh-owner" fails as an unknown user (guest event 4625, substatus 0xc0000064) and prompts for a password.
+  - Add-LocalGroupMember takes the group by -SID 'S-1-5-32-555' and the member as the LocalUser object
+    (-Member $user); passing $user.SID as the member fails to bind.
 - Linux guests (SshAccountManager, SSH.NET):
   - Guest OS comes from KVP (Msvm_KvpExchangeComponent.GuestIntrinsicExchangeItems). Ubuntu reports
     OSName "Ubuntu", OSMajorVersion "24.04", OSPlatformId 129; Windows reports OSPlatformId 2.
@@ -220,7 +231,38 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     (Linux), and marks the VM provisioned only after Remote Desktop answers again after setup. It then
     rotates the one-time administrator password and ejects and deletes the seed. Failed setups back off
     1, 2, 4, 8 minutes, then fail. A Linux profile without a desktop ends after SSH (no Remote Desktop).
-  - Not yet run end to end on a real VM.
+  - Verified end to end on 2026-10-04 with a Windows 11 Pro install (TESTWINDOWSINSTALL), including Connect.
+    Not yet with a real Ubuntu install.
+- Performance mode (Phase 10; Host.Core/Performance):
+  - Only Intel GPU-P was available here (UHD iGPU, VEN_8086, 32 partitions). NVIDIA and AMD rules are unit
+    tested with recorded file lists only. The GPU partition's HostResource format is not yet verified live.
+  - Msvm_GpuPartitionSettingData: ResourceType 32770, ResourceSubType "Microsoft:Hyper-V:GPU Partition".
+    Msvm_PartitionableGpu reports relative units: VRAM, decode, and compute max 1e9, encode max UInt64.MaxValue,
+    so shares are computed in decimal. VSSD: GuestControlledCacheTypes, LowMmioGapSize and HighMmioGapSize
+    (MB), AutomaticShutdownAction 2 (TurnOff), UserSnapshotType 2 (Disabled). Removing restores MMIO 128/512
+    and the Save stop action. Storage move: MigrateVirtualSystemToHost with MigrationType 32769.
+  - Driver discovery: Win32_VideoController.InstalledDisplayDrivers gives the DriverStore folder.
+    Win32_PNPSignedDriverCIMDataFile must be enumerated in full and filtered by the Antecedent DeviceID;
+    association queries fail with "Invalid parameter". FileRepository folders go to the guest's
+    System32\HostDriverStore\FileRepository; System32 and SysWOW64 files go to the same place, staged and
+    replaced at reboot (MoveFileEx) when in use (rebootRequired). NVIDIA adds nv*.dll and
+    drivers\NVIDIA Corporation.
+  - RdpPerformancePolicy holds every registry write with its TerminalServer.admx policy; RdpPerformancePolicyTests
+    check them against the local ADMX. DWMFRAMEINTERVAL (15) is from KB 2885213, not an ADMX. Hardware H.264
+    encoding (AVCHardwareEncodePreferred) is experimental and off by default.
+  - Each PowerShell Direct feature has its own script through PowerShellDirectRunner, to stay under the 32 KB
+    command line. Guest setup needs HyperHarbor's administrator credential (409 credentialRequired).
+  - Drift: the guest record keeps the copied driver version; GET performance compares it with the host's.
+  - Disk export (VmDiskExportService): off VMs only, copies the whole checkpoint chain, never ISOs, removes an
+    incomplete export. The default folder is the tray's backup folder (BackupFolder in host-settings.json,
+    default Public Documents\HyperHarbor Backups).
+  - Pre-shutdown: GpuVmShutdownCoordinator shuts guests down and never turns a VM off. As a Windows service,
+    PreshutdownServiceLifetime sets ServiceBase._acceptedCommands (PreshutdownServiceLifetimeTests fail if
+    .NET renames it); untested live until an installer exists. In console mode the tray's ShutdownGuard (a
+    hidden top-level window) refuses WM_QUERYENDSESSION with a block reason while GPU VMs run, except on
+    sign-out. Not yet tried by hand.
+  - GpuEventReader reads the System log (nvlddmkm, amdkmdag, amdwddmg, igfx*, and Display 4101) for the last
+    7 days, cached 5 minutes, into HostGpu.warnings.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):
