@@ -23,10 +23,12 @@ internal sealed class HostForm : Form
     private readonly Button _changeIsoFolder;
     private readonly Label _vmFolder;
     private readonly Button _changeVmFolder;
+    private readonly Label _backupFolder;
+    private readonly Button _changeBackupFolder;
     private readonly Label _console;
     private readonly Button _setUpConsole;
 
-    public HostForm(Action setPassphrase, Action manageDevices, Action changeIsoFolder, Action changeVmFolder, Action setUpConsole)
+    public HostForm(Action setPassphrase, Action manageDevices, Action changeIsoFolder, Action changeVmFolder, Action changeBackupFolder, Action setUpConsole)
     {
         // Design at 96 DPI; WinForms scales fonts and padding to the monitor's DPI.
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -62,6 +64,7 @@ internal sealed class HostForm : Form
         _console = AddRow(layout, "VM console", out _setUpConsole, "Set up console access…", setUpConsole);
         _vmFolder = AddRow(layout, "VM storage", out _changeVmFolder, "Change folder…", changeVmFolder);
         _isoFolder = AddRow(layout, "ISO library", out _changeIsoFolder, "Change folder…", changeIsoFolder);
+        _backupFolder = AddRow(layout, "VM backups", out _changeBackupFolder, "Change folder…", changeBackupFolder);
         AddRow(layout, "Host log", out _, "Open logs folder", () => Open(Path.Combine(DataDirectory, "logs"), folder: true), $"Daily files in {Path.Combine(DataDirectory, "logs")}");
         AddRow(layout, "Audit log", out _, "Open audit log", () => Open(Path.Combine(DataDirectory, "audit.log"), folder: false), "Every change made from a client or this tray");
 
@@ -72,12 +75,12 @@ internal sealed class HostForm : Form
         CancelButton = close;
 
         Controls.Add(layout);
-        ShowStatus(new HostStatus(Connected: false, PassphraseConfigured: null, DeviceCount: 0, IsoFolder: null, VmFolder: null));
+        ShowStatus(new HostStatus(Connected: false, PassphraseConfigured: null, DeviceCount: 0, IsoFolder: null, VmFolder: null, BackupFolder: null));
     }
 
     public void ShowStatus(HostStatus status)
     {
-        var (connected, passphraseConfigured, deviceCount, isoFolder, vmFolder) = status;
+        var (connected, passphraseConfigured, deviceCount, isoFolder, vmFolder, backupFolder) = status;
         _service.Text = connected ? "Host service running" : "Host service not running. Start it with Start-HyperHarbor.ps1.";
         _service.ForeColor = connected ? SystemColors.ControlText : Color.Firebrick;
 
@@ -104,6 +107,11 @@ internal sealed class HostForm : Form
             ? $"Images clients add are stored in {isoFolder}."
             : "Unknown while the service is not running.";
         _changeIsoFolder.Enabled = connected && isoFolder is not null;
+
+        _backupFolder.Text = connected && backupFolder is not null
+            ? $"Disk exports a client starts without choosing a folder go to {backupFolder}."
+            : "Unknown while the service is not running.";
+        _changeBackupFolder.Enabled = connected && backupFolder is not null;
 
         // The setup helper writes this file itself, so the status does not depend on the service.
         var consoleReady = ConsoleAccessSetup.IsSetUp(DataDirectory);
@@ -166,4 +174,5 @@ internal sealed record HostStatus(
     bool? PassphraseConfigured,
     int DeviceCount,
     string? IsoFolder,
-    Shared.Contracts.Ipc.VmFolderMessage? VmFolder);
+    Shared.Contracts.Ipc.VmFolderMessage? VmFolder,
+    string? BackupFolder);

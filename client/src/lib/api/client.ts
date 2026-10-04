@@ -310,5 +310,9 @@ export const setUpPerformanceGuest = (key: string, vmId: string, driversOnly: bo
 
 export const getHostGpu = (key: string) => invoke<HostGpu>("get_host_resource", { key, resource: "gpu" });
 
+/** Copies an off VM's disks; without a folder the host uses the backup folder set in its tray. */
+export const exportVmDisks = (key: string, vmId: string, destinationFolder: string | null = null) =>
+  invoke<VmJob>("export_vm_disks", { key, vmId, destinationFolder });
+
 export const onHostsChanged = (handler: () => void): Promise<UnlistenFn> =>
   listen("hosts-changed", handler);

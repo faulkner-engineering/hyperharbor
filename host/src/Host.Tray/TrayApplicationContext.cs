@@ -21,6 +21,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private bool _isoFolderChanging;
     private VmFolderMessage? _vmFolder;
     private bool _vmFolderChanging;
+    private string? _backupFolder;
+    private bool _backupFolderChanging;
 
     /// <summary>Null until the service reports it.</summary>
     private bool? _passphraseConfigured;
@@ -84,6 +86,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _passphraseConfigured = null;
             _isoFolder = null;
             _vmFolder = null;
+            _backupFolder = null;
         }
 
         RefreshHost();
@@ -113,6 +116,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 break;
             case IsoFolderMessage isoFolder:
                 OnIsoFolder(isoFolder);
+                break;
+            case BackupFolderMessage backupFolder:
+                OnBackupFolder(backupFolder);
                 break;
             case AdminPassphraseStatusMessage status:
                 OnPassphraseStatus(status);
@@ -201,7 +207,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (_hostForm is null)
         {
-            _hostForm = new HostForm(ShowPassphrase, ShowDevices, ChangeIsoFolder, ChangeVmFolder, () => _ = SetUpConsoleAsync());
+            _hostForm = new HostForm(ShowPassphrase, ShowDevices, ChangeIsoFolder, ChangeVmFolder, ChangeBackupFolder, () => _ = SetUpConsoleAsync());
             _hostForm.FormClosed += (_, _) => _hostForm = null;
             RefreshHost();
         }
@@ -252,6 +258,15 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private void ChangeBackupFolder()
+    {
+        if (ChooseFolder("Choose where the host puts VM disk exports. Each export gets its own folder here; earlier exports stay where they are.", _backupFolder) is { } folder)
+        {
+            _backupFolderChanging = true;
+            _ = _pipe.SendAsync(new SetBackupFolderMessage(folder));
+        }
+    }
+
     /// <returns>The chosen folder, or null when the user cancelled or kept the current one.</returns>
     private string? ChooseFolder(string description, string? current)
     {
@@ -289,6 +304,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private void OnBackupFolder(BackupFolderMessage message)
+    {
+        _backupFolder = message.Folder;
+        RefreshHost();
+        if (_backupFolderChanging)
+        {
+            _backupFolderChanging = false;
+            ReportFolderChange(message.Error, "Backup folder changed", $"Disk exports go to {message.Folder}.");
+        }
+    }
+
     private void ReportFolderChange(string? error, string title, string text)
     {
         if (error is not null)
@@ -302,7 +328,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     }
 
     private void RefreshHost() =>
-        _hostForm?.ShowStatus(new HostStatus(_connected, _passphraseConfigured, _devices.Count, _isoFolder, _vmFolder));
+        _hostForm?.ShowStatus(new HostStatus(_connected, _passphraseConfigured, _devices.Count, _isoFolder, _vmFolder, _backupFolder));
 
     private void OnPassphraseStatus(AdminPassphraseStatusMessage status)
     {

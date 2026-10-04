@@ -609,6 +609,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/disks/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy an off VM's virtual hard disks to a backup folder.
+         * @description Starts an `exportDisks` job that copies the VM's virtual hard disks (never ISO images) into a
+         *     new folder named after the VM and the host's local time, for example `Dev-20261004-1830`,
+         *     under `destinationFolder` or the backup folder set in the host's tray. A disk with checkpoints
+         *     is copied with its whole chain; the copies still name the original parent disks. The VM must
+         *     be off (`code` is `vmMustBeOff` otherwise), and the destination volume must have room for every
+         *     file. An incomplete export is removed.
+         */
+        post: operations["exportVmDisks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{jobId}": {
         parameters: {
             query?: never;
@@ -1174,6 +1202,10 @@ export interface components {
             deleteCheckpoints: boolean;
             /** @description Must equal the VM's name exactly. */
             confirmName: string;
+        };
+        ExportDisksRequest: {
+            /** @description A fully qualified folder on the host. Null or absent uses the backup folder set in the tray. */
+            destinationFolder?: string | null;
         };
         /** @enum {string} */
         DeleteBlockerCode: "notOff" | "sharedDisk" | "diskNotDeletable";
@@ -2787,6 +2819,52 @@ export interface operations {
             /**
              * @description The VM is not off, has checkpoints and `deleteCheckpoints` is false, a disk is shared
              *     or cannot be deleted, or another operation is in progress on the VM.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    exportVmDisks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportDisksRequest"];
+            };
+        };
+        responses: {
+            /** @description The export job started. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not off, has no virtual hard disks, the destination lacks free space, or
+             *     another operation is in progress on the VM.
              */
             409: {
                 headers: {

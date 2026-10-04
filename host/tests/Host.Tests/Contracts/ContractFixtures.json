@@ -41,6 +41,9 @@
     "active": false,
     "expiresAt": null
   },
+  "ExportDisksRequest": {
+    "destinationFolder": "D:\\Backups"
+  },
   "GpuDriverWarning": {
     "provider": "nvlddmkm",
     "eventId": 153,

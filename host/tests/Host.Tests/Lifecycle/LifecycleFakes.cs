@@ -200,3 +200,34 @@ internal sealed class FakeHyperVCompute : IHyperVCompute
         return Task.CompletedTask;
     }
 }
+
+/// <summary>Records disk copies and writes an empty file at each destination.</summary>
+internal sealed class FakeDiskCopier : IDiskCopier
+{
+    /// <summary>File sizes in bytes; unknown files are 1 GB.</summary>
+    public Dictionary<string, long> Sizes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public List<(string Source, string Destination)> Copies { get; } = [];
+
+    /// <summary>Fails the copy of this source, as a full volume would.</summary>
+    public string? FailOn { get; set; }
+
+    public long Length(string path) => Sizes.TryGetValue(path, out var size) ? size : 1L << 30;
+
+    public Task CopyAsync(string source, string destination, Action<long> copied, CancellationToken cancellationToken)
+    {
+        if (string.Equals(source, FailOn, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("There is not enough space on the disk.");
+        }
+
+        File.WriteAllBytes(destination, []);
+        lock (Copies)
+        {
+            Copies.Add((source, destination));
+        }
+
+        copied(Length(source));
+        return Task.CompletedTask;
+    }
+}

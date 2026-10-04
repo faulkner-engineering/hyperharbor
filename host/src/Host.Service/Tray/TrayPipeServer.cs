@@ -119,6 +119,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 await connection.SendAsync(await VmFolderAsync(location));
             }
 
+            if (_services.GetService<BackupLocation>() is { } backups)
+            {
+                await connection.SendAsync(new BackupFolderMessage(backups.Folder));
+            }
+
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
             var lines = new BoundedLineReader(reader, MaxMessageLength);
             while (!stoppingToken.IsCancellationRequested && await lines.ReadLineAsync(stoppingToken) is { } line)
@@ -192,6 +197,9 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             case SetIsoFolderMessage isoFolder:
                 SetIsoFolder(isoFolder);
                 break;
+            case SetBackupFolderMessage backupFolder:
+                SetBackupFolder(backupFolder);
+                break;
             case SetAdminPassphraseMessage set:
                 SetAdminPassphrase(set);
                 break;
@@ -218,6 +226,23 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             AuditTrayAction("traySetIsoFolder", null, null, null, $"folder={folder}");
         });
         Broadcast(new IsoFolderMessage(isos.Folder, error));
+    }
+
+    /// <summary>Sends disk exports that name no folder to a local folder chosen at the host. Earlier exports stay where they are.</summary>
+    private void SetBackupFolder(SetBackupFolderMessage request)
+    {
+        if (_services.GetService<HostSettingsStore>() is not { } settings || _services.GetService<BackupLocation>() is not { } backups)
+        {
+            return;
+        }
+
+        var error = UseLocalFolder(request.Folder, @"D:\Backups", folder =>
+        {
+            settings.SetBackupFolder(folder);
+            _logger.LogInformation("The backup folder was changed to {Folder} from the tray.", folder);
+            AuditTrayAction("traySetBackupFolder", null, null, null, $"folder={folder}");
+        });
+        Broadcast(new BackupFolderMessage(backups.Folder, error));
     }
 
     /// <summary>

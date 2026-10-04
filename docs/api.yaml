@@ -1172,6 +1172,60 @@ paths:
         "503":
           $ref: "#/components/responses/HyperVUnavailable"
 
+  /vms/{vmId}/disks/export:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [VMs]
+      operationId: exportVmDisks
+      summary: Copy an off VM's virtual hard disks to a backup folder.
+      description: |
+        Starts an `exportDisks` job that copies the VM's virtual hard disks (never ISO images) into a
+        new folder named after the VM and the host's local time, for example `Dev-20261004-1830`,
+        under `destinationFolder` or the backup folder set in the host's tray. A disk with checkpoints
+        is copied with its whole chain; the copies still name the original parent disks. The VM must
+        be off (`code` is `vmMustBeOff` otherwise), and the destination volume must have room for every
+        file. An incomplete export is removed.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportDisksRequest"
+      responses:
+        "202":
+          description: The export job started.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            The VM is not off, has no virtual hard disks, the destination lacks free space, or
+            another operation is in progress on the VM.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
   /jobs/{jobId}:
     parameters:
       - $ref: "#/components/parameters/JobId"
@@ -2056,6 +2110,13 @@ components:
         confirmName:
           type: string
           description: Must equal the VM's name exactly.
+
+    ExportDisksRequest:
+      type: object
+      properties:
+        destinationFolder:
+          type: [string, "null"]
+          description: A fully qualified folder on the host. Null or absent uses the backup folder set in the tray.
 
     DeleteBlockerCode:
       type: string

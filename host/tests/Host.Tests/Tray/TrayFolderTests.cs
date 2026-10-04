@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HyperHarbor.Host.Tests.Tray;
 
-/// <summary>Moving the ISO library and the VM storage folder from the tray, over a uniquely named pipe.</summary>
+/// <summary>Moving the ISO library, the VM storage folder, and the backup folder from the tray, over a uniquely named pipe.</summary>
 public sealed class TrayFolderTests : IAsyncLifetime
 {
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "hyperharbor-tests", Guid.NewGuid().ToString("N"));
@@ -33,6 +33,7 @@ public sealed class TrayFolderTests : IAsyncLifetime
             .AddSingleton(_settings)
             .AddSingleton(new IsoLibrary(() => _settings.IsoFolder ?? DefaultFolder))
             .AddSingleton(new VmStorageLocation(_settings, new LifecycleOptions(), new Lifecycle.FakeHyperVHost()))
+            .AddSingleton(new BackupLocation(_settings))
             .BuildServiceProvider();
         _server = new TrayPipeServer(devices, services, NullLogger<TrayPipeServer>.Instance, _pipeName);
         await _server.StartAsync(_stop.Token);
@@ -60,6 +61,7 @@ public sealed class TrayFolderTests : IAsyncLifetime
         var vms = Assert.IsType<VmFolderMessage>(await tray.ReceiveAsync());
         Assert.Equal(@"C:\Hyper-V\Virtual Hard Disks", vms.Folder);
         Assert.True(vms.IsDefault);
+        Assert.Equal(BackupLocation.DefaultFolder, Assert.IsType<BackupFolderMessage>(await tray.ReceiveAsync()).Folder);
     }
 
     [Fact]
@@ -126,6 +128,35 @@ public sealed class TrayFolderTests : IAsyncLifetime
         Assert.Null(_settings.IsoFolder);
     }
 
+    [Fact]
+    public async Task SetBackupFolder_CreatesSavesAndReportsIt()
+    {
+        var folder = Path.Combine(_dataDirectory, "backups");
+        await using var tray = await ConnectAndSkipInitialAsync();
+
+        await tray.SendAsync(new SetBackupFolderMessage(folder));
+
+        var reply = Assert.IsType<BackupFolderMessage>(await tray.ReceiveAsync());
+        Assert.Equal(folder, reply.Folder);
+        Assert.Null(reply.Error);
+        Assert.True(Directory.Exists(folder));
+        Assert.Equal(folder, new HostSettingsStore(_dataDirectory).BackupFolder);
+        Assert.Contains("traySetBackupFolder", await File.ReadAllTextAsync(Path.Combine(_dataDirectory, FileAuditLog.FileName)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SetBackupFolder_RefusesANetworkFolder()
+    {
+        await using var tray = await ConnectAndSkipInitialAsync();
+
+        await tray.SendAsync(new SetBackupFolderMessage(@"\\server\share\backups"));
+
+        var reply = Assert.IsType<BackupFolderMessage>(await tray.ReceiveAsync());
+        Assert.Equal(BackupLocation.DefaultFolder, reply.Folder);
+        Assert.NotNull(reply.Error);
+        Assert.Null(_settings.BackupFolder);
+    }
+
     private async Task<TrayPipeServerTests.TrayClient> ConnectAsync()
     {
         var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
@@ -140,6 +171,7 @@ public sealed class TrayFolderTests : IAsyncLifetime
         Assert.IsType<DeviceListMessage>(await tray.ReceiveAsync());
         Assert.IsType<IsoFolderMessage>(await tray.ReceiveAsync());
         Assert.IsType<VmFolderMessage>(await tray.ReceiveAsync());
+        Assert.IsType<BackupFolderMessage>(await tray.ReceiveAsync());
         return tray;
     }
 }

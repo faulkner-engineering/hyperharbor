@@ -74,6 +74,20 @@ public sealed class HostSettingsStore
 
     public void SetVmFolder(string? folder) => Update(settings => settings with { VmFolder = folder });
 
+    /// <summary>The folder for disk exports chosen in the tray, or null for the default.</summary>
+    public string? BackupFolder
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return Load().BackupFolder;
+            }
+        }
+    }
+
+    public void SetBackupFolder(string? folder) => Update(settings => settings with { BackupFolder = folder });
+
     private void Update(Func<Settings, Settings> change)
     {
         lock (_gate)
@@ -89,7 +103,7 @@ public sealed class HostSettingsStore
         ? JsonSerializer.Deserialize<Settings>(File.ReadAllBytes(_path), JsonOptions) ?? new Settings()
         : new Settings();
 
-    private sealed record Settings(string? IsoFolder = null, string? VmFolder = null);
+    private sealed record Settings(string? IsoFolder = null, string? VmFolder = null, string? BackupFolder = null);
 }
 
 /// <summary>

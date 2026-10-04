@@ -778,6 +778,24 @@ impl ApiClient {
         .await
     }
 
+    /// POST /vms/{vmId}/disks/export. Without a folder the host uses the backup folder set in its tray.
+    pub async fn export_vm_disks(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        destination_folder: Option<&str>,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "disks/export")?,
+            &json!({ "destinationFolder": destination_folder }),
+        )
+        .await
+    }
+
     /// PATCH /isos/{name}.
     pub async fn rename_iso(
         &self,

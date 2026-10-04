@@ -145,6 +145,40 @@ public sealed class PerformanceApiTests : IDisposable
         Assert.Equal("30.0.101.1122", (string?)(await _client.GetFromJsonAsync<JsonObject>($"/api/v1/vms/{VmId}/performance"))!["driver"]!["guestVersion"]);
     }
 
+    [Fact]
+    public async Task ExportDisks_NeedsElevation_RefusesARunningVm_AndCopiesAnOffOne()
+    {
+        var destination = Path.Combine(Path.GetTempPath(), "hh-export-api-" + Guid.NewGuid().ToString("N"));
+        _host.Storage.Attach(VmId, "Dev Box", @"C:\VMs\Dev Box\Dev Box.vhdx");
+        try
+        {
+            var body = new { destinationFolder = destination };
+            Assert.Equal(HttpStatusCode.Forbidden, (await _client.PostAsJsonAsync($"/api/v1/vms/{VmId}/disks/export", body)).StatusCode);
+
+            _host.Inventory.Vms[0] = _host.Inventory.Vms[0] with { State = VmState.Running };
+            var refused = await SendElevated(HttpMethod.Post, $"/api/v1/vms/{VmId}/disks/export", body);
+            Assert.Equal(ContractInfo.ProblemCodes.VmMustBeOff, (string?)(await refused.Content.ReadFromJsonAsync<JsonObject>())!["code"]);
+
+            _host.Inventory.Vms[0] = _host.Inventory.Vms[0] with { State = VmState.Off };
+            var started = await SendElevated(HttpMethod.Post, $"/api/v1/vms/{VmId}/disks/export", body);
+            Assert.Equal(HttpStatusCode.Accepted, started.StatusCode);
+            var job = (await started.Content.ReadFromJsonAsync<JsonObject>())!;
+            Assert.Equal("exportDisks", (string?)job["kind"]);
+            await WaitUntil(async () => (string?)(await _client.GetFromJsonAsync<JsonObject>($"/api/v1/jobs/{job["id"]}"))!["state"] == "succeeded");
+
+            Assert.StartsWith(Path.Combine(destination, "Dev Box-"), Assert.Single(_host.DiskCopier.Copies).Destination, StringComparison.OrdinalIgnoreCase);
+            var audit = _host.AuditEntries().Last(entry => (string?)entry["action"] == "exportVmDisks");
+            Assert.EndsWith($"destination={destination}", (string?)audit["detail"], StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(destination))
+            {
+                Directory.Delete(destination, recursive: true);
+            }
+        }
+    }
+
     private async Task<HttpResponseMessage> SendElevated(HttpMethod method, string path, object? body)
     {
         var elevate = await _client.PostAsJsonAsync("/api/v1/auth/elevation", new { passphrase = Passphrase });

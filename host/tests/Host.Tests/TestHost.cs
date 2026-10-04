@@ -60,6 +60,7 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IGuestAccountManager>(Guest);
                 services.AddSingleton<IHyperVStorage>(Storage);
                 services.AddSingleton<IDiskFiles>(DiskFiles);
+                services.AddSingleton<IDiskCopier>(DiskCopier);
                 services.AddSingleton<IHostCapacityReader>(Capacity);
                 services.AddSingleton<IHyperVHost>(HyperVHost);
                 services.AddSingleton<IHyperVBuilder>(Builder);
@@ -107,6 +108,8 @@ internal sealed class TestHost : IDisposable
     public FakeHyperVStorage Storage { get; } = new();
 
     public FakeDiskFiles DiskFiles { get; } = new();
+
+    public FakeDiskCopier DiskCopier { get; } = new();
 
     public FakeHostCapacity Capacity { get; } = new();
 

@@ -59,6 +59,10 @@ public static class VmEndpoints
             .Audited<VmDeleteRequest>(request => $"deleteDisks={request.DeleteDisks}, deleteCheckpoints={request.DeleteCheckpoints}")
             .RequireElevation();
 
+        vms.MapPost("/{vmId:guid}/disks/export", ExportDisksAsync).WithName("exportVmDisks")
+            .Audited<ExportDisksRequest>(request => $"destination={request.DestinationFolder ?? "backup folder"}")
+            .RequireElevation();
+
         return endpoints;
     }
 
@@ -169,6 +173,18 @@ public static class VmEndpoints
         CancellationToken cancellationToken)
     {
         var job = await deletion.StartAsync(vmId, context.User.UserId(), request, context.CompletionAuditor(), cancellationToken);
+        context.Audit()!.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
+    }
+
+    private static async Task<Accepted<VmJob>> ExportDisksAsync(
+        Guid vmId,
+        ExportDisksRequest request,
+        VmDiskExportService export,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var job = await export.StartAsync(vmId, context.User.UserId(), request.DestinationFolder, context.CompletionAuditor(), cancellationToken);
         context.Audit()!.JobId = job.Id;
         return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }

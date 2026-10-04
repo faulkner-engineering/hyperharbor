@@ -3,6 +3,7 @@
   import {
     applyVmPerformance,
     errorMessage,
+    exportVmDisks,
     getHostGpu,
     getHostResources,
     getVmCompute,
@@ -57,6 +58,8 @@
   let highGapGb = $state(32);
   let moveStorageTo = $state("");
   let hardwareEncoding = $state(false);
+  let exportFirst = $state(false);
+  let exported = $state(false);
 
   let busy = $state(false);
   let changed = $state(false);
@@ -92,6 +95,8 @@
   /** Fills the form from the applied settings, or from the VM's compute settings the first time. */
   function reset() {
     const applied = performance?.settings;
+    // Exporting first is the safe default once the VM has been changed; a first apply starts from a plain VM.
+    exportFirst = performance?.enabled ?? false;
     if (applied) {
       processorCount = applied.processorCount;
       memoryGb = applied.memoryMb / 1024;
@@ -154,6 +159,11 @@
   }
 
   async function apply(acknowledgeWarnings: boolean) {
+    if (exportFirst && !exported) {
+      await run(() => exportVmDisks(host.key, vm.id));
+      if (error || job?.state !== "succeeded") return;
+      exported = true;
+    }
     await run(() => applyVmPerformance(host.key, vm.id, settings(acknowledgeWarnings)));
     if (performance?.enabled && !error && warnings.length === 0) {
       notice = "Performance mode is on. Start the VM, then set up the guest to copy the GPU driver.";
@@ -236,6 +246,10 @@
         <label class="check">
           <input type="checkbox" bind:checked={hardwareEncoding} />
           Hardware H.264 encoding for Remote Desktop <span class="badge">experimental</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" bind:checked={exportFirst} disabled={exported} />
+          {exported ? "Disks exported" : "Export the disks to the host's backup folder first"}
         </label>
       </fieldset>
 

@@ -601,6 +601,20 @@ async fn set_up_performance_guest(
         .await
 }
 
+#[tauri::command]
+async fn export_vm_disks(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    destination_folder: Option<String>,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .export_vm_disks(&host, &paired, &vm_id, destination_folder.as_deref())
+        .await
+}
+
 /// Sends Wake-on-LAN magic packets using the cached adapter details. Returns datagrams sent.
 #[tauri::command]
 fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
@@ -812,7 +826,8 @@ pub fn run() {
             get_vm_performance,
             apply_vm_performance,
             remove_vm_performance,
-            set_up_performance_guest
+            set_up_performance_guest,
+            export_vm_disks
         ])
         .run(tauri::generate_context!())
         .expect("error while running HyperHarbor client");

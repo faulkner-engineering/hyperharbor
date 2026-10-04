@@ -126,6 +126,8 @@ function respond(state: VmState, initial: VmPerformance, hostGpu: HostGpu = gpu)
         return Promise.resolve(job("applyPerformance"));
       case "set_up_performance_guest":
         return Promise.resolve(job("performanceGuestSetup"));
+      case "export_vm_disks":
+        return Promise.resolve(job("exportDisks"));
       default:
         return Promise.reject(new Error(`unexpected ${command}`));
     }
@@ -166,6 +168,27 @@ describe("PerformanceDialog", () => {
       rdp: { hardwareEncoding: false },
       acknowledgeWarnings: false,
     });
+  });
+
+  it("exports the disks before changing a VM that is already in Performance mode", async () => {
+    respond("off", on(false));
+    render(PerformanceDialog, { host, vm, onclose: vi.fn() });
+
+    const exportFirst = (await screen.findByLabelText(/Export the disks/)) as HTMLInputElement;
+    expect(exportFirst.checked).toBe(true);
+    await fireEvent.click(await applyButton());
+
+    await screen.findByText(/Performance mode is on/);
+    const commands = invoke.mock.calls.map(([command]) => command).filter((command) => command === "export_vm_disks" || command === "apply_vm_performance");
+    expect(commands).toEqual(["export_vm_disks", "apply_vm_performance"]);
+    expect(calls("export_vm_disks")[0]).toEqual({ key: host.key, vmId: vm.id, destinationFolder: null });
+  });
+
+  it("does not export before the first apply", async () => {
+    respond("off", off);
+    render(PerformanceDialog, { host, vm, onclose: vi.fn() });
+
+    expect(((await screen.findByLabelText(/Export the disks/)) as HTMLInputElement).checked).toBe(false);
   });
 
   it("explains that Performance mode is unavailable without a partitionable GPU", async () => {
