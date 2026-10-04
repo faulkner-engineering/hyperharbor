@@ -232,6 +232,7 @@
 
   .tag {
     margin-left: 0.4rem;
+    white-space: nowrap;
     padding: 0.05rem 0.4rem;
     border-radius: 999px;
     background: var(--idle-bg);
