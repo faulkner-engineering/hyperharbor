@@ -140,7 +140,7 @@
   }
 
   function requestAction(vm: Vm, action: VmAction) {
-    // Turning off is like pulling the power cord, so it is confirmed first.
+    // Forcing a VM off is like pulling the power cord, so it is confirmed first.
     if (action === "turnOff") {
       confirmTurnOff = vm;
     } else {
@@ -151,7 +151,7 @@
   const actionVerbs: Record<VmAction, string> = {
     start: "Starting",
     shutdown: "Shutting down",
-    turnOff: "Turning off",
+    turnOff: "Forcing off",
     save: "Saving",
     restart: "Restarting",
   };
@@ -357,9 +357,9 @@
         {/if}
         {#if confirmTurnOff}
           <ConfirmDialog
-            title="Turn off {confirmTurnOff.name}?"
-            message="Turning off is like pulling the power cord: anything not saved in the VM is lost. Use Shut down when the guest can respond."
-            confirmLabel="Turn off"
+            title="Force shut off {confirmTurnOff.name}?"
+            message="Forcing it off is like pulling the power cord: anything not saved in the VM is lost. Use Shut down when the guest can respond."
+            confirmLabel="Force shut off"
             danger
             onclose={turnOffConfirmed}
           />

@@ -36,6 +36,26 @@
     run();
   }
 
+  /** How long a running VM may go without reporting its OS before the list stops saying "Detecting". */
+  const OS_DETECTION_SECONDS = 180;
+
+  function osDetectionTimedOut(vm: Vm): boolean {
+    return (vm.uptimeSeconds ?? 0) >= OS_DETECTION_SECONDS;
+  }
+
+  /** Turn off is allowed in these states (VmActionPolicy on the host). */
+  function canForceOff(state: VmState): boolean {
+    return state === "running" || state === "paused" || state === "starting" || state === "stopping";
+  }
+
+  /** The one action shown as a button; everything else is in the menu. */
+  function primaryAction(vm: Vm): "start" | "connect" | "setup" | "console" | null {
+    if (vm.state === "off" || vm.state === "saved" || vm.state === "paused") return "start";
+    if (vm.state !== "running") return null;
+    if (vm.provisioned) return "connect";
+    return vm.guestOs.family === "unknown" ? "console" : "setup";
+  }
+
   const stateLabels: Record<VmState, string> = {
     running: "Running",
     off: "Off",
@@ -96,10 +116,23 @@
     </thead>
     <tbody>
       {#each vms as vm (vm.id)}
+        {@const primary = primaryAction(vm)}
         <tr>
           <td class="name">
             {vm.name}
-            {#if vm.guestOs.name}<span class="os">{vm.guestOs.name}</span>{/if}
+            {#if vm.guestOs.name}
+              <span class="os">{vm.guestOs.name}</span>
+            {:else if vm.state === "running" && vm.guestOs.family === "unknown"}
+              {#if osDetectionTimedOut(vm)}
+                <span
+                  class="os"
+                  title="The VM has not reported its operating system through Hyper-V data exchange. This is normal while an OS is being installed; use Console to see the screen. Once Windows or Linux with Hyper-V integration services is running, it is detected automatically."
+                  >OS not detected</span
+                >
+              {:else}
+                <span class="os" title="Waiting for the VM to report its operating system through Hyper-V data exchange.">Detecting OS…</span>
+              {/if}
+            {/if}
           </td>
           <td>
             <span class="badge {stateTone(vm.state)}">{stateLabels[vm.state]}</span>
@@ -109,50 +142,61 @@
           <td class="num">{formatUptime(vm.uptimeSeconds)}</td>
           <td class="address">{vm.ipAddresses[0] ?? ""}</td>
           <td class="actions">
-            {#if vm.provisioned}
+            {#if primary === "start"}
+              <button type="button" class="primary" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "start")}>
+                {actionVmId === vm.id ? "Starting…" : vm.state === "paused" ? "Resume" : "Start"}
+              </button>
+            {:else if primary === "connect"}
               <button
                 type="button"
                 class="primary"
-                disabled={vm.state !== "running" || !vm.remoteDesktop.address || busyVmId !== null}
-                title={vm.state !== "running" ? "Start the VM to connect" : !vm.remoteDesktop.address ? "Waiting for the VM to report an address" : ""}
+                disabled={!vm.remoteDesktop.address || busyVmId !== null}
+                title={!vm.remoteDesktop.address ? "Waiting for the VM to report an address" : ""}
                 onclick={() => onconnect?.(vm)}>{busyVmId === vm.id ? "Connecting…" : "Connect"}</button
               >
-            {:else if vm.state === "running" && vm.guestOs.family !== "unknown"}
-              <button type="button" disabled={busyVmId !== null} onclick={() => onprovision?.(vm)}>Set up…</button>
-            {:else if vm.state === "running"}
-              <span class="hint" title="The VM has not reported its operating system through Hyper-V data exchange yet.">
-                Detecting OS…
-              </span>
-            {/if}
-            {#if vm.state === "running" || vm.state === "paused"}
+            {:else if primary === "setup"}
+              <button type="button" class="primary" disabled={busyVmId !== null} onclick={() => onprovision?.(vm)}>Set up…</button>
+            {:else if primary === "console"}
               <button
                 type="button"
+                class="primary"
                 disabled={consoleVmId !== null}
                 title="Show the VM's screen, also while its operating system is being installed"
                 onclick={() => onconsole?.(vm)}>{consoleVmId === vm.id ? "Opening…" : "Console"}</button
               >
             {/if}
-            {#if vm.state === "off" || vm.state === "saved"}
-              <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "start")}>
-                {actionVmId === vm.id ? "Starting…" : "Start"}
-              </button>
-            {:else if vm.state === "running"}
-              <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "shutdown")}>
-                {actionVmId === vm.id ? "Sending…" : "Shut down"}
-              </button>
-            {/if}
             <details class="menu">
-              <summary aria-label="More actions for {vm.name}">⋯</summary>
+              <summary aria-label="Actions for {vm.name}" title="More actions">⋮</summary>
               <div class="menu-items">
-                {#if vm.state === "running"}
-                  <button type="button" onclick={(event) => choose(event, () => onaction?.(vm, "restart"))}>Restart</button>
-                  <button type="button" onclick={(event) => choose(event, () => onaction?.(vm, "save"))}>Save state</button>
+                {#if (vm.state === "running" || vm.state === "paused") && primary !== "console"}
+                  <button
+                    type="button"
+                    disabled={consoleVmId !== null}
+                    onclick={(event) => choose(event, () => onconsole?.(vm))}>{consoleVmId === vm.id ? "Opening console…" : "Console"}</button
+                  >
                 {/if}
-                {#if vm.state !== "off" && vm.state !== "saved"}
-                  <button type="button" class="danger" onclick={(event) => choose(event, () => onaction?.(vm, "turnOff"))}>
-                    Turn off…
+                {#if vm.state === "running"}
+                  <button type="button" disabled={actionVmId !== null} onclick={(event) => choose(event, () => onaction?.(vm, "shutdown"))}>
+                    Shut down
+                  </button>
+                  <button type="button" disabled={actionVmId !== null} onclick={(event) => choose(event, () => onaction?.(vm, "restart"))}>
+                    Restart
                   </button>
                 {/if}
+                {#if vm.state === "running" || vm.state === "paused"}
+                  <button type="button" disabled={actionVmId !== null} onclick={(event) => choose(event, () => onaction?.(vm, "save"))}>
+                    Save state
+                  </button>
+                {/if}
+                {#if canForceOff(vm.state)}
+                  <button
+                    type="button"
+                    class="danger"
+                    disabled={actionVmId !== null}
+                    onclick={(event) => choose(event, () => onaction?.(vm, "turnOff"))}>Force shut off…</button
+                  >
+                {/if}
+                <hr />
                 <button type="button" onclick={(event) => choose(event, () => onsettings?.(vm))}>Settings…</button>
                 <button type="button" class="danger" onclick={(event) => choose(event, () => ondelete?.(vm))}>Delete…</button>
               </div>
@@ -265,12 +309,6 @@
     cursor: default;
   }
 
-  .actions > button + button,
-  .actions > button + details,
-  .actions > span + button {
-    margin-left: 0.35rem;
-  }
-
   .menu {
     display: inline-block;
     position: relative;
@@ -279,7 +317,9 @@
 
   .menu summary {
     list-style: none;
-    padding: 0.3rem 0.6rem;
+    padding: 0.3rem 0.5rem;
+    font-weight: 700;
+    line-height: 1;
     border: 1px solid var(--border);
     border-radius: 6px;
     cursor: pointer;
@@ -317,6 +357,17 @@
 
   .menu-items button.danger {
     color: var(--danger);
+  }
+
+  .menu-items button:disabled:hover {
+    background: none;
+  }
+
+  .menu-items hr {
+    width: 100%;
+    margin: 0.25rem 0;
+    border: none;
+    border-top: 1px solid var(--border);
   }
 
   .visually-hidden {
