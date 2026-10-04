@@ -30,6 +30,8 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { elevation, ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
+  import Toasts from "$lib/components/Toasts.svelte";
+  import { toasts } from "$lib/toasts.svelte";
 
   const REFRESH_INTERVAL_MS = 5000;
 
@@ -41,11 +43,9 @@
   let unpairing = $state(false);
   let offline = $state(false);
   let showWake = $state(false);
-  let wakeStatus = $state<string | null>(null);
   let provisioning = $state<Vm | null>(null);
   let connectingVmId = $state<string | null>(null);
   let consoleVmId = $state<string | null>(null);
-  let connectStatus = $state<{ ok: boolean; message: string } | null>(null);
   let actionVmId = $state<string | null>(null);
   let confirmTurnOff = $state<Vm | null>(null);
   let deleting = $state<Vm | null>(null);
@@ -65,9 +65,7 @@
     vmError = null;
     offline = false;
     showWake = false;
-    wakeStatus = null;
     provisioning = null;
-    connectStatus = null;
     confirmTurnOff = null;
     deleting = null;
     editing = null;
@@ -91,7 +89,6 @@
       vms = result;
       vmError = null;
       offline = false;
-      wakeStatus = null;
     } catch (error) {
       if (key !== selectedKey) return;
       vms = null;
@@ -109,12 +106,11 @@
   async function connect(vm: Vm) {
     if (selectedKey === null || !vm.remoteDesktop.address) return;
     connectingVmId = vm.id;
-    connectStatus = null;
     try {
       await connectVm(selectedKey, vm.id, vm.remoteDesktop.address);
-      connectStatus = { ok: true, message: `Opening Remote Desktop to ${vm.name}…` };
+      toasts.show(`Opening Remote Desktop to ${vm.name}…`);
     } catch (error) {
-      connectStatus = { ok: false, message: errorMessage(error) };
+      toasts.error(errorMessage(error));
     } finally {
       connectingVmId = null;
     }
@@ -123,17 +119,15 @@
   async function openVmConsole(vm: Vm) {
     if (selectedKey === null) return;
     consoleVmId = vm.id;
-    connectStatus = null;
     try {
       await openConsole(selectedKey, vm.id);
-      connectStatus = { ok: true, message: `Opening the console of ${vm.name}…` };
+      toasts.show(`Opening the console of ${vm.name}…`);
     } catch (error) {
-      connectStatus = {
-        ok: false,
-        message: hasProblemCode(error, "consoleSetupRequired")
+      toasts.error(
+        hasProblemCode(error, "consoleSetupRequired")
           ? "Console access is not set up on this host. On the host, double-click the HyperHarbor tray icon and choose Set up console access."
           : errorMessage(error),
-      };
+      );
     } finally {
       consoleVmId = null;
     }
@@ -160,13 +154,12 @@
     const key = selectedKey;
     if (key === null) return;
     actionVmId = vm.id;
-    connectStatus = null;
     try {
       await withElevation(key, () => performVmAction(key, vm.id, action));
-      connectStatus = { ok: true, message: `${actionVerbs[action]} ${vm.name}…` };
+      toasts.show(`${actionVerbs[action]} ${vm.name}…`);
       await refreshVms(key);
     } catch (error) {
-      if (!(error instanceof ElevationCancelled)) connectStatus = { ok: false, message: errorMessage(error) };
+      if (!(error instanceof ElevationCancelled)) toasts.error(errorMessage(error));
     } finally {
       actionVmId = null;
     }
@@ -213,7 +206,7 @@
     const vm = provisioning;
     provisioning = null;
     if (done && vm && selectedKey) {
-      connectStatus = { ok: true, message: `${vm.name} is set up. Press Connect to open Remote Desktop.` };
+      toasts.show(`${vm.name} is set up. Press Connect to open Remote Desktop.`);
       refreshVms(selectedKey);
     }
   }
@@ -222,9 +215,9 @@
     if (selectedKey === null) return;
     try {
       await wakeHost(selectedKey);
-      wakeStatus = "Wake signal sent. The host usually responds within a minute.";
+      toasts.show("Wake signal sent. The host usually responds within a minute.");
     } catch (error) {
-      wakeStatus = errorMessage(error);
+      toasts.error(errorMessage(error));
     }
   }
 
@@ -316,7 +309,6 @@
           {:else}
             <p>It has not shared Wake-on-LAN details, so it cannot be woken from here.</p>
           {/if}
-          {#if wakeStatus}<p>{wakeStatus}</p>{/if}
         </div>
       {:else if vmError}
         <div class="notice error" role="status">{vmError}</div>
@@ -331,9 +323,6 @@
             ISO library
           </button>
         </div>
-        {#if connectStatus}
-          <div class={connectStatus.ok ? "notice" : "notice error"} role="status">{connectStatus.message}</div>
-        {/if}
         {#if view === "isos"}
           {#key selectedHost.key}
             <IsoLibrary host={selectedHost} />
@@ -394,6 +383,8 @@
     {/if}
   </main>
 </div>
+
+<Toasts />
 
 <style>
   :global(:root) {
