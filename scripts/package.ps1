@@ -56,8 +56,14 @@ if (-not $version) {
 
 New-Item -ItemType Directory -Force $dist | Out-Null
 
-# Files in dist/ cannot be replaced while running. Check now rather than after a long build.
-$running = Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($dist, [StringComparison]::OrdinalIgnoreCase) }
+# Files in dist/ cannot be replaced while running. Check now rather than after a long build. Only the
+# side being rebuilt matters: the host lives in dist\host, the client executables directly in dist.
+$hostDist = Join-Path $dist 'host'
+$running = Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($dist, [StringComparison]::OrdinalIgnoreCase) } |
+    Where-Object {
+        $isHost = $_.Path.StartsWith($hostDist, [StringComparison]::OrdinalIgnoreCase)
+        ($isHost -and -not $ClientOnly) -or (-not $isHost -and -not $HostOnly)
+    }
 if ($running) {
     $names = ($running | ForEach-Object { Split-Path -Leaf $_.Path } | Sort-Object -Unique) -join ', '
     throw "Close these programs running from dist\ first: $names"
@@ -92,8 +98,10 @@ if (-not $SkipTests) {
 
 if (-not $ClientOnly) {
     $staging = Join-Path $dist 'host'
+    # Empty the folder rather than delete it: a terminal opened in dist\host (to run Start-HyperHarbor.ps1)
+    # keeps the folder itself from being removed.
     if (Test-Path $staging) {
-        Remove-Item -Recurse -Force $staging
+        Get-ChildItem -Force $staging | Remove-Item -Recurse -Force
     }
 
     $publishArgs = @(
