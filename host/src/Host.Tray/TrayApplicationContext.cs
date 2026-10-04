@@ -3,7 +3,7 @@ using HyperHarbor.Shared.Contracts.Ipc;
 namespace HyperHarbor.Host.Tray;
 
 /// <summary>
-/// Owns the notification area icon, its menu, and the pairing and device windows.
+/// Owns the notification area icon, its menu, and the host, pairing, device, and passphrase windows.
 /// </summary>
 internal sealed class TrayApplicationContext : ApplicationContext
 {
@@ -15,7 +15,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private DevicesForm? _devicesForm;
     private readonly ToolStripMenuItem _passphraseItem;
     private AdminPassphraseForm? _passphraseForm;
-    private bool _passphraseConfigured;
+    private HostForm? _hostForm;
+    private bool _connected;
+
+    /// <summary>Null until the service reports it.</summary>
+    private bool? _passphraseConfigured;
     private bool _passphraseSaving;
 
     public TrayApplicationContext()
@@ -23,6 +27,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _status = new ToolStripMenuItem("Connecting to host service…") { Enabled = false };
 
         var menu = new ContextMenuStrip();
+        var open = new ToolStripMenuItem("Open HyperHarbor Host…", null, (_, _) => ShowHost()) { Font = new Font(menu.Font, FontStyle.Bold) };
+        menu.Items.Add(open);
         menu.Items.Add(_status);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Paired devices…", null, (_, _) => ShowDevices());
@@ -38,7 +44,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ContextMenuStrip = menu,
             Visible = true,
         };
-        _notifyIcon.DoubleClick += (_, _) => ShowDevices();
+        _notifyIcon.DoubleClick += (_, _) => ShowHost();
 
         _pipe = new TrayPipeClient();
         _pipe.ConnectionChanged += OnConnectionChanged;
@@ -53,6 +59,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _pipe.Dispose();
             _pinForm?.Dispose();
             _devicesForm?.Dispose();
+            _hostForm?.Dispose();
             _passphraseForm?.Dispose();
             _notifyIcon.Visible = false;
             _notifyIcon.ContextMenuStrip?.Dispose();
@@ -67,6 +74,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _status.Text = connected ? "Host service running" : "Host service not running";
         _notifyIcon.Text = connected ? "HyperHarbor" : "HyperHarbor (service not running)";
         _passphraseItem.Enabled = connected;
+        _connected = connected;
+        if (!connected)
+        {
+            _passphraseConfigured = null;
+        }
+
+        RefreshHost();
         if (!connected)
         {
             _pinForm?.Close();
@@ -86,6 +100,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             case DeviceListMessage list:
                 _devices = list.Devices;
                 _devicesForm?.ShowDevices(_devices);
+                RefreshHost();
                 break;
             case AdminPassphraseStatusMessage status:
                 OnPassphraseStatus(status);
@@ -158,7 +173,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (_passphraseForm is null)
         {
-            _passphraseForm = new AdminPassphraseForm(_passphraseConfigured, async hash =>
+            _passphraseForm = new AdminPassphraseForm(_passphraseConfigured == true, async hash =>
             {
                 _passphraseSaving = true;
                 await _pipe.SendAsync(hash);
@@ -170,10 +185,26 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _passphraseForm.Activate();
     }
 
+    private void ShowHost()
+    {
+        if (_hostForm is null)
+        {
+            _hostForm = new HostForm(ShowPassphrase, ShowDevices);
+            _hostForm.FormClosed += (_, _) => _hostForm = null;
+            RefreshHost();
+        }
+
+        _hostForm.Show();
+        _hostForm.Activate();
+    }
+
+    private void RefreshHost() => _hostForm?.ShowStatus(_connected, _passphraseConfigured, _devices.Count);
+
     private void OnPassphraseStatus(AdminPassphraseStatusMessage status)
     {
         _passphraseConfigured = status.Configured;
         _passphraseItem.Text = status.Configured ? "Change admin passphrase…" : "Set admin passphrase…";
+        RefreshHost();
         if (_passphraseSaving && status.Configured)
         {
             _passphraseSaving = false;

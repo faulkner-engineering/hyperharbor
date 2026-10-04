@@ -57,7 +57,8 @@ per-device VM accounts and a user management UI.
   compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers)
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
   elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/)
-- host/src/Host.Tray: WinForms tray; shows pairing PINs and paired devices, sets the admin passphrase
+- host/src/Host.Tray: WinForms tray. HostForm (double-click the icon) shows service status, the admin passphrase
+  (set or change), paired devices, and opens the logs; PinForm, DevicesForm, AdminPassphraseForm
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
   identity.rs (key in Credential Manager), paired.rs; client/src: SvelteKit SPA. Lifecycle UI:
@@ -70,6 +71,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service; pairing needs Host.Tray running
+- Host logs: the console window and %ProgramData%HyperHarborogshost-yyyyMMdd.log (14 days); audit trail in
+  %ProgramData%HyperHarborudit.log. Both have the ProtectedFile ACL (Administrators, SYSTEM, service account).
 - Print VM inventory JSON: dotnet run --project host/src/Host.Service -- --list-vms
 - Lint contract: npx @redocly/cli lint docs/api.yaml
 - Client (from client/): npm run check | npm test (Vitest) | npm run gen:api | npm run tauri dev
