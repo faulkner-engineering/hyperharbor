@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.2.0
+  version: 1.3.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -114,9 +114,11 @@ paths:
       operationId: listIsos
       summary: List the installation images in the host's ISO library.
       description: |
-        Images are files ending in .iso in the library folder (`HostResources.isoFolder`) and its
-        subfolders. Links are not followed. Create requests name an image by its `name`; paths
-        outside the library are refused.
+        The library is one folder on the host (`HostResources.isoFolder`, chosen in the host tray).
+        Images are the files in it ending in .iso; links are not followed. Clients add, rename,
+        and delete images through this API, so every paired client sees the same library.
+        `usedBy` lists the VMs that have an image attached; those images cannot be renamed or
+        deleted.
       responses:
         "200":
           description: The images, sorted by name.
@@ -128,6 +130,118 @@ paths:
                   $ref: "#/components/schemas/IsoImage"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
+  /isos/{name}:
+    parameters:
+      - $ref: "#/components/parameters/IsoName"
+    put:
+      tags: [Host]
+      operationId: uploadIso
+      summary: Add an image to the ISO library.
+      description: |
+        The body is the image file itself, sent as it is read (no size limit; send
+        Content-Length so the host can check free space first). It is written to a temporary
+        file and appears in the library only once the whole body has arrived, so a cancelled
+        upload leaves nothing behind. Check for elevation before sending a large body: the host
+        refuses an unelevated request before reading it.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: The image was added.
+          headers:
+            Location:
+              description: URL of the image.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IsoImage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          description: An image with this name is already in the library.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "507":
+          description: The library's drive does not have room for the image.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    patch:
+      tags: [Host]
+      operationId: renameIso
+      summary: Rename an image in the ISO library.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameIsoRequest"
+      responses:
+        "200":
+          description: The renamed image.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IsoImage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Another image has the new name, or a VM has this image attached.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags: [Host]
+      operationId: deleteIso
+      summary: Delete an image from the ISO library.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "204":
+          description: The image was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: A VM has this image attached.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /switches:
     get:
@@ -858,6 +972,13 @@ components:
       schema:
         type: string
         format: uuid
+    IsoName:
+      name: name
+      in: path
+      required: true
+      description: An image file name in the ISO library, ending in .iso (URL-encoded).
+      schema:
+        type: string
     JobId:
       name: jobId
       in: path
@@ -1557,21 +1678,36 @@ components:
           description: Where new VMs' disks are created.
         isoFolder:
           type: string
-          description: The ISO library folder. Copy installation images here on the host.
+          description: The ISO library folder on the host, chosen in the host tray.
 
     IsoImage:
       type: object
-      required: [name, sizeBytes, modifiedAt]
+      required: [name, sizeBytes, modifiedAt, usedBy]
       properties:
         name:
           type: string
-          description: Path relative to the ISO library folder.
+          description: The file name in the ISO library folder, ending in .iso.
         sizeBytes:
           type: integer
           format: int64
         modifiedAt:
           type: string
           format: date-time
+        usedBy:
+          type: array
+          description: Names of the VMs (current settings or checkpoints) that have this image attached.
+          items:
+            type: string
+
+    RenameIsoRequest:
+      type: object
+      required: [newName]
+      properties:
+        newName:
+          type: string
+          minLength: 5
+          maxLength: 200
+          description: A file name ending in .iso, without a folder.
 
     VirtualSwitch:
       type: object

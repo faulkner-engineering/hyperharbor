@@ -18,6 +18,8 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(WakeFixCompletedMessage), "wakeFixCompleted")]
 [JsonDerivedType(typeof(AdminPassphraseStatusMessage), "adminPassphraseStatus")]
 [JsonDerivedType(typeof(SetAdminPassphraseMessage), "setAdminPassphrase")]
+[JsonDerivedType(typeof(IsoFolderMessage), "isoFolder")]
+[JsonDerivedType(typeof(SetIsoFolderMessage), "setIsoFolder")]
 public abstract record TrayMessage;
 
 // Service to tray.
@@ -48,6 +50,10 @@ public sealed record WakeFixItem(string CheckId, string Title);
 /// <summary>Whether an admin passphrase is set. Sent on connect and after it changes.</summary>
 public sealed record AdminPassphraseStatusMessage(bool Configured) : TrayMessage;
 
+/// <summary>The ISO library folder in use. Sent on connect and after every change request.</summary>
+/// <param name="Error">Why the last change request was refused, if it was.</param>
+public sealed record IsoFolderMessage(string Folder, string? Error = null) : TrayMessage;
+
 // Tray to service.
 
 public sealed record ListDevicesMessage : TrayMessage;
@@ -55,6 +61,9 @@ public sealed record ListDevicesMessage : TrayMessage;
 public sealed record RemoveDeviceMessage(Guid DeviceId) : TrayMessage;
 
 public sealed record CancelPairingMessage : TrayMessage;
+
+/// <summary>Moves the ISO library to a local folder, which is created if missing. Existing images are not moved.</summary>
+public sealed record SetIsoFolderMessage(string Folder) : TrayMessage;
 
 /// <param name="Outcome">applied, declined, or failed.</param>
 public sealed record WakeFixCompletedMessage(Guid RequestId, string Outcome, string? Detail) : TrayMessage;

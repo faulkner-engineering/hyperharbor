@@ -7,9 +7,15 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 public sealed record DiskAttachment(Guid VmId, string VmName, string Path, bool InCheckpoint);
 
 /// <summary>Every VM's disk attachments and checkpoint counts, read in one pass.</summary>
-public sealed record StorageSnapshot(IReadOnlyList<DiskAttachment> Disks, IReadOnlyDictionary<Guid, int> CheckpointCounts)
+/// <param name="Images">Attached ISO images, in the same form as <paramref name="Disks"/>.</param>
+public sealed record StorageSnapshot(
+    IReadOnlyList<DiskAttachment> Disks,
+    IReadOnlyDictionary<Guid, int> CheckpointCounts,
+    IReadOnlyList<DiskAttachment>? Images = null)
 {
     public int CheckpointsOf(Guid vmId) => CheckpointCounts.GetValueOrDefault(vmId);
+
+    public IReadOnlyList<DiskAttachment> AttachedImages => Images ?? [];
 }
 
 /// <summary>Hyper-V storage and deletion operations used by lifecycle jobs.</summary>

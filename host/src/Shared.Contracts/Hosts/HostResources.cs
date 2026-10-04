@@ -14,8 +14,13 @@ public sealed record HostResources(
     string IsoFolder);
 
 /// <summary>An installation image in the host's ISO library. Schema: IsoImage.</summary>
-/// <param name="Name">Path relative to the library folder, for example "Windows\Win11_24H2.iso".</param>
-public sealed record IsoImage(string Name, long SizeBytes, DateTimeOffset ModifiedAt);
+/// <param name="Name">The file name in the library folder, for example "Win11_24H2.iso".</param>
+/// <param name="UsedBy">Names of the VMs (current settings or checkpoints) that have this image attached.</param>
+public sealed record IsoImage(string Name, long SizeBytes, DateTimeOffset ModifiedAt, IReadOnlyList<string> UsedBy);
+
+/// <summary>Renames an image in the ISO library. Schema: RenameIsoRequest.</summary>
+/// <param name="NewName">A file name ending in .iso.</param>
+public sealed record RenameIsoRequest([property: System.Text.Json.Serialization.JsonRequired] string NewName);
 
 /// <summary>A Hyper-V virtual switch. Schema: VirtualSwitch.</summary>
 /// <param name="IsDefault">The NAT "Default Switch"; VMs on it are reachable only from the host.</param>

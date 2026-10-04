@@ -18,8 +18,10 @@ internal sealed class HostForm : Form
     private readonly Button _setPassphrase;
     private readonly Label _devices;
     private readonly Button _manageDevices;
+    private readonly Label _isoFolder;
+    private readonly Button _changeIsoFolder;
 
-    public HostForm(Action setPassphrase, Action manageDevices)
+    public HostForm(Action setPassphrase, Action manageDevices, Action changeIsoFolder)
     {
         // Design at 96 DPI; WinForms scales fonts and padding to the monitor's DPI.
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -52,6 +54,7 @@ internal sealed class HostForm : Form
 
         _passphrase = AddRow(layout, "Admin passphrase", out _setPassphrase, "Set admin passphrase…", setPassphrase);
         _devices = AddRow(layout, "Paired devices", out _manageDevices, "Manage devices…", manageDevices);
+        _isoFolder = AddRow(layout, "ISO library", out _changeIsoFolder, "Change folder…", changeIsoFolder);
         AddRow(layout, "Host log", out _, "Open logs folder", () => Open(Path.Combine(DataDirectory, "logs"), folder: true), $"Daily files in {Path.Combine(DataDirectory, "logs")}");
         AddRow(layout, "Audit log", out _, "Open audit log", () => Open(Path.Combine(DataDirectory, "audit.log"), folder: false), "Every change made from a client or this tray");
 
@@ -62,11 +65,12 @@ internal sealed class HostForm : Form
         CancelButton = close;
 
         Controls.Add(layout);
-        ShowStatus(connected: false, passphraseConfigured: null, deviceCount: 0);
+        ShowStatus(connected: false, passphraseConfigured: null, deviceCount: 0, isoFolder: null);
     }
 
     /// <param name="passphraseConfigured">Null until the service has reported it.</param>
-    public void ShowStatus(bool connected, bool? passphraseConfigured, int deviceCount)
+    /// <param name="isoFolder">Null until the service reports it.</param>
+    public void ShowStatus(bool connected, bool? passphraseConfigured, int deviceCount, string? isoFolder)
     {
         _service.Text = connected ? "Host service running" : "Host service not running. Start it with Start-HyperHarbor.ps1.";
         _service.ForeColor = connected ? SystemColors.ControlText : Color.Firebrick;
@@ -84,6 +88,11 @@ internal sealed class HostForm : Form
         _devices.Text = !connected ? "Unknown while the service is not running."
             : deviceCount == 1 ? "1 device is paired." : $"{deviceCount} devices are paired.";
         _manageDevices.Enabled = connected;
+
+        _isoFolder.Text = connected && isoFolder is not null
+            ? $"Images clients add are stored in {isoFolder}."
+            : "Unknown while the service is not running.";
+        _changeIsoFolder.Enabled = connected && isoFolder is not null;
     }
 
     private static Label AddRow(TableLayoutPanel layout, string heading, out Button button, string buttonText, Action onClick, string? description = null)

@@ -64,6 +64,25 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
+    /// <summary>Kestrel limits request bodies to 30 MB by default; the upload endpoint lifts that.</summary>
+    [Fact]
+    public async Task IsoUpload_LargerThanKestrelsDefaultLimit_IsStored()
+    {
+        using var client = _service.CreateClient(_service.PairedCertificate);
+        client.Timeout = TimeSpan.FromMinutes(2);
+        var elevate = await client.PostAsJsonAsync("/api/v1/auth/elevation", new { passphrase = ServiceProcess.Passphrase });
+        var token = (string)(await elevate.Content.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>())!["token"]!;
+        var content = new byte[40 * 1024 * 1024];
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, "/api/v1/isos/large.iso") { Content = new ByteArrayContent(content) };
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        request.Headers.Add(Shared.Contracts.ContractInfo.ElevationHeader, token);
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(content.Length, new FileInfo(Path.Combine(_service.IsoFolder, "large.iso")).Length);
+    }
+
     [Fact]
     public async Task ServerCertificate_IsTheStoredHostCertificate()
     {
@@ -130,6 +149,10 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
 
         public int Port { get; } = FreePort();
 
+        public const string Passphrase = "correct horse battery";
+
+        public string IsoFolder => Path.Combine(_dataDirectory, "isos");
+
         public Uri BaseAddress => new($"https://127.0.0.1:{Port}");
 
         public async Task InitializeAsync()
@@ -138,6 +161,8 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
             var users = new UserStore(_dataDirectory);
             var user = users.GetOrCreateDefault();
             new PairedDeviceStore(_dataDirectory, users).Add(user.UserId, "Paired", CertificateFingerprint.Of(PairedCertificate), DateTimeOffset.UtcNow);
+            var hash = Shared.Contracts.Ipc.AdminPassphrase.CreateHash(Passphrase, Elevation.ElevationServiceTests.TestIterations);
+            new Core.Elevation.AdminPassphraseStore(_dataDirectory).Set(hash.Salt, hash.Hash, hash.Iterations);
             using (var hostCertificate = new HostCertificateStore(_dataDirectory, Environment.MachineName).GetOrCreate())
             {
                 HostCertificateFingerprint = CertificateFingerprint.Of(hostCertificate);
@@ -158,6 +183,7 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
                 "--Api:Port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 "--Api:ListenAddress", "127.0.0.1",
                 "--Discovery:Enabled", "false",
+                "--Lifecycle:IsoFolder", IsoFolder,
                 "--Tray:PipeName", "HyperHarbor.Tests." + Guid.NewGuid().ToString("N"),
             })
             {

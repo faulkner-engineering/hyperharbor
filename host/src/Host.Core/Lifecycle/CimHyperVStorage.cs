@@ -18,6 +18,7 @@ public sealed class CimHyperVStorage : IHyperVStorage
     private const string SnapshotTypePrefix = "Microsoft:Hyper-V:Snapshot:";
     // ISO and floppy images are ResourceType 31 too; only this subtype is a virtual hard disk.
     private const string VirtualHardDiskSubType = "Microsoft:Hyper-V:Virtual Hard Disk";
+    private const string OpticalDiskSubType = "Microsoft:Hyper-V:Virtual CD/DVD Disk";
 
     public Task<StorageSnapshot> ReadAsync(CancellationToken cancellationToken) =>
         HyperVCim.RunAsync(session => Task.FromResult(Read(session)), cancellationToken);
@@ -139,8 +140,20 @@ public sealed class CimHyperVStorage : IHyperVStorage
             }
         }
 
-        var disks = new List<DiskAttachment>();
-        foreach (var storage in HyperVCim.Query(session, $"SELECT InstanceID, HostResource FROM Msvm_StorageAllocationSettingData WHERE ResourceSubType = '{VirtualHardDiskSubType}'"))
+        var disks = Attachments(session, VirtualHardDiskSubType, owners, names);
+        var images = Attachments(session, OpticalDiskSubType, owners, names);
+        return new StorageSnapshot(disks, checkpoints, images);
+    }
+
+    /// <summary>Attachments of one storage subtype, each tied to its VM through the owning settings.</summary>
+    private static List<DiskAttachment> Attachments(
+        CimSession session,
+        string subType,
+        Dictionary<string, (Guid VmId, bool InCheckpoint)> owners,
+        Dictionary<Guid, string> names)
+    {
+        var attachments = new List<DiskAttachment>();
+        foreach (var storage in HyperVCim.Query(session, $"SELECT InstanceID, HostResource FROM Msvm_StorageAllocationSettingData WHERE ResourceSubType = '{subType}'"))
         {
             using (storage)
             {
@@ -155,11 +168,11 @@ public sealed class CimHyperVStorage : IHyperVStorage
                 var settingsId = separator < 0 ? instanceId : instanceId[..separator];
                 if (owners.TryGetValue(settingsId, out var owner))
                 {
-                    disks.Add(new DiskAttachment(owner.VmId, names.GetValueOrDefault(owner.VmId, owner.VmId.ToString()), hostResource[0], owner.InCheckpoint));
+                    attachments.Add(new DiskAttachment(owner.VmId, names.GetValueOrDefault(owner.VmId, owner.VmId.ToString()), hostResource[0], owner.InCheckpoint));
                 }
             }
         }
 
-        return new StorageSnapshot(disks, checkpoints);
+        return attachments;
     }
 }

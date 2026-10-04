@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.2.0";
+    public const string ApiVersion = "1.3.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";

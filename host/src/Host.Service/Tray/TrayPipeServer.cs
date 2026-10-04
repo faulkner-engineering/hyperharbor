@@ -5,6 +5,7 @@ using System.Security.Principal;
 using System.Text;
 using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Elevation;
+using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
@@ -108,6 +109,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 await connection.SendAsync(new AdminPassphraseStatusMessage(elevation.IsConfigured));
             }
 
+            if (_services.GetService<IsoLibrary>() is { } isos)
+            {
+                await connection.SendAsync(new IsoFolderMessage(isos.Folder));
+            }
+
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
             var lines = new BoundedLineReader(reader, MaxMessageLength);
             while (!stoppingToken.IsCancellationRequested && await lines.ReadLineAsync(stoppingToken) is { } line)
@@ -175,6 +181,9 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                     completed.Outcome == "applied" ? AuditOutcome.Succeeded : AuditOutcome.Failed);
                 _services.GetRequiredService<Wake.WakeFixCoordinator>().OnCompleted(completed);
                 break;
+            case SetIsoFolderMessage isoFolder:
+                SetIsoFolder(isoFolder);
+                break;
             case SetAdminPassphraseMessage set:
                 SetAdminPassphrase(set);
                 break;
@@ -182,6 +191,42 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
     }
 
     private ElevationService? Elevation => _services.GetService<ElevationService>();
+
+    /// <summary>
+    /// Moves the ISO library to a local folder chosen at the host. Network paths are refused: Hyper-V needs
+    /// extra delegation to attach images from a share. Every tray hears the folder in use afterwards.
+    /// </summary>
+    private void SetIsoFolder(SetIsoFolderMessage request)
+    {
+        if (_services.GetService<HostSettingsStore>() is not { } settings || _services.GetService<IsoLibrary>() is not { } isos)
+        {
+            return;
+        }
+
+        string? error = null;
+        var folder = request.Folder?.Trim() ?? string.Empty;
+        if (!Path.IsPathFullyQualified(folder) || folder.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            error = "Choose a folder on a local drive, for example D:\\ISOs.";
+        }
+        else
+        {
+            try
+            {
+                folder = Path.GetFullPath(folder);
+                Directory.CreateDirectory(folder);
+                settings.SetIsoFolder(folder);
+                _logger.LogInformation("The ISO library folder was changed to {Folder} from the tray.", folder);
+                AuditTrayAction("traySetIsoFolder", null, null, null, $"folder={folder}");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                error = $"The folder could not be used: {ex.Message}";
+            }
+        }
+
+        Broadcast(new IsoFolderMessage(isos.Folder, error));
+    }
 
     private void SetAdminPassphrase(SetAdminPassphraseMessage set)
     {

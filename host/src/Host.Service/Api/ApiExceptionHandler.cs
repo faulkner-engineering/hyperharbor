@@ -99,6 +99,8 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             ElevationRequiredException => (StatusCodes.Status403Forbidden, "Elevation required"),
             ElevationUnavailableException => (StatusCodes.Status403Forbidden, "Elevation unavailable"),
             IncorrectPassphraseException => (StatusCodes.Status403Forbidden, "Incorrect passphrase"),
+            IsoNotFoundException => (StatusCodes.Status404NotFound, "Image not found"),
+            InsufficientStorageException => (StatusCodes.Status507InsufficientStorage, "Not enough space"),
             ElevationRateLimitedException => (StatusCodes.Status429TooManyRequests, "Too many attempts"),
             BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),
             VmNotFoundException => (StatusCodes.Status404NotFound, "Virtual machine not found"),

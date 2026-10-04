@@ -119,7 +119,15 @@ builder.Services.AddOptions<LifecycleOptions>().Bind(builder.Configuration.GetSe
 builder.Services.AddSingleton<IHostCapacityReader, WindowsHostCapacityReader>();
 builder.Services.AddSingleton<IHyperVHost, CimHyperVHost>();
 builder.Services.AddSingleton(services => services.GetRequiredService<IOptions<LifecycleOptions>>().Value);
-builder.Services.AddSingleton(services => new IsoLibrary(services.GetRequiredService<LifecycleOptions>().EffectiveIsoFolder));
+// The tray can move the ISO library; its choice (host-settings.json) wins over Lifecycle:IsoFolder and the default.
+builder.Services.AddSingleton(new HostSettingsStore(dataDirectory));
+builder.Services.AddSingleton(services =>
+{
+    var settings = services.GetRequiredService<HostSettingsStore>();
+    var options = services.GetRequiredService<LifecycleOptions>();
+    return new IsoLibrary(() => settings.IsoFolder ?? options.EffectiveIsoFolder, services.GetRequiredService<ILogger<IsoLibrary>>());
+});
+builder.Services.AddSingleton<IsoLibraryService>();
 builder.Services.AddSingleton<IHyperVBuilder, CimHyperVBuilder>();
 builder.Services.AddSingleton<VmCreationService>();
 builder.Services.AddSingleton<IHyperVCompute, CimHyperVCompute>();

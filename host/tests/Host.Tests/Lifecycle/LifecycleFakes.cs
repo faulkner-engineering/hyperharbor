@@ -7,6 +7,9 @@ internal sealed class FakeHyperVStorage : IHyperVStorage
 {
     public List<DiskAttachment> Disks { get; } = [];
 
+    /// <summary>Attached ISO images.</summary>
+    public List<DiskAttachment> Images { get; } = [];
+
     public Dictionary<Guid, int> Checkpoints { get; } = [];
 
     /// <summary>Child path to parent path.</summary>
@@ -22,7 +25,7 @@ internal sealed class FakeHyperVStorage : IHyperVStorage
     public Action? BeforeDeleteVm { get; set; }
 
     public Task<StorageSnapshot> ReadAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(new StorageSnapshot(Disks.ToList(), new Dictionary<Guid, int>(Checkpoints)));
+        Task.FromResult(new StorageSnapshot(Disks.ToList(), new Dictionary<Guid, int>(Checkpoints), Images.ToList()));
 
     public Task<string?> GetParentPathAsync(string path, CancellationToken cancellationToken) =>
         Task.FromResult(Parents.TryGetValue(path, out var parent) ? parent : null);

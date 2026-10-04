@@ -51,9 +51,11 @@ export interface paths {
         };
         /**
          * List the installation images in the host's ISO library.
-         * @description Images are files ending in .iso in the library folder (`HostResources.isoFolder`) and its
-         *     subfolders. Links are not followed. Create requests name an image by its `name`; paths
-         *     outside the library are refused.
+         * @description The library is one folder on the host (`HostResources.isoFolder`, chosen in the host tray).
+         *     Images are the files in it ending in .iso; links are not followed. Clients add, rename,
+         *     and delete images through this API, so every paired client sees the same library.
+         *     `usedBy` lists the VMs that have an image attached; those images cannot be renamed or
+         *     deleted.
          */
         get: operations["listIsos"];
         put?: never;
@@ -62,6 +64,35 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/isos/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+                name: components["parameters"]["IsoName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Add an image to the ISO library.
+         * @description The body is the image file itself, sent as it is read (no size limit; send
+         *     Content-Length so the host can check free space first). It is written to a temporary
+         *     file and appears in the library only once the whole body has arrived, so a cancelled
+         *     upload leaves nothing behind. Check for elevation before sending a large body: the host
+         *     refuses an unelevated request before reading it.
+         */
+        put: operations["uploadIso"];
+        post?: never;
+        /** Delete an image from the ISO library. */
+        delete: operations["deleteIso"];
+        options?: never;
+        head?: never;
+        /** Rename an image in the ISO library. */
+        patch: operations["renameIso"];
         trace?: never;
     };
     "/switches": {
@@ -923,16 +954,22 @@ export interface components {
             memoryReserveMb: number;
             /** @description Where new VMs' disks are created. */
             virtualHardDiskFolder: string;
-            /** @description The ISO library folder. Copy installation images here on the host. */
+            /** @description The ISO library folder on the host, chosen in the host tray. */
             isoFolder: string;
         };
         IsoImage: {
-            /** @description Path relative to the ISO library folder. */
+            /** @description The file name in the ISO library folder, ending in .iso. */
             name: string;
             /** Format: int64 */
             sizeBytes: number;
             /** Format: date-time */
             modifiedAt: string;
+            /** @description Names of the VMs (current settings or checkpoints) that have this image attached. */
+            usedBy: string[];
+        };
+        RenameIsoRequest: {
+            /** @description A file name ending in .iso, without a folder. */
+            newName: string;
         };
         VirtualSwitch: {
             id: string;
@@ -1127,6 +1164,8 @@ export interface components {
     parameters: {
         /** @description Hyper-V virtual machine ID. */
         VmId: string;
+        /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+        IsoName: string;
         /** @description Job ID returned when the job was started. */
         JobId: string;
     };
@@ -1198,6 +1237,130 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    uploadIso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+                name: components["parameters"]["IsoName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The image was added. */
+            201: {
+                headers: {
+                    /** @description URL of the image. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IsoImage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            /** @description An image with this name is already in the library. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The library's drive does not have room for the image. */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    deleteIso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+                name: components["parameters"]["IsoName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image was deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description A VM has this image attached. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    renameIso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+                name: components["parameters"]["IsoName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameIsoRequest"];
+            };
+        };
+        responses: {
+            /** @description The renamed image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IsoImage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description Another image has the new name, or a VM has this image attached. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     listSwitches: {

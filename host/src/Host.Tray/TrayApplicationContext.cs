@@ -17,6 +17,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private AdminPassphraseForm? _passphraseForm;
     private HostForm? _hostForm;
     private bool _connected;
+    private string? _isoFolder;
+    private bool _isoFolderChanging;
 
     /// <summary>Null until the service reports it.</summary>
     private bool? _passphraseConfigured;
@@ -78,6 +80,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (!connected)
         {
             _passphraseConfigured = null;
+            _isoFolder = null;
         }
 
         RefreshHost();
@@ -101,6 +104,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 _devices = list.Devices;
                 _devicesForm?.ShowDevices(_devices);
                 RefreshHost();
+                break;
+            case IsoFolderMessage isoFolder:
+                OnIsoFolder(isoFolder);
                 break;
             case AdminPassphraseStatusMessage status:
                 OnPassphraseStatus(status);
@@ -189,7 +195,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (_hostForm is null)
         {
-            _hostForm = new HostForm(ShowPassphrase, ShowDevices);
+            _hostForm = new HostForm(ShowPassphrase, ShowDevices, ChangeIsoFolder);
             _hostForm.FormClosed += (_, _) => _hostForm = null;
             RefreshHost();
         }
@@ -198,7 +204,41 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _hostForm.Activate();
     }
 
-    private void RefreshHost() => _hostForm?.ShowStatus(_connected, _passphraseConfigured, _devices.Count);
+    private void ChangeIsoFolder()
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Choose where the host stores the ISO images clients add. Images already in the current folder stay there.",
+            UseDescriptionForTitle = true,
+            SelectedPath = _isoFolder ?? string.Empty,
+            ShowNewFolderButton = true,
+        };
+        if (dialog.ShowDialog(_hostForm) == DialogResult.OK && !string.Equals(dialog.SelectedPath, _isoFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            _isoFolderChanging = true;
+            _ = _pipe.SendAsync(new SetIsoFolderMessage(dialog.SelectedPath));
+        }
+    }
+
+    private void OnIsoFolder(IsoFolderMessage message)
+    {
+        _isoFolder = message.Folder;
+        RefreshHost();
+        if (_isoFolderChanging)
+        {
+            _isoFolderChanging = false;
+            if (message.Error is { } error)
+            {
+                MessageBox.Show(_hostForm, error, "HyperHarbor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else
+            {
+                _notifyIcon.ShowBalloonTip(5000, "ISO library moved", $"New images are stored in {message.Folder}.", ToolTipIcon.Info);
+            }
+        }
+    }
+
+    private void RefreshHost() => _hostForm?.ShowStatus(_connected, _passphraseConfigured, _devices.Count, _isoFolder);
 
     private void OnPassphraseStatus(AdminPassphraseStatusMessage status)
     {
