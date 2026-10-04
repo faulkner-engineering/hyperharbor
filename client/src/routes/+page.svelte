@@ -28,6 +28,7 @@
   import DeleteVmDialog from "$lib/components/DeleteVmDialog.svelte";
   import CreateVmDialog from "$lib/components/CreateVmDialog.svelte";
   import ComputeDialog from "$lib/components/ComputeDialog.svelte";
+  import PerformanceDialog from "$lib/components/PerformanceDialog.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { elevation, ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
@@ -52,6 +53,7 @@
   let confirmTurnOff = $state<Vm | null>(null);
   let deleting = $state<Vm | null>(null);
   let editing = $state<Vm | null>(null);
+  let tuning = $state<Vm | null>(null);
   let creating = $state(false);
   let view = $state<"vms" | "isos" | "profiles">("vms");
   let now = $state(Date.now());
@@ -72,6 +74,7 @@
     confirmTurnOff = null;
     deleting = null;
     editing = null;
+    tuning = null;
     creating = false;
     view = "vms";
     elevation.finish(false);
@@ -196,6 +199,7 @@
   function lifecycleClosed(changed: boolean) {
     deleting = null;
     editing = null;
+    tuning = null;
     creating = false;
     if (changed && selectedKey) refreshVms(selectedKey);
   }
@@ -370,6 +374,7 @@
             onprovision={(vm) => (provisioning = vm)}
             onaction={requestAction}
             onsettings={(vm) => (editing = vm)}
+            onperformance={(vm) => (tuning = vm)}
             ondelete={(vm) => (deleting = vm)}
           />
         {/if}
@@ -390,6 +395,9 @@
         {/if}
         {#if editing}
           <ComputeDialog host={selectedHost} vm={editing} onclose={lifecycleClosed} />
+        {/if}
+        {#if tuning}
+          <PerformanceDialog host={selectedHost} vm={tuning} onclose={lifecycleClosed} />
         {/if}
         {#if creating}
           <CreateVmDialog

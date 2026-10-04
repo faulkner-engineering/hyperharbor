@@ -548,6 +548,59 @@ async fn delete_unattend_profile(
         .await
 }
 
+#[tauri::command]
+async fn get_vm_performance(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_vm_performance(&host, &paired, &vm_id).await
+}
+
+/// Turns Performance mode on or changes it. Needs elevation; returns the job.
+#[tauri::command]
+async fn apply_vm_performance(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    settings: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .apply_vm_performance(&host, &paired, &vm_id, &settings)
+        .await
+}
+
+#[tauri::command]
+async fn remove_vm_performance(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .remove_vm_performance(&host, &paired, &vm_id)
+        .await
+}
+
+/// Copies the host's GPU driver into the guest (and, unless drivers only, writes the RDP settings).
+#[tauri::command]
+async fn set_up_performance_guest(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    drivers_only: bool,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .set_up_performance_guest(&host, &paired, &vm_id, drivers_only)
+        .await
+}
+
 /// Sends Wake-on-LAN magic packets using the cached adapter details. Returns datagrams sent.
 #[tauri::command]
 fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
@@ -755,7 +808,11 @@ pub fn run() {
             open_console,
             inspect_iso,
             save_unattend_profile,
-            delete_unattend_profile
+            delete_unattend_profile,
+            get_vm_performance,
+            apply_vm_performance,
+            remove_vm_performance,
+            set_up_performance_guest
         ])
         .run(tauri::generate_context!())
         .expect("error while running HyperHarbor client");

@@ -161,3 +161,29 @@ describe("VmList unattended install", () => {
     expect(rowButtons()).toEqual(["Set up…"]);
   });
 });
+
+describe("VmList Performance mode", () => {
+  it("offers Performance mode for a Windows VM and reports which VM", async () => {
+    const onperformance = vi.fn();
+    const windows = provisioned("off");
+    render(VmList, { vms: [windows], onperformance });
+
+    const menu = await openMenu();
+    await fireEvent.click(menu.getByRole("button", { name: "Performance mode…" }));
+
+    expect(onperformance).toHaveBeenCalledWith(windows);
+  });
+
+  it("does not offer it for a Linux VM", async () => {
+    render(VmList, { vms: [vm("off", { guestOs: { family: "linux", name: "Ubuntu 24.04" } })] });
+
+    const menu = await openMenu();
+    expect(menu.queryByRole("button", { name: "Performance mode…" })).toBeNull();
+  });
+
+  it("marks a VM in Performance mode with a GPU badge", () => {
+    render(VmList, { vms: [vm("off", { performanceMode: true }), vm("off", { id: "other", name: "Plain" })] });
+
+    expect(screen.getAllByText("GPU")).toHaveLength(1);
+  });
+});

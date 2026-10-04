@@ -714,6 +714,70 @@ impl ApiClient {
         .await
     }
 
+    /// GET /vms/{vmId}/performance.
+    pub async fn get_vm_performance(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "performance")?)
+            .await
+    }
+
+    /// PUT /vms/{vmId}/performance. The host validates the settings; returns the job.
+    pub async fn apply_vm_performance(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        settings: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::PUT,
+            &vm_path(vm_id, "performance")?,
+            settings,
+        )
+        .await
+    }
+
+    /// DELETE /vms/{vmId}/performance.
+    pub async fn remove_vm_performance(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired(
+            host,
+            paired,
+            reqwest::Method::DELETE,
+            &vm_path(vm_id, "performance")?,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// POST /vms/{vmId}/performance/guest-setup. Returns the job.
+    pub async fn set_up_performance_guest(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        drivers_only: bool,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "performance/guest-setup")?,
+            &json!({ "driversOnly": drivers_only }),
+        )
+        .await
+    }
+
     /// PATCH /isos/{name}.
     pub async fn rename_iso(
         &self,
@@ -975,6 +1039,7 @@ pub enum HostResource {
     Isos,
     Switches,
     UnattendProfiles,
+    Gpu,
 }
 
 impl HostResource {
@@ -984,6 +1049,7 @@ impl HostResource {
             HostResource::Isos => "/isos",
             HostResource::Switches => "/switches",
             HostResource::UnattendProfiles => "/unattend-profiles",
+            HostResource::Gpu => "/host/gpu",
         }
     }
 }

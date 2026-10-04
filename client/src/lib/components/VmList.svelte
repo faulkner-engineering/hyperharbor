@@ -14,6 +14,7 @@
     onprovision?: (vm: Vm) => void;
     onaction?: (vm: Vm, action: VmAction) => void;
     onsettings?: (vm: Vm) => void;
+    onperformance?: (vm: Vm) => void;
     ondelete?: (vm: Vm) => void;
   }
 
@@ -27,6 +28,7 @@
     onprovision,
     onaction,
     onsettings,
+    onperformance,
     ondelete,
   }: Props = $props();
 
@@ -133,6 +135,9 @@
         <tr>
           <td class="name">
             {vm.name}
+            {#if vm.performanceMode}
+              <span class="gpu" title="Performance mode: this VM has a share of the host's GPU">GPU</span>
+            {/if}
             {#if vm.installState}
               <span class="os install" class:failed={vm.installState === "failed"}>{installLabels[vm.installState]}</span>
             {:else if vm.guestOs.name}
@@ -213,6 +218,9 @@
                 {/if}
                 <hr />
                 <button type="button" onclick={(event) => choose(event, () => onsettings?.(vm))}>Settings…</button>
+                {#if vm.guestOs.family !== "linux"}
+                  <button type="button" onclick={(event) => choose(event, () => onperformance?.(vm))}>Performance mode…</button>
+                {/if}
                 <button type="button" class="danger" onclick={(event) => choose(event, () => ondelete?.(vm))}>Delete…</button>
               </div>
             </details>
@@ -252,6 +260,18 @@
 
   .name {
     font-weight: 600;
+  }
+
+  .gpu {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+    background: var(--accent);
+    color: var(--accent-fg);
   }
 
   .os {

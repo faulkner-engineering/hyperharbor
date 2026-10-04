@@ -24,6 +24,12 @@ export type UnattendProfileRequest = components["schemas"]["UnattendProfileReque
 export type UnattendedInstallState = components["schemas"]["UnattendedInstallState"];
 export type InstallOs = components["schemas"]["InstallOs"];
 export type IsoInspection = components["schemas"]["IsoInspection"];
+export type VmPerformance = components["schemas"]["VmPerformance"];
+export type PerformanceSettings = components["schemas"]["PerformanceSettings"];
+export type GuestDriverStatus = components["schemas"]["GuestDriverStatus"];
+export type HostGpu = components["schemas"]["HostGpu"];
+export type HostGpuDevice = components["schemas"]["HostGpuDevice"];
+export type GpuDriverWarning = components["schemas"]["GpuDriverWarning"];
 
 /** Request bodies, as the Rust side expects them. */
 export interface DeleteVmRequest {
@@ -58,6 +64,9 @@ export const ProblemCodes = {
   tooManyAttempts: "tooManyAttempts",
   resourceWarnings: "resourceWarnings",
   requiresShutdown: "requiresShutdown",
+  vmMustBeOff: "vmMustBeOff",
+  gpuUnavailable: "gpuUnavailable",
+  credentialRequired: "credentialRequired",
 } as const;
 
 export interface WakeFixOutcome {
@@ -286,6 +295,20 @@ export const getVmCompute = (key: string, vmId: string) =>
 
 export const updateVmCompute = (key: string, vmId: string, request: UpdateComputeRequest) =>
   invoke<VmComputeUpdate>("update_vm_compute", { key, vmId, request });
+
+export const getVmPerformance = (key: string, vmId: string) =>
+  invoke<VmPerformance>("get_vm_performance", { key, vmId });
+
+export const applyVmPerformance = (key: string, vmId: string, settings: PerformanceSettings) =>
+  invoke<VmJob>("apply_vm_performance", { key, vmId, settings });
+
+export const removeVmPerformance = (key: string, vmId: string) =>
+  invoke<void>("remove_vm_performance", { key, vmId });
+
+export const setUpPerformanceGuest = (key: string, vmId: string, driversOnly: boolean) =>
+  invoke<VmJob>("set_up_performance_guest", { key, vmId, driversOnly });
+
+export const getHostGpu = (key: string) => invoke<HostGpu>("get_host_resource", { key, resource: "gpu" });
 
 export const onHostsChanged = (handler: () => void): Promise<UnlistenFn> =>
   listen("hosts-changed", handler);

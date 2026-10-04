@@ -41,6 +41,8 @@ pub struct VmConnection {
     pub port: u16,
     #[serde(default)]
     pub guest_os: GuestOs,
+    #[serde(default)]
+    pub performance_mode: bool,
 }
 
 impl std::fmt::Debug for VmConnection {
@@ -50,6 +52,7 @@ impl std::fmt::Debug for VmConnection {
             .field("address", &self.address)
             .field("port", &self.port)
             .field("guest_os", &self.guest_os)
+            .field("performance_mode", &self.performance_mode)
             .finish_non_exhaustive()
     }
 }
@@ -98,7 +101,16 @@ impl Drop for VmConnection {
 /// Windows guests use CredSSP (NLA) and get WebAuthn, microphone, and camera redirection. Linux
 /// guests run xrdp, which does not support CredSSP or WebAuthn and camera redirection; with CredSSP
 /// off, mstsc sends the stored credential in the TLS logon packet, which xrdp uses to sign in.
-pub fn rdp_file(address: &str, port: u16, user_name: &str, guest_os: GuestOs) -> String {
+///
+/// In Performance mode the connection type is LAN with network and bandwidth auto-detection off, so
+/// mstsc does not lower quality while it measures the link.
+pub fn rdp_file(
+    address: &str,
+    port: u16,
+    user_name: &str,
+    guest_os: GuestOs,
+    performance_mode: bool,
+) -> String {
     let linux = guest_os == GuestOs::Linux;
     let mut lines = vec![
         format!("full address:s:{address}:{port}"),
@@ -113,6 +125,11 @@ pub fn rdp_file(address: &str, port: u16, user_name: &str, guest_os: GuestOs) ->
     if !linux {
         lines.push("redirectwebauthn:i:1".to_string());
         lines.push("camerastoredirect:s:*".to_string());
+    }
+    if performance_mode {
+        lines.push("connection type:i:6".to_string());
+        lines.push("networkautodetect:i:0".to_string());
+        lines.push("bandwidthautodetect:i:0".to_string());
     }
     lines.join("\r\n") + "\r\n"
 }
@@ -157,6 +174,7 @@ pub fn launch(connection: &VmConnection, file_directory: &Path) -> Result<(), Cl
                 connection.port,
                 &connection.user_name,
                 connection.guest_os,
+                connection.performance_mode,
             ),
             window_title_key: connection.address.clone(),
         },
@@ -411,7 +429,7 @@ mod tests {
 
     #[test]
     fn rdp_file_signs_in_and_enables_redirection() {
-        let file = rdp_file("192.168.0.50", 3389, r".\hh-owner", GuestOs::Windows);
+        let file = rdp_file("192.168.0.50", 3389, r".\hh-owner", GuestOs::Windows, false);
         let lines: Vec<&str> = file.lines().collect();
 
         for expected in [
@@ -426,11 +444,27 @@ mod tests {
         }
         assert!(file.ends_with("\r\n"));
         assert!(!file.contains("password"));
+        assert!(!file.contains("connection type"));
+        assert!(!file.contains("autodetect"));
+    }
+
+    #[test]
+    fn rdp_file_in_performance_mode_uses_lan_without_auto_detection() {
+        let file = rdp_file("192.168.0.50", 3389, "hh-owner", GuestOs::Windows, true);
+        let lines: Vec<&str> = file.lines().collect();
+
+        for expected in [
+            "connection type:i:6",
+            "networkautodetect:i:0",
+            "bandwidthautodetect:i:0",
+        ] {
+            assert!(lines.contains(&expected), "missing {expected}");
+        }
     }
 
     #[test]
     fn rdp_file_for_linux_uses_tls_sign_in_without_windows_redirection() {
-        let file = rdp_file("172.25.190.7", 3389, "hh-owner", GuestOs::Linux);
+        let file = rdp_file("172.25.190.7", 3389, "hh-owner", GuestOs::Linux, false);
         let lines: Vec<&str> = file.lines().collect();
 
         assert!(lines.contains(&"username:s:hh-owner"));
@@ -448,6 +482,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(connection.guest_os, GuestOs::Linux);
+        assert!(!connection.performance_mode);
+
+        let tuned: VmConnection = serde_json::from_str(
+            r#"{"userName":"hh-owner","password":"x","address":"10.0.0.5","port":3389,
+                "expiresAt":"2026-10-02T12:00:00Z","performanceMode":true}"#,
+        )
+        .unwrap();
+        assert!(tuned.performance_mode);
     }
 
     #[test]
@@ -489,6 +531,7 @@ mod tests {
             address: address.into(),
             port: 3389,
             guest_os: GuestOs::Windows,
+            performance_mode: false,
         }
     }
 
@@ -558,6 +601,7 @@ mod tests {
             address: "192.168.0.50".into(),
             port: 3389,
             guest_os: GuestOs::Windows,
+            performance_mode: false,
         };
         assert!(!format!("{connection:?}").contains("Secret-Pass1!"));
     }
