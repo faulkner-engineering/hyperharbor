@@ -87,7 +87,7 @@
         autocomplete="off"
         spellcheck="false"
       />
-      <button type="submit" disabled={adding || address.trim() === ""}>Add</button>
+      <button type="submit" disabled={adding || address.trim() === ""}>+ Add</button>
     </div>
     {#if addError}<p class="error" role="alert">{addError}</p>{/if}
   </form>

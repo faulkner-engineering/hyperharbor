@@ -89,6 +89,7 @@ export interface ClientError {
     | "vmUnreachable"
     | "unreachable"
     | "api"
+    | "cancelled"
     | "invalidRequest"
     | "invalidResponse"
     | "storage";
@@ -219,6 +220,36 @@ export const listIsos = (key: string) => invoke<IsoImage[]>("get_host_resource",
 
 export const listSwitches = (key: string) =>
   invoke<VirtualSwitch[]>("get_host_resource", { key, resource: "switches" });
+
+// ISO library. Files are chosen and read on the Rust side; the frontend only sees a pick ID.
+
+export interface PickedIso {
+  pickId: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+export interface IsoUploadProgress {
+  pickId: string;
+  sent: number;
+  total: number;
+}
+
+/** Shows a file picker on this device. Resolves to null when the user cancels. */
+export const pickIsoFile = () => invoke<PickedIso | null>("pick_iso_file");
+
+export const uploadIso = (key: string, pickId: string, name: string) =>
+  invoke<IsoImage>("upload_iso", { key, pickId, name });
+
+export const cancelIsoUpload = (pickId: string) => invoke<void>("cancel_iso_upload", { pickId });
+
+export const renameIso = (key: string, name: string, newName: string) =>
+  invoke<IsoImage>("rename_iso", { key, name, newName });
+
+export const deleteIso = (key: string, name: string) => invoke<void>("delete_iso", { key, name });
+
+export const onIsoUploadProgress = (handler: (progress: IsoUploadProgress) => void): Promise<UnlistenFn> =>
+  listen<IsoUploadProgress>("iso-upload-progress", (event) => handler(event.payload));
 
 export const getVmCompute = (key: string, vmId: string) =>
   invoke<VmComputeSettings>("get_vm_compute", { key, vmId });

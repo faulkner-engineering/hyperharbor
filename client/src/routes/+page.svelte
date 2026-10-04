@@ -27,6 +27,7 @@
   import ComputeDialog from "$lib/components/ComputeDialog.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { elevation, ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
+  import IsoLibrary from "$lib/components/IsoLibrary.svelte";
 
   const REFRESH_INTERVAL_MS = 5000;
 
@@ -47,6 +48,7 @@
   let deleting = $state<Vm | null>(null);
   let editing = $state<Vm | null>(null);
   let creating = $state(false);
+  let view = $state<"vms" | "isos">("vms");
   let now = $state(Date.now());
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
@@ -67,6 +69,7 @@
     deleting = null;
     editing = null;
     creating = false;
+    view = "vms";
     elevation.finish(false);
   }
 
@@ -264,7 +267,7 @@
               </span>
             {/if}
             <button type="button" class="primary" onclick={() => (creating = true)} disabled={offline || vms === null}>
-              New VM…
+              + New VM
             </button>
             <button type="button" onclick={() => (showWake = !showWake)}>
               Wake-on-LAN
@@ -298,19 +301,33 @@
       {:else if vms === null}
         <p class="placeholder">Loading…</p>
       {:else}
+        <div class="views" role="tablist" aria-label="Host views">
+          <button type="button" role="tab" aria-selected={view === "vms"} class:active={view === "vms"} onclick={() => (view = "vms")}>
+            Virtual machines
+          </button>
+          <button type="button" role="tab" aria-selected={view === "isos"} class:active={view === "isos"} onclick={() => (view = "isos")}>
+            ISO library
+          </button>
+        </div>
         {#if connectStatus}
           <div class={connectStatus.ok ? "notice" : "notice error"} role="status">{connectStatus.message}</div>
         {/if}
-        <VmList
-          {vms}
-          busyVmId={connectingVmId}
-          {actionVmId}
-          onconnect={connect}
-          onprovision={(vm) => (provisioning = vm)}
-          onaction={requestAction}
-          onsettings={(vm) => (editing = vm)}
-          ondelete={(vm) => (deleting = vm)}
-        />
+        {#if view === "isos"}
+          {#key selectedHost.key}
+            <IsoLibrary host={selectedHost} />
+          {/key}
+        {:else}
+          <VmList
+            {vms}
+            busyVmId={connectingVmId}
+            {actionVmId}
+            onconnect={connect}
+            onprovision={(vm) => (provisioning = vm)}
+            onaction={requestAction}
+            onsettings={(vm) => (editing = vm)}
+            ondelete={(vm) => (deleting = vm)}
+          />
+        {/if}
         {#if provisioning}
           <ProvisionDialog host={selectedHost} vm={provisioning} onclose={provisioned} />
         {/if}
@@ -330,7 +347,14 @@
           <ComputeDialog host={selectedHost} vm={editing} onclose={lifecycleClosed} />
         {/if}
         {#if creating}
-          <CreateVmDialog host={selectedHost} onclose={lifecycleClosed} />
+          <CreateVmDialog
+            host={selectedHost}
+            onclose={lifecycleClosed}
+            onopenlibrary={() => {
+              creating = false;
+              view = "isos";
+            }}
+          />
         {/if}
       {/if}
 
@@ -469,6 +493,29 @@
     background: var(--accent);
     border-color: var(--accent);
     color: var(--accent-fg);
+  }
+
+  .views {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .views button {
+    padding: 0.45rem 0.9rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .views button.active {
+    border-bottom-color: var(--accent);
+    color: var(--text);
+    font-weight: 600;
   }
 
   .elevated {

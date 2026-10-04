@@ -54,6 +54,9 @@ pub enum ClientError {
         issues: Vec<Issue>,
     },
 
+    #[error("Cancelled.")]
+    Cancelled,
+
     #[error("The request is not valid: {0}")]
     InvalidRequest(String),
 
@@ -79,6 +82,7 @@ impl ClientError {
             ClientError::VmUnreachable(_) => "vmUnreachable",
             ClientError::Unreachable(_) => "unreachable",
             ClientError::Api { .. } => "api",
+            ClientError::Cancelled => "cancelled",
             ClientError::InvalidRequest(_) => "invalidRequest",
             ClientError::InvalidResponse(_) => "invalidResponse",
             ClientError::Storage(_) => "storage",
@@ -143,6 +147,7 @@ mod tests {
                 code: None,
                 issues: Vec::new(),
             },
+            ClientError::Cancelled,
             ClientError::InvalidRequest(String::new()),
             ClientError::InvalidResponse(String::new()),
             ClientError::Storage(String::new()),
@@ -161,6 +166,7 @@ mod tests {
                 | ClientError::VmUnreachable(_)
                 | ClientError::Unreachable(_)
                 | ClientError::Api { .. }
+                | ClientError::Cancelled
                 | ClientError::InvalidRequest(_)
                 | ClientError::InvalidResponse(_)
                 | ClientError::Storage(_) => {}

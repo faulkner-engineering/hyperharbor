@@ -23,9 +23,11 @@
   interface Props {
     host: HostEntry;
     onclose: (created: boolean) => void;
+    /** Shown when the library is empty: closes this dialog and opens the ISO library. */
+    onopenlibrary?: () => void;
   }
 
-  let { host, onclose }: Props = $props();
+  let { host, onclose, onopenlibrary }: Props = $props();
 
   let resources = $state<HostResources | null>(null);
   let isos = $state<IsoImage[]>([]);
@@ -133,10 +135,12 @@
 
       <label for="vm-iso">Installation image</label>
       {#if isos.length === 0}
-        <p class="warning">
-          The ISO library is empty. Copy an .iso file to <strong>{resources.isoFolder}</strong> on the host, then
-          open this dialog again.
-        </p>
+        <div class="warning">
+          <p>The host's ISO library is empty. Add an installation image first.</p>
+          {#if onopenlibrary}
+            <button type="button" onclick={onopenlibrary}>Open ISO library</button>
+          {/if}
+        </div>
       {:else}
         <select id="vm-iso" bind:value={isoName} disabled={job !== null}>
           {#each isos as iso (iso.name)}

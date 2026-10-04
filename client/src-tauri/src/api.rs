@@ -21,6 +21,10 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Linux setup can install xrdp and a desktop; the host allows 20 minutes for that.
 const PROVISION_TIMEOUT: Duration = Duration::from_secs(25 * 60);
 const VM_CONNECT_TIMEOUT: Duration = Duration::from_secs(90);
+/// ISO images are several gigabytes; a slow network can take hours.
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(12 * 60 * 60);
+/// Bytes read from disk per chunk of an upload.
+const UPLOAD_CHUNK_BYTES: usize = 1024 * 1024;
 
 /// Options for POST /vms/{vmId}/provision. `install_desktop` and `trust_new_host_key` apply to Linux
 /// guests only.
@@ -625,6 +629,113 @@ impl ApiClient {
         .await
     }
 
+    /// PATCH /isos/{name}.
+    pub async fn rename_iso(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+        new_name: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let body = json!({ "newName": new_name });
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::PATCH,
+            &iso_path(name)?,
+            &body,
+        )
+        .await
+    }
+
+    /// DELETE /isos/{name}.
+    pub async fn delete_iso(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired(host, paired, reqwest::Method::DELETE, &iso_path(name)?)
+            .await
+            .map(|_| ())
+    }
+
+    /// PUT /isos/{name}: streams the file at `path` to the host's ISO library, calling `progress`
+    /// with the bytes sent so far. Setting `cancel` stops the upload; the host then keeps nothing.
+    /// Like other requests, another address is tried only when a connection could not be made.
+    pub async fn upload_iso(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+        path: &std::path::Path,
+        progress: Arc<dyn Fn(u64) + Send + Sync>,
+        cancel: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<serde_json::Value, ClientError> {
+        let resource = iso_path(name)?;
+        let length = tokio::fs::metadata(path)
+            .await
+            .map_err(|e| ClientError::InvalidRequest(format!("the file could not be read: {e}")))?
+            .len();
+        let http = self.pinned_client(paired)?;
+        let token = self.elevation_token(paired);
+
+        let mut last_error = None;
+        for base_url in self.ordered_candidates(host, paired) {
+            let file = tokio::fs::File::open(path).await.map_err(|e| {
+                ClientError::InvalidRequest(format!("the file could not be read: {e}"))
+            })?;
+            let mut request = http
+                .put(format!("{base_url}{API_BASE_PATH}{resource}"))
+                .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+                .header(reqwest::header::CONTENT_LENGTH, length)
+                .body(reqwest::Body::wrap_stream(progress_stream(
+                    file,
+                    progress.clone(),
+                    cancel.clone(),
+                )))
+                .timeout(UPLOAD_TIMEOUT);
+            if let Some(token) = &token {
+                request = request.header(ELEVATION_HEADER, token.as_str());
+            }
+
+            match request.send().await {
+                Ok(response) => {
+                    self.last_good
+                        .lock()
+                        .unwrap()
+                        .insert(paired.host_id.clone(), base_url);
+                    return parse(check(response).await?).await;
+                }
+                Err(_) if cancel.load(std::sync::atomic::Ordering::SeqCst) => {
+                    return Err(ClientError::Cancelled)
+                }
+                Err(error) if tries_next_address(&error) => last_error = Some(error),
+                Err(error) => return Err(unreachable(Some(error))),
+            }
+        }
+
+        Err(unreachable(last_error))
+    }
+
+    fn elevation_token(&self, paired: &PairedHost) -> Option<zeroize::Zeroizing<String>> {
+        self.elevations
+            .lock()
+            .unwrap()
+            .get(&paired.host_id)
+            .map(|elevation| elevation.token.clone())
+    }
+
+    /// The host's addresses, the one that last worked first.
+    fn ordered_candidates(&self, host: &HostEntry, paired: &PairedHost) -> Vec<String> {
+        let mut candidates = candidate_base_urls(host);
+        if let Some(good) = self.last_good.lock().unwrap().get(&paired.host_id) {
+            candidates.retain(|url| url != good);
+            candidates.insert(0, good.clone());
+        }
+        candidates
+    }
+
     async fn get_json(
         &self,
         host: &HostEntry,
@@ -672,19 +783,8 @@ impl ApiClient {
         timeout: Option<Duration>,
     ) -> Result<reqwest::Response, ClientError> {
         let http = self.pinned_client(paired)?;
-
-        let mut candidates = candidate_base_urls(host);
-        if let Some(good) = self.last_good.lock().unwrap().get(&paired.host_id) {
-            candidates.retain(|url| url != good);
-            candidates.insert(0, good.clone());
-        }
-
-        let token = self
-            .elevations
-            .lock()
-            .unwrap()
-            .get(&paired.host_id)
-            .map(|elevation| elevation.token.clone());
+        let candidates = self.ordered_candidates(host, paired);
+        let token = self.elevation_token(paired);
 
         let mut last_error = None;
         for base_url in candidates {
@@ -800,6 +900,53 @@ pub fn candidate_base_urls(host: &HostEntry) -> Vec<String> {
         }
     }
     urls
+}
+
+/// "/isos/{name}" with the name percent-encoded. Only plain .iso file names may become part of a path;
+/// the host checks the name again.
+fn iso_path(name: &str) -> Result<String, ClientError> {
+    let valid = name.len() > 4
+        && name.to_ascii_lowercase().ends_with(".iso")
+        && !name.contains(['/', '\\', ':'])
+        && !name.starts_with('.')
+        && !name.chars().any(char::is_control);
+    if !valid {
+        return Err(ClientError::InvalidRequest(format!(
+            "\"{name}\" is not an ISO file name"
+        )));
+    }
+
+    let mut encoded = String::with_capacity(name.len());
+    for byte in name.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    Ok(format!("/isos/{encoded}"))
+}
+
+/// The file as a stream of chunks that reports progress and stops with an error once cancelled.
+fn progress_stream(
+    file: tokio::fs::File,
+    progress: Arc<dyn Fn(u64) + Send + Sync>,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
+) -> impl futures_util::Stream<Item = std::io::Result<bytes::Bytes>> {
+    use futures_util::StreamExt;
+    let mut sent = 0u64;
+    tokio_util::io::ReaderStream::with_capacity(file, UPLOAD_CHUNK_BYTES).map(move |chunk| {
+        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "the upload was cancelled",
+            ));
+        }
+        let chunk = chunk?;
+        sent += chunk.len() as u64;
+        progress(sent);
+        Ok(chunk)
+    })
 }
 
 fn to_body<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, ClientError> {
@@ -1690,6 +1837,113 @@ mod server_tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn iso_names_are_encoded_and_paths_are_refused() {
+        assert_eq!(
+            iso_path("Win 11 (24H2).iso").unwrap(),
+            "/isos/Win%2011%20%2824H2%29.iso"
+        );
+        assert_eq!(iso_path("ubuntu.ISO").unwrap(), "/isos/ubuntu.ISO");
+        for name in [
+            "../x.iso",
+            "a\\b.iso",
+            "C:x.iso",
+            ".hidden.iso",
+            "image.img",
+            ".iso",
+            "a\n.iso",
+        ] {
+            assert!(
+                matches!(iso_path(name), Err(ClientError::InvalidRequest(_))),
+                "{name}"
+            );
+        }
+    }
+
+    fn iso_file(bytes: usize) -> std::path::PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("hh-upload-{}.iso", hex::encode(rand_bytes())));
+        std::fs::write(&path, vec![7u8; bytes]).unwrap();
+        path
+    }
+
+    fn rand_bytes() -> [u8; 8] {
+        let mut bytes = [0u8; 8];
+        getrandom::fill(&mut bytes).unwrap();
+        bytes
+    }
+
+    #[tokio::test]
+    async fn upload_streams_the_file_with_progress_and_elevation() {
+        let server = TestServer::start("127.0.0.1:0", |request| {
+            Reply::json(
+                201,
+                format!(
+                    r#"{{"name":"debian.iso","sizeBytes":{},"modifiedAt":"2026-10-03T12:00:00Z","usedBy":[]}}"#,
+                    request.body.len()
+                ),
+            )
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+        api.elevations.lock().unwrap().insert(
+            paired.host_id.clone(),
+            Elevation {
+                token: zeroize::Zeroizing::new("token".into()),
+            },
+        );
+        let path = iso_file(3 * UPLOAD_CHUNK_BYTES + 5);
+        let reported = Arc::new(Mutex::new(Vec::new()));
+        let sink = reported.clone();
+
+        let image = api
+            .upload_iso(
+                &target,
+                &paired,
+                "debian.iso",
+                &path,
+                Arc::new(move |sent| sink.lock().unwrap().push(sent)),
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            )
+            .await
+            .unwrap();
+        std::fs::remove_file(&path).unwrap();
+
+        let total = (3 * UPLOAD_CHUNK_BYTES + 5) as u64;
+        assert_eq!(image["sizeBytes"], total);
+        assert_eq!(reported.lock().unwrap().last(), Some(&total));
+        let request = &server.requests()[0];
+        assert_eq!(request.method, "PUT");
+        assert_eq!(request.path, "/api/v1/isos/debian.iso");
+        assert_eq!(request.header(ELEVATION_HEADER), Some("token"));
+        assert_eq!(
+            request.header("content-type"),
+            Some("application/octet-stream")
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_upload_reports_cancelled() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(201, "{}"));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let path = iso_file(2 * UPLOAD_CHUNK_BYTES);
+
+        let result = api()
+            .upload_iso(
+                &target,
+                &paired(server.certificate_hash()),
+                "debian.iso",
+                &path,
+                Arc::new(|_| {}),
+                Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            )
+            .await;
+        std::fs::remove_file(&path).unwrap();
+
+        assert!(matches!(result, Err(ClientError::Cancelled)), "{result:?}");
     }
 
     #[tokio::test]

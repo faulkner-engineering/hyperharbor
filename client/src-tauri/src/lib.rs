@@ -31,6 +31,10 @@ struct AppState {
     paired: PairedHostStore,
     api: ApiClient,
     pending: tokio::sync::Mutex<HashMap<String, PendingPairing>>,
+    /// Files chosen in the ISO picker, by the ID the frontend gets instead of a path.
+    picked_isos: std::sync::Mutex<HashMap<String, std::path::PathBuf>>,
+    /// Cancel flags of running uploads, by the same ID.
+    uploads: std::sync::Mutex<HashMap<String, Arc<std::sync::atomic::AtomicBool>>>,
     // Kept alive so mDNS browsing continues for the lifetime of the app.
     _mdns: Option<mdns_sd::ServiceDaemon>,
 }
@@ -342,6 +346,156 @@ async fn update_vm_compute(
         .await
 }
 
+/// Event with the progress of an ISO upload: `{ pickId, sent, total }`.
+const ISO_UPLOAD_PROGRESS_EVENT: &str = "iso-upload-progress";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PickedIso {
+    /// Refers to the chosen file in `upload_iso`; the path itself stays on this side.
+    pick_id: String,
+    file_name: String,
+    size_bytes: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UploadProgress {
+    pick_id: String,
+    sent: u64,
+    total: u64,
+}
+
+/// Shows a file picker for an ISO image on this device. Returns None when the user cancels.
+#[tauri::command]
+async fn pick_iso_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<PickedIso>, ClientError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let dialog = app.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        dialog
+            .dialog()
+            .file()
+            .set_title("Choose an ISO image to add to the host's library")
+            .add_filter("ISO images", &["iso"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|e| ClientError::InvalidRequest(e.to_string()))?;
+
+    let Some(path) = picked.and_then(|file| file.into_path().ok()) else {
+        return Ok(None);
+    };
+    let size_bytes = std::fs::metadata(&path)
+        .map_err(|e| ClientError::InvalidRequest(format!("the file could not be read: {e}")))?
+        .len();
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+
+    let mut id = [0u8; 16];
+    getrandom::fill(&mut id).map_err(|e| ClientError::InvalidRequest(e.to_string()))?;
+    let pick_id = hex::encode(id);
+    state
+        .picked_isos
+        .lock()
+        .unwrap()
+        .insert(pick_id.clone(), path);
+    Ok(Some(PickedIso {
+        pick_id,
+        file_name,
+        size_bytes,
+    }))
+}
+
+/// Uploads a picked file to the host's ISO library as `name`, emitting progress events.
+#[tauri::command]
+async fn upload_iso(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+    pick_id: String,
+    name: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let path = state
+        .picked_isos
+        .lock()
+        .unwrap()
+        .get(&pick_id)
+        .cloned()
+        .ok_or_else(|| ClientError::InvalidRequest("choose the file again".into()))?;
+    let total = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    state
+        .uploads
+        .lock()
+        .unwrap()
+        .insert(pick_id.clone(), cancel.clone());
+
+    // At most about two hundred events per upload: one per half percent.
+    let last_reported = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let step = (total / 200).max(1);
+    let events = app.clone();
+    let id = pick_id.clone();
+    let progress: Arc<dyn Fn(u64) + Send + Sync> = Arc::new(move |sent| {
+        let last = last_reported.load(std::sync::atomic::Ordering::Relaxed);
+        if sent == total || sent >= last + step {
+            last_reported.store(sent, std::sync::atomic::Ordering::Relaxed);
+            let _ = events.emit(
+                ISO_UPLOAD_PROGRESS_EVENT,
+                UploadProgress {
+                    pick_id: id.clone(),
+                    sent,
+                    total,
+                },
+            );
+        }
+    });
+
+    let result = state
+        .api
+        .upload_iso(&host, &paired, &name, &path, progress, cancel)
+        .await;
+    state.uploads.lock().unwrap().remove(&pick_id);
+    if result.is_ok() {
+        state.picked_isos.lock().unwrap().remove(&pick_id);
+    }
+    result
+}
+
+#[tauri::command]
+fn cancel_iso_upload(state: State<'_, AppState>, pick_id: String) {
+    if let Some(cancel) = state.uploads.lock().unwrap().get(&pick_id) {
+        cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[tauri::command]
+async fn rename_iso(
+    state: State<'_, AppState>,
+    key: String,
+    name: String,
+    new_name: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.rename_iso(&host, &paired, &name, &new_name).await
+}
+
+#[tauri::command]
+async fn delete_iso(
+    state: State<'_, AppState>,
+    key: String,
+    name: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.delete_iso(&host, &paired, &name).await
+}
+
 /// Sends Wake-on-LAN magic packets using the cached adapter details. Returns datagrams sent.
 #[tauri::command]
 fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
@@ -476,6 +630,7 @@ async fn unpair(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Remove any temporary Remote Desktop credential left by a previous run.
             rdp::remove_stale_credentials();
@@ -508,6 +663,8 @@ pub fn run() {
                 paired: PairedHostStore::new(Some(config_dir.join("paired-hosts.json"))),
                 api: ApiClient::new(identity, local_host_name),
                 pending: tokio::sync::Mutex::new(HashMap::new()),
+                picked_isos: std::sync::Mutex::new(HashMap::new()),
+                uploads: std::sync::Mutex::new(HashMap::new()),
                 _mdns: mdns,
             });
             Ok(())
@@ -537,6 +694,11 @@ pub fn run() {
             get_host_resource,
             get_vm_compute,
             update_vm_compute,
+            pick_iso_file,
+            upload_iso,
+            cancel_iso_upload,
+            rename_iso,
+            delete_iso,
             connect_vm
         ])
         .run(tauri::generate_context!())

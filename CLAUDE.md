@@ -182,14 +182,23 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     "...\Default" template instances. Interfaces (IHyperVStorage, IHyperVBuilder, IHyperVCompute, IDiskFiles,
     IHyperVHost, IHostCapacityReader) have fakes in Host.Tests/Lifecycle/LifecycleFakes.cs.
   - Delete follows checkpoint .avhdx parents to the base disk and never deletes a parent of a differencing
-    disk; anything another VM, a checkpoint, or a stray differencing disk depends on blocks it.
+    disk; anything another VM, a checkpoint, or a stray differencing disk depends on blocks it. Only
+    ResourceSubType "Virtual Hard Disk" attachments are disks: ISOs are ResourceType 31 too.
+  - ISO library: one flat folder of .iso files managed from clients (upload, rename, delete; all elevated).
+    Uploads stream to a hidden .partial file and are moved into place only when complete; images a VM
+    attaches (usedBy) cannot be renamed or deleted. The folder is a host setting: the tray's HyperHarbor Host
+    window sends SetIsoFolderMessage, saved in host-settings.json (HostSettingsStore), which overrides
+    Lifecycle:IsoFolder. Images in an old folder are not moved.
+  - Client uploads: the Rust side shows the file picker (tauri-plugin-dialog) and keeps the path; the webview
+    gets a pick ID and progress events (iso-upload-progress). The client checks elevation before sending,
+    because the host refuses an unelevated upload before reading its body.
   - Validation errors are 400 with `errors`; resource warnings are 409 code resourceWarnings with `warnings`,
     sent again with acknowledgeWarnings. Settings that need the VM off return 409 code requiresShutdown.
   - Configuration: Lifecycle:VmRootFolder (unset: Hyper-V's default folders), Lifecycle:IsoFolder (unset:
     Public Documents\HyperHarbor ISOs), Lifecycle:HostMemoryReserveMb (4096), Lifecycle:ShutdownTimeoutSeconds
     (300), Elevation:TokenLifetimeSeconds (300).
-  - Verified live on 2026-10-03: CIM reads (CimHyperVStorageLiveTests), and create, developer preset, and delete
-    (LifecycleLiveTests). Not yet run live: shut down and apply on a running VM, and checkpoint merging on delete.
+  - Verified live on 2026-10-03: CIM reads (CimHyperVStorageLiveTests), and create, developer preset, a
+    checkpoint, and delete with merging (LifecycleLiveTests). Not yet run live: shut down and apply on a running VM.
   - Client: the elevation token stays in the Rust ApiClient (never in the webview); ClientError carries the
     host's problemCode and issues. withElevation (lifecycle.svelte.ts) prompts once and retries.
   - Vitest: write `beforeEach(() => { invoke.mockReset(); })` with braces. mockReset returns the mock, and a

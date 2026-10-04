@@ -1,4 +1,4 @@
-import { getJob, hasProblemCode, ProblemCodes, type VmJob } from "$lib/api/client";
+import { getElevation, getJob, hasProblemCode, ProblemCodes, type VmJob } from "$lib/api/client";
 
 interface PendingElevation {
   hostKey: string;
@@ -71,6 +71,22 @@ export async function withElevation<T>(hostKey: string, action: () => Promise<T>
     if (!(await elevation.request(hostKey))) throw new ElevationCancelled();
     return await action();
   }
+}
+
+/**
+ * Makes sure the device is elevated before a request that should not be sent twice, such as an
+ * upload of several gigabytes: the host refuses an unelevated one before reading its body.
+ */
+export async function ensureElevated(hostKey: string): Promise<void> {
+  const status = await getElevation(hostKey);
+  if (status.active) return;
+  if (!status.configured) {
+    throw new Error(
+      "No admin passphrase is set on this host. Set one from the HyperHarbor Host window on the host (double-click the tray icon).",
+    );
+  }
+  elevation.forget(hostKey);
+  if (!(await elevation.request(hostKey))) throw new ElevationCancelled();
 }
 
 /** Polls a job until it is no longer running, reporting each update. */

@@ -62,12 +62,16 @@ beforeEach(() => {
 });
 
 describe("CreateVmDialog", () => {
-  it("points to the ISO folder when the library is empty", async () => {
+  it("offers the ISO library when it is empty", async () => {
     respond([]);
-    render(CreateVmDialog, { host, onclose: vi.fn() });
+    const onopenlibrary = vi.fn();
+    render(CreateVmDialog, { host, onclose: vi.fn(), onopenlibrary });
 
-    expect((await screen.findByText(/ISO library is empty/)).textContent).toContain("HyperHarbor ISOs");
+    await screen.findByText(/ISO library is empty/);
     expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Open ISO library" }));
+    expect(onopenlibrary).toHaveBeenCalled();
   });
 
   it("sends the defaults with the Default Switch and a TPM", async () => {
