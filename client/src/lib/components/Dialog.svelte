@@ -68,8 +68,9 @@
     color: var(--muted);
   }
 
-  .dialog :global(input:not([type="checkbox"])),
-  .dialog :global(select) {
+  .dialog :global(input:not([type="checkbox"]):not([type="radio"])),
+  .dialog :global(select),
+  .dialog :global(textarea) {
     padding: 0.45rem 0.6rem;
     border: 1px solid var(--border);
     border-radius: 6px;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Vm, VmAction, VmState } from "$lib/api/client";
+  import type { UnattendedInstallState, Vm, VmAction, VmState } from "$lib/api/client";
 
   interface Props {
     vms: Vm[];
@@ -43,6 +43,17 @@
     return (vm.uptimeSeconds ?? 0) >= OS_DETECTION_SECONDS;
   }
 
+  const installLabels: Record<UnattendedInstallState, string> = {
+    installing: "Installing the OS…",
+    awaitingConfirmation: "Type yes in the console to install",
+    waitingForGuest: "Starting the installed OS…",
+    waitingForRemoteAccess: "Waiting for Remote Desktop…",
+    configuring: "Setting up your account…",
+    ready: "Ready",
+    failed: "Install failed",
+    canceled: "Install canceled",
+  };
+
   /** Turn off is allowed in these states (VmActionPolicy on the host). */
   function canForceOff(state: VmState): boolean {
     return state === "running" || state === "paused" || state === "starting" || state === "stopping";
@@ -52,6 +63,8 @@
   function primaryAction(vm: Vm): "start" | "connect" | "setup" | "console" | null {
     if (vm.state === "off" || vm.state === "saved" || vm.state === "paused") return "start";
     if (vm.state !== "running") return null;
+    // An unattended install sets up the account itself; until then the console shows its progress.
+    if (vm.installState && vm.installState !== "failed") return "console";
     if (vm.provisioned) return "connect";
     return vm.guestOs.family === "unknown" ? "console" : "setup";
   }
@@ -120,7 +133,9 @@
         <tr>
           <td class="name">
             {vm.name}
-            {#if vm.guestOs.name}
+            {#if vm.installState}
+              <span class="os install" class:failed={vm.installState === "failed"}>{installLabels[vm.installState]}</span>
+            {:else if vm.guestOs.name}
               <span class="os">{vm.guestOs.name}</span>
             {:else if vm.state === "running" && vm.guestOs.family === "unknown"}
               {#if osDetectionTimedOut(vm)}
@@ -244,6 +259,14 @@
     font-size: 0.8rem;
     font-weight: 400;
     color: var(--muted);
+  }
+
+  .install {
+    color: var(--accent);
+  }
+
+  .install.failed {
+    color: var(--danger);
   }
 
   .hint {

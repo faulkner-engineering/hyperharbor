@@ -509,6 +509,45 @@ async fn delete_iso(
     state.api.delete_iso(&host, &paired, &name).await
 }
 
+/// What an ISO in the library installs, for the create dialog's unattended options.
+#[tauri::command]
+async fn inspect_iso(
+    state: State<'_, AppState>,
+    key: String,
+    name: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.inspect_iso(&host, &paired, &name).await
+}
+
+/// Creates an unattended profile (no ID) or replaces one. Needs elevation.
+#[tauri::command]
+async fn save_unattend_profile(
+    state: State<'_, AppState>,
+    key: String,
+    profile_id: Option<String>,
+    profile: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .save_unattend_profile(&host, &paired, profile_id.as_deref(), &profile)
+        .await
+}
+
+#[tauri::command]
+async fn delete_unattend_profile(
+    state: State<'_, AppState>,
+    key: String,
+    profile_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .delete_unattend_profile(&host, &paired, &profile_id)
+        .await
+}
+
 /// Sends Wake-on-LAN magic packets using the cached adapter details. Returns datagrams sent.
 #[tauri::command]
 fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
@@ -713,7 +752,10 @@ pub fn run() {
             rename_iso,
             delete_iso,
             connect_vm,
-            open_console
+            open_console,
+            inspect_iso,
+            save_unattend_profile,
+            delete_unattend_profile
         ])
         .run(tauri::generate_context!())
         .expect("error while running HyperHarbor client");

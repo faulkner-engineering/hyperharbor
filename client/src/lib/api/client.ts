@@ -19,6 +19,11 @@ export type VmComputeUpdate = components["schemas"]["VmComputeUpdate"];
 export type ComputeSetting = components["schemas"]["ComputeSetting"];
 export type ValidationIssue = components["schemas"]["ValidationIssue"];
 export type ElevationStatus = components["schemas"]["ElevationStatus"];
+export type UnattendProfile = components["schemas"]["UnattendProfile"];
+export type UnattendProfileRequest = components["schemas"]["UnattendProfileRequest"];
+export type UnattendedInstallState = components["schemas"]["UnattendedInstallState"];
+export type InstallOs = components["schemas"]["InstallOs"];
+export type IsoInspection = components["schemas"]["IsoInspection"];
 
 /** Request bodies, as the Rust side expects them. */
 export interface DeleteVmRequest {
@@ -257,6 +262,21 @@ export const renameIso = (key: string, name: string, newName: string) =>
   invoke<IsoImage>("rename_iso", { key, name, newName });
 
 export const deleteIso = (key: string, name: string) => invoke<void>("delete_iso", { key, name });
+
+// Unattended installs. Saving or deleting a profile needs elevation.
+
+export const listUnattendProfiles = (key: string) =>
+  invoke<UnattendProfile[]>("get_host_resource", { key, resource: "unattendProfiles" });
+
+/** Creates a profile when `profileId` is null, otherwise replaces it. */
+export const saveUnattendProfile = (key: string, profileId: string | null, profile: UnattendProfileRequest) =>
+  invoke<UnattendProfile>("save_unattend_profile", { key, profileId, profile });
+
+export const deleteUnattendProfile = (key: string, profileId: string) =>
+  invoke<void>("delete_unattend_profile", { key, profileId });
+
+/** What an image in the library installs: its OS and, for Windows, its editions. */
+export const inspectIso = (key: string, name: string) => invoke<IsoInspection>("inspect_iso", { key, name });
 
 export const onIsoUploadProgress = (handler: (progress: IsoUploadProgress) => void): Promise<UnlistenFn> =>
   listen<IsoUploadProgress>("iso-upload-progress", (event) => handler(event.payload));

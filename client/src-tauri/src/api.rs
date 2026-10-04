@@ -733,6 +733,49 @@ impl ApiClient {
         .await
     }
 
+    /// GET /isos/{name}/inspection: what an image installs (OS and Windows editions).
+    pub async fn inspect_iso(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("{}/inspection", iso_path(name)?);
+        self.get_json(host, paired, &path).await
+    }
+
+    /// POST /unattend-profiles (no ID) or PUT /unattend-profiles/{id}. The host validates the profile.
+    pub async fn save_unattend_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        profile_id: Option<&str>,
+        profile: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let (method, path) = match profile_id {
+            Some(id) => (reqwest::Method::PUT, profile_path(id)?),
+            None => (reqwest::Method::POST, "/unattend-profiles".to_string()),
+        };
+        self.send_json(host, paired, method, &path, profile).await
+    }
+
+    /// DELETE /unattend-profiles/{id}.
+    pub async fn delete_unattend_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        profile_id: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired(
+            host,
+            paired,
+            reqwest::Method::DELETE,
+            &profile_path(profile_id)?,
+        )
+        .await
+        .map(|_| ())
+    }
+
     /// DELETE /isos/{name}.
     pub async fn delete_iso(
         &self,
@@ -931,6 +974,7 @@ pub enum HostResource {
     Resources,
     Isos,
     Switches,
+    UnattendProfiles,
 }
 
 impl HostResource {
@@ -939,6 +983,7 @@ impl HostResource {
             HostResource::Resources => "/host/resources",
             HostResource::Isos => "/isos",
             HostResource::Switches => "/switches",
+            HostResource::UnattendProfiles => "/unattend-profiles",
         }
     }
 }
@@ -989,6 +1034,22 @@ pub fn candidate_base_urls(host: &HostEntry) -> Vec<String> {
 
 /// "/isos/{name}" with the name percent-encoded. Only plain .iso file names may become part of a path;
 /// the host checks the name again.
+/// "/unattend-profiles/{id}". Profile IDs are slugs or GUIDs; anything else never reaches the host.
+fn profile_path(id: &str) -> Result<String, ClientError> {
+    let valid = !id.is_empty()
+        && id.len() <= 64
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if valid {
+        Ok(format!("/unattend-profiles/{id}"))
+    } else {
+        Err(ClientError::InvalidRequest(format!(
+            "\"{id}\" is not a profile ID"
+        )))
+    }
+}
+
 fn iso_path(name: &str) -> Result<String, ClientError> {
     let valid = name.len() > 4
         && name.to_ascii_lowercase().ends_with(".iso")
@@ -2243,5 +2304,57 @@ mod server_tests {
         tokio::time::sleep(CONSOLE_TUNNEL_TIMEOUT + Duration::from_secs(2)).await;
 
         echo_round_trip(&mut tunnel, b"after idling").await;
+    }
+    #[tokio::test]
+    async fn profiles_are_created_with_post_and_replaced_with_put() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(200, r#"{"id":"p"}"#));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let pinned = paired(server.certificate_hash());
+        let profile = json!({ "name": "Build", "os": "linux" });
+
+        api()
+            .save_unattend_profile(&target, &pinned, None, &profile)
+            .await
+            .unwrap();
+        api()
+            .save_unattend_profile(&target, &pinned, Some("ubuntu-dev-server"), &profile)
+            .await
+            .unwrap();
+        let rejected = api()
+            .save_unattend_profile(&target, &pinned, Some("../vms"), &profile)
+            .await;
+
+        let requests = server.requests();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(
+            (requests[0].method.as_str(), requests[0].path.as_str()),
+            ("POST", "/api/v1/unattend-profiles")
+        );
+        assert_eq!(
+            (requests[1].method.as_str(), requests[1].path.as_str()),
+            ("PUT", "/api/v1/unattend-profiles/ubuntu-dev-server")
+        );
+        assert!(matches!(rejected, Err(ClientError::InvalidRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn iso_inspection_uses_the_encoded_image_name() {
+        let server = TestServer::start("127.0.0.1:0", |_| {
+            Reply::json(
+                200,
+                r#"{"os":"windows","distribution":"Windows","editions":[]}"#,
+            )
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+
+        api()
+            .inspect_iso(&target, &paired(server.certificate_hash()), "Win 11.iso")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            server.requests()[0].path,
+            "/api/v1/isos/Win%2011.iso/inspection"
+        );
     }
 }

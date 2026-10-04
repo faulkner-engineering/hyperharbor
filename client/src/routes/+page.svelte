@@ -18,6 +18,7 @@
     type Vm,
   } from "$lib/api/client";
   import { onMount } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import HostList from "$lib/components/HostList.svelte";
   import PairingPanel from "$lib/components/PairingPanel.svelte";
   import VmList from "$lib/components/VmList.svelte";
@@ -30,6 +31,7 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { elevation, ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
+  import InstallProfiles from "$lib/components/InstallProfiles.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
   import { toasts } from "$lib/toasts.svelte";
 
@@ -51,7 +53,7 @@
   let deleting = $state<Vm | null>(null);
   let editing = $state<Vm | null>(null);
   let creating = $state(false);
-  let view = $state<"vms" | "isos">("vms");
+  let view = $state<"vms" | "isos" | "profiles">("vms");
   let now = $state(Date.now());
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
@@ -62,6 +64,7 @@
     if (key === selectedKey) return;
     selectedKey = key;
     vms = null;
+    installStates.clear();
     vmError = null;
     offline = false;
     showWake = false;
@@ -81,12 +84,30 @@
     }
   }
 
+  /** Each VM's install state at the last refresh, to announce when an install ends. */
+  const installStates = new SvelteMap<string, string>();
+
+  function announceInstalls(list: Vm[]) {
+    for (const vm of list) {
+      const before = installStates.get(vm.id);
+      const now = vm.installState ?? null;
+      if (before && before !== now) {
+        if (now === "failed") toasts.error(`Installing ${vm.name} failed. Open its console to see why.`);
+        else if (now === null && vm.provisioned) toasts.show(`${vm.name} is installed and ready. Press Connect.`);
+      }
+
+      if (now) installStates.set(vm.id, now);
+      else installStates.delete(vm.id);
+    }
+  }
+
   async function refreshVms(key: string) {
     loading = true;
     try {
       const result = await listVms(key);
       if (key !== selectedKey) return;
       vms = result;
+      announceInstalls(result);
       vmError = null;
       offline = false;
     } catch (error) {
@@ -322,10 +343,21 @@
           <button type="button" role="tab" aria-selected={view === "isos"} class:active={view === "isos"} onclick={() => (view = "isos")}>
             ISO library
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "profiles"}
+            class:active={view === "profiles"}
+            onclick={() => (view = "profiles")}>Install profiles</button
+          >
         </div>
         {#if view === "isos"}
           {#key selectedHost.key}
             <IsoLibrary host={selectedHost} />
+          {/key}
+        {:else if view === "profiles"}
+          {#key selectedHost.key}
+            <InstallProfiles host={selectedHost} />
           {/key}
         {:else}
           <VmList
@@ -366,6 +398,10 @@
             onopenlibrary={() => {
               creating = false;
               view = "isos";
+            }}
+            onopenprofiles={() => {
+              creating = false;
+              view = "profiles";
             }}
           />
         {/if}

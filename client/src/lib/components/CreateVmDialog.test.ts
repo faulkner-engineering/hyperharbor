@@ -93,6 +93,7 @@ describe("CreateVmDialog", () => {
       switchId: "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444",
       enableTpm: true,
       acknowledgeWarnings: false,
+      install: null,
     });
   });
 
@@ -132,5 +133,109 @@ describe("CreateVmDialog", () => {
 
     expect((await screen.findAllByText(/already exists/)).length).toBeGreaterThan(0);
     expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+const profiles = [
+  {
+    id: "windows-workstation",
+    name: "Windows Workstation",
+    builtIn: true,
+    os: "windows",
+    adminAccountName: "hhadmin",
+    timeZone: "Central Standard Time",
+    locale: "en-US",
+    windows: { defaultEdition: "Windows 11 Pro" },
+    linux: null,
+  },
+  {
+    id: "ubuntu-dev-server",
+    name: "Ubuntu Dev Server",
+    builtIn: true,
+    os: "linux",
+    adminAccountName: "hhadmin",
+    timeZone: "America/Chicago",
+    locale: "en-US",
+    windows: null,
+    linux: { installDesktop: true },
+  },
+];
+
+/** A host with profiles that inspects images as `inspection` describes. */
+function respondUnattended(inspection: unknown) {
+  invoke.mockImplementation((command: string, args: { resource?: string }) => {
+    if (command === "get_host_resource") {
+      if (args.resource === "resources") return Promise.resolve(resources);
+      if (args.resource === "isos")
+        return Promise.resolve([{ name: "Win11.iso", sizeBytes: 6_000_000_000, modifiedAt: "2026-10-01T00:00:00Z" }]);
+      if (args.resource === "unattendProfiles") return Promise.resolve(profiles);
+      return Promise.resolve([{ id: "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", name: "Default Switch", isDefault: true }]);
+    }
+    if (command === "inspect_iso") return Promise.resolve(inspection);
+    if (command === "create_vm") return Promise.resolve(job);
+    if (command === "open_console") return Promise.resolve();
+    return Promise.reject(new Error(`unexpected ${command}`));
+  });
+}
+
+const windowsMedia = { os: "windows", distribution: "Windows", editions: ["Windows 11 Home", "Windows 11 Pro"] };
+
+describe("CreateVmDialog unattended install", () => {
+  it("offers only profiles for what the image installs and sends the install", async () => {
+    respondUnattended(windowsMedia);
+    render(CreateVmDialog, { host, onclose: vi.fn() });
+
+    await fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "Dev Box" } });
+    await fireEvent.click(screen.getByLabelText("Automatically with a profile"));
+
+    const profile = (await screen.findByLabelText("Profile")) as HTMLSelectElement;
+    expect([...profile.options].map((option) => option.value)).toEqual(["windows-workstation"]);
+    expect((screen.getByLabelText("Edition") as HTMLSelectElement).value).toBe("Windows 11 Pro");
+    expect((screen.getByLabelText("Computer name") as HTMLInputElement).placeholder).toBe("DEV-BOX");
+
+    await fireEvent.change(screen.getByLabelText("Edition"), { target: { value: "Windows 11 Home" } });
+    await fireEvent.input(screen.getByLabelText("Computer name"), { target: { value: " DEVBOX1 " } });
+    await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await screen.findByText("Done.");
+    expect(createCalls()[0].install).toEqual({
+      profileId: "windows-workstation",
+      windowsEdition: "Windows 11 Home",
+      computerName: "DEVBOX1",
+    });
+  });
+
+  it("opens the new VM's console once it is created", async () => {
+    respondUnattended(windowsMedia);
+    render(CreateVmDialog, { host, onclose: vi.fn() });
+
+    await fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "Dev Box" } });
+    await fireEvent.click(screen.getByLabelText("Automatically with a profile"));
+    await screen.findByLabelText("Profile");
+    await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Console" }));
+
+    expect(invoke).toHaveBeenCalledWith("open_console", { key: host.key, vmId: job.vmId });
+  });
+
+  it("explains when the image cannot be installed automatically and blocks Create", async () => {
+    respondUnattended({ os: null, distribution: null, editions: [] });
+    render(CreateVmDialog, { host, onclose: vi.fn() });
+
+    await fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "Dev Box" } });
+    await fireEvent.click(screen.getByLabelText("Automatically with a profile"));
+
+    expect(await screen.findByText(/cannot tell what Win11\.iso installs/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("asks Ubuntu users to confirm in the console", async () => {
+    respondUnattended({ os: "linux", distribution: "Ubuntu-Server 24.04.1 LTS", editions: [] });
+    render(CreateVmDialog, { host, onclose: vi.fn() });
+
+    await fireEvent.click(await screen.findByLabelText("Automatically with a profile"));
+
+    expect(await screen.findByText(/type yes/)).toBeTruthy();
+    expect(screen.queryByLabelText("Edition")).toBeNull();
   });
 });

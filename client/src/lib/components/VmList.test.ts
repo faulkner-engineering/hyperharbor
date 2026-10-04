@@ -138,3 +138,25 @@ describe("VmList OS detection", () => {
     expect(screen.queryByText("OS not detected")).toBeNull();
   });
 });
+
+describe("VmList unattended install", () => {
+  it("shows the install step and keeps Console as the row button while it runs", () => {
+    render(VmList, { vms: [vm("running", { installState: "waitingForRemoteAccess", guestOs: { family: "windows", name: "Windows 11 Pro" } })] });
+
+    expect(screen.getByText("Waiting for Remote Desktop…")).toBeTruthy();
+    expect(rowButtons()).toEqual(["Console"]);
+  });
+
+  it("asks Ubuntu installs to be confirmed in the console", () => {
+    render(VmList, { vms: [vm("running", { installState: "awaitingConfirmation" })] });
+
+    expect(screen.getByText("Type yes in the console to install")).toBeTruthy();
+  });
+
+  it("offers manual setup again after an install failed", () => {
+    render(VmList, { vms: [vm("running", { installState: "failed", guestOs: { family: "windows", name: "Windows 11 Pro" } })] });
+
+    expect(screen.getByText("Install failed")).toBeTruthy();
+    expect(rowButtons()).toEqual(["Set up…"]);
+  });
+});
