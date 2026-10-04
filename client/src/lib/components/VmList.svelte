@@ -7,15 +7,28 @@
     busyVmId?: string | null;
     /** VM whose power action is being sent. */
     actionVmId?: string | null;
+    /** VM whose console is being opened. */
+    consoleVmId?: string | null;
     onconnect?: (vm: Vm) => void;
+    onconsole?: (vm: Vm) => void;
     onprovision?: (vm: Vm) => void;
     onaction?: (vm: Vm, action: VmAction) => void;
     onsettings?: (vm: Vm) => void;
     ondelete?: (vm: Vm) => void;
   }
 
-  let { vms, busyVmId = null, actionVmId = null, onconnect, onprovision, onaction, onsettings, ondelete }: Props =
-    $props();
+  let {
+    vms,
+    busyVmId = null,
+    actionVmId = null,
+    consoleVmId = null,
+    onconnect,
+    onconsole,
+    onprovision,
+    onaction,
+    onsettings,
+    ondelete,
+  }: Props = $props();
 
   /** Runs a menu item and closes its menu. */
   function choose(event: MouseEvent, run: () => void) {
@@ -110,6 +123,14 @@
               <span class="hint" title="The VM has not reported its operating system through Hyper-V data exchange yet.">
                 Detecting OS…
               </span>
+            {/if}
+            {#if vm.state === "running" || vm.state === "paused"}
+              <button
+                type="button"
+                disabled={consoleVmId !== null}
+                title="Show the VM's screen, also while its operating system is being installed"
+                onclick={() => onconsole?.(vm)}>{consoleVmId === vm.id ? "Opening…" : "Console"}</button
+              >
             {/if}
             {#if vm.state === "off" || vm.state === "saved"}
               <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "start")}>

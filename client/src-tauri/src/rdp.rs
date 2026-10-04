@@ -128,41 +128,74 @@ pub fn is_reachable(address: &str, port: u16) -> bool {
         .any(|target| TcpStream::connect_timeout(target, REACHABILITY_TIMEOUT).is_ok())
 }
 
+/// What to launch: a temporary credential for `TERMSRV/{credential_host}`, an .rdp file, and the
+/// text that appears in the title of mstsc's session window once it has connected.
+pub struct Launch<'a> {
+    pub credential_host: &'a str,
+    pub user_name: &'a str,
+    pub password: &'a str,
+    pub file_name: String,
+    pub contents: String,
+    pub window_title_key: String,
+}
+
 /// Writes the credential, launches mstsc, and removes the credential and file in the background once
 /// the session has opened (or mstsc exits, or the wait times out).
 pub fn launch(connection: &VmConnection, file_directory: &Path) -> Result<(), ClientError> {
     connection.validate()?;
-    let target = format!("TERMSRV/{}", connection.address);
-    credentials::write(&target, &connection.user_name, &connection.password)?;
-
-    let file = file_directory.join(format!(
-        "hyperharbor-{}.rdp",
-        connection.address.replace([':', '/', '\\'], "-")
-    ));
-    let started = std::fs::write(
-        &file,
-        rdp_file(
-            &connection.address,
-            connection.port,
-            &connection.user_name,
-            connection.guest_os,
-        ),
+    start(
+        Launch {
+            credential_host: &connection.address,
+            user_name: &connection.user_name,
+            password: &connection.password,
+            file_name: format!(
+                "hyperharbor-{}.rdp",
+                connection.address.replace([':', '/', '\\'], "-")
+            ),
+            contents: rdp_file(
+                &connection.address,
+                connection.port,
+                &connection.user_name,
+                connection.guest_os,
+            ),
+            window_title_key: connection.address.clone(),
+        },
+        file_directory,
+        None,
     )
-    .map_err(|e| ClientError::RdpFailed(e.to_string()))
-    .and_then(|_| {
-        Command::new("mstsc.exe")
-            .arg(&file)
-            .spawn()
-            .map_err(|e| ClientError::RdpFailed(e.to_string()))
-    });
+}
+
+/// Starts mstsc for `launch`. The credential and file are removed once the session has opened;
+/// `on_exit`, if given, runs after mstsc exits.
+pub fn start(
+    launch: Launch<'_>,
+    file_directory: &Path,
+    on_exit: Option<Box<dyn FnOnce() + Send>>,
+) -> Result<(), ClientError> {
+    let target = format!("TERMSRV/{}", launch.credential_host);
+    credentials::write(&target, launch.user_name, launch.password)?;
+
+    let file = file_directory.join(&launch.file_name);
+    let started = std::fs::write(&file, &launch.contents)
+        .map_err(|e| ClientError::RdpFailed(e.to_string()))
+        .and_then(|_| {
+            Command::new("mstsc.exe")
+                .arg(&file)
+                .spawn()
+                .map_err(|e| ClientError::RdpFailed(e.to_string()))
+        });
 
     match started {
-        Ok(child) => {
-            let address = connection.address.clone();
+        Ok(mut child) => {
+            let key = launch.window_title_key;
             std::thread::spawn(move || {
-                wait_for_session(child, &address);
+                wait_for_session(&mut child, &key);
                 let _ = credentials::delete(&target);
                 let _ = std::fs::remove_file(&file);
+                if let Some(on_exit) = on_exit {
+                    let _ = child.wait();
+                    on_exit();
+                }
             });
             Ok(())
         }
@@ -180,14 +213,14 @@ pub fn remove_stale_credentials() -> usize {
     credentials::remove_tagged("TERMSRV/*")
 }
 
-/// Returns when mstsc shows a session window for the address, exits, or the wait expires.
-fn wait_for_session(mut child: Child, address: &str) {
+/// Returns when mstsc shows a session window whose title contains `title_key`, exits, or the wait expires.
+fn wait_for_session(child: &mut Child, title_key: &str) {
     let started = Instant::now();
     while started.elapsed() < SESSION_WAIT {
         if matches!(child.try_wait(), Ok(Some(_))) {
             return;
         }
-        if windows::has_window_title_containing(child.id(), address) {
+        if windows::has_window_title_containing(child.id(), title_key) {
             return;
         }
         std::thread::sleep(Duration::from_millis(500));

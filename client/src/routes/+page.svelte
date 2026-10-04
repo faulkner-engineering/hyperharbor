@@ -9,6 +9,8 @@
     unpair,
     wakeHost,
     connectVm,
+    openConsole,
+    hasProblemCode,
     dropElevation,
     performVmAction,
     type VmAction,
@@ -42,6 +44,7 @@
   let wakeStatus = $state<string | null>(null);
   let provisioning = $state<Vm | null>(null);
   let connectingVmId = $state<string | null>(null);
+  let consoleVmId = $state<string | null>(null);
   let connectStatus = $state<{ ok: boolean; message: string } | null>(null);
   let actionVmId = $state<string | null>(null);
   let confirmTurnOff = $state<Vm | null>(null);
@@ -114,6 +117,25 @@
       connectStatus = { ok: false, message: errorMessage(error) };
     } finally {
       connectingVmId = null;
+    }
+  }
+
+  async function openVmConsole(vm: Vm) {
+    if (selectedKey === null) return;
+    consoleVmId = vm.id;
+    connectStatus = null;
+    try {
+      await openConsole(selectedKey, vm.id);
+      connectStatus = { ok: true, message: `Opening the console of ${vm.name}…` };
+    } catch (error) {
+      connectStatus = {
+        ok: false,
+        message: hasProblemCode(error, "consoleSetupRequired")
+          ? "Console access is not set up on this host. On the host, double-click the HyperHarbor tray icon and choose Set up console access."
+          : errorMessage(error),
+      };
+    } finally {
+      consoleVmId = null;
     }
   }
 
@@ -321,7 +343,9 @@
             {vms}
             busyVmId={connectingVmId}
             {actionVmId}
+            {consoleVmId}
             onconnect={connect}
+            onconsole={openVmConsole}
             onprovision={(vm) => (provisioning = vm)}
             onaction={requestAction}
             onsettings={(vm) => (editing = vm)}

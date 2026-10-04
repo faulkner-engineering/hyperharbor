@@ -32,7 +32,7 @@ hex = "0.4.3"
 getrandom = "0.4.3"
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
 rcgen = "0.14.10"
-tokio = { version = "1.53.1", features = ["sync", "fs"] }
+tokio = { version = "1.53.1", features = ["sync", "fs", "net", "io-util", "rt", "macros"] }
 tokio-util = { version = "0.7", features = ["io"] }
 futures-util = { version = "0.3", default-features = false }
 bytes = "1"

@@ -1,4 +1,5 @@
 mod api;
+mod console;
 mod discovery;
 mod error;
 mod hosts;
@@ -29,7 +30,7 @@ const HOSTS_CHANGED_EVENT: &str = "hosts-changed";
 struct AppState {
     hosts: Arc<HostRegistry>,
     paired: PairedHostStore,
-    api: ApiClient,
+    api: Arc<ApiClient>,
     pending: tokio::sync::Mutex<HashMap<String, PendingPairing>>,
     /// Files chosen in the ISO picker, by the ID the frontend gets instead of a path.
     picked_isos: std::sync::Mutex<HashMap<String, std::path::PathBuf>>,
@@ -224,6 +225,18 @@ async fn connect_vm(
         }
     }
     rdp::launch(&connection, &rdp::file_directory())
+}
+
+/// Opens the VM's console (its video output, also before an OS is installed) in mstsc, through
+/// tunnels to the host. Works for any running VM; it does not need the VM to be set up.
+#[tauri::command]
+async fn open_console(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    console::open(state.api.clone(), host, paired, vm_id).await
 }
 
 #[tauri::command]
@@ -661,7 +674,7 @@ pub fn run() {
             app.manage(AppState {
                 hosts,
                 paired: PairedHostStore::new(Some(config_dir.join("paired-hosts.json"))),
-                api: ApiClient::new(identity, local_host_name),
+                api: Arc::new(ApiClient::new(identity, local_host_name)),
                 pending: tokio::sync::Mutex::new(HashMap::new()),
                 picked_isos: std::sync::Mutex::new(HashMap::new()),
                 uploads: std::sync::Mutex::new(HashMap::new()),
@@ -699,7 +712,8 @@ pub fn run() {
             cancel_iso_upload,
             rename_iso,
             delete_iso,
-            connect_vm
+            connect_vm,
+            open_console
         ])
         .run(tauri::generate_context!())
         .expect("error while running HyperHarbor client");

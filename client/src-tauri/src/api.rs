@@ -21,6 +21,10 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Linux setup can install xrdp and a desktop; the host allows 20 minutes for that.
 const PROVISION_TIMEOUT: Duration = Duration::from_secs(25 * 60);
 const VM_CONNECT_TIMEOUT: Duration = Duration::from_secs(90);
+/// Opening a console grants access through Hyper-V and rotates a host account password; both are quick.
+const CONSOLE_OPEN_TIMEOUT: Duration = Duration::from_secs(30);
+/// Until the host answers a tunnel request; the tunnel itself has no time limit.
+const CONSOLE_TUNNEL_TIMEOUT: Duration = Duration::from_secs(15);
 /// ISO images are several gigabytes; a slow network can take hours.
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(12 * 60 * 60);
 /// Bytes read from disk per chunk of an upload.
@@ -104,6 +108,11 @@ pub const ELEVATION_REQUIRED: &str = "elevationRequired";
 
 /// Request header for the elevation token (the api.yaml elevation security scheme).
 const ELEVATION_HEADER: &str = "X-HyperHarbor-Elevation";
+
+/// Request header that carries a console ticket (api.yaml openVmConsoleTunnel).
+const CONSOLE_TICKET_HEADER: &str = "X-HyperHarbor-Console-Ticket";
+/// The Upgrade protocol of a console tunnel.
+const CONSOLE_UPGRADE_PROTOCOL: &str = "hyperharbor-console";
 
 /// An elevation token for one host. Kept only in memory, and never passed to the frontend.
 struct Elevation {
@@ -368,6 +377,68 @@ impl ApiClient {
             )
             .await?;
         parse(response).await
+    }
+
+    /// POST /vms/{vmId}/console: the host console account, a fresh password, and a tunnel ticket.
+    pub async fn open_console(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<crate::console::ConsoleSession, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &vm_path(vm_id, "console")?,
+                None,
+                Some(CONSOLE_OPEN_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// POST /vms/{vmId}/console/tunnel as an HTTP/1.1 upgrade. After the 101 response the returned
+    /// stream carries raw Remote Desktop bytes to the host's console service. The timeout covers only
+    /// the response; an upgraded stream has no body, so the client-wide timeout does not end it.
+    pub async fn open_console_tunnel(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        ticket: &str,
+    ) -> Result<reqwest::Upgraded, ClientError> {
+        let path = vm_path(vm_id, "console/tunnel")?;
+        let http = self.pinned_client(paired)?;
+        let mut last_error = None;
+        for base_url in self.ordered_candidates(host, paired) {
+            let request = http
+                .post(format!("{base_url}{API_BASE_PATH}{path}"))
+                .header(reqwest::header::CONNECTION, "Upgrade")
+                .header(reqwest::header::UPGRADE, CONSOLE_UPGRADE_PROTOCOL)
+                .header(CONSOLE_TICKET_HEADER, ticket)
+                .timeout(CONSOLE_TUNNEL_TIMEOUT);
+            match request.send().await {
+                Ok(response) if response.status() == reqwest::StatusCode::SWITCHING_PROTOCOLS => {
+                    return response.upgrade().await.map_err(|e| {
+                        ClientError::InvalidResponse(format!(
+                            "the console tunnel did not open: {e}"
+                        ))
+                    });
+                }
+                Ok(response) => {
+                    check(response).await?;
+                    return Err(ClientError::InvalidResponse(
+                        "the host did not open the console tunnel".into(),
+                    ));
+                }
+                Err(error) if tries_next_address(&error) => last_error = Some(error),
+                Err(error) => return Err(unreachable(Some(error))),
+            }
+        }
+
+        Err(unreachable(last_error))
     }
 
     /// GET /wake/info: the adapters to send magic packets to.
@@ -1719,6 +1790,11 @@ mod server_tests {
         assert_eq!(connection.port, 3389);
         connection.validate().unwrap();
 
+        let console: crate::console::ConsoleSession =
+            serde_json::from_value(fixture("ConsoleSession")).unwrap();
+        assert_eq!(console.user_name, r"HOSTPC\hhc-owner");
+        console.validate().unwrap();
+
         let adapters: Vec<WakeAdapter> =
             serde_json::from_value(fixture("WakeInfo")["adapters"].clone()).unwrap();
         assert_eq!(adapters[0].mac_address, "00155D012345");
@@ -2031,5 +2107,126 @@ mod server_tests {
         assert!(matches!(action, Err(ClientError::InvalidRequest(_))));
         assert!(matches!(job, Err(ClientError::InvalidRequest(_))));
         assert!(server.requests().is_empty());
+    }
+    fn console_server() -> TestServer {
+        TestServer::start("127.0.0.1:0", |request| {
+            let upgrade = request
+                .header("connection")
+                .is_some_and(|value| value.eq_ignore_ascii_case("upgrade"))
+                && request.header("upgrade") == Some("hyperharbor-console");
+            if request.path.ends_with("/console/tunnel")
+                && upgrade
+                && request.header("x-hyperharbor-console-ticket") == Some("ticket-1")
+            {
+                Reply::upgrade_and_echo()
+            } else {
+                Reply::json(403, r#"{"title":"Console ticket rejected","status":403}"#)
+            }
+        })
+    }
+
+    async fn echo_round_trip<S>(stream: &mut S, payload: &[u8])
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        stream.write_all(payload).await.unwrap();
+        stream.flush().await.unwrap();
+        let mut echoed = vec![0; payload.len()];
+        tokio::time::timeout(Duration::from_secs(10), stream.read_exact(&mut echoed))
+            .await
+            .expect("echo timed out")
+            .unwrap();
+        assert_eq!(echoed, payload);
+    }
+
+    #[tokio::test]
+    async fn console_tunnel_upgrades_and_carries_bytes() {
+        let server = console_server();
+        let target = host(&["127.0.0.1"], server.address.port());
+
+        let mut tunnel = api()
+            .open_console_tunnel(
+                &target,
+                &paired(server.certificate_hash()),
+                VM_ID,
+                "ticket-1",
+            )
+            .await
+            .expect("tunnel");
+
+        echo_round_trip(&mut tunnel, b"remote desktop bytes").await;
+        let request = &server.requests()[0];
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.path, format!("/api/v1/vms/{VM_ID}/console/tunnel"));
+    }
+
+    #[tokio::test]
+    async fn console_tunnel_rejection_is_an_api_error() {
+        let server = console_server();
+        let target = host(&["127.0.0.1"], server.address.port());
+
+        let result = api()
+            .open_console_tunnel(&target, &paired(server.certificate_hash()), VM_ID, "wrong")
+            .await;
+
+        assert!(
+            matches!(result, Err(ClientError::Api { status: 403, .. })),
+            "{:?}",
+            result.err()
+        );
+    }
+
+    #[tokio::test]
+    async fn console_listener_tunnels_every_connection_until_stopped() {
+        let server = console_server();
+        let target = host(&["127.0.0.1"], server.address.port());
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let local = listener.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let serving = tokio::spawn(crate::console::serve(
+            listener,
+            stopped,
+            Arc::new(api()),
+            target,
+            paired(server.certificate_hash()),
+            VM_ID.into(),
+            zeroize::Zeroizing::new("ticket-1".into()),
+        ));
+
+        let mut first = tokio::net::TcpStream::connect(local).await.unwrap();
+        let mut second = tokio::net::TcpStream::connect(local).await.unwrap();
+        echo_round_trip(&mut first, b"first connection").await;
+        echo_round_trip(&mut second, b"second connection").await;
+
+        // Stopping closes the listener; tunnels already open keep working.
+        stop.send(()).unwrap();
+        serving.await.unwrap();
+        assert!(tokio::net::TcpStream::connect(local).await.is_err());
+        echo_round_trip(&mut first, b"still open").await;
+    }
+
+    /// The client-wide request timeout (10 seconds) must not end an idle tunnel. Slow, so ignored;
+    /// run it after changing how tunnels are requested.
+    #[tokio::test]
+    #[ignore]
+    async fn console_tunnel_outlives_the_request_timeout() {
+        let server = console_server();
+        let target = host(&["127.0.0.1"], server.address.port());
+        let mut tunnel = api()
+            .open_console_tunnel(
+                &target,
+                &paired(server.certificate_hash()),
+                VM_ID,
+                "ticket-1",
+            )
+            .await
+            .expect("tunnel");
+
+        tokio::time::sleep(CONSOLE_TUNNEL_TIMEOUT + Duration::from_secs(2)).await;
+
+        echo_round_trip(&mut tunnel, b"after idling").await;
     }
 }

@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import { connectVm, errorMessage, isClientError, isOffline, provisionVm } from "./client";
+import { connectVm, errorMessage, isClientError, isOffline, openConsole, provisionVm } from "./client";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -55,5 +55,11 @@ describe("commands", () => {
     await connectVm("mdns:host", "vm-1", "192.168.0.50");
 
     expect(invoke).toHaveBeenCalledWith("connect_vm", { key: "mdns:host", vmId: "vm-1", address: "192.168.0.50" });
+  });
+
+  it("openConsole passes the host key and VM", async () => {
+    await openConsole("mdns:host", "vm-1");
+
+    expect(invoke).toHaveBeenCalledWith("open_console", { key: "mdns:host", vmId: "vm-1" });
   });
 });

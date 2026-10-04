@@ -37,6 +37,11 @@ impl Reply {
         }
     }
 
+    /// 101 Switching Protocols, then the connection echoes every byte it receives.
+    pub fn upgrade_and_echo() -> Self {
+        Self::json(101, "")
+    }
+
     pub fn after(mut self, delay: Duration) -> Self {
         self.delay = delay;
         self
@@ -192,6 +197,27 @@ fn serve(
 
     let reply = handler(&request);
     std::thread::sleep(reply.delay);
+    if reply.status == 101 {
+        let protocol = request.header("upgrade").unwrap_or_default().to_string();
+        let head = format!(
+            "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: {protocol}\r\n\r\n"
+        );
+        if reader.get_mut().write_all(head.as_bytes()).is_err() || reader.get_mut().flush().is_err()
+        {
+            return;
+        }
+        let mut buffer = [0u8; 4096];
+        while let Ok(read) = reader.read(&mut buffer) {
+            if read == 0 {
+                break;
+            }
+            let stream = reader.get_mut();
+            if stream.write_all(&buffer[..read]).is_err() || stream.flush().is_err() {
+                break;
+            }
+        }
+        return;
+    }
     let response = format!(
         "HTTP/1.1 {} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         reply.status,

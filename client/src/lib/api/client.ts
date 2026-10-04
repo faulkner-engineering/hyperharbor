@@ -182,6 +182,13 @@ export const provisionVm = (
 export const connectVm = (key: string, vmId: string, address: string) =>
   invoke<void>("connect_vm", { key, vmId, address });
 
+/**
+ * Opens the VM's console (its screen, also before an OS is installed) in mstsc through the host.
+ * Resolves once mstsc has been launched. Fails with problem code consoleSetupRequired when the host
+ * has not set up console access.
+ */
+export const openConsole = (key: string, vmId: string) => invoke<void>("open_console", { key, vmId });
+
 export const isOffline =(error: unknown) => isClientError(error) && error.code === "unreachable";
 
 /** True when the host returned this problem code. */
