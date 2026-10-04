@@ -138,10 +138,11 @@ public sealed class CimHyperVPerformance : IHyperVPerformance
                     return CimXml.Write(disk, new CimXml.Property("HostResource", CimType.StringArray, new[] { target }));
                 }).ToArray();
 
+                // DestinationHost stays unset: a storage move on this host fails with 32773 (invalid
+                // parameter) when it names the local machine or "localhost" (verified live on 2026-10-04).
                 using var parameters = new CimMethodParametersCollection
                 {
                     CimMethodParameter.Create("ComputerSystem", system, CimType.Reference, CimFlags.In),
-                    CimMethodParameter.Create("DestinationHost", Environment.MachineName, CimType.String, CimFlags.In),
                     CimMethodParameter.Create("MigrationSettingData", CimXml.Write("Msvm_VirtualSystemMigrationSettingData",
                         [new CimXml.Property("MigrationType", CimType.UInt16, StorageMigration)]), CimType.String, CimFlags.In),
                     CimMethodParameter.Create("NewSystemSettingData", CimXml.Write(settings,
@@ -171,7 +172,7 @@ public sealed class CimHyperVPerformance : IHyperVPerformance
 
         if (gpu.InstancePath is { } path)
         {
-            properties.Add(new("HostResource", CimType.StringArray, new[] { path }));
+            properties.Add(new("HostResource", CimType.StringArray, new[] { GpuIdentity.PartitionableGpuPath(path, Environment.MachineName) }));
         }
 
         return [.. properties];

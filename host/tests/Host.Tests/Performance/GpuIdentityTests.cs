@@ -37,6 +37,17 @@ public sealed class GpuIdentityTests
         Assert.Equal(expected, GpuIdentity.Share(maximum, percent));
     }
 
+    /// <summary>The HostResource Add-VMGpuPartitionAdapter -InstancePath stored on this host, 2026-10-04.</summary>
+    [Fact]
+    public void PartitionableGpuPath_IsTheWmiObjectPath_AsHyperVStoresIt()
+    {
+        const string name = @"\\?\PCI#VEN_8086&DEV_9B41&SUBSYS_22BE17AA&REV_02#3&11583659&0&10#{064092b3-625e-43bf-9eb5-dc845897dd59}\GPUPARAV";
+
+        Assert.Equal(
+            @"\\DESKTOP-65QRD0H\root\virtualization\v2:Msvm_PartitionableGpu.CreationClassName=""Msvm_PartitionableGpu"",Name=""\\\\?\\PCI#VEN_8086&DEV_9B41&SUBSYS_22BE17AA&REV_02#3&11583659&0&10#{064092b3-625e-43bf-9eb5-dc845897dd59}\\GPUPARAV""",
+            GpuIdentity.PartitionableGpuPath(name, "DESKTOP-65QRD0H"));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(101)]

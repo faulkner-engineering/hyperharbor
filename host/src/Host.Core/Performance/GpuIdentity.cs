@@ -29,6 +29,15 @@ public static class GpuIdentity
     }
 
     /// <summary>
+    /// The value Msvm_GpuPartitionSettingData.HostResource needs to pin a partition to one GPU: the WMI
+    /// object path of the Msvm_PartitionableGpu instance, not its Name. The bare Name makes
+    /// AddResourceSettings fail with only "failed to add device 'GPU Partition'". This is the form
+    /// Add-VMGpuPartitionAdapter -InstancePath stores (verified on a live host on 2026-10-04).
+    /// </summary>
+    public static string PartitionableGpuPath(string partitionableGpuName, string machineName) =>
+        $@"\\{machineName}\root\virtualization\v2:Msvm_PartitionableGpu.CreationClassName=""Msvm_PartitionableGpu"",Name=""{partitionableGpuName.Replace(@"\", @"\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}""";
+
+    /// <summary>
     /// <paramref name="percent"/> of <paramref name="maximum"/>, in the GPU's own relative units. Decimal
     /// arithmetic, because encode maximums are reported as UInt64.MaxValue.
     /// </summary>

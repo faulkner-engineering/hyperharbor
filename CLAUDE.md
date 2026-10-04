@@ -38,8 +38,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 9. Console access and unattended provisioning, added at the user's request (done 2026-10-04): VM console through a
    tunnel to the host's port 2179 with a per-User standard host account (hhc-<username>); autounattend and
    cloud-init seed ISOs on create; KVP readiness watcher that provisions automatically once RDP answers.
-10. Performance mode (GPU-P and Remote Desktop tuning) for Windows VMs, added at the user's request (code done
-   2026-10-04, not yet run live): apply to an off VM (fixed memory, vCPU, GPU partition share, MMIO gaps,
+10. Performance mode (GPU-P and Remote Desktop tuning) for Windows VMs, added at the user's request (done
+   2026-10-04; host side verified live on a throwaway VM, guest setup not yet): apply to an off VM (fixed memory, vCPU, GPU partition share, MMIO gaps,
    no checkpoints, TurnOff stop action, optional storage move); guest setup over PowerShell Direct (driver
    copy, ADMX-verified RDP policy, DWMFRAMEINTERVAL); LAN .rdp tuning; driver drift and re-sync; disk export
    before changes; pre-shutdown of GPU VMs; GPU driver error warnings.
@@ -101,6 +101,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   It starts the real service on a free loopback port, so it can run while a packaged host is running.
 - Live lifecycle (creates, changes, and deletes HyperHarbor-Test; ask first):
   HH_LIFECYCLE_LIVE=1 dotnet test HyperHarbor.sln --filter LifecycleLiveTests
+- Live Performance mode (same VM; GPU partition, storage move, export; ask first):
+  HH_PERFORMANCE_LIVE=1 dotnet test HyperHarbor.sln --filter PerformanceLiveTests
 
 ## Packaging (multi-machine testing)
 - powershell -ExecutionPolicy Bypass -File scripts\package.ps1 [-Fast] [-SkipTests] [-HostOnly|-ClientOnly]
@@ -235,7 +237,13 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     Not yet with a real Ubuntu install.
 - Performance mode (Phase 10; Host.Core/Performance):
   - Only Intel GPU-P was available here (UHD iGPU, VEN_8086, 32 partitions). NVIDIA and AMD rules are unit
-    tested with recorded file lists only. The GPU partition's HostResource format is not yet verified live.
+    tested with recorded file lists only. Verified live on 2026-10-04 (PerformanceLiveTests on HyperHarbor-Test,
+    never started): apply with a storage move, export, read-back, and remove. Guest setup and the shutdown
+    guard have not run live yet.
+  - The GPU partition's HostResource is the WMI object path of the Msvm_PartitionableGpu
+    (GpuIdentity.PartitionableGpuPath), not its Name; the Name fails with only "failed to add device 'GPU
+    Partition'". MigrateVirtualSystemToHost for a storage move needs DestinationHost unset; the machine name or
+    "localhost" returns 32773. Get-VMHardDiskDrive can show a stale path right after a move.
   - Msvm_GpuPartitionSettingData: ResourceType 32770, ResourceSubType "Microsoft:Hyper-V:GPU Partition".
     Msvm_PartitionableGpu reports relative units: VRAM, decode, and compute max 1e9, encode max UInt64.MaxValue,
     so shares are computed in decimal. VSSD: GuestControlledCacheTypes, LowMmioGapSize and HighMmioGapSize
