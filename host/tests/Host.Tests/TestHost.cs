@@ -70,6 +70,8 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<Core.Unattend.IVmMedia>(Media);
                 services.AddSingleton<Core.Performance.IHyperVPerformance>(Performance);
                 services.AddSingleton<Core.Performance.IHostGpuReader>(HostGpus);
+                services.AddSingleton<Core.Performance.IGpuDriverSource>(new Performance.FakeGpuDriverSource());
+                services.AddSingleton<Core.Performance.IGuestPerformanceSetup>(GuestSetup);
                 services.AddSingleton<Core.Unattend.IRemoteAccessProbe>(RemoteAccess);
                 services.AddSingleton(provider => new Core.Unattend.UnattendedSetup(
                     provider.GetRequiredService<Core.Unattend.UnattendProfileStore>(),
@@ -124,6 +126,8 @@ internal sealed class TestHost : IDisposable
     public Performance.FakeHyperVPerformance Performance { get; } = new();
 
     public Performance.FakeHostGpuReader HostGpus { get; } = new();
+
+    public Performance.FakeGuestPerformanceSetup GuestSetup { get; } = new();
 
     public Unattend.FakeRemoteAccessProbe RemoteAccess { get; } = new();
 

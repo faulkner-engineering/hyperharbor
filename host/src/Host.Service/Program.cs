@@ -182,6 +182,8 @@ builder.Services.AddSingleton<VmComputeService>();
 builder.Services.AddSingleton(new PerformanceStore(dataDirectory));
 builder.Services.AddSingleton<IHyperVPerformance, CimHyperVPerformance>();
 builder.Services.AddSingleton<IHostGpuReader, CimHostGpuReader>();
+builder.Services.AddSingleton<IGpuDriverSource, CimGpuDriverSource>();
+builder.Services.AddSingleton<IGuestPerformanceSetup, PowerShellDirectPerformanceSetup>();
 builder.Services.AddSingleton<VmPerformanceService>();
 
 builder.Services.AddOptions<ApiOptions>()

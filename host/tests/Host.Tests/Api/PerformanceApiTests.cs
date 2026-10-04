@@ -106,6 +106,30 @@ public sealed class PerformanceApiTests : IDisposable
         Assert.Empty(gpu["warnings"]!.AsArray());
     }
 
+    [Fact]
+    public async Task GuestSetup_NeedsElevation_AndACredential()
+    {
+        var applied = await SendElevated(HttpMethod.Put, $"/api/v1/vms/{VmId}/performance", Settings());
+        var job = (await applied.Content.ReadFromJsonAsync<JsonObject>())!;
+        await WaitUntil(async () => (string?)(await _client.GetFromJsonAsync<JsonObject>($"/api/v1/jobs/{job["id"]}"))!["state"] == "succeeded");
+        _host.Inventory.Vms[0] = _host.Inventory.Vms[0] with { State = VmState.Running };
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await _client.PostAsJsonAsync($"/api/v1/vms/{VmId}/performance/guest-setup", new { driversOnly = false })).StatusCode);
+
+        var refused = await SendElevated(HttpMethod.Post, $"/api/v1/vms/{VmId}/performance/guest-setup", new { driversOnly = false });
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(ContractInfo.ProblemCodes.CredentialRequired, (string?)(await refused.Content.ReadFromJsonAsync<JsonObject>())!["code"]);
+
+        _host.Services.GetRequiredService<Core.Provisioning.VmCredentialStore>().Save(VmId, new Core.Provisioning.GuestCredential("hhadmin", "Admin-Pass1!"));
+        var started = await SendElevated(HttpMethod.Post, $"/api/v1/vms/{VmId}/performance/guest-setup", new { driversOnly = false });
+        Assert.Equal(HttpStatusCode.Accepted, started.StatusCode);
+        var setup = (await started.Content.ReadFromJsonAsync<JsonObject>())!;
+        Assert.Equal("performanceGuestSetup", (string?)setup["kind"]);
+        await WaitUntil(async () => (string?)(await _client.GetFromJsonAsync<JsonObject>($"/api/v1/jobs/{setup["id"]}"))!["state"] == "succeeded");
+        Assert.Single(_host.GuestSetup.Runs);
+        Assert.Equal("30.0.101.1122", (string?)(await _client.GetFromJsonAsync<JsonObject>($"/api/v1/vms/{VmId}/performance"))!["driver"]!["guestVersion"]);
+    }
+
     private async Task<HttpResponseMessage> SendElevated(HttpMethod method, string path, object? body)
     {
         var elevate = await _client.PostAsJsonAsync("/api/v1/auth/elevation", new { passphrase = Passphrase });

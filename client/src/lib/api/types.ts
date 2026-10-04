@@ -492,6 +492,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/performance/guest-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy the host's GPU driver into the guest and write the Remote Desktop settings.
+         * @description Starts a `performanceGuestSetup` job. Over PowerShell Direct it copies the host GPU driver's
+         *     DriverStore folder into the guest's System32\HostDriverStore\FileRepository and its other files
+         *     into System32 or SysWOW64; files in use are replaced when the guest restarts (`rebootRequired`).
+         *     Unless `driversOnly`, it also writes the Remote Desktop Session Host policies from
+         *     TerminalServer.admx (hardware graphics adapters, H.264/AVC 444, image quality High, no RDP
+         *     compression, hardware encoding as chosen) and DWMFRAMEINTERVAL 15 (60 fps). Needs a running
+         *     Windows guest with Performance mode on and HyperHarbor's administrator credential for it.
+         */
+        post: operations["setUpVmPerformanceGuest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/compute": {
         parameters: {
             query?: never;
@@ -1414,6 +1443,13 @@ export interface components {
             rdp?: components["schemas"]["PerformanceRdpSettings"] | null;
             /** @default false */
             acknowledgeWarnings: boolean;
+        };
+        GuestSetupRequest: {
+            /**
+             * @description Copy the GPU driver only, for example after the host's driver changed.
+             * @default false
+             */
+            driversOnly: boolean;
         };
         GuestDriverStatus: {
             vendor: components["schemas"]["GpuVendor"];
@@ -2555,6 +2591,50 @@ export interface operations {
             403: components["responses"]["ElevationRequired"];
             404: components["responses"]["NotFound"];
             /** @description The VM is not off (`code` is `vmMustBeOff`), or another operation holds it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    setUpVmPerformanceGuest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuestSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description The job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description Performance mode is off, the VM is not a running Windows guest, HyperHarbor has no administrator
+             *     credential for it (`code` is `credentialRequired`), or another operation holds the VM.
+             */
             409: {
                 headers: {
                     [name: string]: unknown;

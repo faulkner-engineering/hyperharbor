@@ -19,6 +19,9 @@ public sealed class VmPerformanceService
     private readonly IHostGpuReader _gpus;
     private readonly IHostCapacityReader _capacity;
     private readonly PerformanceStore _store;
+    private readonly Provisioning.VmCredentialStore _credentials;
+    private readonly IGpuDriverSource _drivers;
+    private readonly IGuestPerformanceSetup _guestSetup;
     private readonly VmOperationLocks _locks;
     private readonly VmJobStore _jobs;
     private readonly LifecycleOptions _options;
@@ -32,6 +35,9 @@ public sealed class VmPerformanceService
         IHostGpuReader gpus,
         IHostCapacityReader capacity,
         PerformanceStore store,
+        Provisioning.VmCredentialStore credentials,
+        IGpuDriverSource drivers,
+        IGuestPerformanceSetup guestSetup,
         VmOperationLocks locks,
         VmJobStore jobs,
         LifecycleOptions options,
@@ -44,6 +50,9 @@ public sealed class VmPerformanceService
         _gpus = gpus;
         _capacity = capacity;
         _store = store;
+        _credentials = credentials;
+        _drivers = drivers;
+        _guestSetup = guestSetup;
         _locks = locks;
         _jobs = jobs;
         _options = options;
@@ -110,6 +119,69 @@ public sealed class VmPerformanceService
 
         _store.Remove(vmId);
         _logger.LogInformation("Turned Performance mode off for {Name} ({VmId}).", vm.Name, vmId);
+    }
+
+    /// <summary>
+    /// Starts a job that copies the host's GPU driver into the running guest and, unless
+    /// <paramref name="driversOnly"/>, writes the Remote Desktop policy values. A drivers-only run is the
+    /// re-sync after the host's driver changed.
+    /// </summary>
+    /// <exception cref="LifecycleConflictException">
+    /// Performance mode is off, the VM is not a running Windows guest, or no administrator credential is
+    /// stored (code credentialRequired).
+    /// </exception>
+    public async Task<VmJobSnapshot> StartGuestSetupAsync(Guid vmId, Guid userId, bool driversOnly, Action<VmJobSnapshot>? onFinished, CancellationToken cancellationToken)
+    {
+        var vm = await _inventory.GetAsync(vmId, cancellationToken).ConfigureAwait(false) ?? throw new VmNotFoundException(vmId);
+        var record = _store.Find(vmId)
+            ?? throw new LifecycleConflictException($"Turn Performance mode on for {vm.Name} before setting up its guest.");
+        if (vm.State != VmState.Running || vm.GuestOs?.Family != GuestOsFamily.Windows)
+        {
+            throw new LifecycleConflictException($"{vm.Name} must be a running Windows guest that has finished starting.");
+        }
+
+        var admin = _credentials.Find(vmId)
+            ?? throw new LifecycleConflictException(
+                $"HyperHarbor has no administrator credential for {vm.Name}. Set it up for Remote Desktop first.",
+                ContractInfo.ProblemCodes.CredentialRequired);
+
+        var gpus = await _gpus.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var gpu = gpus.FirstOrDefault(item => item.Partitionable && string.Equals(item.InstancePath, record.Settings.Gpu?.InstancePath, StringComparison.OrdinalIgnoreCase))
+            ?? gpus.FirstOrDefault(item => item.Partitionable)
+            ?? throw new LifecycleConflictException("This host has no GPU that Hyper-V can partition.", ContractInfo.ProblemCodes.GpuUnavailable);
+
+        return _jobs.Start(VmJobKind.PerformanceGuestSetup, vmId, userId, "Finding the host GPU driver's files",
+            context => GuestSetupAsync(vm.Name, vmId, record, admin, gpu, driversOnly, context), onFinished);
+    }
+
+    private async Task GuestSetupAsync(string name, Guid vmId, PerformanceRecord record, Provisioning.GuestCredential admin, HostGpuInfo gpu, bool driversOnly, VmJobContext context)
+    {
+        var driver = await _drivers.ReadAsync(gpu, context.Stopping).ConfigureAwait(false);
+        context.Report($"Copying the {gpu.Name} driver {driver.Version} into the guest", 20);
+        var registry = driversOnly ? null : RdpPerformancePolicy.Values(record.Settings.Rdp?.HardwareEncoding ?? false);
+
+        GuestSetupResult result;
+        try
+        {
+            result = await _guestSetup.RunAsync(vmId, admin, driver, registry, context.Stopping).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (Provisioning.GuestErrors.IsGuestError(ex))
+        {
+            throw Provisioning.GuestErrors.Sanitize(ex, admin.Password);
+        }
+
+        var current = _store.Find(vmId) ?? record;
+        _store.Save(current with
+        {
+            Guest = new GuestDriverRecord(driver.Vendor, driver.Version, driver.DriverStoreFolders.Select(Path.GetFileName).OfType<string>().ToList(), _time.GetUtcNow(), result.RebootRequired),
+        });
+        _logger.LogInformation(
+            "Copied the {Vendor} GPU driver {Version} into {Name} ({VmId}){Reboot}.",
+            driver.Vendor,
+            driver.Version,
+            name,
+            vmId,
+            result.RebootRequired ? "; some files are replaced when the guest restarts" : string.Empty);
     }
 
     private async Task RunAsync(string name, Guid vmId, PerformanceSettings settings, PerformancePlan plan, VmJobContext context)

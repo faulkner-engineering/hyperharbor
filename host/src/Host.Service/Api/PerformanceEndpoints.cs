@@ -21,6 +21,9 @@ public static class PerformanceEndpoints
         vms.MapDelete("/{vmId:guid}/performance", RemoveAsync).WithName("removeVmPerformance")
             .Audited()
             .RequireElevation();
+        vms.MapPost("/{vmId:guid}/performance/guest-setup", GuestSetupAsync).WithName("setUpVmPerformanceGuest")
+            .Audited<GuestSetupRequest>(request => $"driversOnly={request.DriversOnly}")
+            .RequireElevation();
 
         endpoints.MapGet(ContractInfo.BasePath + "/host/gpu", GetHostGpuAsync).WithName("getHostGpu");
         return endpoints;
@@ -44,6 +47,18 @@ public static class PerformanceEndpoints
         CancellationToken cancellationToken)
     {
         var job = await performance.ApplyAsync(vmId, context.User.UserId(), request, context.CompletionAuditor(), cancellationToken);
+        context.Audit()!.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
+    }
+
+    private static async Task<Accepted<VmJob>> GuestSetupAsync(
+        Guid vmId,
+        GuestSetupRequest request,
+        VmPerformanceService performance,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var job = await performance.StartGuestSetupAsync(vmId, context.User.UserId(), request.DriversOnly, context.CompletionAuditor(), cancellationToken);
         context.Audit()!.JobId = job.Id;
         return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }

@@ -86,3 +86,7 @@ public sealed record GpuDriverWarning(string Provider, int EventId, int Count, D
 
 /// <summary>The host's GPUs and recent driver errors. Schema: HostGpu.</summary>
 public sealed record HostGpu(IReadOnlyList<HostGpuDevice> Gpus, IReadOnlyList<GpuDriverWarning> Warnings);
+
+/// <summary>Sets up a Performance mode guest. Schema: GuestSetupRequest.</summary>
+/// <param name="DriversOnly">Copy the GPU driver only (a re-sync after the host's driver changed); leave the registry alone.</param>
+public sealed record GuestSetupRequest(bool DriversOnly = false);

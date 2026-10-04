@@ -31,6 +31,7 @@ public sealed record UnattendedInstall(
     DateTimeOffset? NextAttemptAt = null,
     long RunningSeconds = 0)
 {
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool IsActive => State is not (UnattendedInstallState.Ready or UnattendedInstallState.Failed or UnattendedInstallState.Canceled);
 }
 

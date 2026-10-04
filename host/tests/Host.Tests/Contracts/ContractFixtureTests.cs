@@ -95,6 +95,7 @@ public class ContractFixtureTests
         ["VmPerformance"] = new VmPerformance(VmId, true, new PerformanceSettings(8, 16384), true, null, []),
         ["HostGpuDevice"] = new HostGpuDevice("NVIDIA GeForce RTX 4080", GpuVendor.Nvidia, "32.0.15.6094", true, 32, @"\\?\PCI#VEN_10DE&DEV_2704#4&2#{064092b3-625e-43bf-9eb5-dc845897dd59}\GPUPARAV"),
         ["GpuDriverWarning"] = new GpuDriverWarning("nvlddmkm", 153, 2, Time, "Display driver nvlddmkm stopped responding and has successfully recovered."),
+        ["GuestSetupRequest"] = new GuestSetupRequest(DriversOnly: true),
         ["HostGpu"] = new HostGpu([new HostGpuDevice("Intel(R) UHD Graphics", GpuVendor.Intel, "30.0.101.1122", true, 32, null)], []),
         ["IsoInspection"] = new IsoInspection(InstallOs.Windows, "Windows", ["Windows 11 Home", "Windows 11 Pro"]),
         ["ValidationIssue"] = new ValidationIssue("processorCount", "Use at most 16 virtual processors."),

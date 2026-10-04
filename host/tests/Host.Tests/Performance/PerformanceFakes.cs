@@ -75,3 +75,40 @@ internal sealed class FakeHostGpuReader : IHostGpuReader
     public Task<IReadOnlyList<HostGpuInfo>> ReadAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<HostGpuInfo>>(Gpus.ToList());
 }
+
+/// <summary>Returns a fixed Intel driver package, with the version the host reader reports.</summary>
+internal sealed class FakeGpuDriverSource : IGpuDriverSource
+{
+    public Exception? Failure { get; set; }
+
+    public Task<GpuDriverPackage> ReadAsync(HostGpuInfo gpu, CancellationToken cancellationToken) =>
+        Failure is not null
+            ? Task.FromException<GpuDriverPackage>(Failure)
+            : Task.FromResult(new GpuDriverPackage(gpu.Vendor, gpu.DriverVersion ?? "0.0",
+                [@"C:\Windows\System32\DriverStore\FileRepository\iigd_dch.inf_amd64_6091bde938afd934"], [], []));
+}
+
+/// <summary>Records guest setups.</summary>
+internal sealed class FakeGuestPerformanceSetup : IGuestPerformanceSetup
+{
+    public List<(Guid VmId, GpuDriverPackage Driver, IReadOnlyList<GuestRegistryValue>? Registry)> Runs { get; } = [];
+
+    public bool RebootRequired { get; set; }
+
+    public Exception? Failure { get; set; }
+
+    public Task<GuestSetupResult> RunAsync(Guid vmId, Core.Provisioning.GuestCredential admin, GpuDriverPackage driver, IReadOnlyList<GuestRegistryValue>? registry, CancellationToken cancellationToken)
+    {
+        if (Failure is not null)
+        {
+            return Task.FromException<GuestSetupResult>(Failure);
+        }
+
+        lock (Runs)
+        {
+            Runs.Add((vmId, driver, registry));
+        }
+
+        return Task.FromResult(new GuestSetupResult(RebootRequired));
+    }
+}

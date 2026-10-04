@@ -63,6 +63,9 @@
     "drift": true,
     "rebootRequired": false
   },
+  "GuestSetupRequest": {
+    "driversOnly": true
+  },
   "HostGpu": {
     "gpus": [
       {

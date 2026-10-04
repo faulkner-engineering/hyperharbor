@@ -18,6 +18,9 @@ public sealed class VmPerformanceServiceTests : IDisposable
     private readonly FakeHyperVPerformance _performance = new();
     private readonly FakeHyperVCompute _compute = new();
     private readonly FakeHostGpuReader _gpus = new();
+    private readonly FakeGpuDriverSource _drivers = new();
+    private readonly FakeGuestPerformanceSetup _guestSetup = new();
+    private readonly Core.Provisioning.VmCredentialStore _credentials;
     private readonly VmOperationLocks _locks = new();
     private readonly VmJobStore _jobs;
     private readonly PerformanceStore _store;
@@ -27,7 +30,8 @@ public sealed class VmPerformanceServiceTests : IDisposable
     {
         _jobs = new VmJobStore(_locks, TimeProvider.System, NullLogger<VmJobStore>.Instance);
         _store = new PerformanceStore(_directory);
-        _service = new VmPerformanceService(_inventory, _performance, _compute, _gpus, new FakeHostCapacity(), _store, _locks, _jobs,
+        _credentials = new Core.Provisioning.VmCredentialStore(_directory);
+        _service = new VmPerformanceService(_inventory, _performance, _compute, _gpus, new FakeHostCapacity(), _store, _credentials, _drivers, _guestSetup, _locks, _jobs,
             new LifecycleOptions(), new FakeTimeProvider(DateTimeOffset.Parse("2026-10-04T12:00:00Z")), NullLogger<VmPerformanceService>.Instance);
     }
 
@@ -174,5 +178,92 @@ public sealed class VmPerformanceServiceTests : IDisposable
         Assert.True(drifted.Drift);
         Assert.Equal("31.0.101.5186", drifted.HostVersion);
         Assert.Equal("30.0.101.1122", drifted.GuestVersion);
+    }
+    private async Task EnableAsync()
+    {
+        Vm(VmState.Off);
+        var job = await _service.ApplyAsync(VmId, UserId, Settings(), null, CancellationToken.None);
+        await _jobs.WhenFinished(job.Id);
+        _inventory.Vms[0] = _inventory.Vms[0] with { State = VmState.Running };
+    }
+
+    [Fact]
+    public async Task GuestSetup_WithoutAStoredCredential_Returns409CredentialRequired()
+    {
+        await EnableAsync();
+
+        var error = await Assert.ThrowsAsync<LifecycleConflictException>(() =>
+            _service.StartGuestSetupAsync(VmId, UserId, driversOnly: false, null, CancellationToken.None));
+
+        Assert.Equal(ContractInfo.ProblemCodes.CredentialRequired, error.Code);
+        Assert.Empty(_guestSetup.Runs);
+    }
+
+    [Fact]
+    public async Task GuestSetup_NeedsPerformanceModeAndARunningWindowsGuest()
+    {
+        _credentials.Save(VmId, new Core.Provisioning.GuestCredential("hhadmin", "Admin-Pass1!"));
+        Vm(VmState.Running);
+        await Assert.ThrowsAsync<LifecycleConflictException>(() => _service.StartGuestSetupAsync(VmId, UserId, false, null, CancellationToken.None));
+
+        await EnableAsync();
+        _inventory.Vms[0] = _inventory.Vms[0] with { State = VmState.Off };
+        await Assert.ThrowsAsync<LifecycleConflictException>(() => _service.StartGuestSetupAsync(VmId, UserId, false, null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GuestSetup_CopiesTheDriverWritesThePolicyAndRecordsTheVersion()
+    {
+        await EnableAsync();
+        _credentials.Save(VmId, new Core.Provisioning.GuestCredential("hhadmin", "Admin-Pass1!"));
+        _guestSetup.RebootRequired = true;
+
+        var job = await _service.StartGuestSetupAsync(VmId, UserId, driversOnly: false, null, CancellationToken.None);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+        var run = Assert.Single(_guestSetup.Runs);
+        Assert.Contains(run.Registry!, value => value.Name == "AVCHardwareEncodePreferred" && value.Value == 0);
+        var driver = (await _service.GetAsync(VmId, CancellationToken.None)).Driver!;
+        Assert.Equal("30.0.101.1122", driver.GuestVersion);
+        Assert.True(driver.RebootRequired);
+        Assert.False(driver.Drift);
+        Assert.Equal(["iigd_dch.inf_amd64_6091bde938afd934"], _store.Find(VmId)!.Guest!.DriverFolders);
+    }
+
+    [Fact]
+    public async Task DriversOnlyResync_ClearsDrift_WithoutTouchingTheRegistry()
+    {
+        await EnableAsync();
+        _credentials.Save(VmId, new Core.Provisioning.GuestCredential("hhadmin", "Admin-Pass1!"));
+        var first = await _service.StartGuestSetupAsync(VmId, UserId, false, null, CancellationToken.None);
+        await _jobs.WhenFinished(first.Id);
+
+        _gpus.DriverVersion = "31.0.101.5186";
+        Assert.True((await _service.GetAsync(VmId, CancellationToken.None)).Driver!.Drift);
+
+        var resync = await _service.StartGuestSetupAsync(VmId, UserId, driversOnly: true, null, CancellationToken.None);
+        await _jobs.WhenFinished(resync.Id);
+
+        Assert.Null(_guestSetup.Runs[^1].Registry);
+        var driver = (await _service.GetAsync(VmId, CancellationToken.None)).Driver!;
+        Assert.False(driver.Drift);
+        Assert.Equal("31.0.101.5186", driver.GuestVersion);
+    }
+
+    [Fact]
+    public async Task GuestSetupErrors_DoNotLeakTheAdminPassword()
+    {
+        await EnableAsync();
+        _credentials.Save(VmId, new Core.Provisioning.GuestCredential("hhadmin", "Admin-Pass1!"));
+        _guestSetup.Failure = new Core.Provisioning.GuestOperationException("Copy failed for hhadmin / Admin-Pass1!.");
+
+        var job = await _service.StartGuestSetupAsync(VmId, UserId, false, null, CancellationToken.None);
+        await _jobs.WhenFinished(job.Id);
+
+        var finished = _jobs.Get(job.Id, UserId)!;
+        Assert.Equal(VmJobState.Failed, finished.State);
+        Assert.DoesNotContain("Admin-Pass1!", finished.ErrorDetail, StringComparison.Ordinal);
+        Assert.Null(_store.Find(VmId)!.Guest);
     }
 }

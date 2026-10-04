@@ -958,6 +958,57 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
 
+  /vms/{vmId}/performance/guest-setup:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [Performance]
+      operationId: setUpVmPerformanceGuest
+      summary: Copy the host's GPU driver into the guest and write the Remote Desktop settings.
+      description: |
+        Starts a `performanceGuestSetup` job. Over PowerShell Direct it copies the host GPU driver's
+        DriverStore folder into the guest's System32\HostDriverStore\FileRepository and its other files
+        into System32 or SysWOW64; files in use are replaced when the guest restarts (`rebootRequired`).
+        Unless `driversOnly`, it also writes the Remote Desktop Session Host policies from
+        TerminalServer.admx (hardware graphics adapters, H.264/AVC 444, image quality High, no RDP
+        compression, hardware encoding as chosen) and DWMFRAMEINTERVAL 15 (60 fps). Needs a running
+        Windows guest with Performance mode on and HyperHarbor's administrator credential for it.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestSetupRequest"
+      responses:
+        "202":
+          description: The job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            Performance mode is off, the VM is not a running Windows guest, HyperHarbor has no administrator
+            credential for it (`code` is `credentialRequired`), or another operation holds the VM.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
   /vms/{vmId}/compute:
     parameters:
       - $ref: "#/components/parameters/VmId"
@@ -2478,6 +2529,14 @@ components:
         acknowledgeWarnings:
           type: boolean
           default: false
+
+    GuestSetupRequest:
+      type: object
+      properties:
+        driversOnly:
+          type: boolean
+          default: false
+          description: Copy the GPU driver only, for example after the host's driver changed.
 
     GuestDriverStatus:
       type: object
