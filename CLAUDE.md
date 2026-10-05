@@ -3,7 +3,9 @@
 Host/client app that manages Hyper-V VMs on a home PC and connects to them in one click from any device. Think "Moonlight for Hyper-V."
 
 ## Architecture
-- host/ (.NET 8): Worker Service + Kestrel API (mTLS), WinForms tray app, Core library
+- host/ (.NET 8): one executable, HyperHarbor.Host.exe (Kestrel API with mTLS, WinForms tray, installer,
+  elevated helpers), on a Core library. Installed as the LocalSystem service HyperHarborHost under
+  %ProgramFiles%\HyperHarbor\versions\<version> with a current junction; data stays in %ProgramData%\HyperHarbor.
   - Hyper-V via CIM/WMI (root\virtualization\v2); PowerShell Direct through Windows PowerShell (powershell.exe)
     with an encoded script and secrets on stdin (PowerShellDirectAccountManager)
 - client/ (Tauri v2, Rust + TypeScript): discovery, pairing, VM dashboard, RDP launcher
@@ -43,6 +45,14 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    no checkpoints, TurnOff stop action, optional storage move); guest setup over PowerShell Direct (driver
    copy, ADMX-verified RDP policy, DWMFRAMEINTERVAL); LAN .rdp tuning; driver drift and re-sync; disk export
    before changes; pre-shutdown of GPU VMs; GPU driver error warnings.
+11. Host self-update with side-by-side versions, added at the user's request (in progress). Releases go to
+   https://github.com/faulkner-engineering/hyperharbor (latest.json manifest: version, URL, SHA-256). Decided:
+   health.json plus a TLS check instead of an anonymous health route; "install now" in the tray only; stable
+   channel by default; Authenticode and Sigstore only as a marked hook. Steps: 11.1 installer (done 2026-10-04:
+   single executable, LocalSystem service, verified live including an update from 0.1.0 to 0.1.1), 11.2 data
+   format marker, backup, and --self-test, 11.3 manifest and download, 11.4 hh-update helper (junction flip,
+   rollback after two failed starts, recovery at boot), 11.5 idle gate and maintenance window, 11.6 API, tray,
+   and client, 11.7 release packaging, 11.8 live test.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -56,10 +66,11 @@ per-device VM accounts and a user management UI.
   VM admin credentials for provisioning are stored only with DPAPI through ProtectedFile.
 - Ask before any destructive Hyper-V operation.
 - After any change, without asking (the user's standing instruction): stop everything running from dist/
-  (HyperHarbor.Host.Service, HyperHarbor.Host.Tray, the portable client), rebuild with
+  (HyperHarbor.Host processes: host and tray; the portable client), rebuild with
   scripts\package.ps1 -Fast (add -SkipTests once the change's tests have passed, and -HostOnly or -ClientOnly
   when only one side changed), then relaunch: dist\host\Start-HyperHarbor.ps1 (service and tray) and
   dist\HyperHarbor-Client-<ver>-portable.exe. Report it if the rebuild fails, and leave things stopped.
+  Start-HyperHarbor.ps1 refuses while the HyperHarborHost service is installed; uninstall it first.
 
 ## Layout
 - docs/api.yaml: OpenAPI 3.1 contract, the source of truth for host and client
@@ -71,8 +82,14 @@ per-device VM accounts and a user management UI.
   VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants)
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
   elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/),
-  ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console)
-- host/src/Host.Tray: WinForms tray. HostForm (double-click the icon) shows service status, the admin passphrase
+  ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console).
+  It builds HyperHarbor.Host.exe (WinExe); Program.cs picks the mode with Installation/HostCommandLine (service,
+  console run, --tray, launcher, install, uninstall, helpers). Installation/: HostInstaller (elevated steps),
+  InstallCommand (elevates one copy of itself, relays progress through a result file), ServiceRegistration (SCM),
+  Launcher (double-click), TrayUser (tray SID from the service's Parameters key), ConsoleAttachment
+- host/src/Host.Core/Installation: SemanticVersion, Junction (mount point reparse points), InstallLayout
+  (versions folders, current junction, stage, activate, prune); Security/DataDirectoryAcl
+- host/src/Host.Tray: WinForms tray (a library; TrayApp.Run is single-instance per session). HostForm (double-click the icon) shows service status, the admin passphrase
   (set or change), paired devices, console access (Set up console access runs the elevated helper), and opens
   the logs; PinForm, DevicesForm, AdminPassphraseForm
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
@@ -87,7 +104,10 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Everything CI runs (build, tests, lint, type drift, audits): powershell -ExecutionPolicy Bypass -File scripts\test-all.ps1
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
-- Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service; pairing needs Host.Tray running
+- Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service (opens its own console
+  window); pairing needs the tray: dotnet run --project host/src/Host.Service -- --tray
+- Install, update, remove (one UAC prompt each): HyperHarbor.Host.exe install [--port N] | uninstall [--remove-data];
+  double-clicking the exe does the same with dialogs. HyperHarbor.Host.exe --help lists every mode.
 - Host logs: the console window and %ProgramData%\HyperHarbor\logs\host-yyyyMMdd.log (14 days); audit trail in
   %ProgramData%\HyperHarbor\audit.log. Both have the ProtectedFile ACL (Administrators, SYSTEM, service account).
 - Print VM inventory JSON: dotnet run --project host/src/Host.Service -- --list-vms
@@ -106,16 +126,18 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 
 ## Packaging (multi-machine testing)
 - powershell -ExecutionPolicy Bypass -File scripts\package.ps1 [-Fast] [-SkipTests] [-HostOnly|-ClientOnly]
-- Output in dist/ (git-ignored): HyperHarbor-Host-<ver>-portable.zip, client NSIS setup exe, portable client exe.
+- Output in dist/ (git-ignored): HyperHarbor-Host-<ver>.exe (the whole host; about 187 MB uncompressed with
+  -Fast), dist\host (the same exe plus portable Start/Stop-HyperHarbor.ps1 for development), client NSIS setup
+  exe, portable client exe. The script fails if the host publish yields more than the one exe.
 - -Fast is for test builds: the client without LTO at opt 1, incremental (a small client change rebuilds in
-  seconds), uncompressed host executables, fastest zip. Switching between fast and full recompiles once
+  seconds), an uncompressed host executable. Switching between fast and full recompiles once
   (about 6 min). Measured 2026-10-04: thin LTO took 170 s for a one-line client change, -Fast about 7 s.
 - Upload throughput on loopback (2026-10-04): about 320 MB/s into the host and 351 MB/s from the Rust client
   (IsoUpload_Throughput with HH_BENCHMARK=1; upload_throughput with HH_E2E_SERVICE_EXE).
 - Version comes from Directory.Build.props (host) and client/src-tauri/tauri.conf.json (client); keep them equal.
 - The script refuses to run while anything is running from dist/ (Windows locks the exe).
-- The host zip's Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
-  Hyper-V Administrators membership), then starts the service console and tray. Builds are unsigned.
+- dist\host\Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
+  Hyper-V Administrators membership), then starts "HyperHarbor.Host.exe run" and "--tray". Builds are unsigned.
 - Verified on 2026-10-02: packaged host plus client paired and listed VMs across machines.
 
 ## Contract changes
@@ -135,6 +157,11 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
 - Do not use sed or perl substitutions to edit text with backslashes (Windows paths, C# verbatim strings):
   escapes like \l, \b, and \F were silently turned into other characters. Use a file editor instead.
 - Do not run cargo fetch; it downloads every target platform's dependencies (Android, iOS, macOS).
+- HyperHarbor.Host.exe is a GUI-subsystem executable: from PowerShell, pipe or redirect its output
+  (`| Out-String`) so the shell waits. Anything it starts must not inherit handles (shell execute), or a
+  caller reading its output waits until that child exits (the tray did this). MSBuild XML comments cannot
+  contain "--".
+- Installer and service changes need UAC prompts, so live install tests need the user at the PC.
 - All endpoints except pairing require a paired client certificate (PairedDeviceAuthenticationHandler).
   Kestrel accepts any client cert in the handshake; the fingerprint check is in the handler.
 - Pairing secrets (PIN, w, x, y, K) must never be logged or persisted. Change the protocol only via docs/pairing.md,
@@ -206,8 +233,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   - Logging on creates a host profile (C:\Users\<name>); removing the account does not remove it.
   - mstsc shows an "unknown publisher" prompt for the unsigned .rdp file the first time.
   - Implementation (9.1): the console account hhc-<user> is created by the elevated helper
-    `HyperHarbor.Host.Service.exe --setup-console [data dir] [result file]` (tray: Set up console access;
-    Start-HyperHarbor.ps1 runs it when console-accounts.json.protected is missing) and removed with
+    `HyperHarbor.Host.exe --setup-console [data dir] [result file]` (tray: Set up console access; the installer
+    and Start-HyperHarbor.ps1 run it when console-accounts.json.protected is missing) and removed with
     --remove-console. It denies interactive, Remote Desktop, batch, and service logon; network logon stays.
   - TestServer cannot upgrade connections (IsUpgradableRequest is always false), so the API tests stop at 426
     and ConsoleTunnelTests run the tunnel handler on real Kestrel with an echo server for VMMS.
@@ -266,9 +293,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     default Public Documents\HyperHarbor Backups).
   - Pre-shutdown: GpuVmShutdownCoordinator shuts guests down and never turns a VM off. As a Windows service,
     PreshutdownServiceLifetime sets ServiceBase._acceptedCommands (PreshutdownServiceLifetimeTests fail if
-    .NET renames it); untested live until an installer exists. In console mode the tray's ShutdownGuard (a
+    .NET renames it); not yet tried through a real Windows shutdown. In console mode the tray's ShutdownGuard (a
     hidden top-level window) refuses WM_QUERYENDSESSION with a block reason while GPU VMs run, except on
-    sign-out. Not yet tried by hand.
+    sign-out; it stands aside while the installed service runs. Not yet tried by hand.
   - GpuEventReader reads the System log (nvlddmkm, amdkmdag, amdwddmg, igfx*, and Display 4101) for the last
     7 days, cached 5 minutes, into HostGpu.warnings.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
@@ -326,16 +353,17 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   cannot be armed; both are reported as not fixable.
 - Windows sends 255.255.255.255 out of the lowest-metric interface (often a virtual adapter); the client
   binds each magic packet to the local address on the host's subnet.
-- packaging/host/Diagnose-Wake.ps1 collects what the checks cannot see; -Listen proves packet delivery.
+- Diagnose-Wake.ps1 (host/src/Host.Service/Wake, embedded; HyperHarbor.Host.exe save-wake-diagnostics [folder]
+  writes it out) collects what the checks cannot see; -Listen proves packet delivery.
 
 ## Open issues (not yet scheduled)
 - Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray
   should verify the pipe server process. (The pipe ACL now admits only SYSTEM, Administrators, and the
   service account; TrayPipeServerTests check it.)
 - Anyone on the LAN can repeatedly start pairing requests (PIN window spam). Consider rate limiting.
-- No real installer yet: the service runs as a console app, not a Windows service. An MSI (service as
-  LocalSystem, tray at logon) needs the data-file ACLs and pipe ACL retested under LocalSystem; the pipe
-  must then grant the logged-on user explicitly, since the service account is no longer that user.
+- Installed service, not yet verified live as LocalSystem: Connect (PowerShell Direct), console password
+  rotation (NetUserChangePassword), Wake-on-LAN fixes from the tray, the double-click launcher dialogs, and a
+  real Windows shutdown with a GPU VM running. Verified: inventory, mDNS, tray pipe, log access, update, ACLs.
 - The client has no VM console, so installing an OS on a new VM needs the host's Hyper-V console.
 - Jobs live in host memory: a service restart forgets them, and a VM whose creation was interrupted keeps its
   "creation in progress" note. Elevation tokens also end when the host service or the client restarts.
