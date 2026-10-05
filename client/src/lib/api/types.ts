@@ -785,10 +785,11 @@ export interface paths {
         put?: never;
         /**
          * Apply automatic fixes for failed readiness checks.
-         * @description Fixes change system settings and need administrator rights. When the host service
-         *     has them, the fixes are applied immediately (200). Otherwise the host tray asks the
-         *     user to approve them with a UAC prompt (202); poll `GET /wake/readiness` to see the
-         *     result. Only checks with `autoFixAvailable` can be fixed.
+         * @description Fixes change system settings, so the request needs an elevation token from the admin
+         *     passphrase. When the host service has administrator rights (the installed service runs
+         *     as LocalSystem), the fixes are applied immediately (200). Otherwise the host tray also
+         *     asks the user to approve them with a UAC prompt (202); poll `GET /wake/readiness` to see
+         *     the result. Only checks with `autoFixAvailable` can be fixed.
          */
         post: operations["fixWakeReadiness"];
         delete?: never;
@@ -3098,6 +3099,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
             /** @description Approval is needed and no tray app is running on the host to ask. */
             503: {
                 headers: {

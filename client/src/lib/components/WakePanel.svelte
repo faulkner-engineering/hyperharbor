@@ -11,6 +11,7 @@
     type HostEntry,
     type WakeReadiness,
   } from "$lib/api/client";
+  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
 
   interface Props {
     host: HostEntry;
@@ -72,7 +73,13 @@
     fixMessage = null;
     const before = JSON.stringify(readiness);
     try {
-      const outcome = await fixWake(host.key, fixable.map((check) => check.id));
+      // Fixes change host settings, so they need the admin passphrase.
+      const outcome = await withElevation(host.key, () =>
+        fixWake(
+          host.key,
+          fixable.map((check) => check.id),
+        ),
+      );
       if (outcome.status === "applied" && outcome.readiness) {
         readiness = outcome.readiness;
         fixState = "idle";
@@ -96,7 +103,7 @@
       fixMessage = "No change yet. If the request was approved, refresh in a moment.";
     } catch (error) {
       fixState = "idle";
-      fixMessage = errorMessage(error);
+      fixMessage = error instanceof ElevationCancelled ? null : errorMessage(error);
     }
   }
 

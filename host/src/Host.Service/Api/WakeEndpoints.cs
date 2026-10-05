@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using HyperHarbor.Host.Service.Audit;
+using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Shared.Contracts;
@@ -20,7 +21,8 @@ public static class WakeEndpoints
         wake.MapGet("/info", GetInfoAsync).WithName("getWakeInfo");
         wake.MapGet("/readiness", GetReadinessAsync).WithName("getWakeReadiness");
         wake.MapPost("/readiness/fix", FixAsync).WithName("fixWakeReadiness")
-            .Audited<WakeFixRequest>(request => $"checkIds={string.Join(",", request.CheckIds)}");
+            .Audited<WakeFixRequest>(request => $"checkIds={string.Join(",", request.CheckIds)}")
+            .RequireElevation();
         wake.MapPost("/test", StartTest).WithName("startWakeTest")
             .Audited<WakeTestRequest>(request => $"delaySeconds={request.DelaySeconds}");
 

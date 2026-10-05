@@ -312,6 +312,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     Tokens are random, kept as SHA-256 in memory, bound to device and User, and end on passphrase change,
     unpair, or restart. ElevateRequest, ElevationGrant, and SetAdminPassphraseMessage hide secrets in ToString.
   - Tests set the passphrase with AdminPassphrase.CreateHash(..., ElevationServiceTests.TestIterations).
+  - Wake-on-LAN fixes need elevation too (API 1.8.0, the user's decision on 2026-10-04): the installed
+    service runs as LocalSystem and applies them directly, with no tray approval. An unelevated console
+    host still asks the tray as well. TestHost pins the unelevated WakeFixCoordinator path.
 - VM lifecycle (Phase 8):
   - Host.Core/Lifecycle: VmDeletionService, VmCreationService, VmComputeService, VmJobStore (in-memory jobs,
     each holding its VM's VmOperationLocks lock), IsoLibrary. CIM goes through HyperVCim (waits on

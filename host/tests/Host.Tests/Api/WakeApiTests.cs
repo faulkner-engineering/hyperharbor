@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.Wake;
+using HyperHarbor.Host.Tests.Elevation;
+using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Ipc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
@@ -9,6 +13,7 @@ namespace HyperHarbor.Host.Tests.Api;
 
 public sealed class WakeApiTests : IDisposable
 {
+    private const string Passphrase = "correct horse battery";
     private readonly TestHost _host = new();
     private readonly HttpClient _client;
 
@@ -17,6 +22,8 @@ public sealed class WakeApiTests : IDisposable
         using var certificate = TestHost.CreateClientCertificate();
         _host.Pair(certificate, "Living Room Laptop");
         _client = _host.CreateClient(certificate);
+        var hash = AdminPassphrase.CreateHash(Passphrase, ElevationServiceTests.TestIterations);
+        _host.Services.GetRequiredService<ElevationService>().SetPassphrase(hash.Salt, hash.Hash, hash.Iterations);
     }
 
     public void Dispose()
@@ -63,9 +70,9 @@ public sealed class WakeApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Fix_WhenNotElevated_AsksTrayAndReturns202()
+    public async Task Fix_WhenTheServiceIsNotElevated_AsksTrayAndReturns202()
     {
-        var response = await _client.PostAsJsonAsync("/api/v1/wake/readiness/fix", new { checkIds = new[] { "nicWakeOnMagicPacket", "nicAllowWake" } });
+        var response = await PostFixElevatedAsync("nicWakeOnMagicPacket", "nicAllowWake");
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal("/api/v1/wake/readiness", response.Headers.Location?.OriginalString);
@@ -75,11 +82,21 @@ public sealed class WakeApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Fix_WithoutAdminPassphraseElevation_Returns403()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/wake/readiness/fix", new { checkIds = new[] { "nicAllowWake" } });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(ContractInfo.ProblemCodes.ElevationRequired, (string?)(await response.Content.ReadFromJsonAsync<JsonObject>())!["code"]);
+        Assert.Empty(_host.Tray.WakeFixRequests);
+    }
+
+    [Fact]
     public async Task Fix_WithoutTray_Returns503()
     {
         _host.Tray.CanDisplayPin = false;
 
-        var response = await _client.PostAsJsonAsync("/api/v1/wake/readiness/fix", new { checkIds = new[] { "nicAllowWake" } });
+        var response = await PostFixElevatedAsync("nicAllowWake");
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
@@ -89,7 +106,7 @@ public sealed class WakeApiTests : IDisposable
     [InlineData("madeUp")]
     public async Task Fix_UnfixableOrUnknownCheck_Returns400(string checkId)
     {
-        var response = await _client.PostAsJsonAsync("/api/v1/wake/readiness/fix", new { checkIds = new[] { checkId } });
+        var response = await PostFixElevatedAsync(checkId);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(_host.Tray.WakeFixRequests);
@@ -117,6 +134,18 @@ public sealed class WakeApiTests : IDisposable
         var response = await _client.PostAsJsonAsync("/api/v1/wake/test", new { delaySeconds });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>Fixes change host settings, so they need an admin passphrase elevation token.</summary>
+    private async Task<HttpResponseMessage> PostFixElevatedAsync(params string[] checkIds)
+    {
+        var elevate = await _client.PostAsJsonAsync("/api/v1/auth/elevation", new { passphrase = Passphrase });
+        Assert.Equal(HttpStatusCode.OK, elevate.StatusCode);
+        var token = (string)(await elevate.Content.ReadFromJsonAsync<JsonObject>())!["token"]!;
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/wake/readiness/fix") { Content = JsonContent.Create(new { checkIds }) };
+        request.Headers.Add(ContractInfo.ElevationHeader, token);
+        return await _client.SendAsync(request);
     }
 }
 

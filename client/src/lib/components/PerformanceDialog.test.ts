@@ -15,7 +15,7 @@ const host: HostEntry = {
   hostName: null,
   addresses: [],
   port: 48443,
-  apiVersion: "1.7.0",
+  apiVersion: "1.8.0",
   source: "discovered",
   isLocal: false,
   paired: true,

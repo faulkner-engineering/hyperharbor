@@ -1330,13 +1330,14 @@ mod tests {
             .expect("wake readiness");
         println!("wake readiness: {readiness}");
         assert!(readiness["checks"].is_array());
+        // Fixes change host settings, so without an admin passphrase elevation the host refuses them.
         let fix = api
             .fix_wake(&host, &paired, &["nicAllowWake".to_string()])
-            .await
-            .expect("fix request");
-        assert!(
-            fix.is_none(),
-            "an unelevated host must ask for approval instead of applying fixes"
+            .await;
+        assert_eq!(
+            fix.unwrap_err().problem_code(),
+            Some(ELEVATION_REQUIRED),
+            "a fix request without elevation must be refused"
         );
 
         let mut wrong_pin_host = paired.clone();
