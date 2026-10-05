@@ -5,6 +5,7 @@ using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.Identity;
+using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Performance;
@@ -34,6 +35,7 @@ using Microsoft.Extensions.Options;
 
 // HyperHarbor.Host.exe is the service, the tray, the installer, and the elevated helpers (HostCommandLine).
 var isWindowsService = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService();
+SelfTestRun? selfTest = null;
 if (!isWindowsService)
 {
     // A Windows executable has no console: commands that print attach to the terminal that started them.
@@ -66,6 +68,10 @@ if (!isWindowsService)
         case HostMode.ConsoleSetup:
             // Elevated helper that creates or removes the host console accounts (tray or the installer).
             return await ConsoleSetupCommand.RunAsync(args);
+        case HostMode.SelfTest:
+            // The gate a new version passes before it is installed: the real host against a copy of the data.
+            (selfTest, args) = SelfTestRun.Prepare(args);
+            break;
         case HostMode.Host when !redirected:
             // A console run gets its own window, which outlives the terminal or script that started it.
             ConsoleAttachment.OpenWindow();
@@ -121,6 +127,9 @@ IReadOnlyCollection<System.Security.Principal.SecurityIdentifier> logReaders = t
 
 // Other local accounts must not be able to plant files the service would trust (the installer does this too).
 var untrustedDataEntries = isWindowsService ? DataDirectoryAcl.Secure(dataDirectory, trayUser) : [];
+
+// Migrates older data and refuses data a newer version wrote, before any store reads it.
+DataFormat.EnsureCurrent(dataDirectory);
 
 // The console and the daily log file under <data>\logs get the same entries.
 // Registered through DI so the container disposes it, which closes the file when the service stops.
@@ -234,7 +243,12 @@ builder.Services.AddSingleton<IRemoteAccessProbe>(new TcpRemoteAccessProbe());
 builder.Services.AddSingleton<IVmMedia, CimVmMedia>();
 builder.Services.AddSingleton(builder.Configuration.GetSection(InstallWatcherOptions.SectionName).Get<InstallWatcherOptions>() ?? new InstallWatcherOptions());
 builder.Services.AddSingleton<UnattendedInstallWatcher>();
-builder.Services.AddHostedService<InstallWatcherService>();
+if (selfTest is null)
+{
+    // The watcher changes VMs (passwords, seed media), so a self-test run leaves it out.
+    builder.Services.AddHostedService<InstallWatcherService>();
+}
+
 builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<VmCreationService>(services, services.GetRequiredService<VmStorageLocation>()));
 builder.Services.AddSingleton<IHyperVCompute, CimHyperVCompute>();
 builder.Services.AddSingleton<VmComputeService>();
@@ -318,6 +332,11 @@ app.MapPerformanceEndpoints();
 app.MapJobEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();
+
+if (selfTest is not null)
+{
+    return await selfTest.RunAsync(app);
+}
 
 await app.RunAsync();
 return 0;

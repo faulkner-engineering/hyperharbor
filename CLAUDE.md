@@ -50,7 +50,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    health.json plus a TLS check instead of an anonymous health route; "install now" in the tray only; stable
    channel by default; Authenticode and Sigstore only as a marked hook. Steps: 11.1 installer (done 2026-10-04:
    single executable, LocalSystem service, verified live including an update from 0.1.0 to 0.1.1), 11.2 data
-   format marker, backup, and --self-test, 11.3 manifest and download, 11.4 hh-update helper (junction flip,
+   format marker, backup, and --self-test (done 2026-10-04; self-test passed on a copy of this host's real
+   data), 11.3 manifest and download, 11.4 hh-update helper (junction flip,
    rollback after two failed starts, recovery at boot), 11.5 idle gate and maintenance window, 11.6 API, tray,
    and client, 11.7 release packaging, 11.8 live test.
 
@@ -88,7 +89,11 @@ per-device VM accounts and a user management UI.
   InstallCommand (elevates one copy of itself, relays progress through a result file), ServiceRegistration (SCM),
   Launcher (double-click), TrayUser (tray SID from the service's Parameters key), ConsoleAttachment
 - host/src/Host.Core/Installation: SemanticVersion, Junction (mount point reparse points), InstallLayout
-  (versions folders, current junction, stage, activate, prune); Security/DataDirectoryAcl
+  (versions folders, current junction, stage, activate, prune), DataFormat (data-format.json; migrations keyed
+  by format; a newer format stops the host), DataBackup (copy and restore with ACLs, never logs or the audit
+  trail), SelfTestGate (copies the data to <data>\update\selftest and runs the new exe's --self-test);
+  Security/DataDirectoryAcl. Host.Service/Installation/SelfTestRun: the real host on the copy, loopback port,
+  no mDNS or install watcher; checks dataFormat, stores, start, tls (pinned host certificate), inventory.
 - host/src/Host.Tray: WinForms tray (a library; TrayApp.Run is single-instance per session). HostForm (double-click the icon) shows service status, the admin passphrase
   (set or change), paired devices, console access (Set up console access runs the elevated helper), and opens
   the logs; PinForm, DevicesForm, AdminPassphraseForm
@@ -162,6 +167,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   caller reading its output waits until that child exits (the tray did this). MSBuild XML comments cannot
   contain "--".
 - Installer and service changes need UAC prompts, so live install tests need the user at the PC.
+- Copying an ACL: a FileSecurity read from one file is not written to another (only sections marked changed
+  are persisted); go through Get/SetSecurityDescriptorBinaryForm. DataBackupTests check protected files.
+- When a release changes how a store writes its file, raise DataFormat.Current and add the migration.
 - All endpoints except pairing require a paired client certificate (PairedDeviceAuthenticationHandler).
   Kestrel accepts any client cert in the handshake; the fingerprint check is in the handler.
 - Pairing secrets (PIN, w, x, y, K) must never be logged or persisted. Change the protocol only via docs/pairing.md,

@@ -1,3 +1,4 @@
+using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Service.VmConsole;
 using HyperHarbor.Shared.Contracts.Ipc;
 
@@ -21,6 +22,9 @@ internal enum HostMode
     ApplyWakeFixes,
     ConsoleSetup,
     SaveWakeDiagnostics,
+
+    /// <summary>--self-test &lt;data copy&gt; &lt;result file&gt;: the check a new version passes before it is installed.</summary>
+    SelfTest,
     Help,
 }
 
@@ -72,6 +76,7 @@ internal static class HostCommandLine
             SaveWakeDiagnosticsVerb => (HostMode.SaveWakeDiagnostics, rest),
             "help" or "--help" or "-h" or "/?" => (HostMode.Help, rest),
             WakeFixHelper.Switch when args.Length is 2 or 3 => (HostMode.ApplyWakeFixes, args),
+            SelfTestGate.Switch when args.Length == 3 => (HostMode.SelfTest, args),
             _ when ConsoleSetupCommand.Matches(args) => (HostMode.ConsoleSetup, args),
             _ when args.Contains(ListVmsCommand.Switch, StringComparer.OrdinalIgnoreCase) => (HostMode.ListVms, args),
             _ => (HostMode.Host, args),
