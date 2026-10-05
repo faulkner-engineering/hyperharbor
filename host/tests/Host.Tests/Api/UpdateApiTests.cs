@@ -111,9 +111,19 @@ public sealed class UpdateApiTests : IDisposable
         Assert.Equal(UpdateActivity.Ready, coordinator.Status.Activity);
 
         var install = await SendElevatedAsync(HttpMethod.Post, "/api/v1/host/update/install", null);
-        await coordinator.TickAsync(CancellationToken.None);
-
         Assert.Equal(HttpStatusCode.Accepted, install.StatusCode);
+
+        // The install is requested when the response completes, which the test server may finish after
+        // the client has the response; ticking until then is what the service's loop does.
+        for (var attempt = 0; attempt < 100 && _helperStarts == 0; attempt++)
+        {
+            await coordinator.TickAsync(CancellationToken.None);
+            if (_helperStarts == 0)
+            {
+                await Task.Delay(50);
+            }
+        }
+
         Assert.Equal(1, _helperStarts);
         Assert.Equal(UpdateActivity.Installing, coordinator.Status.Activity);
         var audited = _host.AuditEntries().Last(entry => (string?)entry["action"] == "installHostUpdate");
