@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Elevation;
@@ -89,29 +88,11 @@ internal sealed class SelfTestRun(string resultFile, int port)
         return $"{devices} paired device(s)";
     }
 
-    /// <summary>Connects as a client would and checks that the host serves its own certificate.</summary>
     private async Task<string> HandshakeAsync(HostCertificateStore certificates)
     {
         using var expected = certificates.GetOrCreate();
-        using var client = new TcpClient();
-        await client.ConnectAsync(IPAddress.Loopback, port);
-        await using var tls = new SslStream(client.GetStream());
-        try
-        {
-            // The certificate is self-signed, so it is pinned the way clients pin it: by its hash.
-            await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
-            {
-                TargetHost = "localhost",
-                RemoteCertificateValidationCallback = (_, certificate, _, _) =>
-                    certificate is not null && certificate.GetCertHashString() == expected.GetCertHashString(),
-            });
-        }
-        catch (System.Security.Authentication.AuthenticationException ex)
-        {
-            throw new InvalidOperationException("The host did not serve its own certificate.", ex);
-        }
-
-        return $"Served the host certificate over {tls.SslProtocol}";
+        var protocol = await HostTlsCheck.HandshakeAsync(IPAddress.Loopback, port, expected, CancellationToken.None);
+        return $"Served the host certificate over {protocol}";
     }
 
     private void Check(string name, Func<string> action)

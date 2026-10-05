@@ -25,6 +25,9 @@ internal enum HostMode
 
     /// <summary>--self-test &lt;data copy&gt; &lt;result file&gt;: the check a new version passes before it is installed.</summary>
     SelfTest,
+
+    /// <summary>update-run: the update helper, started as SYSTEM by the "HyperHarbor\Update" task.</summary>
+    UpdateRun,
     Help,
 }
 
@@ -36,6 +39,7 @@ internal static class HostCommandLine
     public const string InstallVerb = "install";
     public const string UninstallVerb = "uninstall";
     public const string SaveWakeDiagnosticsVerb = "save-wake-diagnostics";
+    public const string UpdateRunVerb = "update-run";
 
     public const string Usage =
         """
@@ -74,6 +78,7 @@ internal static class HostCommandLine
             InstallVerb => (HostMode.Install, rest),
             UninstallVerb => (HostMode.Uninstall, rest),
             SaveWakeDiagnosticsVerb => (HostMode.SaveWakeDiagnostics, rest),
+            UpdateRunVerb => (HostMode.UpdateRun, rest),
             "help" or "--help" or "-h" or "/?" => (HostMode.Help, rest),
             WakeFixHelper.Switch when args.Length is 2 or 3 => (HostMode.ApplyWakeFixes, args),
             SelfTestGate.Switch when args.Length == 3 => (HostMode.SelfTest, args),

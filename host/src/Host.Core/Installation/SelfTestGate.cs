@@ -72,7 +72,7 @@ public sealed class SelfTestGate(string dataDirectory, ISelfTestProcess process,
     {
         try
         {
-            return File.Exists(path) ? JsonSerializer.Deserialize<SelfTestResult>(File.ReadAllBytes(path), SelfTestResult.JsonOptions) : null;
+            return File.Exists(path) ? JsonSerializer.Deserialize<SelfTestResult>(Utf8Json.ReadFile(path), SelfTestResult.JsonOptions) : null;
         }
         catch (JsonException)
         {

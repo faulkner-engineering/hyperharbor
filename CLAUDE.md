@@ -52,7 +52,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    single executable, LocalSystem service, verified live including an update from 0.1.0 to 0.1.1), 11.2 data
    format marker, backup, and --self-test (done 2026-10-04; self-test passed on a copy of this host's real
    data), 11.3 manifest and download (done 2026-10-04; not yet against a real GitHub release), 11.4 hh-update helper (junction flip,
-   rollback after two failed starts, recovery at boot), 11.5 idle gate and maintenance window, 11.6 API, tray,
+   rollback after two failed starts, recovery at boot; done 2026-10-04, verified live: 0.1.0 to 0.1.1, and a
+   broken 0.1.2 rolled back to 0.1.1 in 10 s), 11.5 idle gate and maintenance window, 11.6 API, tray,
    and client, 11.7 release packaging, 11.8 live test.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
@@ -94,6 +95,12 @@ per-device VM accounts and a user management UI.
   trail), SelfTestGate (copies the data to <data>\update\selftest and runs the new exe's --self-test);
   Security/DataDirectoryAcl. Host.Service/Installation/SelfTestRun: the real host on the copy, loopback port,
   no mDNS or install watcher; checks dataFormat, stores, start, tls (pinned host certificate), inventory.
+- Update helper: UpdateApplier (Host.Core/Installation) is the state machine; update\state.json (UpdateStateStore)
+  saves each phase first, so a rerun resumes (Stopping/BackingUp/Flipping: keep From; Starting: commit if To is
+  healthy, else roll back; RollingBack: finish). Healthy = update\health.json (HealthReporter, installed service
+  only) from a live process started after the attempt, plus HostTlsCheck on its port. The scheduled task
+  "HyperHarbor\Update" (UpdateTask, from XML so it runs on battery) runs root\hh-update.exe update-run as SYSTEM
+  at startup and on demand; hh-update.exe is a copy of the installed version, refreshed after each update.
 - host/src/Host.Core/Updates: UpdateOptions (Update section: channel, channel manifest URLs, allowed hosts,
   package size cap), UpdateManifest (latest.json schema 1 and its rules), UpdatePolicy (never a downgrade,
   skips rolled-back versions, minimumUpdateFrom), UpdateDownloader (https and allowed hosts on every redirect
@@ -175,6 +182,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
 - Copying an ACL: a FileSecurity read from one file is not written to another (only sections marked changed
   are persisted); go through Get/SetSecurityDescriptorBinaryForm. DataBackupTests check protected files.
 - When a release changes how a store writes its file, raise DataFormat.Current and add the migration.
+- schtasks /Create without /XML makes tasks that start only on AC power (they sit "Queued" on battery).
+- System.Text.Json rejects a UTF-8 BOM in raw bytes; read hand-editable JSON through Utf8Json.ReadFile.
+  PowerShell 5's Set-Content -Encoding utf8 writes one.
 - All endpoints except pairing require a paired client certificate (PairedDeviceAuthenticationHandler).
   Kestrel accepts any client cert in the handshake; the fingerprint check is in the handler.
 - Pairing secrets (PIN, w, x, y, K) must never be logged or persisted. Change the protocol only via docs/pairing.md,

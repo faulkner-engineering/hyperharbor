@@ -42,7 +42,7 @@ public static class DataFormat
 
         try
         {
-            return JsonSerializer.Deserialize<Marker>(File.ReadAllBytes(path), JsonOptions) is { Format: > 0 } marker
+            return JsonSerializer.Deserialize<Marker>(Utf8Json.ReadFile(path), JsonOptions) is { Format: > 0 } marker
                 ? marker.Format
                 : throw new InvalidDataException($"{path} does not hold a data format number.");
         }

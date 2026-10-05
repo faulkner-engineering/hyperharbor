@@ -61,7 +61,7 @@ public sealed record UpdateManifest(
         UpdateManifest manifest;
         try
         {
-            manifest = JsonSerializer.Deserialize<UpdateManifest>(json, JsonOptions) ?? throw new UpdateRejectedException("The update manifest is empty.");
+            manifest = JsonSerializer.Deserialize<UpdateManifest>(Utf8Json.WithoutBom(json), JsonOptions) ?? throw new UpdateRejectedException("The update manifest is empty.");
         }
         catch (JsonException ex)
         {

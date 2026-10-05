@@ -82,6 +82,10 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
             parameters.SetValue(HostService.TrayUserSidValue, trayUser.Value);
         }
 
+        progress.Report("Registering the update task");
+        layout.InstallHelper(layout.CurrentExecutable);
+        UpdateTask.Register(layout);
+
         UninstallEntry.Write(layout, version);
         StartMenuShortcut.Create(layout);
 
@@ -139,6 +143,7 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
         }
 
         FirewallRule.Delete();
+        UpdateTask.Delete();
         UninstallEntry.Delete();
         StartMenuShortcut.Delete();
         if (trayUser is not null)

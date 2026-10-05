@@ -17,6 +17,8 @@ public sealed class HostCommandLineTests
     [InlineData(nameof(HostMode.Uninstall), "uninstall", "--remove-data")]
     [InlineData(nameof(HostMode.SaveWakeDiagnostics), "save-wake-diagnostics", "C:\\temp")]
     [InlineData(nameof(HostMode.Help), "--help")]
+    [InlineData(nameof(HostMode.UpdateRun), "update-run")]
+    [InlineData(nameof(HostMode.SelfTest), "--self-test", "C:\\data", "C:\\result.json")]
     [InlineData(nameof(HostMode.ApplyWakeFixes), "--apply-wake-fixes", "wol-nic,wol-sleep")]
     [InlineData(nameof(HostMode.ConsoleSetup), "--setup-console")]
     [InlineData(nameof(HostMode.ConsoleSetup), "--remove-console", "C:\\data", "C:\\result.txt")]

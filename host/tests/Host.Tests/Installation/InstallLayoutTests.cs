@@ -144,6 +144,24 @@ public sealed class InstallLayoutTests : IDisposable
     }
 
     [Fact]
+    public void InstallHelper_ReplacesARunningHelper_ByRenamingItAside()
+    {
+        _layout.InstallHelper(WriteExecutable("helper 1"));
+
+        // A running executable's image allows rename and delete sharing, so it can be moved aside but not overwritten.
+        using (new FileStream(_layout.HelperExecutable, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
+        {
+            _layout.InstallHelper(WriteExecutable("helper 2"));
+        }
+
+        Assert.Equal("helper 2", File.ReadAllText(_layout.HelperExecutable));
+
+        _layout.InstallHelper(WriteExecutable("helper 3"));
+        Assert.Equal("helper 3", File.ReadAllText(_layout.HelperExecutable));
+        Assert.False(File.Exists(_layout.HelperExecutable + ".partial"));
+    }
+
+    [Fact]
     public void Activate_RefusesAVersionThatIsNotStaged()
     {
         Assert.Throws<FileNotFoundException>(() => _layout.Activate(SemanticVersion.Parse("9.9.9")));

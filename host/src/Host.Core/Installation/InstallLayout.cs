@@ -28,6 +28,48 @@ public sealed class InstallLayout
 
     public string CurrentExecutable => Path.Combine(Current, ExecutableName);
 
+    /// <summary>
+    /// root\hh-update.exe: a copy of the installed version that the update task runs. It lives outside the
+    /// version folders, so it keeps working while the junction moves and the versions are pruned.
+    /// </summary>
+    public string HelperExecutable => Path.Combine(Root, HelperName);
+
+    public const string HelperName = "hh-update.exe";
+
+    /// <summary>
+    /// Replaces the helper with a copy of <paramref name="source"/>. The helper may be the running process, so the
+    /// old file is renamed aside (Windows allows renaming a running executable) and deleted on a later call.
+    /// </summary>
+    public void InstallHelper(string source)
+    {
+        var old = HelperExecutable + ".old";
+        try
+        {
+            File.Delete(old);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Still running from the last replacement; it goes next time.
+        }
+
+        if (File.Exists(HelperExecutable))
+        {
+            if (File.Exists(old))
+            {
+                File.Delete(HelperExecutable);
+            }
+            else
+            {
+                File.Move(HelperExecutable, old);
+            }
+        }
+
+        var partial = HelperExecutable + ".partial";
+        Directory.CreateDirectory(Root);
+        File.Copy(source, partial, overwrite: true);
+        File.Move(partial, HelperExecutable);
+    }
+
     public string VersionFolder(SemanticVersion version) => Path.Combine(VersionsFolder, version.ToString());
 
     /// <summary>The version current points at, or null when nothing is installed here.</summary>

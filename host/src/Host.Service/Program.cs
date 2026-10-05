@@ -68,6 +68,8 @@ if (!isWindowsService)
         case HostMode.ConsoleSetup:
             // Elevated helper that creates or removes the host console accounts (tray or the installer).
             return await ConsoleSetupCommand.RunAsync(args);
+        case HostMode.UpdateRun:
+            return await UpdateRunCommand.RunAsync();
         case HostMode.SelfTest:
             // The gate a new version passes before it is installed: the real host against a copy of the data.
             (selfTest, args) = SelfTestRun.Prepare(args);
@@ -247,6 +249,13 @@ if (selfTest is null)
 {
     // The watcher changes VMs (passwords, seed media), so a self-test run leaves it out.
     builder.Services.AddHostedService<InstallWatcherService>();
+
+}
+
+if (isWindowsService)
+{
+    // update\health.json, which the update helper waits for after starting a new version of the service.
+    builder.Services.AddHostedService<HealthReporter>();
 }
 
 builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<VmCreationService>(services, services.GetRequiredService<VmStorageLocation>()));

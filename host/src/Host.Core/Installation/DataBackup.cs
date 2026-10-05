@@ -60,6 +60,24 @@ public static class DataBackup
         }
     }
 
+    /// <summary>update\backups: the copies taken before each update.</summary>
+    public static string BackupsFolder(string dataDirectory) => Path.Combine(dataDirectory, UpdateFolderName, "backups");
+
+    /// <summary>Deletes all but the newest <paramref name="keep"/> backups.</summary>
+    public static void PruneBackups(string dataDirectory, int keep)
+    {
+        var folder = new DirectoryInfo(BackupsFolder(dataDirectory));
+        if (!folder.Exists)
+        {
+            return;
+        }
+
+        foreach (var old in folder.EnumerateDirectories().OrderByDescending(backup => backup.CreationTimeUtc).Skip(keep))
+        {
+            Delete(old.FullName);
+        }
+    }
+
     /// <summary>Deletes a copy or backup. A junction inside it is removed without following it.</summary>
     public static void Delete(string folder)
     {
