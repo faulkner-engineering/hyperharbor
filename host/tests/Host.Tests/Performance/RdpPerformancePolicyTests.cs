@@ -71,12 +71,16 @@ public sealed class RdpPerformancePolicyTests
     [InlineData("performance")]
     [InlineData("accounts")]
     [InlineData("appx")]
+    [InlineData("packageSearch")]
+    [InlineData("packageSearchSetup")]
     public void HostScripts_ParseInWindowsPowerShell(string which)
     {
         var script = which switch
         {
             "performance" => PowerShellDirectPerformanceSetup.Script,
             "accounts" => PowerShellDirectAccountManager.Script,
+            "packageSearch" => Core.Profiles.PwshPackageSearch.Script,
+            "packageSearchSetup" => Service.Installation.PackageSearchSetupCommand.Script,
             _ => Core.Profiles.PowerShellDirectProfileReader.AppxScript,
         };
         var check = "$e = $null; [void][System.Management.Automation.Language.Parser]::ParseInput([Console]::In.ReadToEnd(), [ref]$null, [ref]$e); $e.Count";

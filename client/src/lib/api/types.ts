@@ -414,6 +414,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/packages/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search the winget community source.
+         * @description Runs Find-WinGetPackage (Microsoft.WinGet.Client) in PowerShell 7 on the host. The service runs
+         *     as SYSTEM, where the module works only in PowerShell 7, so search needs PowerShell 7 and the
+         *     module installed for all users; until then it answers 409 with `code: wingetUnavailable`
+         *     (on the host, the tray's Set up package search installs both). Results are cached for ten
+         *     minutes.
+         */
+        get: operations["searchPackages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/packages/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List HyperHarbor's package catalog (aliases, and the picker's Popular tab). */
+        get: operations["listPackageCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/unattend-profiles": {
         parameters: {
             query?: never;
@@ -1125,7 +1166,7 @@ export interface components {
              *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
              *     `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
              *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`,
-             *     `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`.
+             *     `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`, `wingetUnavailable`.
              */
             code?: string;
             /** @description Field-level validation problems (400). */
@@ -1873,6 +1914,22 @@ export interface components {
             packages: components["schemas"]["AppxPackage"][];
             /** @description In the baseline but no longer in the VM. */
             removedFromBaseline: components["schemas"]["AppxPackage"][];
+        };
+        PackageSearchResult: {
+            /** @description The winget id, for example Git.Git. */
+            id: string;
+            name: string;
+            version: string;
+            source: string;
+        };
+        PackageCatalogItem: {
+            /** @description What a profile may write instead of the winget id. */
+            alias: string;
+            id: string;
+            name: string;
+            category: string;
+            /** @description Listed on the package picker's Popular tab. */
+            popular: boolean;
         };
         /** @description Settings for installing an OS without anyone at the console. Profiles never hold passwords. */
         UnattendProfile: {
@@ -2833,6 +2890,72 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    searchPackages: {
+        parameters: {
+            query: {
+                /** @description What to search for (1 to 100 characters). */
+                q: string;
+                /** @description How many results, 1 to 50 (default 20). */
+                count?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The packages found. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackageSearchResult"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Package search is not set up on the host (`code: wingetUnavailable`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description winget ran and failed, for example because its source could not be reached. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    listPackageCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The catalog. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackageCatalogItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     listUnattendProfiles: {

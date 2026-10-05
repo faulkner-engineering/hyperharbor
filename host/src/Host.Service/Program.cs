@@ -72,6 +72,9 @@ if (!isWindowsService)
         case HostMode.ConsoleSetup:
             // Elevated helper that creates or removes the host console accounts (tray or the installer).
             return await ConsoleSetupCommand.RunAsync(args);
+        case HostMode.PackageSearchSetup:
+            // Elevated helper that installs PowerShell 7 and the WinGet module for package search (tray).
+            return await PackageSearchSetupCommand.RunAsync(args);
         case HostMode.WriteUpdateManifest:
             return WriteManifestCommand.Run(args);
         case HostMode.UpdateRun:
@@ -250,6 +253,7 @@ builder.Services.AddSingleton(services => new SetupProfileStore(dataDirectory, s
 builder.Services.AddSingleton(new AppxBaselineStore(dataDirectory));
 builder.Services.AddSingleton<IGuestProfileReader, PowerShellDirectProfileReader>();
 builder.Services.AddSingleton<AppxInventoryService>();
+builder.Services.AddSingleton<IPackageSearch, PwshPackageSearch>();
 builder.Services.AddSingleton<IsoInspector>();
 builder.Services.AddSingleton(new UnattendedInstallStore(dataDirectory));
 builder.Services.AddSingleton<IVmKeyboard, CimVmKeyboard>();

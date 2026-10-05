@@ -32,3 +32,23 @@ internal sealed class FakeGuestProfileReader : IGuestProfileReader
             Appx.Select(name => new GuestAppxPackage(name, "1.0.0.0", "8wekyb3d8bbwe")).ToList()));
     }
 }
+
+/// <summary>Package search with fixed results, or unavailable like a host without PowerShell 7.</summary>
+internal sealed class FakePackageSearch : IPackageSearch
+{
+    public bool Available { get; set; } = true;
+
+    public List<(string Query, int Count)> Searches { get; } = [];
+
+    public Task<IReadOnlyList<Shared.Contracts.Profiles.PackageSearchResult>> SearchAsync(string query, int count, CancellationToken cancellationToken)
+    {
+        Searches.Add((query, count));
+        if (!Available)
+        {
+            throw new PackageSearchUnavailableException("Package search is not set up on this host.");
+        }
+
+        IReadOnlyList<Shared.Contracts.Profiles.PackageSearchResult> results = [new("Git.Git", "Git", "2.55.0.5", "winget"), new("Microsoft.Git", "Git", "2.55.0.0.10", "winget")];
+        return Task.FromResult(results);
+    }
+}

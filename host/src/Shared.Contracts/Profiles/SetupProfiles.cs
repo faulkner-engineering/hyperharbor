@@ -76,3 +76,10 @@ public sealed record SetupProfileSummary(
 
 /// <summary>A saved setup profile. Schema: StoredSetupProfile.</summary>
 public sealed record StoredSetupProfile(string Id, DateTimeOffset UpdatedAt, SetupProfile Profile);
+
+/// <summary>A winget package found by search. Schema: PackageSearchResult.</summary>
+public sealed record PackageSearchResult(string Id, string Name, string Version, string Source);
+
+/// <summary>A package from HyperHarbor's package catalog (aliases and the Popular list). Schema: PackageCatalogItem.</summary>
+/// <param name="Alias">What a profile may write instead of the winget id.</param>
+public sealed record PackageCatalogItem(string Alias, string Id, string Name, string Category, bool Popular);

@@ -31,6 +31,8 @@ internal sealed class HostForm : Form
     private readonly Button _changeBackupFolder;
     private readonly Label _console;
     private readonly Button _setUpConsole;
+    private readonly Label _packageSearch;
+    private readonly Button _setUpPackageSearch;
     private readonly Label _update;
     private readonly Button _updateAction;
     private readonly Label _updateChannel;
@@ -47,6 +49,7 @@ internal sealed class HostForm : Form
         Action changeVmFolder,
         Action changeBackupFolder,
         Action setUpConsole,
+        Action setUpPackageSearch,
         Action<bool> checkOrInstallUpdate,
         Action<string> setUpdateChannel)
     {
@@ -84,6 +87,7 @@ internal sealed class HostForm : Form
         _passphrase = AddRow(overview, "Admin passphrase", out _setPassphrase, "Set admin passphrase…", setPassphrase);
         _devices = AddRow(overview, "Paired devices", out _manageDevices, "Manage devices…", manageDevices);
         _console = AddRow(overview, "VM console", out _setUpConsole, "Set up console access…", setUpConsole);
+        _packageSearch = AddRow(overview, "Package search", out _setUpPackageSearch, "Set up package search…", setUpPackageSearch);
 
         var storage = AddPage("Storage");
         _vmFolder = AddRow(storage, "VM storage", out _changeVmFolder, "Change folder…", changeVmFolder);
@@ -312,6 +316,13 @@ internal sealed class HostForm : Form
             : "Not set up. Paired devices cannot open VM consoles until you set it up. Windows asks for administrator permission.";
         _console.ForeColor = consoleReady ? SystemColors.ControlText : Color.Firebrick;
         _setUpConsole.Text = consoleReady ? "Set up again…" : "Set up console access…";
+
+        // Checked here, because the helper installs PowerShell 7 and the module whether or not the service runs.
+        var searchReady = Shared.Contracts.Ipc.PackageSearchSetupHelper.IsSetUp;
+        _packageSearch.Text = searchReady
+            ? "Set up. Paired devices can search winget packages for setup profiles."
+            : "Not set up. Searching packages for setup profiles needs PowerShell 7 and the WinGet PowerShell module. Windows asks for administrator permission.";
+        _setUpPackageSearch.Visible = !searchReady;
     }
 
     private static Label AddRow(TableLayoutPanel layout, string heading, out Button button, string buttonText, Action onClick, string? description = null)

@@ -316,6 +316,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 ChangeVmFolder,
                 ChangeBackupFolder,
                 () => _ = SetUpConsoleAsync(),
+                () => _ = SetUpPackageSearchAsync(),
                 CheckOrInstallUpdate,
                 channel => _ = _pipe.SendAsync(new SetUpdateChannelMessage(channel)));
             _hostForm.FormClosed += (_, _) => _hostForm = null;
@@ -325,6 +326,27 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _hostForm.Show();
         _hostForm.Activate();
+    }
+
+    private async Task SetUpPackageSearchAsync()
+    {
+        var answer = MessageBox.Show(
+            _hostForm,
+            "HyperHarbor will install PowerShell 7 and the WinGet PowerShell module (Microsoft.WinGet.Client) for all users on this PC, " +
+            "so the host service can search winget packages for setup profiles. This downloads them from Microsoft and the PowerShell Gallery." +
+            $"{Environment.NewLine}{Environment.NewLine}Windows will ask for administrator permission. Continue?",
+            "Set up package search",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1);
+        if (answer != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var (succeeded, message) = await PackageSearchSetup.RunAsync(Environment.ProcessPath);
+        RefreshHost();
+        MessageBox.Show(_hostForm, message, "Set up package search", MessageBoxButtons.OK, succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
 
     private async Task SetUpConsoleAsync()

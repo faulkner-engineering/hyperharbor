@@ -18,8 +18,27 @@ public static class ProfileSourceEndpoints
         var vms = endpoints.MapGroup(VmEndpoints.BasePath);
         vms.MapGet("/{vmId:guid}/appx", ListAppxAsync).WithName("listVmAppx");
         vms.MapPost("/{vmId:guid}/appx-baseline", RecordBaselineAsync).WithName("recordAppxBaseline").Audited();
+
+        endpoints.MapGet(ContractInfo.BasePath + "/packages/search", SearchPackagesAsync).WithName("searchPackages");
+        endpoints.MapGet(ContractInfo.BasePath + "/packages/catalog", PackageCatalog).WithName("listPackageCatalog");
         return endpoints;
     }
+
+    private static async Task<Ok<IReadOnlyList<PackageSearchResult>>> SearchPackagesAsync(string? q, int? count, IPackageSearch search, CancellationToken cancellationToken)
+    {
+        var query = q?.Trim() ?? "";
+        if (query.Length is 0 or > PwshPackageSearch.MaxQuery || query.Any(char.IsControl))
+        {
+            throw new LifecycleValidationException("Enter something to search for.", [new ValidationIssue("q", $"Search for 1 to {PwshPackageSearch.MaxQuery} characters.")]);
+        }
+
+        return TypedResults.Ok(await search.SearchAsync(query, Math.Clamp(count ?? 20, 1, PwshPackageSearch.MaxCount), cancellationToken));
+    }
+
+    private static Ok<IReadOnlyList<PackageCatalogItem>> PackageCatalog(Catalogs catalogs) =>
+        TypedResults.Ok<IReadOnlyList<PackageCatalogItem>>(catalogs.Packages
+            .Select(entry => new PackageCatalogItem(entry.Alias, entry.Id, entry.Name, entry.Category, entry.Popular))
+            .ToList());
 
     /// <summary>Only a running VM can be read today; golden images will be another source.</summary>
     private static async Task<Ok<VmAppxInventory>> ListAppxAsync(Guid vmId, string? source, AppxInventoryService appx, CancellationToken cancellationToken)

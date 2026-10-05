@@ -140,6 +140,8 @@ public class ContractFixtureTests
         ["RenameIsoRequest"] = new RenameIsoRequest("Windows 11 24H2.iso"),
         ["SetupProfile"] = SetupProfileSample,
         ["AppxBaselineInfo"] = AppxBaselineSample,
+        ["PackageSearchResult"] = new PackageSearchResult("Git.Git", "Git", "2.55.0.5", "winget"),
+        ["PackageCatalogItem"] = new PackageCatalogItem("vscode", "Microsoft.VisualStudioCode", "Visual Studio Code", "development", true),
 
         // Nulls on purpose: note and inBaseline are required but nullable.
         ["AppxPackage"] = new AppxPackage("Contoso.Extra", "Contoso.Extra", "1.0.0.0", "Contoso", AppxRating.Unrated, null, null),

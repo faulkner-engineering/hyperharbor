@@ -187,6 +187,19 @@
     "lowGapMb": 1024,
     "highGapMb": 32768
   },
+  "PackageCatalogItem": {
+    "alias": "vscode",
+    "id": "Microsoft.VisualStudioCode",
+    "name": "Visual Studio Code",
+    "category": "development",
+    "popular": true
+  },
+  "PackageSearchResult": {
+    "id": "Git.Git",
+    "name": "Git",
+    "version": "2.55.0.5",
+    "source": "winget"
+  },
   "PairingConfirmation": {
     "clientShare": "BAUG",
     "clientConfirmation": "BwgJ"

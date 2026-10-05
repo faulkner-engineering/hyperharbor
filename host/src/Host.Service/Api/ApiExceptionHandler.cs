@@ -93,6 +93,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         LifecycleConflictException { Code: { } code } => code,
         ConsoleConflictException conflict => conflict.Code,
         RemoteDesktopConflictException conflict => conflict.Code,
+        PackageSearchUnavailableException => ContractInfo.ProblemCodes.WingetUnavailable,
         _ => null,
     };
 
@@ -108,6 +109,8 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             IsoNotFoundException => (StatusCodes.Status404NotFound, "Image not found"),
             UnattendProfileNotFoundException => (StatusCodes.Status404NotFound, "Profile not found"),
             SetupProfileNotFoundException => (StatusCodes.Status404NotFound, "Setup profile not found"),
+            PackageSearchUnavailableException => (StatusCodes.Status409Conflict, "Package search is not set up"),
+            PackageSearchFailedException => (StatusCodes.Status502BadGateway, "Package search failed"),
             InsufficientStorageException => (StatusCodes.Status507InsufficientStorage, "Not enough space"),
             ElevationRateLimitedException => (StatusCodes.Status429TooManyRequests, "Too many attempts"),
             BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),

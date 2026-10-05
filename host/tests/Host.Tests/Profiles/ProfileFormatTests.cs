@@ -316,3 +316,37 @@ public sealed class ProfileValidatorTests
         Assert.Contains("does not apply to Google Chrome", Assert.Single(error.Errors).Message, StringComparison.Ordinal);
     }
 }
+
+public sealed class PackageSearchParseTests
+{
+    [Fact]
+    public void Results_AreRead_FromTheLastJsonLine()
+    {
+        var results = PwshPackageSearch.Parse("WARNING: noise\n{\"ok\":true,\"result\":[{\"id\":\"Git.Git\",\"name\":\"Git\",\"version\":\"2.55.0.5\",\"source\":\"winget\"},{\"id\":\"\"}]}\n");
+
+        Assert.Equal([new Shared.Contracts.Profiles.PackageSearchResult("Git.Git", "Git", "2.55.0.5", "winget")], results);
+    }
+
+    [Fact]
+    public void NoResults_IsAnEmptyList()
+    {
+        Assert.Empty(PwshPackageSearch.Parse("{\"ok\":true,\"result\":[]}"));
+    }
+
+    [Fact]
+    public void AMissingModule_IsUnavailable_AndOtherFailuresAreFailures()
+    {
+        Assert.Throws<PackageSearchUnavailableException>(() => PwshPackageSearch.Parse("{\"ok\":false,\"stage\":\"module\",\"error\":\"not found\"}"));
+        Assert.Contains("source unreachable", Assert.Throws<PackageSearchFailedException>(() => PwshPackageSearch.Parse("{\"ok\":false,\"stage\":\"search\",\"error\":\"source unreachable\"}")).Message, StringComparison.Ordinal);
+        Assert.Throws<PackageSearchFailedException>(() => PwshPackageSearch.Parse("not json"));
+    }
+
+    /// <summary>Set HH_PACKAGE_SEARCH_LIVE=1 on a host with PowerShell 7 and Microsoft.WinGet.Client for all users.</summary>
+    [EnvironmentFact("HH_PACKAGE_SEARCH_LIVE")]
+    public async Task Live_SearchFindsGit()
+    {
+        var results = await new PwshPackageSearch(TimeProvider.System).SearchAsync("git", 5, CancellationToken.None);
+
+        Assert.Contains(results, result => result.Id == "Git.Git");
+    }
+}

@@ -151,6 +151,41 @@ public static class ConsoleSetupHelper
     public const string AccountsFileName = "console-accounts.json.protected";
 }
 
+/// <summary>
+/// The elevated package search helper (--setup-package-search [result file]) and where package search looks for
+/// what it needs. The service runs as SYSTEM, where the Microsoft.WinGet.Client module works only in PowerShell 7,
+/// so search needs PowerShell 7 installed for all users (the MSI, not the per-user MSIX) and the module for all
+/// users.
+/// </summary>
+public static class PackageSearchSetupHelper
+{
+    public const string Switch = "--setup-package-search";
+
+    public const string ModuleName = "Microsoft.WinGet.Client";
+
+    public static string PwshPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "PowerShell", "7", "pwsh.exe");
+
+    /// <summary>The all-users module folders PowerShell 7 reads (its own and Windows PowerShell's).</summary>
+    public static IReadOnlyList<string> ModuleFolders
+    {
+        get
+        {
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            return
+            [
+                Path.Combine(programFiles, "PowerShell", "Modules", ModuleName),
+                Path.Combine(programFiles, "WindowsPowerShell", "Modules", ModuleName),
+            ];
+        }
+    }
+
+    public static bool PwshInstalled => File.Exists(PwshPath);
+
+    public static bool ModuleInstalled => ModuleFolders.Any(Directory.Exists);
+
+    public static bool IsSetUp => PwshInstalled && ModuleInstalled;
+}
+
 public static class TrayPipe
 {
     public const string Name = "HyperHarbor.Host.Tray";

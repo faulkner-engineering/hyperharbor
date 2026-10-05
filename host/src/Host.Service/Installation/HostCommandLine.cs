@@ -21,6 +21,9 @@ internal enum HostMode
     ListVms,
     ApplyWakeFixes,
     ConsoleSetup,
+
+    /// <summary>--setup-package-search [result file]: installs PowerShell 7 and the WinGet module (elevated, from the tray).</summary>
+    PackageSearchSetup,
     SaveWakeDiagnostics,
 
     /// <summary>--self-test &lt;data copy&gt; &lt;result file&gt;: the check a new version passes before it is installed.</summary>
@@ -88,6 +91,7 @@ internal static class HostCommandLine
             WakeFixHelper.Switch when args.Length is 2 or 3 => (HostMode.ApplyWakeFixes, args),
             SelfTestGate.Switch when args.Length == 3 => (HostMode.SelfTest, args),
             _ when ConsoleSetupCommand.Matches(args) => (HostMode.ConsoleSetup, args),
+            _ when PackageSearchSetupCommand.Matches(args) => (HostMode.PackageSearchSetup, args),
             _ when args.Contains(ListVmsCommand.Switch, StringComparer.OrdinalIgnoreCase) => (HostMode.ListVms, args),
             _ => (HostMode.Host, args),
         };

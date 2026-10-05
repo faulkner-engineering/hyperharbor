@@ -91,6 +91,7 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<Core.Performance.IGpuDriverSource>(new Performance.FakeGpuDriverSource());
                 services.AddSingleton<Core.Performance.IGuestPerformanceSetup>(GuestSetup);
                 services.AddSingleton<Core.Profiles.IGuestProfileReader>(ProfileReader);
+                services.AddSingleton<Core.Profiles.IPackageSearch>(PackageSearch);
                 services.AddSingleton<Core.Unattend.IRemoteAccessProbe>(RemoteAccess);
                 services.AddSingleton(provider => new Core.Unattend.UnattendedSetup(
                     provider.GetRequiredService<Core.Unattend.UnattendProfileStore>(),
@@ -159,6 +160,8 @@ internal sealed class TestHost : IDisposable
     public Performance.FakeGuestPerformanceSetup GuestSetup { get; } = new();
 
     public Profiles.FakeGuestProfileReader ProfileReader { get; } = new();
+
+    public Profiles.FakePackageSearch PackageSearch { get; } = new();
 
     public Unattend.FakeRemoteAccessProbe RemoteAccess { get; } = new();
 

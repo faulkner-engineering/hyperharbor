@@ -50,5 +50,8 @@ public static class ContractInfo
 
         /// <summary>409: no update has been downloaded and tested yet, so there is nothing to install.</summary>
         public const string UpdateNotReady = "updateNotReady";
+
+        /// <summary>409: package search needs PowerShell 7 and the WinGet PowerShell module on the host (tray: Set up package search).</summary>
+        public const string WingetUnavailable = "wingetUnavailable";
     }
 }
