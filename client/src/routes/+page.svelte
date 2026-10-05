@@ -9,6 +9,7 @@
     unpair,
     wakeHost,
     connectVm,
+    getVmInstall,
     openConsole,
     hasProblemCode,
     dropElevation,
@@ -48,6 +49,7 @@
   import { openHostRemoteDesktop } from "$lib/hostRemoteDesktop";
   import BrandMark from "$lib/brand/BrandMark.svelte";
   import { toasts } from "$lib/toasts.svelte";
+  import { setupResultMessage } from "$lib/setupProfiles";
 
   const REFRESH_INTERVAL_MS = 5000;
 
@@ -123,11 +125,24 @@
       const now = vm.installState ?? null;
       if (before && before !== now) {
         if (now === "failed") toasts.error(`Installing ${vm.name} failed. Open its console to see why.`);
+        else if (now === null && vm.provisioned && before === "applyingProfile") void announceSetupResult(vm);
         else if (now === null && vm.provisioned) toasts.show(`${vm.name} is installed and ready. Press Connect.`);
       }
 
       if (now) installStates.set(vm.id, now);
       else installStates.delete(vm.id);
+    }
+  }
+
+  /** The ready toast for an install with a setup profile says how applying it went. */
+  async function announceSetupResult(vm: Vm) {
+    if (selectedKey === null) return;
+    try {
+      const result = setupResultMessage(vm.name, await getVmInstall(selectedKey, vm.id));
+      if (result?.problem) toasts.error(result.message);
+      else toasts.show(result?.message ?? `${vm.name} is installed and ready. Press Connect.`);
+    } catch {
+      toasts.show(`${vm.name} is installed and ready. Press Connect.`);
     }
   }
 

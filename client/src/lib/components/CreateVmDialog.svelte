@@ -5,17 +5,21 @@
     errorMessage,
     getHostResources,
     hasProblemCode,
+    hostSupports,
     inspectIso,
     isClientError,
     listIsos,
     listSwitches,
+    listSetupProfiles,
     listUnattendProfiles,
     openConsole,
     ProblemCodes,
+    SetupProfileInstallApiVersion,
     type HostEntry,
     type HostResources,
     type IsoImage,
     type IsoInspection,
+    type SetupProfileSummary,
     type UnattendProfile,
     type ValidationIssue,
     type VirtualSwitch,
@@ -61,6 +65,13 @@
   let windowsEdition = $state("");
   let computerName = $state("");
 
+  // A setup profile applied after a Windows install (hosts at API 1.13.0 or later). Profiles whose file does not
+  // read on the host are not offered.
+  const offersSetupProfiles = $derived(hostSupports(host, SetupProfileInstallApiVersion));
+  let setupProfiles = $state<SetupProfileSummary[]>([]);
+  let setupProfileId = $state("");
+  const usableSetupProfiles = $derived(setupProfiles.filter((profile) => !profile.error));
+
   const matchingProfiles = $derived(
     inspection?.os ? profiles.filter((profile) => profile.os === inspection?.os) : [],
   );
@@ -100,6 +111,7 @@
         listUnattendProfiles(host.key).catch(() => []),
       ]);
       processorCount = Math.min(2, resources.logicalProcessorCount);
+      if (offersSetupProfiles) setupProfiles = await listSetupProfiles(host.key).catch(() => []);
       chooseIso(isos[0]?.name ?? "");
       switchId = switches.find((item) => item.isDefault)?.id ?? switches[0]?.id ?? null;
     } catch (e) {
@@ -185,6 +197,7 @@
             profileId,
             windowsEdition: selectedProfile?.os === "windows" ? windowsEdition : null,
             computerName: selectedProfile?.os === "windows" && computerName.trim() !== "" ? computerName.trim() : null,
+            ...(selectedProfile?.os === "windows" && setupProfileId !== "" ? { setupProfileId } : {}),
           }
         : null,
     };
@@ -293,6 +306,23 @@
                 spellcheck="false"
               />
               {#if issueFor("install.computerName")}<p class="error">{issueFor("install.computerName")}</p>{/if}
+
+              {#if offersSetupProfiles}
+                <label for="vm-setup-profile">Setup profile</label>
+                <select id="vm-setup-profile" bind:value={setupProfileId}>
+                  <option value="">None</option>
+                  {#each usableSetupProfiles as profile (profile.id)}
+                    <option value={profile.id}>{profile.name}</option>
+                  {/each}
+                </select>
+                {#if issueFor("install.setupProfileId")}<p class="error">{issueFor("install.setupProfileId")}</p>{/if}
+                {#if setupProfileId !== ""}
+                  <p class="muted">
+                    Once Windows is installed, the host installs the profile's apps, removes what it lists, and applies its
+                    settings, then restarts the VM if needed. The VM shows Ready after that.
+                  </p>
+                {/if}
+              {/if}
               <p class="muted">
                 Setup creates {selectedProfile.adminAccountName} with a one-time password the host changes once setup is
                 done, and your Remote Desktop account.

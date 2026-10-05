@@ -169,6 +169,7 @@ function respondUnattended(inspection: unknown) {
       if (args.resource === "isos")
         return Promise.resolve([{ name: "Win11.iso", sizeBytes: 6_000_000_000, modifiedAt: "2026-10-01T00:00:00Z" }]);
       if (args.resource === "unattendProfiles") return Promise.resolve(profiles);
+      if (args.resource === "setupProfiles") return Promise.resolve(setupProfiles);
       return Promise.resolve([{ id: "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", name: "Default Switch", isDefault: true }]);
     }
     if (command === "inspect_iso") return Promise.resolve(inspection);
@@ -177,6 +178,11 @@ function respondUnattended(inspection: unknown) {
     return Promise.reject(new Error(`unexpected ${command}`));
   });
 }
+
+const setupProfiles = [
+  { id: "workstation", name: "Workstation", description: null, updatedAt: "2026-10-05T12:00:00Z", installCount: 2, removeCount: 1, tweakCount: 1, extensionCount: 0, browser: null, error: null },
+  { id: "broken", name: "broken", description: null, updatedAt: "2026-10-05T12:00:00Z", installCount: 0, removeCount: 0, tweakCount: 0, extensionCount: 0, browser: null, error: "Line 3: not YAML" },
+];
 
 const windowsMedia = { os: "windows", distribution: "Windows", editions: ["Windows 11 Home", "Windows 11 Pro"] };
 
@@ -227,6 +233,55 @@ describe("CreateVmDialog unattended install", () => {
 
     expect(await screen.findByText(/cannot tell what Win11\.iso installs/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("sends the chosen setup profile to a host that applies them", async () => {
+    respondUnattended(windowsMedia);
+    render(CreateVmDialog, { host: { ...host, apiVersion: "1.13.0" }, onclose: vi.fn() });
+
+    await fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "Dev Box" } });
+    await fireEvent.click(screen.getByLabelText("Automatically with a profile"));
+    const select = (await screen.findByLabelText("Setup profile")) as HTMLSelectElement;
+    // Profiles whose file does not read on the host are not offered.
+    expect([...select.options].map((option) => option.textContent)).toEqual(["None", "Workstation"]);
+    expect(select.value).toBe("");
+
+    await fireEvent.change(select, { target: { value: "workstation" } });
+    expect(screen.getByText(/restarts the VM if needed/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await screen.findByText("Done.");
+    expect(createCalls()[0].install).toEqual({
+      profileId: "windows-workstation",
+      windowsEdition: "Windows 11 Pro",
+      computerName: null,
+      setupProfileId: "workstation",
+    });
+  });
+
+  it("leaves the setup profile out for None", async () => {
+    respondUnattended(windowsMedia);
+    render(CreateVmDialog, { host: { ...host, apiVersion: "1.13.0" }, onclose: vi.fn() });
+
+    await fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "Dev Box" } });
+    await fireEvent.click(screen.getByLabelText("Automatically with a profile"));
+    await screen.findByLabelText("Setup profile");
+    await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByText("Done.");
+    expect(createCalls()[0].install).not.toHaveProperty("setupProfileId");
+
+    expect(invoke.mock.calls.filter(([, args]) => args?.resource === "setupProfiles")).toHaveLength(1);
+  });
+
+  it("does not offer setup profiles on a host that cannot apply them", async () => {
+    respondUnattended(windowsMedia);
+    render(CreateVmDialog, { host: { ...host, apiVersion: "1.12.0" }, onclose: vi.fn() });
+
+    await fireEvent.click(await screen.findByLabelText("Automatically with a profile"));
+    await screen.findByLabelText("Edition");
+
+    expect(screen.queryByLabelText("Setup profile")).toBeNull();
+    expect(invoke.mock.calls.some(([, args]) => args?.resource === "setupProfiles")).toBe(false);
   });
 
   it("asks Ubuntu users to confirm in the console", async () => {

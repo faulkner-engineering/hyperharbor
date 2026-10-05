@@ -2125,6 +2125,22 @@ export interface components {
             windowsEdition?: string | null;
             /** @description Windows only, at most 15 letters, digits, or hyphens. Null means derived from the VM name. */
             computerName?: string | null;
+            /**
+             * @description Windows only (API 1.13.0). An `id` from `GET /setup-profiles`, applied after the install is ready: its
+             *     packages, removals, and settings, with one restart when something needs it. The host keeps the profile
+             *     as it is now, so later edits do not change this install. Null means none.
+             */
+            setupProfileId?: string | null;
+        };
+        SetupProfileResult: {
+            /** @description Items applied (packages, removals, tweaks, policies, the extension list). */
+            applied: number;
+            /** @description Items that could not be applied, each with the reason. */
+            problems: string[];
+            /** @description The VM was restarted to finish, and Remote Desktop answered afterwards. */
+            restarted: boolean;
+            /** Format: date-time */
+            finishedAt: string;
         };
         UnattendedInstallStatus: {
             /** Format: uuid */
@@ -2140,14 +2156,19 @@ export interface components {
             updatedAt: string;
             /** @description Why the install failed. */
             error: string | null;
+            /** @description The setup profile chosen at create time, if any (API 1.13.0). */
+            setupProfileName?: string | null;
+            /** @description What applying the setup profile did; null until it is done or without one. */
+            setupResult?: components["schemas"]["SetupProfileResult"] | null;
         };
         /**
          * @description `installing` (Setup is running), `awaitingConfirmation` (Ubuntu waits for "yes" at the console),
          *     `waitingForGuest` (no address yet), `waitingForRemoteAccess` (Remote Desktop or SSH not answering
-         *     yet), `configuring` (the host sets up the User account), then `ready`, `failed`, or `canceled`.
+         *     yet), `configuring` (the host sets up the User account), `applyingProfile` (the host applies the
+         *     setup profile, API 1.13.0), then `ready`, `failed`, or `canceled`.
          * @enum {string}
          */
-        UnattendedInstallState: "installing" | "awaitingConfirmation" | "waitingForGuest" | "waitingForRemoteAccess" | "configuring" | "ready" | "failed" | "canceled";
+        UnattendedInstallState: "installing" | "awaitingConfirmation" | "waitingForGuest" | "waitingForRemoteAccess" | "configuring" | "applyingProfile" | "ready" | "failed" | "canceled";
         /** @enum {string} */
         GpuVendor: "nvidia" | "amd" | "intel" | "other";
         /** @description Each percent sets the partition's minimum, maximum, and optimal values to that share of what the GPU offers. */

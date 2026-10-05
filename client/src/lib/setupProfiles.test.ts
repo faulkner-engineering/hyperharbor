@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppxPackage, ProfileDraft } from "$lib/api/client";
-import { addItem, debloatPreset, draftToProfile, groupByPublisher, initialChoices, policyValue } from "./setupProfiles";
+import { addItem, debloatPreset, draftToProfile, groupByPublisher, initialChoices, policyValue, setupResultMessage } from "./setupProfiles";
 
 const appx = (name: string, friendlyName: string, publisher: string, rating: AppxPackage["rating"]): AppxPackage => ({
   name,
@@ -110,5 +110,41 @@ describe("small helpers", () => {
     expect(policyValue("boolean", "false")).toBe("false");
     expect(policyValue("integer", 5)).toBe("5");
     expect(policyValue("string", " https://example.com ")).toBe("https://example.com");
+  });
+});
+
+describe("setupResultMessage", () => {
+  const install = {
+    vmId: "5e4d3c2b-1a09-4f8e-9d7c-6b5a49382716",
+    profileId: "windows-workstation",
+    os: "windows" as const,
+    state: "ready" as const,
+    step: "Ready",
+    startedAt: "2026-10-05T12:00:00Z",
+    updatedAt: "2026-10-05T12:40:00Z",
+    error: null,
+    setupProfileName: "Workstation",
+  };
+  const result = (problems: string[]) => ({ applied: 5, problems, restarted: true, finishedAt: "2026-10-05T12:40:00Z" });
+
+  it("says the profile was applied", () => {
+    expect(setupResultMessage("Dev Box", { ...install, setupResult: result([]) })).toEqual({
+      message: "Dev Box is ready; Workstation applied. Press Connect.",
+      problem: false,
+    });
+  });
+
+  it("lists the first problems and counts the rest", () => {
+    const message = setupResultMessage("Dev Box", { ...install, setupResult: result(["a: x", "b: y", "c: z", "d: w"]) });
+    expect(message).toEqual({
+      message: "Dev Box is ready, but 4 items of Workstation could not be applied: a: x; b: y; c: z (and 1 more)",
+      problem: true,
+    });
+    expect(setupResultMessage("Dev Box", { ...install, setupResult: result(["a: x"]) })?.message).toContain("1 item of");
+  });
+
+  it("is null without a setup profile or before it ran", () => {
+    expect(setupResultMessage("Dev Box", { ...install, setupProfileName: null, setupResult: null })).toBeNull();
+    expect(setupResultMessage("Dev Box", { ...install })).toBeNull();
   });
 });

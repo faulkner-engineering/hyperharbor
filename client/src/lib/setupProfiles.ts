@@ -6,7 +6,29 @@ import type {
   ProfileItem,
   ProfileTweak,
   SetupProfile,
+  UnattendedInstallStatus,
 } from "$lib/api/client";
+
+/** How many problems a ready toast lists before it says "and N more". */
+export const SHOWN_PROBLEMS = 3;
+
+/**
+ * The toast for an install that finished with a setup profile: null when it had none. Problems are listed (the
+ * first few), since the install is ready either way.
+ */
+export function setupResultMessage(vmName: string, install: UnattendedInstallStatus): { message: string; problem: boolean } | null {
+  const result = install.setupResult;
+  const profile = install.setupProfileName;
+  if (!result || !profile) return null;
+  if (result.problems.length === 0) {
+    return { message: `${vmName} is ready; ${profile} applied. Press Connect.`, problem: false };
+  }
+
+  const shown = result.problems.slice(0, SHOWN_PROBLEMS).join("; ");
+  const more = result.problems.length > SHOWN_PROBLEMS ? ` (and ${result.problems.length - SHOWN_PROBLEMS} more)` : "";
+  const count = result.problems.length === 1 ? "1 item" : `${result.problems.length} items`;
+  return { message: `${vmName} is ready, but ${count} of ${profile} could not be applied: ${shown}${more}`, problem: true };
+}
 
 /** A profile with nothing in it yet. */
 export function emptyProfile(name = ""): SetupProfile {

@@ -66,6 +66,8 @@ export type CreateVmRequest = Required<
 > & { switchId: string | null; install?: UnattendedInstallRequest | null };
 
 export type UnattendedInstallRequest = components["schemas"]["UnattendedInstallRequest"];
+export type UnattendedInstallStatus = components["schemas"]["UnattendedInstallStatus"];
+export type SetupProfileResult = components["schemas"]["SetupProfileResult"];
 
 export type UpdateComputeRequest = {
   processorCount?: number;
@@ -454,6 +456,13 @@ export const inspectIso = (key: string, name: string) => invoke<IsoInspection>("
 
 export const onIsoUploadProgress = (handler: (progress: IsoUploadProgress) => void): Promise<UnlistenFn> =>
   listen<IsoUploadProgress>("iso-upload-progress", (event) => handler(event.payload));
+
+/** The API version that added choosing a setup profile for an unattended install. */
+export const SetupProfileInstallApiVersion = "1.13.0";
+
+/** The VM's unattended install and, once applied, its setup profile's result. */
+export const getVmInstall = (key: string, vmId: string) =>
+  invoke<UnattendedInstallStatus>("get_vm_install", { key, vmId });
 
 export const getVmCompute = (key: string, vmId: string) =>
   invoke<VmComputeSettings>("get_vm_compute", { key, vmId });

@@ -477,6 +477,17 @@ async fn set_host_update_settings(
         .await
 }
 
+/// The VM's unattended install (UnattendedInstallStatus), with the setup profile's result.
+#[tauri::command]
+async fn get_vm_install(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_vm_install(&host, &paired, &vm_id).await
+}
+
 #[tauri::command]
 async fn get_vm_compute(
     state: State<'_, AppState>,
@@ -1156,6 +1167,7 @@ pub fn run() {
             check_host_update,
             install_host_update,
             set_host_update_settings,
+            get_vm_install,
             get_vm_compute,
             update_vm_compute,
             pick_iso_file,

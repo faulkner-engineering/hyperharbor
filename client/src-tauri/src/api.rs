@@ -85,6 +85,9 @@ pub struct UnattendedInstallRequest {
     pub windows_edition: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub computer_name: Option<String>,
+    /// Windows only (API 1.13.0): one of the User's setup profiles, applied once the install is ready.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setup_profile_id: Option<String>,
 }
 
 /// The fields of api.yaml HostRemoteDesktop that the client acts on.
@@ -977,6 +980,17 @@ impl ApiClient {
             )
             .await?;
         parse(response).await
+    }
+
+    /// GET /vms/{vmId}/install: the UnattendedInstallStatus.
+    pub async fn get_vm_install(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "install")?)
+            .await
     }
 
     /// GET /vms/{vmId}/compute.

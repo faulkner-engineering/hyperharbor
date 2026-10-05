@@ -51,6 +51,7 @@
     waitingForGuest: "Starting the installed OS…",
     waitingForRemoteAccess: "Waiting for Remote Desktop…",
     configuring: "Setting up your account…",
+    applyingProfile: "Applying the setup profile…",
     ready: "Ready",
     failed: "Install failed",
     canceled: "Install canceled",
