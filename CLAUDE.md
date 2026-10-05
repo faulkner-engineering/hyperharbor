@@ -51,7 +51,7 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    channel by default; Authenticode and Sigstore only as a marked hook. Steps: 11.1 installer (done 2026-10-04:
    single executable, LocalSystem service, verified live including an update from 0.1.0 to 0.1.1), 11.2 data
    format marker, backup, and --self-test (done 2026-10-04; self-test passed on a copy of this host's real
-   data), 11.3 manifest and download, 11.4 hh-update helper (junction flip,
+   data), 11.3 manifest and download (done 2026-10-04; not yet against a real GitHub release), 11.4 hh-update helper (junction flip,
    rollback after two failed starts, recovery at boot), 11.5 idle gate and maintenance window, 11.6 API, tray,
    and client, 11.7 release packaging, 11.8 live test.
 
@@ -94,6 +94,11 @@ per-device VM accounts and a user management UI.
   trail), SelfTestGate (copies the data to <data>\update\selftest and runs the new exe's --self-test);
   Security/DataDirectoryAcl. Host.Service/Installation/SelfTestRun: the real host on the copy, loopback port,
   no mDNS or install watcher; checks dataFormat, stores, start, tls (pinned host certificate), inventory.
+- host/src/Host.Core/Updates: UpdateOptions (Update section: channel, channel manifest URLs, allowed hosts,
+  package size cap), UpdateManifest (latest.json schema 1 and its rules), UpdatePolicy (never a downgrade,
+  skips rolled-back versions, minimumUpdateFrom), UpdateDownloader (https and allowed hosts on every redirect
+  hop, size and SHA-256 while streaming), PackageSignatures (UnsignedPackageVerifier holds the marked SIGNING
+  HOOK), UpdatePreparer (manifest, decision, then download, hash, signatures, self-test; a failure deletes it).
 - host/src/Host.Tray: WinForms tray (a library; TrayApp.Run is single-instance per session). HostForm (double-click the icon) shows service status, the admin passphrase
   (set or change), paired devices, console access (Set up console access runs the elevated helper), and opens
   the logs; PinForm, DevicesForm, AdminPassphraseForm
