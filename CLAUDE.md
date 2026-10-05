@@ -66,6 +66,9 @@ per-device VM accounts and a user management UI.
 - MVP scope only. Do not implement later phases early.
 - Professional code and comments. No slang. No em dashes.
 - Small commits with clear messages. Run tests before committing.
+- Always update CHANGELOG.md with every user-visible change (features, behavior changes, fixes, API version
+  changes, anything a user must act on), in the same commit. Add entries under [Unreleased]; when the version
+  is bumped, move them under the new version with its date.
 - Never store VM passwords in plaintext. Never bind the API to 0.0.0.0 without mTLS.
 - Rotated VM passwords live in host memory only for the reuse window and are never logged or persisted.
   VM admin credentials for provisioning are stored only with DPAPI through ProtectedFile.
@@ -342,6 +345,20 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     sign-out; it stands aside while the installed service runs. Not yet tried by hand.
   - GpuEventReader reads the System log (nvlddmkm, amdkmdag, amdwddmg, igfx*, and Display 4101) for the last
     7 days, cached 5 minutes, into HostGpu.warnings.
+- Host Remote Desktop (maintenance sessions on the host itself; API 1.10.0, added at the user's request 2026-10-05):
+  - GET /host/remote-desktop reads fDenyTSConnections, RDP-Tcp PortNumber, EditionID (Home editions start with
+    "Core" and are unsupported), and the firewall group "@FirewallAPI.dll,-28752" through HNetCfg.FwPolicy2.
+  - POST /host/remote-desktop/enable (elevated, audited) calls Win32_TerminalServiceSetting.SetAllowTSConnections(1, 1)
+    in root\cimv2\TerminalServices, which also opens the firewall group; NLA is left alone. An unelevated host
+    answers 409 requiresInstalledService.
+  - The client's connect_host writes an .rdp file with no user name and prompt for credentials:i:1; mstsc asks
+    for the host's Windows account. No host credential is stored or sent (the user's decision).
+  - Host controls other than + New VM live in the header's Host menu (components/Menu.svelte, shared with the
+    VM row's menu). Menu closes the <details> element directly: jsdom fires no toggle event, so bind:open fails in tests.
+- Mixed versions: every 404 the host sends on purpose has a `detail`; a bare 404 (status code pages) means an older
+  host without the route, and the client's api.rs check() turns it into problem code hostOutdated with an
+  update hint. Gate UI for features added in a newer API version with hostSupports(host, "x.y.z") in client.ts
+  (mDNS hosts report apiVersion; unknown versions pass and rely on hostOutdated).
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):

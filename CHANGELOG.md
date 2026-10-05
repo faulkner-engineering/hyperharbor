@@ -1,0 +1,51 @@
+# Changelog
+
+All notable changes to HyperHarbor (host and client) are recorded here, newest first. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Host and client share one version number
+(Directory.Build.props and client/src-tauri/tauri.conf.json); the API version (docs/api.yaml info.version)
+is noted where it changes.
+
+Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
+note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
+
+## [Unreleased]
+
+## [0.1.2] - 2026-10-05 (API 1.10.0; installed on DESKTOP-65QRD0H for testing, not released)
+
+### Added
+- Remote Desktop to the host itself for maintenance, from the client's Host menu. mstsc asks for the host's
+  Windows account; HyperHarbor stores and sends no host credentials. Home editions are reported as unsupported.
+- The host can turn on its own Remote Desktop (and the Windows Firewall "Remote Desktop" rule) when a client
+  asks. This needs the admin passphrase and is audited. A host run without administrator rights (a development
+  console run) asks the user to turn it on in Windows Settings instead.
+- API: `GET /host/remote-desktop` and `POST /host/remote-desktop/enable` (elevated), problem codes
+  `remoteDesktopUnsupported` and `requiresInstalledService`.
+- Per-VM monitor choice for Connect (one monitor, all, or selected ones), from the VM's Monitors… menu item.
+  The choice is kept on each device and names monitors by device path, so it survives rearranging displays.
+
+### Changed
+- The host header shows only "+ New VM" (and the elevation countdown); Wake-on-LAN, Updates, Refresh, Unpair,
+  and Remote Desktop to host moved into a "Host ▾" menu. The VM row menu uses the same menu component.
+- A feature the host does not have yet (an older host) now says to update the host, instead of "Not Found".
+  Features from a newer API version are greyed out for hosts that report an older version over mDNS.
+
+### Fixed
+- The tray pipe server waits for tray connections to finish their message when it stops.
+
+## [0.1.1] - 2026-10-04 (API 1.9.0)
+
+Version bump used to verify the self-update path (0.1.0 to 0.1.1, and the rollback of a broken build).
+
+## [0.1.0] - 2026-10-04 (API 1.9.0)
+
+First packaged version, covering roadmap phases 1 to 11.7 (see CLAUDE.md):
+- Hyper-V VM inventory, power actions, and a Kestrel API with mutual TLS.
+- mDNS discovery, PIN pairing (SPAKE2) with certificate pinning, Wake-on-LAN with readiness checks and fixes.
+- One-click Remote Desktop to VMs with a rotated per-User account (Windows via PowerShell Direct, Linux via SSH
+  and xrdp).
+- VM lifecycle: create from an ISO (Gen 2, Secure Boot, vTPM), compute settings, delete; ISO library; audit
+  log and admin passphrase elevation.
+- VM console through the host, unattended Windows and Linux installs, Performance mode (GPU-P and Remote
+  Desktop tuning).
+- A single host executable that installs itself as a LocalSystem service, with side-by-side versions,
+  self-test, rollback, and update checks against GitHub releases.
