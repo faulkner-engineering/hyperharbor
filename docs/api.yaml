@@ -64,6 +64,12 @@ tags:
       Wake-on-LAN support. A sleeping host cannot wake itself, so clients cache the
       adapter details from `GET /wake/info` and send the magic packet directly.
       Relay mode is not part of this version.
+
+      After a wake nobody is at the host, so Windows would soon sleep again. The host keeps
+      itself awake while it is used: for 10 minutes after any authenticated request (reads
+      included), while work is in progress, and while someone is signed in to it over Remote
+      Desktop. Clients that keep a Remote Desktop or console window open check in with
+      `GET /host` about once a minute.
   - name: Jobs
     description: Progress of long-running VM operations such as creation and deletion.
   - name: Auth

@@ -88,7 +88,8 @@ per-device VM accounts and a user management UI.
   Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile),
   Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService), Lifecycle/ (create, delete,
   compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
-  VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants)
+  VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants),
+  Power/ (VM power actions; KeepAwake: the power request that keeps the host awake during remote use)
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
   elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/),
   ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console).
@@ -426,6 +427,15 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   binds each magic packet to the local address on the host's subnet.
 - Diagnose-Wake.ps1 (host/src/Host.Service/Wake, embedded; HyperHarbor.Host.exe save-wake-diagnostics [folder]
   writes it out) collects what the checks cannot see; -Listen proves packet delivery.
+- After a Wake-on-LAN wake nobody is at the PC, so Windows' "System unattended sleep timeout" (UNATTENDSLEEP,
+  about 2 minutes) puts it back to sleep. Host.Core/Power: KeepAwakeController (ticked by KeepAwakeService)
+  holds a PowerRequestSystemRequired request (WindowsPowerRequest) while a paired device made a request in the
+  last KeepAwake:ClientWindowMinutes (10; RemoteUseMiddleware after UseAuthorization marks RemoteUseTracker,
+  reads included), while HostActivity.InProgress (requests, console tunnels, jobs, pairing), or while a Remote
+  Desktop session is signed in to the host (WindowsRemoteSessions), and releases it otherwise. Running VMs do not
+  count (the user's decision): a Remote Desktop session to a VM never passes through the host, so the client
+  checks in with GET /host every minute (sessions.rs) while mstsc windows it launched stay open, as long as the
+  client app runs. Check with `powercfg /requests` (elevated): "HyperHarbor: ..." under SYSTEM.
 
 ## Open issues (not yet scheduled)
 - Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray

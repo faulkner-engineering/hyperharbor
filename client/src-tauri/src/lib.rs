@@ -7,6 +7,7 @@ mod identity;
 mod monitors;
 mod paired;
 mod rdp;
+mod sessions;
 mod spake2;
 #[cfg(test)]
 mod test_server;
@@ -40,6 +41,8 @@ struct AppState {
     uploads: std::sync::Mutex<HashMap<String, Arc<std::sync::atomic::AtomicBool>>>,
     /// Which monitors each VM's Remote Desktop sessions use.
     monitors: MonitorChoiceStore,
+    /// Remote Desktop and console windows still open, by host; those hosts get a check-in each minute.
+    sessions: sessions::ActiveSessions,
     // Kept alive so mDNS browsing continues for the lifetime of the app.
     _mdns: Option<mdns_sd::ServiceDaemon>,
 }
@@ -232,7 +235,13 @@ async fn connect_vm(
         .monitors
         .get(&paired.host_id, &vm_id)
         .resolve(&monitors::list());
-    rdp::launch(&connection, &layout, &rdp::file_directory())
+    let session = state.sessions.begin(&key);
+    rdp::launch(
+        &connection,
+        &layout,
+        &rdp::file_directory(),
+        Some(Box::new(move || drop(session))),
+    )
 }
 
 /// The fixed ID under which the host's own Remote Desktop session keeps its monitor choice.
@@ -279,7 +288,14 @@ async fn connect_host(state: State<'_, AppState>, key: String) -> Result<(), Cli
         .monitors
         .get(&paired.host_id, HOST_SESSION_ID)
         .resolve(&monitors::list());
-    rdp::launch_host(&address, port, &layout, &rdp::file_directory())
+    let session = state.sessions.begin(&key);
+    rdp::launch_host(
+        &address,
+        port,
+        &layout,
+        &rdp::file_directory(),
+        Some(Box::new(move || drop(session))),
+    )
 }
 
 /// Allows Remote Desktop connections to the host (needs elevation). Returns the HostRemoteDesktop.
@@ -329,7 +345,8 @@ async fn open_console(
     vm_id: String,
 ) -> Result<(), ClientError> {
     let (host, paired) = state.paired_host(&key)?;
-    console::open(state.api.clone(), host, paired, vm_id).await
+    let session = state.sessions.begin(&key);
+    console::open(state.api.clone(), host, paired, vm_id, session).await
 }
 
 #[tauri::command]
@@ -910,7 +927,24 @@ pub fn run() {
                 picked_isos: std::sync::Mutex::new(HashMap::new()),
                 uploads: std::sync::Mutex::new(HashMap::new()),
                 monitors: MonitorChoiceStore::new(Some(config_dir.join("client-settings.json"))),
+                sessions: sessions::ActiveSessions::default(),
                 _mdns: mdns,
+            });
+
+            // While a Remote Desktop or console window is open, tell its host it is still in use, so a
+            // host woken by Wake-on-LAN does not go back to sleep under the session.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut ticks = tokio::time::interval(sessions::CHECK_IN_INTERVAL);
+                loop {
+                    ticks.tick().await;
+                    let state = handle.state::<AppState>();
+                    for key in state.sessions.keys() {
+                        if let Ok((host, paired)) = state.paired_host(&key) {
+                            let _ = state.api.ping(&host, &paired).await;
+                        }
+                    }
+                }
             });
             Ok(())
         })

@@ -9,6 +9,7 @@ using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Performance;
+using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.RemoteDesktop;
 using HyperHarbor.Host.Core.Security;
@@ -262,6 +263,18 @@ builder.Services.AddSingleton(services => new HostActivity(
     () => services.GetRequiredService<VmJobStore>().AnyRunning || services.GetRequiredService<PairingService>().HasPendingRequest,
     services.GetRequiredService<TimeProvider>()));
 
+// Keeps the PC awake while paired devices use it (after a Wake-on-LAN wake Windows would sleep again in minutes).
+builder.Services.AddSingleton(builder.Configuration.GetSection(KeepAwakeOptions.SectionName).Get<KeepAwakeOptions>() ?? new KeepAwakeOptions());
+builder.Services.AddSingleton<RemoteUseTracker>();
+builder.Services.AddSingleton<IPowerRequest, WindowsPowerRequest>();
+builder.Services.AddSingleton<IRemoteSessions, WindowsRemoteSessions>();
+builder.Services.AddSingleton<KeepAwakeController>();
+if (selfTest is null)
+{
+    // A self-test run on a copy of the data must not hold the real host awake.
+    builder.Services.AddHostedService<KeepAwakeService>();
+}
+
 // Update settings: the Update section, with the owner's choices from host-settings.json applied.
 builder.Services.AddSingleton(builder.Configuration.GetSection(UpdateOptions.SectionName).Get<UpdateOptions>() ?? new UpdateOptions());
 builder.Services.AddSingleton(services => new UpdateSettings(services.GetRequiredService<UpdateOptions>(), services.GetRequiredService<HostSettingsStore>()));
@@ -366,6 +379,7 @@ app.UseStatusCodePages();
 app.UseUpdateGate();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRemoteUseTracking();
 
 app.MapHostEndpoints();
 app.MapAuthEndpoints();

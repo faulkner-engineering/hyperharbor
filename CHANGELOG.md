@@ -10,6 +10,16 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- The host stays awake while a paired device uses it, so a host woken with Wake-on-LAN no longer goes back to
+  sleep after about 2 minutes (Windows' unattended sleep timeout). It stays awake for 10 minutes after the
+  client's last contact (an open client checks in every few seconds), while work such as a console session or
+  a job is in progress, and while someone is signed in to the host over Remote Desktop; then Windows' own sleep
+  settings apply again. The client keeps checking in once a minute while Remote Desktop or console windows it
+  opened stay open, as long as the client app is running. Running VMs alone do not keep the host awake.
+  Update both the host and the client.
+- Wake diagnostics also report the unattended sleep timeout and the active power requests.
+
 ## [0.1.3] - 2026-10-05 (API 1.11.0)
 
 ### Added

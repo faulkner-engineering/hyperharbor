@@ -139,10 +139,16 @@ Section 'Available sleep states'
 powercfg /a
 
 Section 'Sleep and hibernate timeouts on AC power (seconds, 0 = never)'
-foreach ($setting in 'STANDBYIDLE', 'HIBERNATEIDLE', 'HYBRIDSLEEP') {
-    $line = powercfg /q SCHEME_CURRENT SUB_SLEEP $setting | Select-String 'Current AC Power Setting Index'
-    Write-Output ("{0,-14} {1}" -f $setting, (($line -split ':')[-1]).Trim())
+# UNATTENDSLEEP is the short timeout after a wake nobody is at the PC for (Wake-on-LAN); HyperHarbor's
+# keep-awake power request overrides it while a paired device uses the host.
+foreach ($setting in 'STANDBYIDLE', 'HIBERNATEIDLE', 'HYBRIDSLEEP', 'UNATTENDSLEEP') {
+    $line = powercfg /q SCHEME_CURRENT SUB_SLEEP $setting 2>$null | Select-String 'Current AC Power Setting Index'
+    $value = if ($line) { (($line -split ':')[-1]).Trim() } else { '(not reported)' }
+    Write-Output ("{0,-14} {1}" -f $setting, $value)
 }
+
+Section 'Power requests keeping the PC awake (HyperHarbor appears under SYSTEM while a device uses it)'
+powercfg /requests
 
 Section 'Last wake source'
 powercfg /lastwake

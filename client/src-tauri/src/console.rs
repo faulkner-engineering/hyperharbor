@@ -16,6 +16,7 @@ use crate::error::ClientError;
 use crate::hosts::HostEntry;
 use crate::paired::PairedHost;
 use crate::rdp;
+use crate::sessions::SessionGuard;
 
 /// The longest "HOST\account" name: a 15-character computer name, a backslash, and a 20-character account.
 const MAX_USER_NAME: usize = 36;
@@ -108,11 +109,13 @@ pub fn console_rdp_file(port: u16, user_name: &str, pcb: &str) -> String {
 
 /// Opens the VM's console: asks the host for a session, starts the loopback listener, and launches
 /// mstsc against it.
+/// `in_use` keeps the host listed as in use until mstsc exits.
 pub async fn open(
     api: Arc<ApiClient>,
     host: HostEntry,
     paired: PairedHost,
     vm_id: String,
+    in_use: SessionGuard,
 ) -> Result<(), ClientError> {
     let session = api.open_console(&host, &paired, &vm_id).await?;
     session.validate()?;
@@ -144,6 +147,7 @@ pub async fn open(
         &rdp::file_directory(),
         Some(Box::new(move || {
             let _ = stop.send(());
+            drop(in_use);
         })),
     )
 }

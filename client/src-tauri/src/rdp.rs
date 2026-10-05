@@ -195,12 +195,13 @@ pub fn is_valid_host_address(address: &str) -> bool {
 }
 
 /// Opens Remote Desktop to the host for maintenance. Nothing is written to the credential store;
-/// the .rdp file is removed once the session window opens.
+/// the .rdp file is removed once the session window opens. `on_exit` runs after mstsc exits.
 pub fn launch_host(
     address: &str,
     port: u16,
     monitors: &MonitorLayout,
     file_directory: &Path,
+    on_exit: Option<Box<dyn FnOnce() + Send>>,
 ) -> Result<(), ClientError> {
     if !is_valid_host_address(address) || port == 0 {
         return Err(ClientError::InvalidAddress);
@@ -216,7 +217,7 @@ pub fn launch_host(
             window_title_key: address.to_string(),
         },
         file_directory,
-        None,
+        on_exit,
     )
 }
 
@@ -237,11 +238,12 @@ pub struct Launch<'a> {
 }
 
 /// Writes the credential, launches mstsc, and removes the credential and file in the background once
-/// the session has opened (or mstsc exits, or the wait times out).
+/// the session has opened (or mstsc exits, or the wait times out). `on_exit` runs after mstsc exits.
 pub fn launch(
     connection: &VmConnection,
     monitors: &MonitorLayout,
     file_directory: &Path,
+    on_exit: Option<Box<dyn FnOnce() + Send>>,
 ) -> Result<(), ClientError> {
     connection.validate()?;
     start(
@@ -266,7 +268,7 @@ pub fn launch(
             window_title_key: connection.address.clone(),
         },
         file_directory,
-        None,
+        on_exit,
     )
 }
 
@@ -774,6 +776,7 @@ mod tests {
             &connection(address, "hh-owner"),
             &MonitorLayout::Single,
             &directory,
+            None,
         );
 
         let files = std::fs::read_dir(&directory).unwrap().count();

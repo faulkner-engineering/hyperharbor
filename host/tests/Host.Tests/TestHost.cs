@@ -70,6 +70,8 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IDiskFiles>(DiskFiles);
                 services.AddSingleton<IDiskCopier>(DiskCopier);
                 services.AddSingleton<IHostCapacityReader>(Capacity);
+                services.AddSingleton<Core.Power.IPowerRequest>(PowerRequest);
+                services.AddSingleton<Core.Power.IRemoteSessions>(RemoteSessions);
 
                 // Built on first use, so a test can set RemoteDesktop.Elevated before its first request.
                 services.AddSingleton(provider => new Core.RemoteDesktop.HostRemoteDesktopService(
@@ -126,6 +128,10 @@ internal sealed class TestHost : IDisposable
     public FakeDiskCopier DiskCopier { get; } = new();
 
     public FakeHostCapacity Capacity { get; } = new();
+
+    public Power.FakePowerRequest PowerRequest { get; } = new();
+
+    public Power.FakeRemoteSessions RemoteSessions { get; } = new();
 
     public FakeRemoteDesktopSettings RemoteDesktop { get; } = new();
 

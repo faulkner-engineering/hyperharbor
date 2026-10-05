@@ -722,6 +722,13 @@ impl ApiClient {
         parse(response).await
     }
 
+    /// GET /host, only to tell the host it is still in use (any authenticated request keeps it awake).
+    pub async fn ping(&self, host: &HostEntry, paired: &PairedHost) -> Result<(), ClientError> {
+        self.send_paired(host, paired, reqwest::Method::GET, "/host")
+            .await
+            .map(|_| ())
+    }
+
     /// GET /host/remote-desktop.
     pub async fn host_remote_desktop(
         &self,
@@ -2449,6 +2456,25 @@ mod server_tests {
         let request = &server.requests()[0];
         assert_eq!(request.method, "POST");
         assert_eq!(request.path, format!("/api/v1/vms/{VM_ID}/console/tunnel"));
+    }
+
+    #[tokio::test]
+    async fn ping_checks_in_with_get_host() {
+        let server = TestServer::start("127.0.0.1:0", |_| {
+            Reply::json(200, r#"{"hostName":"TC-PC"}"#)
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+
+        api()
+            .ping(&target, &paired(server.certificate_hash()))
+            .await
+            .unwrap();
+
+        let request = &server.requests()[0];
+        assert_eq!(
+            (request.method.as_str(), request.path.as_str()),
+            ("GET", "/api/v1/host")
+        );
     }
 
     #[tokio::test]
