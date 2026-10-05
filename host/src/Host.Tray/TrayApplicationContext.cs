@@ -8,6 +8,7 @@ namespace HyperHarbor.Host.Tray;
 internal sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly NotifyIcon _notifyIcon;
+    private readonly TrayIconProvider _iconProvider;
     private readonly ToolStripMenuItem _status;
     private readonly TrayPipeClient _pipe;
     private IReadOnlyList<TrayDevice> _devices = [];
@@ -46,14 +47,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
+        // Asleep until the service answers on the pipe.
+        _iconProvider = new TrayIconProvider(TrayIconState.Asleep);
         _notifyIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = _iconProvider.Current,
             Text = "HyperHarbor",
             ContextMenuStrip = menu,
             Visible = true,
         };
         _notifyIcon.DoubleClick += (_, _) => ShowHost();
+        _iconProvider.IconChanged += (_, _) => _notifyIcon.Icon = _iconProvider.Current;
 
         _pipe = new TrayPipeClient();
         _pipe.ConnectionChanged += OnConnectionChanged;
@@ -82,6 +86,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _notifyIcon.Visible = false;
             _notifyIcon.ContextMenuStrip?.Dispose();
             _notifyIcon.Dispose();
+            _iconProvider.Dispose();
         }
 
         base.Dispose(disposing);
@@ -93,6 +98,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon.Text = connected ? "HyperHarbor" : "HyperHarbor (service not running)";
         _passphraseItem.Enabled = connected;
         _connected = connected;
+
+        // The service does not report sessions to the tray yet, so the icon shows only awake or asleep.
+        _iconProvider.State = connected ? TrayIconState.Awake : TrayIconState.Asleep;
         if (!connected)
         {
             _passphraseConfigured = null;

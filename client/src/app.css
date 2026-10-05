@@ -1,0 +1,9 @@
+/* HyperHarbor brand color tokens, from hyperharbor-brand/brand.json. */
+:root {
+  --hh-ink: #121a26;
+  --hh-fog: #f3f1ec;
+  --hh-accent: #e39b2e;
+  --hh-sleep: #8a93a1;
+  --hh-text-muted: #5b6470;
+  --hh-border: #e2ded5;
+}

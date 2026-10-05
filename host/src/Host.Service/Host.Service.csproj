@@ -11,6 +11,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <RootNamespace>HyperHarbor.Host.Service</RootNamespace>
     <AssemblyName>HyperHarbor.Host</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

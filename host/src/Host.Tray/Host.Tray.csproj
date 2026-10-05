@@ -7,7 +7,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>HyperHarbor.Host.Tray</RootNamespace>
     <AssemblyName>HyperHarbor.Host.Tray</AssemblyName>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Notification area icons from hyperharbor-brand/icons; TrayIconProvider loads them by these names. -->
+    <EmbeddedResource Include="Resources\tray-*.ico" LogicalName="HyperHarbor.Host.Tray.Resources.%(Filename)%(Extension)" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Shared.Contracts\Shared.Contracts.csproj" />

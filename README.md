@@ -1,3 +1,9 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="hyperharbor-brand/png/lockup-horizontal-on-dark@2x.png">
+  <source media="(prefers-color-scheme: light)" srcset="hyperharbor-brand/png/lockup-horizontal@2x.png">
+  <img alt="HyperHarbor" src="hyperharbor-brand/png/lockup-horizontal@2x.png" width="420">
+</picture>
+
 # HyperHarbor
 
 Manage Hyper-V virtual machines on a home PC and connect to them in one click from any device.
@@ -30,3 +36,7 @@ cd client
 npm install
 npm run tauri dev
 ```
+
+## Brand
+
+The logo, app and tray icons, colors, and usage rules are in [hyperharbor-brand/](hyperharbor-brand/README.md).

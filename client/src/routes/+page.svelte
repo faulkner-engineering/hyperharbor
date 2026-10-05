@@ -35,6 +35,7 @@
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
   import InstallProfiles from "$lib/components/InstallProfiles.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
+  import BrandMark from "$lib/brand/BrandMark.svelte";
   import { toasts } from "$lib/toasts.svelte";
 
   const REFRESH_INTERVAL_MS = 5000;
@@ -283,7 +284,7 @@
 
 <div class="app">
   <aside>
-    <h1>HyperHarbor</h1>
+    <h1><BrandMark size="1.4em" decorative />HyperHarbor</h1>
     <HostList {hosts} {selectedKey} onselect={selectHost} />
   </aside>
 
@@ -436,11 +437,11 @@
 
 <style>
   :global(:root) {
-    --bg: #f6f8fa;
+    --bg: var(--hh-fog);
     --surface: #ffffff;
-    --text: #1f2328;
-    --muted: #59636e;
-    --border: #d1d9e0;
+    --text: var(--hh-ink);
+    --muted: var(--hh-text-muted);
+    --border: var(--hh-border);
     --hover: #eef1f4;
     --selected: #dde7f3;
     --danger: #cf222e;
@@ -453,8 +454,8 @@
     --busy-fg: #0550ae;
     --notice-bg: #ddf4ff;
     --error-bg: #ffebe9;
-    --accent: #0969da;
-    --accent-fg: #ffffff;
+    --accent: var(--hh-accent);
+    --accent-fg: var(--hh-ink);
     font-family: "Segoe UI", system-ui, sans-serif;
     font-size: 14px;
     color: var(--text);
@@ -465,7 +466,7 @@
     :global(:root) {
       --bg: #0d1117;
       --surface: #151b23;
-      --text: #e6edf3;
+      --text: var(--hh-fog);
       --muted: #9198a1;
       --border: #30363d;
       --hover: #1c232c;
@@ -480,8 +481,8 @@
       --busy-fg: #79c0ff;
       --notice-bg: #0c2d4b;
       --error-bg: #3c1618;
-      --accent: #1f6feb;
-      --accent-fg: #ffffff;
+      --accent: var(--hh-accent);
+      --accent-fg: var(--hh-ink);
     }
   }
 
@@ -506,6 +507,9 @@
   }
 
   h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     margin: 0;
     font-size: 1.2rem;
   }

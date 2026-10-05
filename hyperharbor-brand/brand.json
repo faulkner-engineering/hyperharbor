@@ -1,0 +1,50 @@
+{
+  "name": "HyperHarbor",
+  "colors": {
+    "ink": "#121A26",
+    "fog": "#F3F1EC",
+    "accent": "#E39B2E",
+    "accentAlternates": {
+      "sea": "#2E8B8B",
+      "coral": "#D8694A",
+      "signal": "#3B82A0"
+    },
+    "sleep": "#8A93A1",
+    "textMuted": "#5B6470",
+    "border": "#E2DED5"
+  },
+  "typography": {
+    "family": "Manrope",
+    "wordmark": {
+      "Hyper": 500,
+      "Harbor": 800,
+      "letterSpacing": "-0.02em"
+    },
+    "source": "https://fonts.google.com/specimen/Manrope (SIL Open Font License 1.1)"
+  },
+  "mark": {
+    "viewBox": "0 0 100 100",
+    "strokes": "M28 16 V84 M72 16 V84 M28 50 H72",
+    "strokeWidth": 12,
+    "slipTop": {
+      "x": 42,
+      "y": 23,
+      "w": 16,
+      "h": 12,
+      "rx": 3.5
+    },
+    "slipBottom": {
+      "x": 42,
+      "y": 65,
+      "w": 16,
+      "h": 12,
+      "rx": 3.5
+    },
+    "smallSizeVariant": "below 32 px use stroke width 14 and drop the bottom slip"
+  },
+  "states": {
+    "awake": "top slip filled with accent, bottom slip hollow",
+    "asleep": "all strokes in sleep grey, top slip hollow, no bottom slip",
+    "connected": "both slips filled with accent"
+  }
+}
