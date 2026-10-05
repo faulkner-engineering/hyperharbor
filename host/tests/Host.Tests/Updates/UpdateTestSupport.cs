@@ -1,6 +1,8 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Updates;
 
 namespace HyperHarbor.Host.Tests.Updates;
@@ -76,4 +78,15 @@ internal static class Releases
 
     public static UpdateDownloader Downloader(FakeReleaseServer server, UpdateOptions? options = null) =>
         new(new HttpClient(server), options ?? new UpdateOptions());
+}
+
+/// <summary>A self-test of the new version (Releases.Version) that passes.</summary>
+internal sealed class PassingSelfTest : ISelfTestProcess
+{
+    public Task<(int ExitCode, string StandardError)?> RunAsync(string executable, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var result = new SelfTestResult("1.2.0", true, [new SelfTestCheck("stores", true, "ok")]);
+        File.WriteAllBytes(arguments[2], JsonSerializer.SerializeToUtf8Bytes(result, SelfTestResult.JsonOptions));
+        return Task.FromResult<(int, string)?>((0, string.Empty));
+    }
 }

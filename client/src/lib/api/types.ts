@@ -66,6 +66,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/update/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install the ready update now.
+         * @description Installs the version the host has already downloaded and tested (`activity: ready`),
+         *     whatever the update mode and maintenance time. Work in progress (state-changing
+         *     requests, running jobs, a pending pairing) still finishes first. The host restarts during
+         *     the install; poll `GET /host/update` until it answers again. Returns 409 with
+         *     `code: updateNotReady` when no version is ready (check first), or
+         *     `code: updatesUnsupported` for a host run without installing it.
+         */
+        post: operations["installHostUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/host/update/settings": {
         parameters: {
             query?: never;
@@ -941,7 +966,7 @@ export interface components {
              *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
              *     `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
              *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`,
-             *     `remoteDesktopUnsupported`, `requiresInstalledService`.
+             *     `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`.
              */
             code?: string;
             /** @description Field-level validation problems (400). */
@@ -1962,6 +1987,29 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["UpdatesUnsupported"];
+        };
+    };
+    installHostUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The install starts once this request has ended. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostUpdateStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            409: components["responses"]["Conflict"];
         };
     };
     setHostUpdateSettings: {

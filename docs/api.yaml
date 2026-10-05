@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.10.0
+  version: 1.11.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -134,6 +134,35 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/UpdatesUnsupported"
+
+  /host/update/install:
+    post:
+      tags: [Host]
+      operationId: installHostUpdate
+      summary: Install the ready update now.
+      description: |
+        Installs the version the host has already downloaded and tested (`activity: ready`),
+        whatever the update mode and maintenance time. Work in progress (state-changing
+        requests, running jobs, a pending pairing) still finishes first. The host restarts during
+        the install; poll `GET /host/update` until it answers again. Returns 409 with
+        `code: updateNotReady` when no version is ready (check first), or
+        `code: updatesUnsupported` for a host run without installing it.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "202":
+          description: The install starts once this request has ended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostUpdateStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /host/update/settings:
     put:
@@ -1731,7 +1760,7 @@ components:
             `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
             `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
             `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`,
-            `remoteDesktopUnsupported`, `requiresInstalledService`.
+            `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`.
         errors:
           type: array
           description: Field-level validation problems (400).

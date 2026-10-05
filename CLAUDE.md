@@ -47,7 +47,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    before changes; pre-shutdown of GPU VMs; GPU driver error warnings.
 11. Host self-update with side-by-side versions, added at the user's request (in progress). Releases go to
    https://github.com/faulkner-engineering/hyperharbor (latest.json manifest: version, URL, SHA-256). Decided:
-   health.json plus a TLS check instead of an anonymous health route; "install now" in the tray only; stable
+   health.json plus a TLS check instead of an anonymous health route; "install now" in the tray and (since
+   2026-10-05, the user's decision, API 1.11.0) from a client with elevation; stable
    channel by default; Authenticode and Sigstore only as a marked hook. Steps: 11.1 installer (done 2026-10-04:
    single executable, LocalSystem service, verified live including an update from 0.1.0 to 0.1.1), 11.2 data
    format marker, backup, and --self-test (done 2026-10-04; self-test passed on a copy of this host's real
@@ -117,7 +118,9 @@ per-device VM accounts and a user management UI.
   /host/update/settings or the tray's channel menu) over UpdateOptions. UpdateEndpoints.Status builds the
   HostUpdateStatus for the API and the tray; a host run without installing reports supported=false and
   answers check and settings with 409 updatesUnsupported. The tray polls UpdateStatusQueryMessage while the
-  HostForm window is open; Install now (InstallUpdateMessage) is tray-only, as decided.
+  HostForm window is open; Install now comes from the tray (InstallUpdateMessage) or from POST /host/update/install
+  (elevated, audited; 409 updateNotReady unless a version is prepared). The endpoint calls RequestInstall in
+  Response.OnCompleted, because its own in-flight request would otherwise keep HostActivity busy until the next tick.
 - host/src/Host.Core/Updates: UpdateOptions (Update section: channel, channel manifest URLs, allowed hosts,
   package size cap), UpdateManifest (latest.json schema 1 and its rules), UpdatePolicy (never a downgrade,
   skips rolled-back versions, minimumUpdateFrom), UpdateDownloader (https and allowed hosts on every redirect

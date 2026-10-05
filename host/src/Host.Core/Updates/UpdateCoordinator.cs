@@ -96,7 +96,19 @@ public sealed class UpdateCoordinator(
         _requested.Release();
     }
 
-    /// <summary>Installs the prepared version as soon as nothing is in progress (the tray's Install now).</summary>
+    /// <summary>A version has been downloaded and tested, so <see cref="RequestInstall"/> would accept.</summary>
+    public bool IsReadyToInstall
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _prepared is not null;
+            }
+        }
+    }
+
+    /// <summary>Installs the prepared version as soon as nothing is in progress (Install now, from the tray or a client).</summary>
     /// <returns>False when no version is ready.</returns>
     public bool RequestInstall()
     {

@@ -62,6 +62,30 @@ describe("HostUpdatePanel", () => {
     expect(await screen.findByText(/Install it from the HyperHarbor Host window on the host\./)).toBeTruthy();
   });
 
+  it("offers no Install now on a host that installs only from its tray", async () => {
+    invoke.mockResolvedValue(status({ mode: "notify", activity: "ready", availableVersion: "0.2.0" }));
+    render(HostUpdatePanel, { host });
+
+    await screen.findByText(/is ready/);
+    expect(screen.queryByRole("button", { name: /Install .* now/ })).toBeNull();
+  });
+
+  it("installs a ready version now on a newer host, then follows the install", async () => {
+    const newer = { ...host, apiVersion: "1.11.0" };
+    invoke
+      .mockResolvedValueOnce(status({ mode: "notify", activity: "ready", availableVersion: "0.2.0" }))
+      .mockResolvedValueOnce(status({ mode: "notify", activity: "ready", availableVersion: "0.2.0" }));
+    render(HostUpdatePanel, { host: newer });
+
+    expect(await screen.findByText("Version 0.2.0 is ready to install.", { exact: false })).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Install 0.2.0 now" }));
+
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("install_host_update", { key: newer.key }));
+    // While the install runs, the button is gone and the other actions wait.
+    await vi.waitFor(() => expect(screen.queryByRole("button", { name: "Install 0.2.0 now" })).toBeNull());
+    expect((screen.getByRole("button", { name: "Check now" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("checks now", async () => {
     invoke.mockResolvedValueOnce(status()).mockResolvedValueOnce(status({ activity: "checking" }));
     render(HostUpdatePanel, { host });

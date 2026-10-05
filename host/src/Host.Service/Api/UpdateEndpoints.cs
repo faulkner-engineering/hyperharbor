@@ -18,6 +18,9 @@ public static class UpdateEndpoints
     {
         endpoints.MapGet(StatusPath, GetStatus).WithName("getHostUpdate");
         endpoints.MapPost(StatusPath + "/check", Check).WithName("checkHostUpdate").Audited();
+        endpoints.MapPost(StatusPath + "/install", Install).WithName("installHostUpdate")
+            .Audited()
+            .RequireElevation();
         endpoints.MapPut(StatusPath + "/settings", SaveSettings).WithName("setHostUpdateSettings")
             .Audited<HostUpdateSettings>(settings => $"channel={settings.Channel} mode={settings.Mode} maintenanceTime={settings.MaintenanceTime ?? "none"}")
             .RequireElevation();
@@ -71,6 +74,32 @@ public static class UpdateEndpoints
         }
 
         coordinator.RequestCheck();
+        return TypedResults.Accepted(StatusPath, Status(coordinator, settings));
+    }
+
+    private static Results<Accepted<HostUpdateStatus>, ProblemHttpResult> Install(HttpContext context, IServiceProvider services, UpdateSettings settings)
+    {
+        if (services.GetService<UpdateCoordinator>() is not { } coordinator)
+        {
+            return Unsupported();
+        }
+
+        if (!coordinator.IsReadyToInstall)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "No update is ready",
+                detail: "No update is ready to install. Check for updates first; the host downloads and tests a newer version before it can be installed.",
+                extensions: new Dictionary<string, object?> { ["code"] = ContractInfo.ProblemCodes.UpdateNotReady });
+        }
+
+        // This request counts as work in progress until it ends, which would hold the install back
+        // until the next tick, so the install is requested once the response has been sent.
+        context.Response.OnCompleted(() =>
+        {
+            coordinator.RequestInstall();
+            return Task.CompletedTask;
+        });
         return TypedResults.Accepted(StatusPath, Status(coordinator, settings));
     }
 

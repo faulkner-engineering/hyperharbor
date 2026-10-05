@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Updates;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -187,16 +186,6 @@ public sealed class UpdateCoordinatorTests : IDisposable
         if (_helperFailure is not null)
         {
             throw _helperFailure;
-        }
-    }
-
-    private sealed class PassingSelfTest : ISelfTestProcess
-    {
-        public Task<(int ExitCode, string StandardError)?> RunAsync(string executable, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)
-        {
-            var result = new SelfTestResult("1.2.0", true, [new SelfTestCheck("stores", true, "ok")]);
-            File.WriteAllBytes(arguments[2], JsonSerializer.SerializeToUtf8Bytes(result, SelfTestResult.JsonOptions));
-            return Task.FromResult<(int, string)?>((0, string.Empty));
         }
     }
 }

@@ -8,7 +8,13 @@ is noted where it changes.
 Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
 note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
 
-## [Unreleased]
+## [Unreleased] (API 1.11.0)
+
+### Added
+- "Install <version> now" in the client's Updates panel installs a downloaded and tested update right away,
+  whatever the update mode. It needs the admin passphrase and is audited; work in progress on the host still
+  finishes first. Hosts before API 1.11.0 install only from their tray, and the client shows no button for them.
+- API: `POST /host/update/install` (elevated), problem code `updateNotReady`.
 
 ## [0.1.2] - 2026-10-05 (API 1.10.0; installed on DESKTOP-65QRD0H for testing, not released)
 

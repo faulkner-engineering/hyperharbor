@@ -437,6 +437,16 @@ async fn check_host_update(
     state.api.check_host_update(&host, &paired).await
 }
 
+/// Installs the host's ready update now (needs elevation). Returns the HostUpdateStatus.
+#[tauri::command]
+async fn install_host_update(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.install_host_update(&host, &paired).await
+}
+
 #[tauri::command]
 async fn set_host_update_settings(
     state: State<'_, AppState>,
@@ -928,6 +938,7 @@ pub fn run() {
             get_job,
             get_host_resource,
             check_host_update,
+            install_host_update,
             set_host_update_settings,
             get_vm_compute,
             update_vm_compute,

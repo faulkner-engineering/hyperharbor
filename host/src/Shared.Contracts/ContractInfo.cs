@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.10.0";
+    public const string ApiVersion = "1.11.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -47,5 +47,8 @@ public static class ContractInfo
 
         /// <summary>409: the host process lacks administrator rights for this change; the installed service has them.</summary>
         public const string RequiresInstalledService = "requiresInstalledService";
+
+        /// <summary>409: no update has been downloaded and tested yet, so there is nothing to install.</summary>
+        public const string UpdateNotReady = "updateNotReady";
     }
 }

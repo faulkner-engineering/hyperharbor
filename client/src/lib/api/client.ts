@@ -75,6 +75,7 @@ export const ProblemCodes = {
   requiresInstalledService: "requiresInstalledService",
   /** Set by the client: the host does not have the route, because it runs an older version. */
   hostOutdated: "hostOutdated",
+  updateNotReady: "updateNotReady",
 } as const;
 
 export interface WakeFixOutcome {
@@ -309,6 +310,15 @@ export const getHostUpdate = (key: string) =>
   invoke<HostUpdateStatus>("get_host_resource", { key, resource: "update" });
 
 export const checkHostUpdate = (key: string) => invoke<HostUpdateStatus>("check_host_update", { key });
+
+/** The API version that added installing a ready update from a client. */
+export const InstallUpdateApiVersion = "1.11.0";
+
+/**
+ * Installs the ready update now (status.activity "ready"); the host restarts. Needs elevation:
+ * run it inside withElevation.
+ */
+export const installHostUpdate = (key: string) => invoke<HostUpdateStatus>("install_host_update", { key });
 
 /** Needs elevation: run it inside withElevation. */
 export const setHostUpdateSettings = (key: string, settings: HostUpdateSettings) =>

@@ -751,6 +751,19 @@ impl ApiClient {
         parse(response).await
     }
 
+    /// POST /host/update/install (needs elevation). Returns the HostUpdateStatus; the host installs
+    /// the ready version once this request has ended, and restarts.
+    pub async fn install_host_update(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired(host, paired, reqwest::Method::POST, "/host/update/install")
+            .await?;
+        parse(response).await
+    }
+
     /// PUT /host/update/settings (needs elevation). Returns the HostUpdateStatus.
     pub async fn set_host_update_settings(
         &self,

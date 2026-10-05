@@ -4,6 +4,9 @@
     checkHostUpdate,
     errorMessage,
     getHostUpdate,
+    hostSupports,
+    installHostUpdate,
+    InstallUpdateApiVersion,
     setHostUpdateSettings,
     type HostEntry,
     type HostUpdateMode,
@@ -28,10 +31,17 @@
   let channel = $state("stable");
   let mode = $state<HostUpdateMode>("auto");
   let maintenanceTime = $state("");
+  let startingInstall = $state(false);
+  /** The version this device asked the host to install, until the host runs it or gives up. */
+  let installTarget = $state<string | null>(null);
+
+  // Older hosts install only from their tray.
+  const canInstallHere = $derived(hostSupports(host, InstallUpdateApiVersion));
 
   // Checking, downloading, and installing move on by themselves, so watch them until they settle.
   const working = $derived(
-    status !== null && (status.activity === "checking" || status.activity === "preparing" || status.activity === "installing"),
+    installTarget !== null ||
+      (status !== null && (status.activity === "checking" || status.activity === "preparing" || status.activity === "installing")),
   );
 
   const summary = $derived.by(() => {
@@ -45,7 +55,9 @@
       case "ready":
         return status.mode === "auto"
           ? `Version ${status.availableVersion} is ready. It installs when nothing is in progress on the host, or at the maintenance time.`
-          : `Version ${status.availableVersion} is ready. Install it from the HyperHarbor Host window on the host.`;
+          : canInstallHere
+            ? `Version ${status.availableVersion} is ready to install.`
+            : `Version ${status.availableVersion} is ready. Install it from the HyperHarbor Host window on the host.`;
       case "installing":
         return `Installing version ${status.availableVersion}. The host restarts and is back in a minute or two.`;
       default:
@@ -57,9 +69,11 @@
     try {
       status = await getHostUpdate(host.key);
       loadError = null;
+      // The host runs the new version, or came back without it (rolled back, or the install was refused).
+      if (installTarget && (status.currentVersion === installTarget || status.activity === "idle")) installTarget = null;
     } catch (error) {
       // While an update installs the host restarts, so a failed poll is expected for a while.
-      loadError = status?.activity === "installing" ? null : errorMessage(error);
+      loadError = status?.activity === "installing" || installTarget ? null : errorMessage(error);
     }
   }
 
@@ -82,6 +96,21 @@
       loadError = errorMessage(error);
     } finally {
       checking = false;
+    }
+  }
+
+  async function installNow() {
+    if (!status?.availableVersion) return;
+    const target = status.availableVersion;
+    startingInstall = true;
+    loadError = null;
+    try {
+      status = await withElevation(host.key, () => installHostUpdate(host.key));
+      installTarget = target;
+    } catch (error) {
+      if (!(error instanceof ElevationCancelled)) loadError = errorMessage(error);
+    } finally {
+      startingInstall = false;
     }
   }
 
@@ -181,6 +210,16 @@
         </form>
       {:else}
         <div class="actions">
+          {#if status.activity === "ready" && canInstallHere && installTarget === null}
+            <button
+              type="button"
+              class="primary"
+              onclick={installNow}
+              disabled={startingInstall}
+              title="Install now, whatever the update mode. Work in progress on the host finishes first, and the host restarts."
+              >{startingInstall ? "Starting the install…" : `Install ${status.availableVersion} now`}</button
+            >
+          {/if}
           <button type="button" onclick={checkNow} disabled={checking || working}>
             {checking ? "Checking…" : "Check now"}
           </button>
@@ -241,5 +280,11 @@
   .actions {
     display: flex;
     gap: 0.5rem;
+  }
+
+  .actions button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
   }
 </style>

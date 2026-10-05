@@ -19,6 +19,7 @@ public sealed class UpdateApiTests : IDisposable
     private readonly FakeReleaseServer _server = new();
     private TestHost? _host;
     private HttpClient? _client;
+    private int _helperStarts;
 
     public void Dispose()
     {
@@ -87,8 +88,46 @@ public sealed class UpdateApiTests : IDisposable
         Assert.Equal(field, (string?)errors.Single()!["field"]);
     }
 
-    private HttpClient Start(bool installed)
+    [Fact]
+    public async Task InstallNow_NeedsElevation_AndAReadyVersion()
     {
+        Start(installed: true);
+
+        var unelevated = await _client!.PostAsync("/api/v1/host/update/install", null);
+        var notReady = await SendElevatedAsync(HttpMethod.Post, "/api/v1/host/update/install", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, unelevated.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, notReady.StatusCode);
+        Assert.Equal(ContractInfo.ProblemCodes.UpdateNotReady, await CodeAsync(notReady));
+    }
+
+    [Fact]
+    public async Task InstallNow_HandsAReadyVersionToTheHelper_InNotifyMode()
+    {
+        Start(installed: true, ready: true);
+        _host!.Services.GetRequiredService<UpdateSettings>().Save(new UpdatePreferences("stable", UpdateMode.Notify, null));
+        var coordinator = _host.Services.GetRequiredService<UpdateCoordinator>();
+        await coordinator.TickAsync(CancellationToken.None);
+        Assert.Equal(UpdateActivity.Ready, coordinator.Status.Activity);
+
+        var install = await SendElevatedAsync(HttpMethod.Post, "/api/v1/host/update/install", null);
+        await coordinator.TickAsync(CancellationToken.None);
+
+        Assert.Equal(HttpStatusCode.Accepted, install.StatusCode);
+        Assert.Equal(1, _helperStarts);
+        Assert.Equal(UpdateActivity.Installing, coordinator.Status.Activity);
+        var audited = _host.AuditEntries().Last(entry => (string?)entry["action"] == "installHostUpdate");
+        Assert.Equal("succeeded", (string?)audited["outcome"]);
+    }
+
+    private HttpClient Start(bool installed, bool ready = false)
+    {
+        if (ready)
+        {
+            _server.Serve(Releases.ManifestUrl, System.Text.Encoding.UTF8.GetBytes(Releases.Manifest()));
+            _server.Serve(Releases.PackageUrl, Releases.Package);
+        }
+
         _host = new TestHost(services =>
         {
             if (installed)
@@ -96,14 +135,14 @@ public sealed class UpdateApiTests : IDisposable
                 services.AddSingleton(provider =>
                 {
                     var options = provider.GetRequiredService<UpdateOptions>();
-                    var preparer = new UpdatePreparer(options, Releases.Downloader(_server, options), new UnsignedPackageVerifier(), new SelfTestGate(_host!.DataDirectory, new NoSelfTest(), TimeSpan.FromSeconds(5)), _host.DataDirectory);
+                    var preparer = new UpdatePreparer(options, Releases.Downloader(_server, options), new UnsignedPackageVerifier(), new SelfTestGate(_host!.DataDirectory, ready ? new PassingSelfTest() : new NoSelfTest(), TimeSpan.FromSeconds(5)), _host.DataDirectory);
                     return new UpdateCoordinator(
                         preparer,
                         new UpdateStateStore(_host.DataDirectory),
                         provider.GetRequiredService<HostActivity>(),
                         provider.GetRequiredService<UpdateSettings>().Current,
                         SemanticVersion.Parse("0.1.0"),
-                        () => { },
+                        () => _helperStarts++,
                         TimeProvider.System,
                         NullLogger.Instance);
                 });
@@ -118,11 +157,11 @@ public sealed class UpdateApiTests : IDisposable
         return _client;
     }
 
-    private async Task<HttpResponseMessage> SendElevatedAsync(HttpMethod method, string path, object body)
+    private async Task<HttpResponseMessage> SendElevatedAsync(HttpMethod method, string path, object? body)
     {
         var elevate = await _client!.PostAsJsonAsync("/api/v1/auth/elevation", new { passphrase = Passphrase });
         var token = (string)(await elevate.Content.ReadFromJsonAsync<JsonObject>())!["token"]!;
-        var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
+        var request = new HttpRequestMessage(method, path) { Content = body is null ? null : JsonContent.Create(body) };
         request.Headers.Add(ContractInfo.ElevationHeader, token);
         return await _client!.SendAsync(request);
     }
