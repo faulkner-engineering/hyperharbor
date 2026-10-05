@@ -5,16 +5,18 @@
     title: string;
     /** Wider dialogs for forms with two columns. */
     wide?: boolean;
+    /** Nearly the whole window, for editors and side-by-side lists. */
+    xl?: boolean;
     children: Snippet;
   }
 
-  let { title, wide = false, children }: Props = $props();
+  let { title, wide = false, xl = false, children }: Props = $props();
 
   const titleId = $props.id();
 </script>
 
 <div class="backdrop" role="presentation">
-  <div class="dialog" class:wide role="dialog" aria-modal="true" aria-labelledby={titleId}>
+  <div class="dialog" class:wide class:xl role="dialog" aria-modal="true" aria-labelledby={titleId}>
     <h3 id={titleId}>{title}</h3>
     {@render children()}
   </div>
@@ -43,6 +45,13 @@
 
   .dialog.wide {
     width: min(620px, calc(100vw - 2rem));
+  }
+
+  .dialog.xl {
+    width: min(1100px, calc(100vw - 2rem));
+    height: min(820px, calc(100vh - 2rem));
+    display: flex;
+    flex-direction: column;
   }
 
   h3 {

@@ -54,6 +54,25 @@ describe("VmList row actions", () => {
     }
   });
 
+  it("offers Capture setup profile only for running Windows VMs, and only when the host has it", async () => {
+    const oncapture = vi.fn();
+    const running = provisioned("running");
+    const { unmount } = render(VmList, { vms: [running], oncapture });
+
+    await fireEvent.click((await openMenu()).getByRole("button", { name: "Capture setup profile…" }));
+    expect(oncapture).toHaveBeenCalledWith(running);
+    unmount();
+
+    render(VmList, { vms: [provisioned("off")], oncapture });
+    expect((await openMenu()).queryByRole("button", { name: "Capture setup profile…" })).toBeNull();
+  });
+
+  it("leaves Capture setup profile out for hosts without setup profiles", async () => {
+    render(VmList, { vms: [provisioned("running")] });
+
+    expect((await openMenu()).queryByRole("button", { name: "Capture setup profile…" })).toBeNull();
+  });
+
   it("offers Force shut off from the menu and reports the turnOff action", async () => {
     const onaction = vi.fn();
     const running = provisioned("running");

@@ -34,6 +34,24 @@ export type GuestDriverStatus = components["schemas"]["GuestDriverStatus"];
 export type HostGpu = components["schemas"]["HostGpu"];
 export type HostGpuDevice = components["schemas"]["HostGpuDevice"];
 export type GpuDriverWarning = components["schemas"]["GpuDriverWarning"];
+export type SetupProfile = components["schemas"]["SetupProfile"];
+export type ProfileItem = components["schemas"]["ProfileItem"];
+export type ProfileTweak = components["schemas"]["ProfileTweak"];
+export type RegistryTweak = components["schemas"]["RegistryTweak"];
+export type ProfileBrowser = components["schemas"]["ProfileBrowser"];
+export type SetupProfileSummary = components["schemas"]["SetupProfileSummary"];
+export type StoredSetupProfile = components["schemas"]["StoredSetupProfile"];
+export type SetupProfileCatalog = components["schemas"]["SetupProfileCatalog"];
+export type VmAppxInventory = components["schemas"]["VmAppxInventory"];
+export type AppxPackage = components["schemas"]["AppxPackage"];
+export type AppxBaselineInfo = components["schemas"]["AppxBaselineInfo"];
+export type PackageSearchResult = components["schemas"]["PackageSearchResult"];
+export type PackageCatalogItem = components["schemas"]["PackageCatalogItem"];
+export type ExtensionCatalogItem = components["schemas"]["ExtensionCatalogItem"];
+export type ResolvedExtension = components["schemas"]["ResolvedExtension"];
+export type ProfileDraft = components["schemas"]["ProfileDraft"];
+export type DraftItem = components["schemas"]["DraftItem"];
+export type DraftBrowser = components["schemas"]["DraftBrowser"];
 
 /** Request bodies, as the Rust side expects them. */
 export interface DeleteVmRequest {
@@ -76,6 +94,7 @@ export const ProblemCodes = {
   /** Set by the client: the host does not have the route, because it runs an older version. */
   hostOutdated: "hostOutdated",
   updateNotReady: "updateNotReady",
+  wingetUnavailable: "wingetUnavailable",
 } as const;
 
 export interface WakeFixOutcome {
@@ -339,6 +358,57 @@ export const enableHostRemoteDesktop = (key: string) =>
 
 /** Opens Remote Desktop to the host. Resolves once mstsc has been launched. */
 export const connectHost = (key: string) => invoke<void>("connect_host", { key });
+
+// Setup profiles (API 1.12.0): YAML files on the host, built with pickers or captured from a VM.
+
+/** The API version that added setup profiles, package search, and capture. */
+export const SetupProfilesApiVersion = "1.12.0";
+
+export const listSetupProfiles = (key: string) =>
+  invoke<SetupProfileSummary[]>("get_host_resource", { key, resource: "setupProfiles" });
+
+export const getSetupProfile = (key: string, profileId: string) =>
+  invoke<StoredSetupProfile>("get_setup_profile", { key, profileId });
+
+/** Creates a profile (null ID) or replaces one. Needs elevation: run it inside withElevation. */
+export const saveSetupProfile = (key: string, profileId: string | null, profile: SetupProfile) =>
+  invoke<StoredSetupProfile>("save_setup_profile", { key, profileId, profile });
+
+/** Needs elevation: run it inside withElevation. */
+export const deleteSetupProfile = (key: string, profileId: string) =>
+  invoke<void>("delete_setup_profile", { key, profileId });
+
+/** Saves the profile's YAML file where the user chooses; null when cancelled. */
+export const exportSetupProfile = (key: string, profileId: string) =>
+  invoke<string | null>("export_setup_profile", { key, profileId });
+
+/** Picks a YAML file and saves it as a new profile; null when cancelled. Needs elevation. */
+export const importSetupProfile = (key: string) => invoke<StoredSetupProfile | null>("import_setup_profile", { key });
+
+export const getSetupProfileCatalog = (key: string) =>
+  invoke<SetupProfileCatalog>("get_host_resource", { key, resource: "setupProfileCatalog" });
+
+export const listPackageCatalog = (key: string) =>
+  invoke<PackageCatalogItem[]>("get_host_resource", { key, resource: "packageCatalog" });
+
+export const listExtensionCatalog = (key: string) =>
+  invoke<ExtensionCatalogItem[]>("get_host_resource", { key, resource: "extensionCatalog" });
+
+/** Fails with problem code wingetUnavailable until package search is set up on the host. */
+export const searchPackages = (key: string, query: string) =>
+  invoke<PackageSearchResult[]>("search_packages", { key, query });
+
+export const resolveExtension = (key: string, input: string) =>
+  invoke<ResolvedExtension>("resolve_extension", { key, input });
+
+export const listVmAppx = (key: string, vmId: string) => invoke<VmAppxInventory>("list_vm_appx", { key, vmId });
+
+export const recordAppxBaseline = (key: string, vmId: string) =>
+  invoke<AppxBaselineInfo>("record_appx_baseline", { key, vmId });
+
+/** Reads a running Windows VM (a few minutes) and returns a draft; nothing is saved. */
+export const captureSetupProfile = (key: string, vmId: string) =>
+  invoke<ProfileDraft>("capture_setup_profile", { key, vmId });
 
 // ISO library. Files are chosen and read on the Rust side; the frontend only sees a pick ID.
 

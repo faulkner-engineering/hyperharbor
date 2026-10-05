@@ -26,6 +26,12 @@ const CONSOLE_OPEN_TIMEOUT: Duration = Duration::from_secs(30);
 /// Until the host answers a tunnel request; the tunnel itself has no time limit.
 const CONSOLE_TUNNEL_TIMEOUT: Duration = Duration::from_secs(15);
 /// ISO images are several gigabytes; a slow network can take hours.
+/// winget search runs PowerShell 7 on the host; extension lookups reach the stores.
+const PACKAGE_SEARCH_TIMEOUT: Duration = Duration::from_secs(90);
+/// Reading a guest over PowerShell Direct.
+const GUEST_READ_TIMEOUT: Duration = Duration::from_secs(4 * 60);
+/// Capture runs three guest reads, including winget export.
+const CAPTURE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(12 * 60 * 60);
 /// Bytes read from disk per chunk of an upload.
 const UPLOAD_CHUNK_BYTES: usize = 1024 * 1024;
@@ -788,6 +794,191 @@ impl ApiClient {
         .await
     }
 
+    /// GET /setup-profiles/{id}: the StoredSetupProfile.
+    pub async fn get_setup_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &setup_profile_path(id)?).await
+    }
+
+    /// POST /setup-profiles, or PUT /setup-profiles/{id} (needs elevation).
+    pub async fn save_setup_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        id: Option<&str>,
+        profile: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let (method, path) = match id {
+            Some(id) => (reqwest::Method::PUT, setup_profile_path(id)?),
+            None => (reqwest::Method::POST, "/setup-profiles".to_string()),
+        };
+        self.send_json(host, paired, method, &path, profile).await
+    }
+
+    /// DELETE /setup-profiles/{id} (needs elevation).
+    pub async fn delete_setup_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        id: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired(
+            host,
+            paired,
+            reqwest::Method::DELETE,
+            &setup_profile_path(id)?,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// GET /setup-profiles/{id}/yaml: the file as stored on the host.
+    pub async fn export_setup_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        id: &str,
+    ) -> Result<String, ClientError> {
+        let path = format!("{}/yaml", setup_profile_path(id)?);
+        let response = self
+            .send_paired(host, paired, reqwest::Method::GET, &path)
+            .await?;
+        response
+            .text()
+            .await
+            .map_err(|e| ClientError::InvalidResponse(e.without_url().to_string()))
+    }
+
+    /// POST /setup-profiles/import with the YAML file as the body (needs elevation).
+    pub async fn import_setup_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        yaml: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired_built(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/setup-profiles/import",
+                None,
+                |request| {
+                    request
+                        .header(reqwest::header::CONTENT_TYPE, "application/yaml")
+                        .body(yaml.to_string())
+                },
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// GET /packages/search?q=: winget packages, searched on the host.
+    pub async fn search_packages(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        query: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("/packages/search?q={}&count=25", query_value(query));
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::GET,
+                &path,
+                None,
+                Some(PACKAGE_SEARCH_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// GET /extensions/resolve?input=: an extension from a store link or id.
+    pub async fn resolve_extension(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        input: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("/extensions/resolve?input={}", query_value(input));
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::GET,
+                &path,
+                None,
+                Some(PACKAGE_SEARCH_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// GET /vms/{vmId}/appx: provisioned packages, rated and compared with the clean baseline.
+    pub async fn list_vm_appx(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::GET,
+                &vm_path(vm_id, "appx")?,
+                None,
+                Some(GUEST_READ_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// POST /vms/{vmId}/appx-baseline: records the VM's packages as the clean baseline.
+    pub async fn record_appx_baseline(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &vm_path(vm_id, "appx-baseline")?,
+                None,
+                Some(GUEST_READ_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// POST /vms/{vmId}/profile-capture: a draft setup profile read from the VM (takes minutes).
+    pub async fn capture_setup_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &vm_path(vm_id, "profile-capture")?,
+                None,
+                Some(CAPTURE_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
     /// GET /vms/{vmId}/compute.
     pub async fn get_vm_compute(
         &self,
@@ -1095,6 +1286,23 @@ impl ApiClient {
         body: Option<&serde_json::Value>,
         timeout: Option<Duration>,
     ) -> Result<reqwest::Response, ClientError> {
+        self.send_paired_built(host, paired, method, path, timeout, |request| match body {
+            Some(body) => request.json(body),
+            None => request,
+        })
+        .await
+    }
+
+    /// Sends to the host's addresses in turn; `build` adds the body to each attempt.
+    async fn send_paired_built(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        method: reqwest::Method,
+        path: &str,
+        timeout: Option<Duration>,
+        build: impl Fn(reqwest::RequestBuilder) -> reqwest::RequestBuilder,
+    ) -> Result<reqwest::Response, ClientError> {
         let http = self.pinned_client(paired)?;
         let candidates = self.ordered_candidates(host, paired);
         let token = self.elevation_token(paired);
@@ -1102,10 +1310,7 @@ impl ApiClient {
         let mut last_error = None;
         for base_url in candidates {
             let mut request =
-                http.request(method.clone(), format!("{base_url}{API_BASE_PATH}{path}"));
-            if let Some(body) = body {
-                request = request.json(body);
-            }
+                build(http.request(method.clone(), format!("{base_url}{API_BASE_PATH}{path}")));
             if let Some(token) = &token {
                 request = request.header(ELEVATION_HEADER, token.as_str());
             }
@@ -1163,6 +1368,10 @@ pub enum HostResource {
     Gpu,
     Update,
     RemoteDesktop,
+    SetupProfiles,
+    SetupProfileCatalog,
+    PackageCatalog,
+    ExtensionCatalog,
 }
 
 impl HostResource {
@@ -1175,6 +1384,10 @@ impl HostResource {
             HostResource::UnattendProfiles => "/unattend-profiles",
             HostResource::Gpu => "/host/gpu",
             HostResource::RemoteDesktop => "/host/remote-desktop",
+            HostResource::SetupProfiles => "/setup-profiles",
+            HostResource::SetupProfileCatalog => "/setup-profiles/catalog",
+            HostResource::PackageCatalog => "/packages/catalog",
+            HostResource::ExtensionCatalog => "/extensions/catalog",
         }
     }
 }
@@ -1226,6 +1439,36 @@ pub fn candidate_base_urls(host: &HostEntry) -> Vec<String> {
 /// "/isos/{name}" with the name percent-encoded. Only plain .iso file names may become part of a path;
 /// the host checks the name again.
 /// "/unattend-profiles/{id}". Profile IDs are slugs or GUIDs; anything else never reaches the host.
+/// "/setup-profiles/{id}": lowercase letters, digits, and hyphens, as the host names them.
+fn setup_profile_path(id: &str) -> Result<String, ClientError> {
+    let valid = !id.is_empty()
+        && id.len() <= 48
+        && !id.starts_with('-')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if valid {
+        Ok(format!("/setup-profiles/{id}"))
+    } else {
+        Err(ClientError::InvalidRequest(format!(
+            "\"{id}\" is not a setup profile ID"
+        )))
+    }
+}
+
+/// A query string value, percent-encoded (everything but unreserved characters).
+fn query_value(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
+}
+
 fn profile_path(id: &str) -> Result<String, ClientError> {
     let valid = !id.is_empty()
         && id.len() <= 64
@@ -2474,6 +2717,86 @@ mod server_tests {
         assert_eq!(
             (request.method.as_str(), request.path.as_str()),
             ("GET", "/api/v1/host")
+        );
+    }
+
+    #[tokio::test]
+    async fn import_sends_the_yaml_file_as_is() {
+        let server = TestServer::start("127.0.0.1:0", |_| {
+            Reply::json(
+                201,
+                r#"{"id":"imported","updatedAt":"2026-10-05T12:00:00Z","profile":{"name":"Imported"}}"#,
+            )
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let yaml = "schemaVersion: 1\nname: Imported\ninstall:\n  - git   # Git\n";
+
+        let saved = api()
+            .import_setup_profile(&target, &paired(server.certificate_hash()), yaml)
+            .await
+            .unwrap();
+
+        assert_eq!(saved["id"], "imported");
+        let request = &server.requests()[0];
+        assert_eq!(
+            (request.method.as_str(), request.path.as_str()),
+            ("POST", "/api/v1/setup-profiles/import")
+        );
+        assert_eq!(request.header("content-type"), Some("application/yaml"));
+        assert_eq!(request.body, yaml);
+    }
+
+    #[tokio::test]
+    async fn search_and_resolve_encode_their_query() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(200, "[]"));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let paired = paired(server.certificate_hash());
+
+        api()
+            .search_packages(&target, &paired, "visual studio & c++")
+            .await
+            .unwrap();
+        api()
+            .resolve_extension(
+                &target,
+                &paired,
+                "https://chromewebstore.google.com/detail/x/abc?hl=en",
+            )
+            .await
+            .unwrap();
+
+        let requests = server.requests();
+        assert_eq!(
+            requests[0].path,
+            "/api/v1/packages/search?q=visual%20studio%20%26%20c%2B%2B&count=25"
+        );
+        assert_eq!(
+            requests[1].path,
+            "/api/v1/extensions/resolve?input=https%3A%2F%2Fchromewebstore.google.com%2Fdetail%2Fx%2Fabc%3Fhl%3Den"
+        );
+    }
+
+    #[tokio::test]
+    async fn setup_profile_ids_are_checked_before_any_request() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(200, "{}"));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let paired = paired(server.certificate_hash());
+
+        for id in ["../users", "Dev", "", "-x", "a/b"] {
+            let result = api().get_setup_profile(&target, &paired, id).await;
+            assert!(
+                matches!(result, Err(ClientError::InvalidRequest(_))),
+                "{id}"
+            );
+        }
+        assert!(server.requests().is_empty());
+        api()
+            .get_setup_profile(&target, &paired, "dev-workstation-2")
+            .await
+            .unwrap();
+        assert_eq!(
+            server.requests()[0].path,
+            "/api/v1/setup-profiles/dev-workstation-2"
         );
     }
 

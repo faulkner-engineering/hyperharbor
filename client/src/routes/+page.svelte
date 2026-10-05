@@ -18,6 +18,8 @@
     type HostRemoteDesktop,
     hostSupports,
     RemoteDesktopApiVersion,
+    SetupProfilesApiVersion,
+    type StoredSetupProfile,
     type Vm,
   } from "$lib/api/client";
   import { onMount } from "svelte";
@@ -38,6 +40,8 @@
   import { elevation, ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
   import InstallProfiles from "$lib/components/InstallProfiles.svelte";
+  import SetupProfiles from "$lib/components/SetupProfiles.svelte";
+  import CaptureReview from "$lib/components/CaptureReview.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
   import MonitorsDialog from "$lib/components/MonitorsDialog.svelte";
   import Menu from "$lib/components/Menu.svelte";
@@ -69,13 +73,17 @@
   let connectingHost = $state(false);
   /** The host's Remote Desktop state while asking whether to turn it on, and the answer's resolver. */
   let enablingRemoteDesktop = $state<{ state: HostRemoteDesktop; answer: (confirmed: boolean) => void } | null>(null);
-  let view = $state<"vms" | "isos" | "profiles">("vms");
+  let view = $state<"vms" | "isos" | "profiles" | "setup">("vms");
+  let capturing = $state<Vm | null>(null);
   let now = $state(Date.now());
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
   // VMs are only fetched from paired hosts; others show the pairing panel instead.
   const pairedKey = $derived(selectedHost?.paired ? selectedHost.key : null);
   const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
+  const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
+  // Setup profiles read provisioned packages from running Windows VMs.
+  const runningWindows = $derived((vms ?? []).filter((vm) => vm.state === "running" && vm.guestOs.family === "windows"));
 
   function selectHost(key: string | null) {
     if (key === selectedKey) return;
@@ -92,6 +100,7 @@
     editing = null;
     tuning = null;
     choosingMonitors = null;
+    capturing = null;
     creating = false;
     enablingRemoteDesktop?.answer(false);
     view = "vms";
@@ -182,6 +191,13 @@
     const pending = enablingRemoteDesktop;
     enablingRemoteDesktop = null;
     pending?.answer(confirmed);
+  }
+
+  function captured(saved: StoredSetupProfile | null) {
+    capturing = null;
+    if (saved) {
+      toasts.show(`Saved the setup profile ${saved.profile.name}. It is on the Setup profiles tab.`);
+    }
   }
 
   async function openVmConsole(vm: Vm) {
@@ -418,6 +434,15 @@
             class:active={view === "profiles"}
             onclick={() => (view = "profiles")}>Install profiles</button
           >
+          {#if hostHasSetupProfiles}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "setup"}
+              class:active={view === "setup"}
+              onclick={() => (view = "setup")}>Setup profiles</button
+            >
+          {/if}
         </div>
         {#if view === "isos"}
           {#key selectedHost.key}
@@ -426,6 +451,10 @@
         {:else if view === "profiles"}
           {#key selectedHost.key}
             <InstallProfiles host={selectedHost} />
+          {/key}
+        {:else if view === "setup"}
+          {#key selectedHost.key}
+            <SetupProfiles host={selectedHost} vms={runningWindows} />
           {/key}
         {:else}
           <VmList
@@ -440,11 +469,15 @@
             onsettings={(vm) => (editing = vm)}
             onperformance={(vm) => (tuning = vm)}
             onmonitors={(vm) => (choosingMonitors = vm)}
+            oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
             ondelete={(vm) => (deleting = vm)}
           />
         {/if}
         {#if provisioning}
           <ProvisionDialog host={selectedHost} vm={provisioning} onclose={provisioned} />
+        {/if}
+        {#if capturing}
+          <CaptureReview host={selectedHost} vm={capturing} onclose={captured} />
         {/if}
         {#if confirmTurnOff}
           <ConfirmDialog

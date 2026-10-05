@@ -651,6 +651,188 @@ async fn delete_iso(
     state.api.delete_iso(&host, &paired, &name).await
 }
 
+/// A saved setup profile (StoredSetupProfile).
+#[tauri::command]
+async fn get_setup_profile(
+    state: State<'_, AppState>,
+    key: String,
+    profile_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .get_setup_profile(&host, &paired, &profile_id)
+        .await
+}
+
+/// Saves a new setup profile (no ID) or replaces one. Needs elevation.
+#[tauri::command]
+async fn save_setup_profile(
+    state: State<'_, AppState>,
+    key: String,
+    profile_id: Option<String>,
+    profile: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .save_setup_profile(&host, &paired, profile_id.as_deref(), &profile)
+        .await
+}
+
+/// Deletes a setup profile. Needs elevation.
+#[tauri::command]
+async fn delete_setup_profile(
+    state: State<'_, AppState>,
+    key: String,
+    profile_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .delete_setup_profile(&host, &paired, &profile_id)
+        .await
+}
+
+/// The largest setup profile file the host accepts.
+const MAX_PROFILE_FILE_BYTES: u64 = 256 * 1024;
+
+/// Saves a setup profile's YAML file where the user chooses. Returns the path, or None when cancelled.
+#[tauri::command]
+async fn export_setup_profile(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+    profile_id: String,
+) -> Result<Option<String>, ClientError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (host, paired) = state.paired_host(&key)?;
+    let yaml = state
+        .api
+        .export_setup_profile(&host, &paired, &profile_id)
+        .await?;
+    let dialog = app.clone();
+    let file_name = format!("{profile_id}.yaml");
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        dialog
+            .dialog()
+            .file()
+            .set_title("Save the setup profile")
+            .set_file_name(&file_name)
+            .add_filter("Setup profiles", &["yaml", "yml"])
+            .blocking_save_file()
+    })
+    .await
+    .map_err(|e| ClientError::InvalidRequest(e.to_string()))?;
+
+    let Some(path) = chosen.and_then(|file| file.into_path().ok()) else {
+        return Ok(None);
+    };
+    std::fs::write(&path, yaml).map_err(|e| ClientError::Storage(e.to_string()))?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Picks a YAML file on this device and saves it on the host as a new setup profile (needs elevation).
+/// Returns None when the user cancels.
+#[tauri::command]
+async fn import_setup_profile(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<Option<serde_json::Value>, ClientError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (host, paired) = state.paired_host(&key)?;
+    let dialog = app.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        dialog
+            .dialog()
+            .file()
+            .set_title("Choose a setup profile to import")
+            .add_filter("Setup profiles", &["yaml", "yml"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|e| ClientError::InvalidRequest(e.to_string()))?;
+
+    let Some(path) = picked.and_then(|file| file.into_path().ok()) else {
+        return Ok(None);
+    };
+    let size = std::fs::metadata(&path)
+        .map_err(|e| ClientError::Storage(e.to_string()))?
+        .len();
+    if size > MAX_PROFILE_FILE_BYTES {
+        return Err(ClientError::InvalidRequest(
+            "a setup profile file is at most 256 KB".into(),
+        ));
+    }
+    let yaml = std::fs::read_to_string(&path).map_err(|e| ClientError::Storage(e.to_string()))?;
+    state
+        .api
+        .import_setup_profile(&host, &paired, &yaml)
+        .await
+        .map(Some)
+}
+
+/// winget packages found by the host.
+#[tauri::command]
+async fn search_packages(
+    state: State<'_, AppState>,
+    key: String,
+    query: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.search_packages(&host, &paired, &query).await
+}
+
+/// An extension from a pasted store link or id.
+#[tauri::command]
+async fn resolve_extension(
+    state: State<'_, AppState>,
+    key: String,
+    input: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.resolve_extension(&host, &paired, &input).await
+}
+
+/// A running Windows VM's provisioned Appx packages, compared with the clean baseline.
+#[tauri::command]
+async fn list_vm_appx(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.list_vm_appx(&host, &paired, &vm_id).await
+}
+
+/// Records a VM's provisioned packages as the clean baseline for its build and edition.
+#[tauri::command]
+async fn record_appx_baseline(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.record_appx_baseline(&host, &paired, &vm_id).await
+}
+
+/// A draft setup profile read from a running Windows VM.
+#[tauri::command]
+async fn capture_setup_profile(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .capture_setup_profile(&host, &paired, &vm_id)
+        .await
+}
+
 /// What an ISO in the library installs, for the create dialog's unattended options.
 #[tauri::command]
 async fn inspect_iso(
@@ -989,6 +1171,16 @@ pub fn run() {
             get_monitor_choice,
             set_monitor_choice,
             inspect_iso,
+            get_setup_profile,
+            save_setup_profile,
+            delete_setup_profile,
+            export_setup_profile,
+            import_setup_profile,
+            search_packages,
+            resolve_extension,
+            list_vm_appx,
+            record_appx_baseline,
+            capture_setup_profile,
             save_unattend_profile,
             delete_unattend_profile,
             get_vm_performance,
