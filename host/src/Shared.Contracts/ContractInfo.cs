@@ -35,5 +35,8 @@ public static class ContractInfo
         public const string VmMustBeOff = "vmMustBeOff";
         public const string GpuUnavailable = "gpuUnavailable";
         public const string CredentialRequired = "credentialRequired";
+
+        /// <summary>503: the host is installing an update; retry after Retry-After.</summary>
+        public const string Updating = "updating";
     }
 }

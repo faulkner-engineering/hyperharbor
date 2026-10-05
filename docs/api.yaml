@@ -16,6 +16,8 @@ info:
     - Every operation that changes state is recorded in the host's audit log with the User,
       device, virtual machine, and outcome. If the entry cannot be written, the operation is
       refused with 503.
+    - While the host installs an update, every operation that changes state is refused with
+      503, `code: updating`, and `Retry-After`; reads keep working until the service restarts.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary

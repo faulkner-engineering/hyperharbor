@@ -12,6 +12,7 @@ using HyperHarbor.Host.Core.Performance;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Unattend;
+using HyperHarbor.Host.Core.Updates;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Core.Wake;
@@ -249,13 +250,37 @@ if (selfTest is null)
 {
     // The watcher changes VMs (passwords, seed media), so a self-test run leaves it out.
     builder.Services.AddHostedService<InstallWatcherService>();
-
 }
+
+// What an update restart would interrupt; the update gate middleware counts state-changing requests here.
+builder.Services.AddSingleton(services => new HostActivity(
+    () => services.GetRequiredService<VmJobStore>().AnyRunning || services.GetRequiredService<PairingService>().HasPendingRequest,
+    services.GetRequiredService<TimeProvider>()));
 
 if (isWindowsService)
 {
     // update\health.json, which the update helper waits for after starting a new version of the service.
     builder.Services.AddHostedService<HealthReporter>();
+
+    // Updates apply to the installed service only: checks, downloads, self-tests, and the handoff to the helper.
+    builder.Services.AddSingleton(builder.Configuration.GetSection(UpdateOptions.SectionName).Get<UpdateOptions>() ?? new UpdateOptions());
+    builder.Services.AddSingleton(services =>
+    {
+        var options = services.GetRequiredService<UpdateOptions>();
+        var downloader = new UpdateDownloader(UpdateDownloader.CreateHttpClient($"HyperHarbor-Host/{HostVersion.Current}"), options);
+        var gate = new SelfTestGate(dataDirectory, new SelfTestProcess(), SelfTestGate.DefaultTimeout);
+        var preparer = new UpdatePreparer(options, downloader, new UnsignedPackageVerifier(), gate, dataDirectory);
+        return new UpdateCoordinator(
+            preparer,
+            new UpdateStateStore(dataDirectory),
+            services.GetRequiredService<HostActivity>(),
+            () => options,
+            HostVersion.Current,
+            UpdateTask.Run,
+            services.GetRequiredService<TimeProvider>(),
+            services.GetRequiredService<ILogger<UpdateCoordinator>>());
+    });
+    builder.Services.AddHostedService<UpdateService>();
 }
 
 builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<VmCreationService>(services, services.GetRequiredService<VmStorageLocation>()));
@@ -329,6 +354,7 @@ foreach (var removed in untrustedDataEntries)
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseUpdateGate();
 app.UseAuthentication();
 app.UseAuthorization();
 

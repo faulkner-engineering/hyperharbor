@@ -50,6 +50,18 @@ public sealed class PairingService : IDisposable
         _logger = logger;
     }
 
+    /// <summary>Whether a pairing request is waiting for its PIN (a host update waits for it to end).</summary>
+    public bool HasPendingRequest
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _pending is not null && _time.GetUtcNow() < _pending.ExpiresAt;
+            }
+        }
+    }
+
     public PairingRequestCreated CreateRequest(PairingRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

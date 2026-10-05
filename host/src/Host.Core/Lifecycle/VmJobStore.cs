@@ -121,6 +121,18 @@ public sealed class VmJobStore : IDisposable
         return entry.Snapshot;
     }
 
+    /// <summary>Whether any job is still running (a host update waits for none).</summary>
+    public bool AnyRunning
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _jobs.Values.Any(entry => entry.Snapshot.State == VmJobState.Running);
+            }
+        }
+    }
+
     /// <summary>The job, or null when it does not exist, has been pruned, or belongs to another User.</summary>
     public VmJobSnapshot? Get(Guid jobId, Guid userId)
     {
