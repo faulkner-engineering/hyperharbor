@@ -45,7 +45,11 @@ public static class ProtectedFile
     /// Opens <paramref name="path"/> for appending. A new file gets the restricted ACL; an existing
     /// file keeps the ACL it was created with.
     /// </summary>
-    public static FileStream OpenAppend(string path)
+    /// <param name="readers">
+    /// Accounts that may also read a new file. The installed service grants the tray's user read access
+    /// to the logs and the audit trail, which never contain secrets.
+    /// </param>
+    public static FileStream OpenAppend(string path, IReadOnlyCollection<SecurityIdentifier>? readers = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         return new FileInfo(path).Create(
@@ -54,10 +58,11 @@ public static class ProtectedFile
             FileShare.Read,
             bufferSize: 4096,
             FileOptions.WriteThrough,
-            CreateSecurity());
+            CreateSecurity(readers));
     }
 
-    private static FileSecurity CreateSecurity()
+    /// <summary>The ACL for new files. Exposed for tests.</summary>
+    internal static FileSecurity CreateSecurity(IReadOnlyCollection<SecurityIdentifier>? readers = null)
     {
         var security = new FileSecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
@@ -65,6 +70,11 @@ public static class ProtectedFile
         foreach (var identity in AllowedIdentities())
         {
             security.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, AccessControlType.Allow));
+        }
+
+        foreach (var reader in readers ?? [])
+        {
+            security.AddAccessRule(new FileSystemAccessRule(reader, FileSystemRights.Read | FileSystemRights.Synchronize, AccessControlType.Allow));
         }
 
         return security;

@@ -53,6 +53,12 @@ if ($ElevatedSetup) {
     return
 }
 
+# The installed service and a portable host would share the port, the tray pipe, and the data.
+if (Get-Service -Name 'HyperHarborHost' -ErrorAction SilentlyContinue) {
+    Write-Warning 'HyperHarbor is installed as a service on this PC. Run Uninstall-HyperHarbor.ps1 first to use the portable host.'
+    return
+}
+
 # Hyper-V must be enabled on this PC.
 if (-not (Get-Service -Name vmms -ErrorAction SilentlyContinue)) {
     Write-Warning 'Hyper-V is not enabled on this PC. Enable it, restart, and run this script again.'

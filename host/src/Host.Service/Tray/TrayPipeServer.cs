@@ -16,8 +16,9 @@ namespace HyperHarbor.Host.Service.Tray;
 
 /// <summary>
 /// Serves tray apps over a named pipe. Shows pairing PINs and lets the tray list and revoke
-/// paired devices. The pipe ACL admits only SYSTEM, Administrators, and the account the service runs
-/// as: anyone who can connect sees pairing PINs, can revoke devices, and can set the admin passphrase.
+/// paired devices. The pipe ACL admits only SYSTEM, Administrators, the account the service runs as,
+/// and, for the installed service (LocalSystem), the user who installed it: anyone who can connect sees
+/// pairing PINs, can revoke devices, and can set the admin passphrase.
 /// </summary>
 public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.IWakeFixApprover
 {
@@ -25,14 +26,17 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
     private readonly IServiceProvider _services;
     private readonly ILogger<TrayPipeServer> _logger;
     private readonly string _pipeName;
+    private readonly SecurityIdentifier? _trayUser;
     private readonly ConcurrentDictionary<Guid, Connection> _connections = new();
 
     /// <summary>Longest message accepted from a tray, in characters. Longer input closes the connection.</summary>
     public const int MaxMessageLength = 64 * 1024;
 
-    public TrayPipeServer(PairedDeviceStore devices, IServiceProvider services, ILogger<TrayPipeServer> logger, string pipeName = TrayPipe.Name)
+    /// <param name="trayUser">A user admitted besides the service account (see <see cref="Installation.TrayUser"/>).</param>
+    public TrayPipeServer(PairedDeviceStore devices, IServiceProvider services, ILogger<TrayPipeServer> logger, string pipeName = TrayPipe.Name, SecurityIdentifier? trayUser = null)
     {
         _pipeName = pipeName;
+        _trayUser = trayUser;
         _devices = devices;
         _services = services;
         _logger = logger;
@@ -73,7 +77,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                     PipeOptions.Asynchronous,
                     inBufferSize: 0,
                     outBufferSize: 0,
-                    CreatePipeSecurity());
+                    CreatePipeSecurity(_trayUser));
             }
             catch (IOException ex)
             {
@@ -427,8 +431,12 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
     private static string JsonNamingPolicyCamel(PairingOutcome outcome) =>
         System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(outcome.ToString());
 
-    /// <summary>SYSTEM, Administrators, and the service account. Exposed for tests.</summary>
-    internal static PipeSecurity CreatePipeSecurity()
+    /// <summary>
+    /// SYSTEM, Administrators, the service account, and <paramref name="trayUser"/>. The tray user may read
+    /// and write but not create pipe instances or change the ACL, so it cannot serve the pipe itself.
+    /// Exposed for tests.
+    /// </summary>
+    internal static PipeSecurity CreatePipeSecurity(SecurityIdentifier? trayUser = null)
     {
         var security = new PipeSecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
@@ -443,6 +451,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         if (current.User is { } user)
         {
             Allow(user, PipeAccessRights.FullControl);
+        }
+
+        if (trayUser is not null && trayUser != current.User)
+        {
+            Allow(trayUser, PipeAccessRights.ReadWrite | PipeAccessRights.Synchronize);
         }
 
         return security;

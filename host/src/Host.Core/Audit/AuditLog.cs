@@ -1,3 +1,4 @@
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -71,10 +72,13 @@ public sealed class FileAuditLog : IAuditLog
     private readonly string _path;
     private readonly string _previousPath;
     private readonly object _gate = new();
+    private readonly IReadOnlyCollection<SecurityIdentifier> _readers;
 
-    public FileAuditLog(string dataDirectory, long maxBytes = DefaultMaxBytes)
+    /// <param name="readers">Accounts that may also read the audit trail (see <see cref="ProtectedFile.OpenAppend"/>).</param>
+    public FileAuditLog(string dataDirectory, long maxBytes = DefaultMaxBytes, IReadOnlyCollection<SecurityIdentifier>? readers = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
+        _readers = readers ?? [];
         _path = Path.Combine(dataDirectory, FileName);
         _previousPath = Path.Combine(dataDirectory, PreviousFileName);
         MaxBytes = maxBytes;
@@ -90,7 +94,7 @@ public sealed class FileAuditLog : IAuditLog
             lock (_gate)
             {
                 RollOverIfFull();
-                using var stream = ProtectedFile.OpenAppend(_path);
+                using var stream = ProtectedFile.OpenAppend(_path, _readers);
                 stream.Write(line);
             }
         }

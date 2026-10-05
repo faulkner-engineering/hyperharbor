@@ -120,6 +120,8 @@ if (-not $ClientOnly) {
     # Development settings must not ship, and web.config is an IIS file the Web SDK adds.
     Remove-Item (Join-Path $staging 'appsettings.Development.json'), (Join-Path $staging 'web.config') -ErrorAction SilentlyContinue
     Copy-Item (Join-Path $repo 'packaging\host\*') $staging
+    # Install-HyperHarbor.ps1 names the version folder from this file.
+    [IO.File]::WriteAllText((Join-Path $staging 'version.json'), (@{ version = $version } | ConvertTo-Json))
 
     $zip = Join-Path $dist "HyperHarbor-Host-$version-portable.zip"
     Remove-Item $zip -ErrorAction SilentlyContinue

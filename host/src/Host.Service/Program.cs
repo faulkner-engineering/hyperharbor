@@ -17,6 +17,7 @@ using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
 using HyperHarbor.Host.Service.Discovery;
+using HyperHarbor.Host.Service.Installation;
 using HyperHarbor.Host.Service.Logging;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Host.Service.Tray;
@@ -42,7 +43,14 @@ if (ConsoleSetupCommand.Matches(args))
     return await ConsoleSetupCommand.RunAsync(args);
 }
 
-var builder = WebApplication.CreateBuilder(args);
+var isWindowsService = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService();
+
+// A service starts in System32, so appsettings.json is read from the executable's folder instead.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = isWindowsService ? AppContext.BaseDirectory : null,
+});
 
 builder.Services.AddVmInventory();
 builder.Services.AddVmPowerControl();
@@ -57,9 +65,9 @@ if (args.Contains(ListVmsCommand.Switch, StringComparer.OrdinalIgnoreCase))
 
 builder.Services.AddWindowsService(options =>
 {
-    options.ServiceName = "HyperHarbor Host";
+    options.ServiceName = HostService.Name;
 });
-if (Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
+if (isWindowsService)
 {
     // Replaces the lifetime AddWindowsService registered, to handle SERVICE_CONTROL_PRESHUTDOWN.
     builder.Services.AddSingleton<IHostLifetime, PreshutdownServiceLifetime>();
@@ -71,16 +79,21 @@ builder.Services.AddHostedService<VmInventoryStartupLogger>();
 var dataDirectory = builder.Configuration["DataDirectory"] is { Length: > 0 } configured
     ? configured
     : HostIdentityStore.DefaultDataDirectory;
+
+// The installed service runs as LocalSystem; the user who installed it keeps the tray and read access to the logs.
+var trayUser = TrayUser.Resolve(builder.Configuration, isWindowsService);
+IReadOnlyCollection<System.Security.Principal.SecurityIdentifier> logReaders = trayUser is null ? [] : [trayUser];
+
 // The console and the daily log file under <data>\logs get the same entries.
 // Registered through DI so the container disposes it, which closes the file when the service stops.
-builder.Services.AddSingleton<ILoggerProvider>(_ => new FileLoggerProvider(dataDirectory));
+builder.Services.AddSingleton<ILoggerProvider>(_ => new FileLoggerProvider(dataDirectory, readers: logReaders));
 builder.Services.AddSingleton(new HostIdentityStore(dataDirectory));
 builder.Services.AddSingleton(new HostCertificateStore(dataDirectory, Environment.MachineName));
 var users = new UserStore(dataDirectory);
 users.GetOrCreateDefault();
 builder.Services.AddSingleton(users);
 builder.Services.AddSingleton(new PairedDeviceStore(dataDirectory, users));
-builder.Services.AddSingleton<IAuditLog>(new FileAuditLog(dataDirectory));
+builder.Services.AddSingleton<IAuditLog>(new FileAuditLog(dataDirectory, readers: logReaders));
 builder.Services.AddSingleton(new AdminPassphraseStore(dataDirectory));
 builder.Services.AddSingleton(services => new ElevationService(
     services.GetRequiredService<AdminPassphraseStore>(),
@@ -100,7 +113,8 @@ builder.Services.AddSingleton(services => new TrayPipeServer(
     services.GetRequiredService<PairedDeviceStore>(),
     services,
     services.GetRequiredService<ILogger<TrayPipeServer>>(),
-    trayPipeName));
+    trayPipeName,
+    trayUser));
 builder.Services.AddSingleton<IPairingNotifier>(services => services.GetRequiredService<TrayPipeServer>());
 builder.Services.AddHostedService(services => services.GetRequiredService<TrayPipeServer>());
 builder.Services.AddSingleton(TimeProvider.System);

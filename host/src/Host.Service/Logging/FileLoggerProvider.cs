@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Principal;
 using System.Text;
 using System.Threading.Channels;
 using HyperHarbor.Host.Core.Security;
@@ -22,9 +23,12 @@ public sealed class FileLoggerProvider : ILoggerProvider
     private readonly Channel<string> _lines = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Task _writer;
     private readonly System.Collections.Concurrent.ConcurrentQueue<TaskCompletionSource> _flushRequests = new();
+    private readonly IReadOnlyCollection<SecurityIdentifier> _readers;
 
-    public FileLoggerProvider(string dataDirectory, TimeProvider? time = null)
+    /// <param name="readers">Accounts that may also read new log files (see <see cref="ProtectedFile.OpenAppend"/>).</param>
+    public FileLoggerProvider(string dataDirectory, TimeProvider? time = null, IReadOnlyCollection<SecurityIdentifier>? readers = null)
     {
+        _readers = readers ?? [];
         _folder = Path.Combine(dataDirectory, FolderName);
         _time = time ?? TimeProvider.System;
         DeleteOldFiles();
@@ -86,7 +90,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
                         if (path != openPath)
                         {
                             stream?.Dispose();
-                            stream = ProtectedFile.OpenAppend(path);
+                            stream = ProtectedFile.OpenAppend(path, _readers);
                             openPath = path;
                         }
 

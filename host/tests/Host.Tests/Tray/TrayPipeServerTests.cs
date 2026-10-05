@@ -181,6 +181,24 @@ public sealed class TrayPipeServerTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public void PipeAcl_AdmitsTheTrayUser_WithoutCreatingInstancesOrChangingTheAcl()
+    {
+        var trayUser = new SecurityIdentifier("S-1-5-21-1111111111-2222222222-3333333333-1001");
+
+        var rule = Assert.Single(
+            TrayPipeServer.CreatePipeSecurity(trayUser)
+                .GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier))
+                .Cast<PipeAccessRule>(),
+            rule => rule.IdentityReference.Equals(trayUser));
+
+        Assert.Equal(AccessControlType.Allow, rule.AccessControlType);
+        Assert.True(rule.PipeAccessRights.HasFlag(PipeAccessRights.ReadWrite));
+        Assert.False(rule.PipeAccessRights.HasFlag(PipeAccessRights.CreateNewInstance));
+        Assert.False(rule.PipeAccessRights.HasFlag(PipeAccessRights.ChangePermissions));
+        Assert.False(rule.PipeAccessRights.HasFlag(PipeAccessRights.TakeOwnership));
+    }
+
     private PairedDevice AddDevice(string name) =>
         _devices.Add(new UserStore(_dataDirectory).GetOrCreateDefault().UserId, name, Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow);
 

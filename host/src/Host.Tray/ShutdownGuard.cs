@@ -7,7 +7,8 @@ namespace HyperHarbor.Host.Tray;
 /// as a console app (a console app is not told about shutdowns). A GPU partition VM cannot be saved,
 /// so Hyper-V would turn it off. The guard is a hidden top-level window: on WM_QUERYENDSESSION it shows
 /// a reason on the "apps are preventing shutdown" screen, refuses, and asks the service to shut the VMs
-/// down. Signing out is let through, because VMs keep running when the user signs out.
+/// down. Signing out is let through, because VMs keep running when the user signs out. The installed
+/// service handles shutdowns itself (preshutdown), so the guard stands aside while it runs.
 /// </summary>
 internal sealed class ShutdownGuard : NativeWindow, IDisposable
 {
@@ -46,7 +47,8 @@ internal sealed class ShutdownGuard : NativeWindow, IDisposable
 
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == WmQueryEndSession && (m.LParam.ToInt64() & EndSessionLogoff) == 0 && _runningGpuVms() is { Count: > 0 } running)
+        if (m.Msg == WmQueryEndSession && (m.LParam.ToInt64() & EndSessionLogoff) == 0 && _runningGpuVms() is { Count: > 0 } running
+            && !InstalledService.IsRunning())
         {
             if (!_blocking)
             {

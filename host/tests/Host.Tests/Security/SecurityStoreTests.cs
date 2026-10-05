@@ -59,6 +59,26 @@ public sealed class SecurityStoreTests : IDisposable
     }
 
     [Fact]
+    public void ProtectedFile_OpenAppend_GrantsReadersReadOnly()
+    {
+        var reader = new SecurityIdentifier("S-1-5-21-1111111111-2222222222-3333333333-1001");
+        var path = Path.Combine(_directory, "logs", "host.log");
+        using (var stream = ProtectedFile.OpenAppend(path, [reader]))
+        {
+            stream.Write("entry\n"u8);
+        }
+
+        var rules = new FileInfo(path).GetAccessControl()
+            .GetAccessRules(true, true, typeof(SecurityIdentifier))
+            .Cast<FileSystemAccessRule>()
+            .ToList();
+        var readerRule = Assert.Single(rules, rule => rule.IdentityReference.Equals(reader));
+        Assert.Equal(AccessControlType.Allow, readerRule.AccessControlType);
+        Assert.Equal(FileSystemRights.Read | FileSystemRights.Synchronize, readerRule.FileSystemRights);
+        Assert.DoesNotContain(rules, rule => rule.IdentityReference.Equals(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null)));
+    }
+
+    [Fact]
     public void PairedDevices_PersistAndRemove()
     {
         var store = new PairedDeviceStore(_directory, Users());
