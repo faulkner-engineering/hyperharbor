@@ -68,3 +68,46 @@ public sealed class PackageApiTests : IDisposable
         Assert.Equal(Catalogs.Default.Packages.Count, catalog.Count);
     }
 }
+
+public sealed class ExtensionApiTests : IDisposable
+{
+    private readonly TestHost _host = new();
+    private readonly X509Certificate2 _certificate = TestHost.CreateClientCertificate();
+    private readonly HttpClient _client;
+
+    public ExtensionApiTests()
+    {
+        _host.Pair(_certificate, "Laptop");
+        _client = _host.CreateClient(_certificate);
+    }
+
+    public void Dispose()
+    {
+        _client.Dispose();
+        _certificate.Dispose();
+        _host.Dispose();
+    }
+
+    [Fact]
+    public async Task TheCatalog_GivesProfileIds_IncludingEdgeOnlyEntries()
+    {
+        var catalog = (await _client.GetFromJsonAsync<JsonArray>("/api/v1/extensions/catalog"))!;
+
+        Assert.Contains(catalog, item => (string?)item!["id"] == "edge:odfafepnkmbhccpbejgmiehpchacaeak" && (string?)item["name"] == "uBlock Origin");
+        Assert.Contains(catalog, item => (string?)item!["edgeId"] == "edge:jbkfoedolllekgbhcbcoahefnbanhhlh");
+    }
+
+    [Fact]
+    public async Task APastedLink_Resolves_AndJunkIs400_AndAnUnknownIdIs404()
+    {
+        var link = Uri.EscapeDataString($"https://chromewebstore.google.com/detail/google-docs-offline/{Profiles.FakeExtensionResolver.StoreOnlyId}?hl=en");
+        var resolved = (await _client.GetFromJsonAsync<JsonObject>($"/api/v1/extensions/resolve?input={link}"))!;
+        var junk = await _client.GetAsync("/api/v1/extensions/resolve?input=hello");
+        var unknown = await _client.GetAsync($"/api/v1/extensions/resolve?input={new string('a', 32)}");
+
+        Assert.Equal(("Google Docs Offline", "chrome", false), ((string?)resolved["name"], (string?)resolved["store"], (bool)resolved["inCatalog"]!));
+        Assert.Equal(HttpStatusCode.BadRequest, junk.StatusCode);
+        Assert.Equal("input", (string?)(await junk.Content.ReadFromJsonAsync<JsonObject>())!["errors"]![0]!["field"]);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+    }
+}

@@ -455,6 +455,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extensions/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List HyperHarbor's browser extension catalog. */
+        get: operations["listExtensionCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extensions/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find an extension from a pasted store link or id.
+         * @description Accepts a Chrome Web Store link, an Edge Add-ons link, an extension id, or edge:<id>. Catalog
+         *     entries resolve without the network; anything else is looked up in its store (the host
+         *     contacts only the stores' hosts, over HTTPS). The icon comes back as a data: URL, so clients
+         *     load nothing remote. Results are cached for a day.
+         */
+        get: operations["resolveExtension"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/unattend-profiles": {
         parameters: {
             query?: never;
@@ -1931,6 +1971,30 @@ export interface components {
             /** @description Listed on the package picker's Popular tab. */
             popular: boolean;
         };
+        /**
+         * @description Chrome Web Store ids work in Chrome, Brave, and Edge; Edge Add-ons ids only in Edge.
+         * @enum {string}
+         */
+        ExtensionStore: "chrome" | "edge";
+        ExtensionCatalogItem: {
+            /** @description How a profile lists it, for example cjpalhdlnbpafiamejdnhcphjbkeiagm or edge:<id>. */
+            id: string;
+            name: string;
+            category: string;
+            description: string;
+            /** @description The same extension in the Edge Add-ons store (edge:<id>), when it is there. */
+            edgeId: string | null;
+        };
+        ResolvedExtension: {
+            store: components["schemas"]["ExtensionStore"];
+            id: string;
+            /** @description How a profile lists it. */
+            profileId: string;
+            name: string;
+            /** @description The store icon as a data URL; null for catalog entries and when the store has none. */
+            iconDataUrl: string | null;
+            inCatalog: boolean;
+        };
         /** @description Settings for installing an OS without anyone at the console. Profiles never hold passwords. */
         UnattendProfile: {
             /** @description A slug for built-in profiles, a GUID for the User's own. */
@@ -2956,6 +3020,62 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listExtensionCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The catalog. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionCatalogItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    resolveExtension: {
+        parameters: {
+            query: {
+                /** @description The link or id. */
+                input: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The extension. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedExtension"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The store could not be reached or answered something unexpected. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     listUnattendProfiles: {

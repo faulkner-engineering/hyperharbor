@@ -254,6 +254,10 @@ builder.Services.AddSingleton(new AppxBaselineStore(dataDirectory));
 builder.Services.AddSingleton<IGuestProfileReader, PowerShellDirectProfileReader>();
 builder.Services.AddSingleton<AppxInventoryService>();
 builder.Services.AddSingleton<IPackageSearch, PwshPackageSearch>();
+builder.Services.AddSingleton<IExtensionResolver>(services => new StoreExtensionResolver(
+    StoreExtensionResolver.CreateHttpClient($"HyperHarbor-Host/{HostVersion.Current}"),
+    services.GetRequiredService<Catalogs>(),
+    services.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IsoInspector>();
 builder.Services.AddSingleton(new UnattendedInstallStore(dataDirectory));
 builder.Services.AddSingleton<IVmKeyboard, CimVmKeyboard>();

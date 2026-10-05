@@ -759,6 +759,61 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /extensions/catalog:
+    get:
+      tags: [Profiles]
+      operationId: listExtensionCatalog
+      summary: List HyperHarbor's browser extension catalog.
+      responses:
+        "200":
+          description: The catalog.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExtensionCatalogItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /extensions/resolve:
+    get:
+      tags: [Profiles]
+      operationId: resolveExtension
+      summary: Find an extension from a pasted store link or id.
+      description: |
+        Accepts a Chrome Web Store link, an Edge Add-ons link, an extension id, or edge:<id>. Catalog
+        entries resolve without the network; anything else is looked up in its store (the host
+        contacts only the stores' hosts, over HTTPS). The icon comes back as a data: URL, so clients
+        load nothing remote. Results are cached for a day.
+      parameters:
+        - name: input
+          in: query
+          required: true
+          description: The link or id.
+          schema:
+            type: string
+            maxLength: 2048
+      responses:
+        "200":
+          description: The extension.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolvedExtension"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: The store could not be reached or answered something unexpected.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
   /unattend-profiles:
     get:
       tags: [Unattended]
@@ -3322,6 +3377,47 @@ components:
         popular:
           type: boolean
           description: Listed on the package picker's Popular tab.
+
+    ExtensionStore:
+      type: string
+      enum: [chrome, edge]
+      description: Chrome Web Store ids work in Chrome, Brave, and Edge; Edge Add-ons ids only in Edge.
+
+    ExtensionCatalogItem:
+      type: object
+      required: [id, name, category, description, edgeId]
+      properties:
+        id:
+          type: string
+          description: How a profile lists it, for example cjpalhdlnbpafiamejdnhcphjbkeiagm or edge:<id>.
+        name:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        edgeId:
+          type: [string, "null"]
+          description: The same extension in the Edge Add-ons store (edge:<id>), when it is there.
+
+    ResolvedExtension:
+      type: object
+      required: [store, id, profileId, name, iconDataUrl, inCatalog]
+      properties:
+        store:
+          $ref: "#/components/schemas/ExtensionStore"
+        id:
+          type: string
+        profileId:
+          type: string
+          description: How a profile lists it.
+        name:
+          type: string
+        iconDataUrl:
+          type: [string, "null"]
+          description: The store icon as a data URL; null for catalog entries and when the store has none.
+        inCatalog:
+          type: boolean
 
     UnattendProfile:
       type: object

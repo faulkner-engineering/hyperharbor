@@ -92,6 +92,7 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<Core.Performance.IGuestPerformanceSetup>(GuestSetup);
                 services.AddSingleton<Core.Profiles.IGuestProfileReader>(ProfileReader);
                 services.AddSingleton<Core.Profiles.IPackageSearch>(PackageSearch);
+                services.AddSingleton<Core.Profiles.IExtensionResolver>(new Profiles.FakeExtensionResolver());
                 services.AddSingleton<Core.Unattend.IRemoteAccessProbe>(RemoteAccess);
                 services.AddSingleton(provider => new Core.Unattend.UnattendedSetup(
                     provider.GetRequiredService<Core.Unattend.UnattendProfileStore>(),

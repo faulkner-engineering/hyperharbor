@@ -143,6 +143,10 @@ public class ContractFixtureTests
         ["PackageSearchResult"] = new PackageSearchResult("Git.Git", "Git", "2.55.0.5", "winget"),
         ["PackageCatalogItem"] = new PackageCatalogItem("vscode", "Microsoft.VisualStudioCode", "Visual Studio Code", "development", true),
 
+        // Null on purpose: edgeId is required but nullable.
+        ["ExtensionCatalogItem"] = new ExtensionCatalogItem("eimadpbcbfnmbkopoojfekhnkhdbieeh", "Dark Reader", "accessibility", "Dark theme for every website.", null),
+        ["ResolvedExtension"] = new ResolvedExtension(ExtensionStore.Edge, "odfafepnkmbhccpbejgmiehpchacaeak", "edge:odfafepnkmbhccpbejgmiehpchacaeak", "uBlock Origin", "data:image/png;base64,iVBORw0KGgo=", false),
+
         // Nulls on purpose: note and inBaseline are required but nullable.
         ["AppxPackage"] = new AppxPackage("Contoso.Extra", "Contoso.Extra", "1.0.0.0", "Contoso", AppxRating.Unrated, null, null),
         ["VmAppxInventory"] = new VmAppxInventory(

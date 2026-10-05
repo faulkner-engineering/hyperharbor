@@ -21,7 +21,27 @@ public static class ProfileSourceEndpoints
 
         endpoints.MapGet(ContractInfo.BasePath + "/packages/search", SearchPackagesAsync).WithName("searchPackages");
         endpoints.MapGet(ContractInfo.BasePath + "/packages/catalog", PackageCatalog).WithName("listPackageCatalog");
+
+        endpoints.MapGet(ContractInfo.BasePath + "/extensions/catalog", ExtensionCatalog).WithName("listExtensionCatalog");
+        endpoints.MapGet(ContractInfo.BasePath + "/extensions/resolve", ResolveExtensionAsync).WithName("resolveExtension");
         return endpoints;
+    }
+
+    private static Ok<IReadOnlyList<ExtensionCatalogItem>> ExtensionCatalog(Catalogs catalogs) =>
+        TypedResults.Ok<IReadOnlyList<ExtensionCatalogItem>>(catalogs.Extensions
+            .Select(entry => new ExtensionCatalogItem(entry.ProfileId, entry.Name, entry.Category, entry.Description, entry.EdgeId is null ? null : ExtensionRef.EdgePrefix + entry.EdgeId))
+            .ToList());
+
+    private static async Task<Ok<ResolvedExtension>> ResolveExtensionAsync(string? input, IExtensionResolver resolver, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return TypedResults.Ok(await resolver.ResolveAsync(input ?? "", cancellationToken));
+        }
+        catch (ExtensionInputException ex)
+        {
+            throw new LifecycleValidationException(ex.Message, [new ValidationIssue("input", ex.Message)]);
+        }
     }
 
     private static async Task<Ok<IReadOnlyList<PackageSearchResult>>> SearchPackagesAsync(string? q, int? count, IPackageSearch search, CancellationToken cancellationToken)

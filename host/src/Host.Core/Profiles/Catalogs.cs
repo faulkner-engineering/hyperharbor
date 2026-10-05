@@ -21,7 +21,14 @@ public sealed class ExtensionCatalogEntry
     public string Name { get; set; } = "";
     public string Category { get; set; } = "";
     public string Description { get; set; } = "";
+
+    /// <summary>chrome (the default) or edge, for extensions only in the Edge Add-ons store.</summary>
+    public string Store { get; set; } = "chrome";
+
     public string? EdgeId { get; set; }
+
+    /// <summary>How a profile lists it: the id, or edge:&lt;id&gt; for an Edge-only entry.</summary>
+    public string ProfileId => Store == "edge" ? ExtensionRef.EdgePrefix + Id : Id;
 }
 
 /// <summary>A provisioned Appx package with its removal rating. catalogs/appx.yaml.</summary>
@@ -106,7 +113,9 @@ public sealed class Catalogs
         AppxIndex = Appx.ToDictionary(entry => entry.Name, StringComparer.OrdinalIgnoreCase);
         TweakIndex = Tweaks.ToDictionary(entry => entry.Id, StringComparer.Ordinal);
         PolicyIndex = Policies.ToDictionary(entry => entry.Key, StringComparer.Ordinal);
-        ExtensionIndex = Extensions.ToDictionary(entry => entry.Id, StringComparer.Ordinal);
+        ExtensionIndex = Extensions
+            .SelectMany(entry => entry.EdgeId is null ? [(entry.ProfileId, entry)] : new[] { (entry.ProfileId, entry), (ExtensionRef.EdgePrefix + entry.EdgeId, entry) })
+            .ToDictionary(pair => pair.Item1, pair => pair.entry, StringComparer.Ordinal);
     }
 
     /// <summary>The catalogs shipped with this host.</summary>
@@ -134,6 +143,7 @@ public sealed class Catalogs
 
     public IReadOnlyDictionary<string, BrowserPolicyEntry> PolicyIndex { get; }
 
+    /// <summary>Catalog extensions by profile id: Chrome Web Store ids, and edge:&lt;id&gt; for Edge ids.</summary>
     public IReadOnlyDictionary<string, ExtensionCatalogEntry> ExtensionIndex { get; }
 
     /// <summary>The browser a profile's browser app names, by winget id or alias.</summary>

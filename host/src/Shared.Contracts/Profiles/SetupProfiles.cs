@@ -83,3 +83,34 @@ public sealed record PackageSearchResult(string Id, string Name, string Version,
 /// <summary>A package from HyperHarbor's package catalog (aliases and the Popular list). Schema: PackageCatalogItem.</summary>
 /// <param name="Alias">What a profile may write instead of the winget id.</param>
 public sealed record PackageCatalogItem(string Alias, string Id, string Name, string Category, bool Popular);
+
+/// <summary>Which store an extension id belongs to. Schema: ExtensionStore.</summary>
+public enum ExtensionStore
+{
+    /// <summary>The Chrome Web Store; its ids work in Chrome, Brave, and Edge.</summary>
+    Chrome,
+
+    /// <summary>The Edge Add-ons store; profiles write these ids as edge:&lt;id&gt;.</summary>
+    Edge,
+}
+
+/// <summary>An extension from HyperHarbor's extension catalog. Schema: ExtensionCatalogItem.</summary>
+/// <param name="Id">How a profile lists it: the Chrome Web Store id, or edge:&lt;id&gt; for an Edge-only entry.</param>
+/// <param name="EdgeId">The same extension in the Edge Add-ons store (edge:&lt;id&gt;), when it is there.</param>
+public sealed record ExtensionCatalogItem(
+    string Id,
+    string Name,
+    string Category,
+    string Description,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? EdgeId);
+
+/// <summary>An extension found from a store URL or id. Schema: ResolvedExtension.</summary>
+/// <param name="ProfileId">How a profile lists it: the id, or edge:&lt;id&gt;.</param>
+/// <param name="IconDataUrl">The store icon as a data: URL, so the client loads nothing remote; null for catalog entries and when the store has none.</param>
+public sealed record ResolvedExtension(
+    ExtensionStore Store,
+    string Id,
+    string ProfileId,
+    string Name,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? IconDataUrl,
+    bool InCatalog);

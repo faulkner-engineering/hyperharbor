@@ -62,6 +62,13 @@
   "ExportDisksRequest": {
     "destinationFolder": "D:\\Backups"
   },
+  "ExtensionCatalogItem": {
+    "id": "eimadpbcbfnmbkopoojfekhnkhdbieeh",
+    "name": "Dark Reader",
+    "category": "accessibility",
+    "description": "Dark theme for every website.",
+    "edgeId": null
+  },
   "GpuDriverWarning": {
     "provider": "nvlddmkm",
     "eventId": 153,
@@ -300,6 +307,14 @@
   },
   "RenameIsoRequest": {
     "newName": "Windows 11 24H2.iso"
+  },
+  "ResolvedExtension": {
+    "store": "edge",
+    "id": "odfafepnkmbhccpbejgmiehpchacaeak",
+    "profileId": "edge:odfafepnkmbhccpbejgmiehpchacaeak",
+    "name": "uBlock Origin",
+    "iconDataUrl": "data:image/png;base64,iVBORw0KGgo=",
+    "inCatalog": false
   },
   "SetupProfile": {
     "name": "Dev workstation",

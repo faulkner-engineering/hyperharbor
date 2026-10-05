@@ -111,6 +111,8 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             SetupProfileNotFoundException => (StatusCodes.Status404NotFound, "Setup profile not found"),
             PackageSearchUnavailableException => (StatusCodes.Status409Conflict, "Package search is not set up"),
             PackageSearchFailedException => (StatusCodes.Status502BadGateway, "Package search failed"),
+            ExtensionNotFoundException => (StatusCodes.Status404NotFound, "Extension not found"),
+            ExtensionStoreException => (StatusCodes.Status502BadGateway, "Extension store unavailable"),
             InsufficientStorageException => (StatusCodes.Status507InsufficientStorage, "Not enough space"),
             ElevationRateLimitedException => (StatusCodes.Status429TooManyRequests, "Too many attempts"),
             BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),

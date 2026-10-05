@@ -222,7 +222,7 @@ public sealed class ProfileYamlTests
     [Fact]
     public void HandWrittenFiles_WithoutComments_GetNamesFromTheCatalogs()
     {
-        const string yaml = "schemaVersion: 1\nname: Quick\ninstall:\n  - vscode\n  - Git.Git\nremove:\n  appx:\n    - Microsoft.BingNews\ntweaks:\n  - explorer.showFileExtensions\nbrowser:\n  app: brave\n  extensions:\n    - cjpalhdlnbpafiamejdnhcphjbkeiagm\n";
+        const string yaml = "schemaVersion: 1\nname: Quick\ninstall:\n  - vscode\n  - Git.Git\nremove:\n  appx:\n    - Microsoft.BingNews\ntweaks:\n  - explorer.showFileExtensions\nbrowser:\n  app: brave\n  extensions:\n    - eimadpbcbfnmbkopoojfekhnkhdbieeh\n";
 
         var profile = Validator.Normalize(ProfileYamlReader.Read(yaml));
 
@@ -230,7 +230,7 @@ public sealed class ProfileYamlTests
         Assert.Equal("Microsoft News", profile.Remove!.Appx![0].Name);
         Assert.Equal("Show file name extensions", profile.Tweaks![0].Name);
         Assert.Equal("Brave", profile.Browser!.App.Name);
-        Assert.Equal("uBlock Origin", profile.Browser.Extensions![0].Name);
+        Assert.Equal("Dark Reader", profile.Browser.Extensions![0].Name);
     }
 
     [Fact]

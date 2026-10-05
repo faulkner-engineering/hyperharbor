@@ -45,8 +45,10 @@ public sealed class CatalogTests
 
             Assert.False(string.IsNullOrWhiteSpace(entry.Name));
             Assert.Contains(entry.Category, (string[])["privacy", "security", "productivity", "developer", "accessibility", "media"]);
+            Assert.Contains(entry.Store, (string[])["chrome", "edge"]);
+            Assert.True(entry.EdgeId is null || entry.Store == "chrome");
         });
-        Assert.Equal(Catalogs.Extensions.Count, Catalogs.Extensions.Select(entry => entry.Id).Distinct().Count());
+        Assert.Equal(Catalogs.Extensions.Count, Catalogs.Extensions.Select(entry => entry.ProfileId).Distinct().Count());
     }
 
     [Fact]

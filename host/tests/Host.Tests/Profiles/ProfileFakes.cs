@@ -52,3 +52,22 @@ internal sealed class FakePackageSearch : IPackageSearch
         return Task.FromResult(results);
     }
 }
+
+/// <summary>Resolves through the real catalog, and finds one extension "in the store" without the network.</summary>
+internal sealed class FakeExtensionResolver : IExtensionResolver
+{
+    public const string StoreOnlyId = "ghbmnnjooekpmoecnnnilnnbdlolhkhi";
+
+    public Task<Shared.Contracts.Profiles.ResolvedExtension> ResolveAsync(string input, CancellationToken cancellationToken)
+    {
+        var parsed = ExtensionIdParser.Parse(input) ?? throw new ExtensionInputException("Paste a store link or an extension id.");
+        if (Catalogs.Default.ExtensionIndex.TryGetValue(parsed.ProfileId, out var known))
+        {
+            return Task.FromResult(new Shared.Contracts.Profiles.ResolvedExtension(parsed.Store, parsed.Id, parsed.ProfileId, known.Name, null, true));
+        }
+
+        return parsed.Id == StoreOnlyId
+            ? Task.FromResult(new Shared.Contracts.Profiles.ResolvedExtension(parsed.Store, parsed.Id, parsed.ProfileId, "Google Docs Offline", "data:image/png;base64,iVBORw0KGgo=", false))
+            : throw new ExtensionNotFoundException($"The store has no extension {parsed.Id}.");
+    }
+}

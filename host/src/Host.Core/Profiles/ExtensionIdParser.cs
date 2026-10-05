@@ -1,12 +1,7 @@
 using System.Text.RegularExpressions;
+using HyperHarbor.Shared.Contracts.Profiles;
 
 namespace HyperHarbor.Host.Core.Profiles;
-
-public enum ExtensionStore
-{
-    Chrome,
-    Edge,
-}
 
 /// <summary>A browser extension by store and id. Profiles write Edge ids as edge:&lt;id&gt;.</summary>
 public sealed record ExtensionRef(ExtensionStore Store, string Id)
