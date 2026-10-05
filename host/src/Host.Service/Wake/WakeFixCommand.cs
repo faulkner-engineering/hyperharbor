@@ -4,7 +4,7 @@ using HyperHarbor.Host.Core.Wake;
 namespace HyperHarbor.Host.Service.Wake;
 
 /// <summary>
-/// The elevated helper: HyperHarbor.Host.Service.exe --apply-wake-fixes id1,id2 [result-file].
+/// The elevated helper: HyperHarbor.Host.exe --apply-wake-fixes id1,id2 [result-file].
 /// The tray starts it with a UAC prompt after the user approves. An elevated process started with
 /// ShellExecute cannot share the tray's console, so per-check results are written as JSON to the
 /// optional result file. Exit code 0 means every fix applied.

@@ -29,7 +29,7 @@ $project = Join-Path $repo 'host\src\Host.Service\Host.Service.csproj'
 dotnet build $project -c Debug
 if ($LASTEXITCODE -ne 0) { throw "Host build failed with exit code $LASTEXITCODE." }
 
-$env:HH_E2E_SERVICE_EXE = Join-Path $repo 'host\src\Host.Service\bin\Debug\net8.0-windows\HyperHarbor.Host.Service.exe'
+$env:HH_E2E_SERVICE_EXE = Join-Path $repo 'host\src\Host.Service\bin\Debug\net8.0-windows\HyperHarbor.Host.exe'
 if (-not (Test-Path $env:HH_E2E_SERVICE_EXE)) { throw "Not found: $env:HH_E2E_SERVICE_EXE" }
 
 Push-Location (Join-Path $repo 'client\src-tauri')

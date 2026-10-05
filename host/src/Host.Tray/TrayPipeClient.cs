@@ -52,37 +52,11 @@ internal sealed class TrayPipeClient : IDisposable
         }
     }
 
-    /// <summary>
-    /// The executable of the process serving the pipe. Anything the tray runs elevated is taken from
-    /// here rather than from a message, so a process that claimed the pipe name cannot choose it.
-    /// </summary>
-    public string? ServerExecutablePath()
-    {
-        if (_pipe is not { IsConnected: true } pipe ||
-            !GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var processId))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var process = System.Diagnostics.Process.GetProcessById((int)processId);
-            return process.MainModule?.FileName;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            return null;
-        }
-    }
-
     public void Dispose()
     {
         _stop.Cancel();
         _stop.Dispose();
     }
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GetNamedPipeServerProcessId(Microsoft.Win32.SafeHandles.SafePipeHandle pipe, out uint serverProcessId);
 
     private async Task RunAsync(CancellationToken stop)
     {

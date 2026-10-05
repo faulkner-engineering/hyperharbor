@@ -217,7 +217,7 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
                 HostCertificateFingerprint = CertificateFingerprint.Of(hostCertificate);
             }
 
-            var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "HyperHarbor.Host.Service.exe"))
+            var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "HyperHarbor.Host.exe"))
             {
                 WorkingDirectory = AppContext.BaseDirectory,
                 RedirectStandardOutput = true,

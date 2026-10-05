@@ -1779,7 +1779,7 @@ mod server_tests {
     }
 
     /// Upload throughput of this client against the real host service on loopback (1 GB file):
-    /// HH_E2E_SERVICE_EXE=<path to HyperHarbor.Host.Service.exe> cargo test --release upload_throughput -- --ignored --nocapture
+    /// HH_E2E_SERVICE_EXE=<path to HyperHarbor.Host.exe> cargo test --release upload_throughput -- --ignored --nocapture
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn upload_throughput() {
@@ -1828,7 +1828,7 @@ mod server_tests {
     }
 
     /// End to end against the real host service, on loopback only. Run with scripts\e2e.ps1, or:
-    /// HH_E2E_SERVICE_EXE=<path to HyperHarbor.Host.Service.exe> cargo test e2e_loopback -- --ignored
+    /// HH_E2E_SERVICE_EXE=<path to HyperHarbor.Host.exe> cargo test e2e_loopback -- --ignored
     #[tokio::test]
     #[ignore]
     async fn e2e_loopback() {

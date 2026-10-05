@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-    Builds test packages into dist/: a portable host zip and the client installer.
+    Builds test packages into dist/: the host executable and the client installer.
 
 .DESCRIPTION
     1. Runs the host and client test suites (skip with -SkipTests).
-    2. Publishes Host.Service and Host.Tray as self-contained single-file executables and zips
-       them with the start and stop scripts from packaging/host.
+    2. Publishes the host (service, tray, and installer) as one self-contained executable,
+       dist\HyperHarbor-Host-<version>.exe. dist\host holds the same executable with the portable
+       start and stop scripts from packaging/host, for development runs.
     3. Builds the Tauri client and copies its NSIS installer and portable executable.
 
     -Fast is for test builds; omit it for releases. It builds the client without LTO, at
@@ -114,21 +115,22 @@ if (-not $ClientOnly) {
         '-p:DebugType=None',
         '-o', $staging
     )
-    Invoke-Step 'Publish host service' { dotnet publish (Join-Path $repo 'host\src\Host.Service\Host.Service.csproj') @publishArgs }
-    Invoke-Step 'Publish tray app' { dotnet publish (Join-Path $repo 'host\src\Host.Tray\Host.Tray.csproj') @publishArgs }
+    # One executable: the service, the tray, the installer, and the helpers (the tray is a library inside it).
+    Invoke-Step 'Publish host' { dotnet publish (Join-Path $repo 'host\src\Host.Service\Host.Service.csproj') @publishArgs }
 
-    # Development settings must not ship, and web.config is an IIS file the Web SDK adds.
-    Remove-Item (Join-Path $staging 'appsettings.Development.json'), (Join-Path $staging 'web.config') -ErrorAction SilentlyContinue
+    # The settings are embedded in the executable; web.config is an IIS file the Web SDK adds.
+    Remove-Item (Join-Path $staging 'web.config') -ErrorAction SilentlyContinue
+    $extra = Get-ChildItem $staging | Where-Object Name -ne 'HyperHarbor.Host.exe'
+    if ($extra) {
+        throw "The host publish produced more than one file: $($extra.Name -join ', ')"
+    }
+
+    # dist\host keeps the portable start and stop scripts for development runs; the executable alone is what ships.
     Copy-Item (Join-Path $repo 'packaging\host\*') $staging
-    # Install-HyperHarbor.ps1 names the version folder from this file.
-    [IO.File]::WriteAllText((Join-Path $staging 'version.json'), (@{ version = $version } | ConvertTo-Json))
-
-    $zip = Join-Path $dist "HyperHarbor-Host-$version-portable.zip"
-    Remove-Item $zip -ErrorAction SilentlyContinue
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $level = if ($Fast) { [IO.Compression.CompressionLevel]::Fastest } else { [IO.Compression.CompressionLevel]::Optimal }
-    [IO.Compression.ZipFile]::CreateFromDirectory($staging, $zip, $level, $false)
-    Write-Host "Host package: $zip" -ForegroundColor Green
+    $hostExe = Join-Path $dist "HyperHarbor-Host-$version.exe"
+    Copy-Item (Join-Path $staging 'HyperHarbor.Host.exe') $hostExe -Force
+    Remove-Item (Join-Path $dist "HyperHarbor-Host-$version-portable.zip") -ErrorAction SilentlyContinue
+    Write-Host "Host: $hostExe (double-click to install, or HyperHarbor.Host.exe --help)" -ForegroundColor Green
 }
 
 if (-not $HostOnly) {

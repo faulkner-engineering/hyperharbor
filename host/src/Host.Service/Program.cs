@@ -23,6 +23,7 @@ using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Host.Service.Tray;
 using HyperHarbor.Host.Service.VmConsole;
 using HyperHarbor.Host.Service.Wake;
+using HyperHarbor.Host.Tray;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Ipc;
 using Microsoft.AspNetCore.Authentication;
@@ -31,25 +32,59 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Options;
 
-// Elevated helper started by the tray after the user approves Wake-on-LAN fixes.
-if (args.Length is 2 or 3 && args[0] == WakeFixHelper.Switch)
-{
-    return await WakeFixCommand.RunAsync(args[1], args.Length == 3 ? args[2] : null);
-}
-
-// Elevated helper that creates or removes the host console accounts (tray or Start-HyperHarbor.ps1).
-if (ConsoleSetupCommand.Matches(args))
-{
-    return await ConsoleSetupCommand.RunAsync(args);
-}
-
+// HyperHarbor.Host.exe is the service, the tray, the installer, and the elevated helpers (HostCommandLine).
 var isWindowsService = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService();
+if (!isWindowsService)
+{
+    // A Windows executable has no console: commands that print attach to the terminal that started them.
+    var redirected = ConsoleAttachment.HasStandardOutput;
+    var attached = !redirected && ConsoleAttachment.AttachToParent();
+    (var mode, args) = HostCommandLine.Parse(args, startedFromConsole: redirected || attached);
+    if (attached && !HostCommandLine.WritesToConsole(mode))
+    {
+        ConsoleAttachment.Detach();
+    }
+
+    switch (mode)
+    {
+        case HostMode.Tray:
+            return TrayApp.Run();
+        case HostMode.Launcher:
+            return await Launcher.RunAsync();
+        case HostMode.Install:
+            return await InstallCommand.InstallAsync(args, attached || redirected ? new ConsoleInstallUi() : new DialogInstallUi());
+        case HostMode.Uninstall:
+            return await InstallCommand.UninstallAsync(args, attached || redirected ? new ConsoleInstallUi() : new DialogInstallUi());
+        case HostMode.SaveWakeDiagnostics:
+            return WakeDiagnosticsCommand.Run(args);
+        case HostMode.Help:
+            Console.WriteLine(HostCommandLine.Usage);
+            return 0;
+        case HostMode.ApplyWakeFixes:
+            // Elevated helper started by the tray after the user approves Wake-on-LAN fixes.
+            return await WakeFixCommand.RunAsync(args[1], args.Length == 3 ? args[2] : null);
+        case HostMode.ConsoleSetup:
+            // Elevated helper that creates or removes the host console accounts (tray or the installer).
+            return await ConsoleSetupCommand.RunAsync(args);
+        case HostMode.Host when !redirected:
+            // A console run gets its own window, which outlives the terminal or script that started it.
+            ConsoleAttachment.OpenWindow();
+            break;
+    }
+}
 
 // A service starts in System32, so appsettings.json is read from the executable's folder instead.
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
     ContentRootPath = isWindowsService ? AppContext.BaseDirectory : null,
+});
+
+// The defaults travel inside the executable, below every other source (appsettings.json beside it, the command line).
+builder.Configuration.Sources.Insert(0, new Microsoft.Extensions.Configuration.Json.JsonStreamConfigurationSource
+{
+    Stream = typeof(HostCommandLine).Assembly.GetManifestResourceStream("HyperHarbor.Host.appsettings.json")
+        ?? throw new InvalidOperationException("The default settings are missing from the executable."),
 });
 
 builder.Services.AddVmInventory();
@@ -83,6 +118,9 @@ var dataDirectory = builder.Configuration["DataDirectory"] is { Length: > 0 } co
 // The installed service runs as LocalSystem; the user who installed it keeps the tray and read access to the logs.
 var trayUser = TrayUser.Resolve(builder.Configuration, isWindowsService);
 IReadOnlyCollection<System.Security.Principal.SecurityIdentifier> logReaders = trayUser is null ? [] : [trayUser];
+
+// Other local accounts must not be able to plant files the service would trust (the installer does this too).
+var untrustedDataEntries = isWindowsService ? DataDirectoryAcl.Secure(dataDirectory, trayUser) : [];
 
 // The console and the daily log file under <data>\logs get the same entries.
 // Registered through DI so the container disposes it, which closes the file when the service stops.
@@ -260,6 +298,11 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 await using var app = builder.Build();
+
+foreach (var removed in untrustedDataEntries)
+{
+    app.Logger.LogWarning("Removed {Path} from the data directory: an untrusted account owned it.", removed);
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();

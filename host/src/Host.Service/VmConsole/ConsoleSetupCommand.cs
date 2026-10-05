@@ -7,8 +7,8 @@ namespace HyperHarbor.Host.Service.VmConsole;
 
 /// <summary>
 /// The elevated console account helper:
-/// HyperHarbor.Host.Service.exe --setup-console|--remove-console [data directory] [result file].
-/// The tray and Start-HyperHarbor.ps1 start it with a UAC prompt. An elevated process started with
+/// HyperHarbor.Host.exe --setup-console|--remove-console [data directory] [result file].
+/// The tray starts it with a UAC prompt, and the installer runs it in process. An elevated process started with
 /// ShellExecute cannot share the caller's console, so a one-line summary is written to the optional
 /// result file. Exit code 0 means success.
 /// </summary>

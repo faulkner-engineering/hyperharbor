@@ -1,10 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
+    <!--
+      HyperHarbor.Host.exe is the whole host: the service, the tray (with the Host.Tray library), the installer,
+      and the elevated helpers. It is a Windows (GUI) executable so the tray and the installer show no console
+      window; console runs attach to or open a console themselves (ConsoleAttachment).
+    -->
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
     <TargetFramework>net8.0-windows</TargetFramework>
     <RootNamespace>HyperHarbor.Host.Service</RootNamespace>
-    <AssemblyName>HyperHarbor.Host.Service</AssemblyName>
+    <AssemblyName>HyperHarbor.Host</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Windows Forms names (Timer, Application, Control) would clash with the web and threading namespaces. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
@@ -12,7 +25,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Host.Core\Host.Core.csproj" />
+    <ProjectReference Include="..\Host.Tray\Host.Tray.csproj" />
     <ProjectReference Include="..\Shared.Contracts\Shared.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The single executable carries its default settings; an appsettings.json beside it still overrides them. -->
+    <EmbeddedResource Include="appsettings.json" LogicalName="HyperHarbor.Host.appsettings.json" />
+    <Content Update="appsettings.json;appsettings.Development.json" CopyToPublishDirectory="Never" />
+    <EmbeddedResource Include="Wake\Diagnose-Wake.ps1" LogicalName="HyperHarbor.Host.Diagnose-Wake.ps1" />
   </ItemGroup>
 
   <ItemGroup>

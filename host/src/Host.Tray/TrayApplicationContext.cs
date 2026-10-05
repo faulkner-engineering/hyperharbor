@@ -185,7 +185,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private async Task ApproveWakeFixAsync(WakeFixRequestedMessage request)
     {
-        var result = await WakeFixApproval.HandleAsync(request, _pipe.ServerExecutablePath());
+        // The tray and the service are the same executable (HyperHarbor.Host.exe).
+        var result = await WakeFixApproval.HandleAsync(request, Environment.ProcessPath);
         await _pipe.SendAsync(result);
 
         var (title, icon) = result.Outcome switch
@@ -257,7 +258,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _passphraseForm.Activate();
     }
 
-    private void ShowHost()
+    internal void ShowHost()
     {
         if (_hostForm is null)
         {
@@ -286,9 +287,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        // The service executable sits beside the tray in the packaged host, so setup also works while the service is stopped.
-        var executable = _pipe.ServerExecutablePath() ?? Path.Combine(AppContext.BaseDirectory, "HyperHarbor.Host.Service.exe");
-        var (succeeded, message) = await ConsoleAccessSetup.RunAsync(executable, HostForm.DataDirectory);
+        // The tray is the host executable, so setup also works while the service is stopped.
+        var (succeeded, message) = await ConsoleAccessSetup.RunAsync(Environment.ProcessPath, HostForm.DataDirectory);
         RefreshHost();
         MessageBox.Show(_hostForm, message, "Set up console access", MessageBoxButtons.OK, succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }

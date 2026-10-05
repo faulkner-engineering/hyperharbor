@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <!-- Linked into HyperHarbor.Host.exe, which runs the tray in its tray mode (TrayApp). -->
+    <OutputType>Library</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <RootNamespace>HyperHarbor.Host.Tray</RootNamespace>
     <AssemblyName>HyperHarbor.Host.Tray</AssemblyName>
   </PropertyGroup>
