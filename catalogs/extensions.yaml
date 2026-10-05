@@ -1,0 +1,82 @@
+# Browser extensions offered in the extension picker. Chrome Web Store ids work in Chrome and Brave, and in
+# Edge too; edgeId, when present, is the same extension in the Edge Add-ons store.
+# Fields: id (Chrome Web Store, 32 letters a to p), name, category (privacy | security | productivity |
+# developer | accessibility | media), description, edgeId (optional).
+- id: cjpalhdlnbpafiamejdnhcphjbkeiagm
+  name: uBlock Origin
+  category: privacy
+  description: Content blocker for ads, trackers, and malware sites.
+  edgeId: odfafepnkmbhccpbejgmiehpchacaeak
+- id: ddkjiahejlhfcafbddmgiahcphecmpfh
+  name: uBlock Origin Lite
+  category: privacy
+  description: Manifest V3 content blocker that needs no broad permissions.
+- id: pkehgijcmpdhfbdbbnkijodmdjhbjlgp
+  name: Privacy Badger
+  category: privacy
+  description: Learns to block invisible trackers.
+- id: bkdgflcldnnnapblkhphbgpggdiikppg
+  name: DuckDuckGo Privacy Essentials
+  category: privacy
+  description: Tracker blocking and private search.
+- id: lckanjgmijmafbedllaakclkaicjfmnk
+  name: ClearURLs
+  category: privacy
+  description: Removes tracking parameters from links.
+- id: ldpochfccmkkmhdbclfhpagapcfdljkj
+  name: Decentraleyes
+  category: privacy
+  description: Serves common libraries locally instead of from CDNs.
+- id: nngceckbapebfimnlniiiahkandclblb
+  name: Bitwarden Password Manager
+  category: security
+  description: Open source password manager.
+  edgeId: jbkfoedolllekgbhcbcoahefnbanhhlh
+- id: aeblfdkhhhdcdjpifhhbdiojplfjncoa
+  name: 1Password
+  category: security
+  description: Password manager.
+- id: eimadpbcbfnmbkopoojfekhnkhdbieeh
+  name: Dark Reader
+  category: accessibility
+  description: Dark theme for every website.
+- id: kbfnbcaeplbcioakkpcpgfkobkghlhen
+  name: Grammarly
+  category: productivity
+  description: Writing suggestions.
+- id: aapbdbdomjkkjkaonfhkkikfgjllcleb
+  name: Google Translate
+  category: productivity
+  description: Translates selected text and pages.
+- id: dbepggeogbaibhgnhhndojpepiihcmeb
+  name: Vimium
+  category: productivity
+  description: Keyboard navigation with Vim-style keys.
+- id: dhdgffkkebhmkfjojejmpbldmpobfkfo
+  name: Tampermonkey
+  category: developer
+  description: User script manager.
+- id: fmkadmapgofadopljbjfkapdkoienihi
+  name: React Developer Tools
+  category: developer
+  description: Inspects React component trees.
+- id: nhdogjmejiglipccpnnnanhbledajbpd
+  name: Vue.js devtools
+  category: developer
+  description: Inspects Vue.js applications.
+- id: bcjindcccaagfpapjjmafapmmgkkhgoa
+  name: JSON Formatter
+  category: developer
+  description: Formats JSON responses in the browser.
+- id: gppongmhjkpfnbhagpmjfkannfbllamg
+  name: Wappalyzer
+  category: developer
+  description: Identifies the technologies a website uses.
+- id: mnjggcdmjocbbbhaepdhchncahnbgone
+  name: SponsorBlock
+  category: media
+  description: Skips sponsored segments in YouTube videos.
+- id: gebbhagfogifgggkldgodflihgfeippi
+  name: Return YouTube Dislike
+  category: media
+  description: Shows dislike counts on YouTube.

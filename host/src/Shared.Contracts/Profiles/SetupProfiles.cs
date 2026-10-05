@@ -1,0 +1,60 @@
+using System.Text.Json.Serialization;
+
+namespace HyperHarbor.Shared.Contracts.Profiles;
+
+/// <summary>
+/// What to install, remove, and change in a Windows VM, kept as YAML on the host
+/// (schemas/profile.v1.schema.json). Schema: SetupProfile.
+/// </summary>
+/// <param name="Install">winget ids (they contain a dot), Microsoft Store ids (12 capitals and digits), or aliases from the package catalog.</param>
+/// <param name="Tweaks">Curated tweaks by id, or custom registry values.</param>
+public sealed record SetupProfile(
+    [property: JsonRequired] string Name,
+    string? Description,
+    IReadOnlyList<ProfileItem>? Install,
+    ProfileRemove? Remove,
+    IReadOnlyList<ProfileTweak>? Tweaks,
+    ProfileBrowser? Browser);
+
+/// <summary>An id with its friendly name; the name is written as a trailing comment in YAML. Schema: ProfileItem.</summary>
+public sealed record ProfileItem([property: JsonRequired] string Id, string? Name = null);
+
+/// <summary>What to remove from Windows. Schema: ProfileRemove.</summary>
+/// <param name="Appx">Provisioned package names without the version, for example Microsoft.BingNews.</param>
+/// <param name="Capabilities">Full capability names, for example Browser.InternetExplorer~~~~0.0.11.0.</param>
+/// <param name="Features">Optional feature names, for example MicrosoftWindowsPowerShellV2Root.</param>
+public sealed record ProfileRemove(
+    IReadOnlyList<ProfileItem>? Appx,
+    IReadOnlyList<ProfileItem>? Capabilities,
+    IReadOnlyList<ProfileItem>? Features);
+
+/// <summary>A curated tweak (Id) or a custom registry value (Registry), never both. Schema: ProfileTweak.</summary>
+public sealed record ProfileTweak(string? Id = null, string? Name = null, RegistryTweak? Registry = null);
+
+public enum RegistryValueType
+{
+    Dword,
+    Qword,
+    String,
+}
+
+/// <summary>
+/// A registry value to set. HKCU values apply to the User's VM account. Schema: RegistryTweak.
+/// </summary>
+/// <param name="Key">Starts with HKLM\ or HKCU\.</param>
+/// <param name="Name">The value name; empty for the key's default value.</param>
+/// <param name="Value">Decimal for dword and qword, the text for string.</param>
+public sealed record RegistryTweak(
+    [property: JsonRequired] string Key,
+    [property: JsonRequired] string Name,
+    [property: JsonRequired] RegistryValueType Type,
+    [property: JsonRequired] string Value);
+
+/// <summary>A browser to install, with extensions and policies. Schema: ProfileBrowser.</summary>
+/// <param name="App">The browser's winget id or alias (Chrome, Edge, or Brave).</param>
+/// <param name="Extensions">Chrome Web Store ids, or edge:&lt;id&gt; for the Edge Add-ons store.</param>
+/// <param name="Policies">Friendly policy keys from the browser catalog, with values as text (true, false, numbers, or text).</param>
+public sealed record ProfileBrowser(
+    [property: JsonRequired] ProfileItem App,
+    IReadOnlyList<ProfileItem>? Extensions,
+    IReadOnlyDictionary<string, string>? Policies);

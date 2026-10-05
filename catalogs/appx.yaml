@@ -1,0 +1,250 @@
+# Provisioned Appx packages in Windows 11 images, with how safe they are to remove.
+#   safe     no other part of Windows depends on it; included in the debloat preset
+#   caution  removable, but people often expect it (Photos, Snipping Tool) or a feature needs it (Game Bar)
+#   keep     frameworks, the Store, and security pieces; removing them breaks other apps or updates
+# Packages not listed here are shown as unrated.
+# Fields: name (DisplayName from Get-AppxProvisionedPackage), friendlyName, publisher, rating, note (optional).
+- name: Clipchamp.Clipchamp
+  friendlyName: Clipchamp
+  publisher: Clipchamp
+  rating: safe
+- name: Microsoft.549981C3F5F10
+  friendlyName: Cortana
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.BingNews
+  friendlyName: Microsoft News
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.BingWeather
+  friendlyName: Weather
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.BingSearch
+  friendlyName: Bing Search
+  publisher: Microsoft
+  rating: caution
+  note: Provides web results in Start search.
+- name: Microsoft.Copilot
+  friendlyName: Copilot
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.GamingApp
+  friendlyName: Xbox
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.GetHelp
+  friendlyName: Get Help
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.Getstarted
+  friendlyName: Tips
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.MicrosoftOfficeHub
+  friendlyName: Microsoft 365 Copilot
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.MicrosoftSolitaireCollection
+  friendlyName: Microsoft Solitaire Collection
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.MicrosoftStickyNotes
+  friendlyName: Sticky Notes
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.OutlookForWindows
+  friendlyName: Outlook (new)
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.People
+  friendlyName: People
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.PowerAutomateDesktop
+  friendlyName: Power Automate
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.Todos
+  friendlyName: Microsoft To Do
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.Windows.DevHome
+  friendlyName: Dev Home
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.WindowsFeedbackHub
+  friendlyName: Feedback Hub
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.WindowsMaps
+  friendlyName: Maps
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.YourPhone
+  friendlyName: Phone Link
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.ZuneVideo
+  friendlyName: Movies & TV
+  publisher: Microsoft
+  rating: safe
+- name: microsoft.windowscommunicationsapps
+  friendlyName: Mail and Calendar
+  publisher: Microsoft
+  rating: safe
+- name: MicrosoftCorporationII.MicrosoftFamily
+  friendlyName: Microsoft Family Safety
+  publisher: Microsoft
+  rating: safe
+- name: MSTeams
+  friendlyName: Microsoft Teams
+  publisher: Microsoft
+  rating: safe
+- name: MicrosoftTeams
+  friendlyName: Microsoft Teams (classic)
+  publisher: Microsoft
+  rating: safe
+- name: Microsoft.ZuneMusic
+  friendlyName: Media Player
+  publisher: Microsoft
+  rating: caution
+  note: The default player for music and video files.
+- name: Microsoft.XboxGamingOverlay
+  friendlyName: Xbox Game Bar
+  publisher: Microsoft
+  rating: caution
+  note: Also provides screen recording (Win+Alt+R).
+- name: Microsoft.XboxIdentityProvider
+  friendlyName: Xbox Identity Provider
+  publisher: Microsoft
+  rating: caution
+  note: Needed to sign in to Xbox services in games.
+- name: Microsoft.XboxSpeechToTextOverlay
+  friendlyName: Xbox Speech to Text
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.Xbox.TCUI
+  friendlyName: Xbox TCUI
+  publisher: Microsoft
+  rating: caution
+  note: Used by games for Xbox social features.
+- name: MicrosoftCorporationII.QuickAssist
+  friendlyName: Quick Assist
+  publisher: Microsoft
+  rating: caution
+- name: MicrosoftWindows.Client.WebExperience
+  friendlyName: Widgets
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.WindowsAlarms
+  friendlyName: Clock
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.WindowsCamera
+  friendlyName: Camera
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.WindowsSoundRecorder
+  friendlyName: Sound Recorder
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.Paint
+  friendlyName: Paint
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.ScreenSketch
+  friendlyName: Snipping Tool
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.Windows.Photos
+  friendlyName: Photos
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.WindowsNotepad
+  friendlyName: Notepad
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.WindowsCalculator
+  friendlyName: Calculator
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.WindowsTerminal
+  friendlyName: Windows Terminal
+  publisher: Microsoft
+  rating: caution
+- name: Microsoft.WindowsStore
+  friendlyName: Microsoft Store
+  publisher: Microsoft
+  rating: keep
+  note: Needed to install and update Store apps.
+- name: Microsoft.StorePurchaseApp
+  friendlyName: Store Purchase App
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.DesktopAppInstaller
+  friendlyName: App Installer (winget)
+  publisher: Microsoft
+  rating: keep
+  note: Provides winget, which setup profiles use to install packages.
+- name: Microsoft.SecHealthUI
+  friendlyName: Windows Security
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.ApplicationCompatibilityEnhancements
+  friendlyName: Application Compatibility Enhancements
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.VCLibs.140.00
+  friendlyName: Visual C++ runtime for apps
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.VCLibs.140.00.UWPDesktop
+  friendlyName: Visual C++ runtime for desktop apps
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.UI.Xaml.2.8
+  friendlyName: WinUI 2.8 runtime
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.NET.Native.Framework.2.2
+  friendlyName: .NET Native framework
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.NET.Native.Runtime.2.2
+  friendlyName: .NET Native runtime
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.WidgetsPlatformRuntime
+  friendlyName: Widgets Platform Runtime
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.HEIFImageExtension
+  friendlyName: HEIF Image Extensions
+  publisher: Microsoft
+  rating: keep
+  note: Image codec used by Photos and other apps.
+- name: Microsoft.HEVCVideoExtension
+  friendlyName: HEVC Video Extensions
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.AV1VideoExtension
+  friendlyName: AV1 Video Extension
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.VP9VideoExtensions
+  friendlyName: VP9 Video Extensions
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.WebMediaExtensions
+  friendlyName: Web Media Extensions
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.WebpImageExtension
+  friendlyName: Webp Image Extensions
+  publisher: Microsoft
+  rating: keep
+- name: Microsoft.RawImageExtension
+  friendlyName: Raw Image Extension
+  publisher: Microsoft
+  rating: keep

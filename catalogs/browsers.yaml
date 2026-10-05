@@ -1,0 +1,123 @@
+# Browsers a setup profile can configure, and the policies it can set with friendly keys.
+# browsers: id, name, wingetId, alias (from packages.yaml), policyRoot (HKLM), userData (under %LOCALAPPDATA%),
+#   updateUrl (what ExtensionInstallForcelist uses for Chrome Web Store ids).
+# policies: key (friendly, used in profiles), name, policy (the browser's policy name), type (boolean |
+#   integer | string), appliesTo (browser ids), description, values (optional, for integers with fixed meanings).
+browsers:
+  - id: chrome
+    name: Google Chrome
+    wingetId: Google.Chrome
+    alias: chrome
+    policyRoot: HKLM\SOFTWARE\Policies\Google\Chrome
+    userData: Google\Chrome\User Data
+    updateUrl: https://clients2.google.com/service/update2/crx
+  - id: edge
+    name: Microsoft Edge
+    wingetId: Microsoft.Edge
+    alias: edge
+    policyRoot: HKLM\SOFTWARE\Policies\Microsoft\Edge
+    userData: Microsoft\Edge\User Data
+    updateUrl: https://clients2.google.com/service/update2/crx
+    edgeUpdateUrl: https://edge.microsoft.com/extensionwebstorebase/v1/crx
+  - id: brave
+    name: Brave
+    wingetId: Brave.Brave
+    alias: brave
+    policyRoot: HKLM\SOFTWARE\Policies\BraveSoftware\Brave
+    userData: BraveSoftware\Brave-Browser\User Data
+    updateUrl: https://clients2.google.com/service/update2/crx
+policies:
+  - key: homepage
+    name: Home page
+    policy: HomepageLocation
+    type: string
+    appliesTo: [chrome, edge, brave]
+    description: The page the Home button opens.
+  - key: showHomeButton
+    name: Show the Home button
+    policy: ShowHomeButton
+    type: boolean
+    appliesTo: [chrome, edge, brave]
+  - key: restoreOnStartup
+    name: On startup
+    policy: RestoreOnStartup
+    type: integer
+    appliesTo: [chrome, edge, brave]
+    values:
+      "1": Continue where you left off
+      "4": Open specific pages
+      "5": Open the New Tab page
+  - key: bookmarkBar
+    name: Show the bookmarks bar
+    policy: BookmarkBarEnabled
+    type: boolean
+    appliesTo: [chrome, brave]
+  - key: passwordManager
+    name: Offer to save passwords
+    policy: PasswordManagerEnabled
+    type: boolean
+    appliesTo: [chrome, edge, brave]
+  - key: autofillAddresses
+    name: Autofill addresses
+    policy: AutofillAddressEnabled
+    type: boolean
+    appliesTo: [chrome, edge, brave]
+  - key: autofillCreditCards
+    name: Autofill payment methods
+    policy: AutofillCreditCardEnabled
+    type: boolean
+    appliesTo: [chrome, edge, brave]
+  - key: syncDisabled
+    name: Turn off sync
+    policy: SyncDisabled
+    type: boolean
+    appliesTo: [chrome, edge, brave]
+  - key: browserSignin
+    name: Browser sign-in
+    policy: BrowserSignin
+    type: integer
+    appliesTo: [chrome, edge, brave]
+    values:
+      "0": Disabled
+      "1": Allowed
+      "2": Required
+  - key: metricsReporting
+    name: Send usage statistics
+    policy: MetricsReportingEnabled
+    type: boolean
+    appliesTo: [chrome, brave]
+  - key: edgeShopping
+    name: Shopping in Microsoft Edge
+    policy: EdgeShoppingAssistantEnabled
+    type: boolean
+    appliesTo: [edge]
+  - key: edgeSidebar
+    name: Show the sidebar
+    policy: HubsSidebarEnabled
+    type: boolean
+    appliesTo: [edge]
+  - key: edgeStartupBoost
+    name: Startup boost
+    policy: StartupBoostEnabled
+    type: boolean
+    appliesTo: [edge]
+  - key: braveRewardsDisabled
+    name: Turn off Brave Rewards
+    policy: BraveRewardsDisabled
+    type: boolean
+    appliesTo: [brave]
+  - key: braveWalletDisabled
+    name: Turn off Brave Wallet
+    policy: BraveWalletDisabled
+    type: boolean
+    appliesTo: [brave]
+  - key: braveVpnDisabled
+    name: Turn off Brave VPN
+    policy: BraveVPNDisabled
+    type: boolean
+    appliesTo: [brave]
+  - key: braveAiChat
+    name: Leo AI assistant
+    policy: BraveAIChatEnabled
+    type: boolean
+    appliesTo: [brave]

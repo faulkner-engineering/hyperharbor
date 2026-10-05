@@ -1,0 +1,157 @@
+# Curated registry tweaks for setup profiles. Capture reads each value and selects the tweaks whose values
+# differ from a clean install (default; null means the value is not present on a clean install).
+# HKCU values apply to the User's account in the VM.
+# Fields: id (category.name), name, category (explorer | taskbar | start | privacy | appearance | system),
+# note (optional), values: [ { key, name (empty for the default value), type (dword | qword | string),
+# value, default } ].
+- id: explorer.showFileExtensions
+  name: Show file name extensions
+  category: explorer
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: HideFileExt
+      type: dword
+      value: "0"
+      default: "1"
+- id: explorer.showHiddenFiles
+  name: Show hidden files
+  category: explorer
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: Hidden
+      type: dword
+      value: "1"
+      default: "2"
+- id: explorer.openThisPC
+  name: Open File Explorer to This PC
+  category: explorer
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: LaunchTo
+      type: dword
+      value: "1"
+      default: null
+- id: explorer.classicContextMenu
+  name: Show the full right-click menu
+  category: explorer
+  note: Brings back the Windows 10 context menu without Show more options.
+  values:
+    - key: HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32
+      name: ""
+      type: string
+      value: ""
+      default: null
+- id: taskbar.alignLeft
+  name: Align taskbar icons to the left
+  category: taskbar
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: TaskbarAl
+      type: dword
+      value: "0"
+      default: null
+- id: taskbar.hideSearch
+  name: Hide the taskbar search box
+  category: taskbar
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\Search
+      name: SearchboxTaskbarMode
+      type: dword
+      value: "0"
+      default: null
+- id: taskbar.hideTaskView
+  name: Hide the Task View button
+  category: taskbar
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      name: ShowTaskViewButton
+      type: dword
+      value: "0"
+      default: null
+- id: taskbar.disableWidgets
+  name: Turn off Widgets
+  category: taskbar
+  note: Uses the policy, because newer builds protect the taskbar setting itself.
+  values:
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Dsh
+      name: AllowNewsAndInterests
+      type: dword
+      value: "0"
+      default: null
+- id: start.disableWebSearch
+  name: Turn off web results in Start search
+  category: start
+  values:
+    - key: HKCU\Software\Policies\Microsoft\Windows\Explorer
+      name: DisableSearchBoxSuggestions
+      type: dword
+      value: "1"
+      default: null
+- id: privacy.disableAdvertisingId
+  name: Turn off the advertising ID
+  category: privacy
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo
+      name: Enabled
+      type: dword
+      value: "0"
+      default: "1"
+- id: privacy.disableTailoredExperiences
+  name: Turn off tailored experiences
+  category: privacy
+  values:
+    - key: HKCU\Software\Policies\Microsoft\Windows\CloudContent
+      name: DisableTailoredExperiencesWithDiagnosticData
+      type: dword
+      value: "1"
+      default: null
+- id: privacy.requiredDiagnosticsOnly
+  name: Send only required diagnostic data
+  category: privacy
+  values:
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection
+      name: AllowTelemetry
+      type: dword
+      value: "1"
+      default: null
+- id: system.disableConsumerFeatures
+  name: Turn off suggested apps and consumer features
+  category: system
+  values:
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent
+      name: DisableWindowsConsumerFeatures
+      type: dword
+      value: "1"
+      default: null
+- id: system.disableCopilot
+  name: Turn off Copilot
+  category: system
+  values:
+    - key: HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot
+      name: TurnOffWindowsCopilot
+      type: dword
+      value: "1"
+      default: null
+- id: system.disableRecall
+  name: Turn off Recall snapshots
+  category: system
+  values:
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI
+      name: DisableAIDataAnalysis
+      type: dword
+      value: "1"
+      default: null
+- id: appearance.darkMode
+  name: Use dark mode
+  category: appearance
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
+      name: AppsUseLightTheme
+      type: dword
+      value: "0"
+      default: "1"
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
+      name: SystemUsesLightTheme
+      type: dword
+      value: "0"
+      default: "1"

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/faulkner-engineering/hyperharbor/main/schemas/profile.v1.schema.json",
+  "title": "HyperHarbor setup profile",
+  "description": "What to install, remove, and change in a Windows VM. Ids are followed by a comment with their friendly name.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "description": { "type": "string", "maxLength": 500 },
+    "install": {
+      "description": "Packages to install: winget ids (they contain a dot), Microsoft Store ids, or aliases from HyperHarbor's package catalog (resolved when the profile is applied).",
+      "type": "array",
+      "maxItems": 200,
+      "items": { "$ref": "#/$defs/installEntry" }
+    },
+    "remove": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "appx": {
+          "description": "Provisioned Appx package names without the version, for example Microsoft.BingNews.",
+          "type": "array",
+          "maxItems": 200,
+          "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" }
+        },
+        "capabilities": {
+          "description": "Windows capability names, for example Browser.InternetExplorer~~~~0.0.11.0.",
+          "type": "array",
+          "maxItems": 100,
+          "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,199}$" }
+        },
+        "features": {
+          "description": "Optional feature names, for example MicrosoftWindowsPowerShellV2Root.",
+          "type": "array",
+          "maxItems": 100,
+          "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" }
+        }
+      }
+    },
+    "tweaks": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "oneOf": [
+          { "description": "A curated tweak id.", "type": "string", "pattern": "^[a-z]+\\.[A-Za-z0-9]+$" },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["registry"],
+            "properties": { "registry": { "$ref": "#/$defs/registryValue" } }
+          }
+        ]
+      }
+    },
+    "browser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app"],
+      "properties": {
+        "app": {
+          "description": "The browser's winget id or alias: Google.Chrome, Microsoft.Edge, or Brave.Brave.",
+          "$ref": "#/$defs/installEntry"
+        },
+        "extensions": {
+          "description": "Chrome Web Store ids (32 letters a to p), or edge:<id> for the Edge Add-ons store.",
+          "type": "array",
+          "maxItems": 100,
+          "items": { "type": "string", "pattern": "^(edge:)?[a-p]{32}$" }
+        },
+        "policies": {
+          "description": "Browser policies by friendly key, from HyperHarbor's browser catalog.",
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]{0,63}$" },
+          "additionalProperties": { "type": ["string", "boolean", "integer"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "installEntry": {
+      "type": "string",
+      "anyOf": [
+        { "description": "winget id", "pattern": "^[A-Za-z0-9][A-Za-z0-9+_-]*(\\.[A-Za-z0-9+_-]+)+$" },
+        { "description": "Microsoft Store id", "pattern": "^[0-9A-Z]{12}$" },
+        { "description": "alias", "pattern": "^[a-z0-9][a-z0-9-]{0,39}$" }
+      ]
+    },
+    "registryValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "type", "value"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^(HKLM|HKCU)\\\\[^\\r\\n]{1,255}$" },
+        "name": { "type": "string", "maxLength": 255 },
+        "type": { "enum": ["dword", "qword", "string"] },
+        "value": { "type": ["string", "integer"] }
+      }
+    }
+  }
+}

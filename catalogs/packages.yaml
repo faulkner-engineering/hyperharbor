@@ -1,0 +1,170 @@
+# Package aliases and the Popular list for setup profiles. An alias (lowercase letters, digits, and hyphens)
+# can stand for a winget id in a profile's install list; it is resolved when the profile is applied.
+# Fields: alias, id (winget), name, category (browsers | development | utilities | media | communication |
+# productivity | security | gaming), popular (shown on the Popular tab).
+- alias: chrome
+  id: Google.Chrome
+  name: Google Chrome
+  category: browsers
+  popular: true
+- alias: firefox
+  id: Mozilla.Firefox
+  name: Mozilla Firefox
+  category: browsers
+  popular: true
+- alias: brave
+  id: Brave.Brave
+  name: Brave
+  category: browsers
+  popular: true
+- alias: edge
+  id: Microsoft.Edge
+  name: Microsoft Edge
+  category: browsers
+- alias: git
+  id: Git.Git
+  name: Git
+  category: development
+  popular: true
+- alias: gh
+  id: GitHub.cli
+  name: GitHub CLI
+  category: development
+- alias: github-desktop
+  id: GitHub.GitHubDesktop
+  name: GitHub Desktop
+  category: development
+- alias: vscode
+  id: Microsoft.VisualStudioCode
+  name: Visual Studio Code
+  category: development
+  popular: true
+- alias: terminal
+  id: Microsoft.WindowsTerminal
+  name: Windows Terminal
+  category: development
+- alias: powershell
+  id: Microsoft.PowerShell
+  name: PowerShell 7
+  category: development
+  popular: true
+- alias: python
+  id: Python.Python.3.12
+  name: Python 3.12
+  category: development
+  popular: true
+- alias: nodejs
+  id: OpenJS.NodeJS.LTS
+  name: Node.js LTS
+  category: development
+  popular: true
+- alias: dotnet-sdk
+  id: Microsoft.DotNet.SDK.8
+  name: .NET 8 SDK
+  category: development
+- alias: docker
+  id: Docker.DockerDesktop
+  name: Docker Desktop
+  category: development
+- alias: jetbrains-toolbox
+  id: JetBrains.Toolbox
+  name: JetBrains Toolbox
+  category: development
+- alias: putty
+  id: PuTTY.PuTTY
+  name: PuTTY
+  category: development
+- alias: winscp
+  id: WinSCP.WinSCP
+  name: WinSCP
+  category: development
+- alias: wireshark
+  id: WiresharkFoundation.Wireshark
+  name: Wireshark
+  category: development
+- alias: 7zip
+  id: 7zip.7zip
+  name: 7-Zip
+  category: utilities
+  popular: true
+- alias: notepadplusplus
+  id: Notepad++.Notepad++
+  name: Notepad++
+  category: utilities
+  popular: true
+- alias: powertoys
+  id: Microsoft.PowerToys
+  name: PowerToys
+  category: utilities
+  popular: true
+- alias: everything
+  id: voidtools.Everything
+  name: Everything
+  category: utilities
+- alias: sharex
+  id: ShareX.ShareX
+  name: ShareX
+  category: utilities
+- alias: windirstat
+  id: WinDirStat.WinDirStat
+  name: WinDirStat
+  category: utilities
+- alias: vlc
+  id: VideoLAN.VLC
+  name: VLC media player
+  category: media
+  popular: true
+- alias: obs
+  id: OBSProject.OBSStudio
+  name: OBS Studio
+  category: media
+- alias: gimp
+  id: GIMP.GIMP
+  name: GIMP
+  category: media
+- alias: spotify
+  id: Spotify.Spotify
+  name: Spotify
+  category: media
+- alias: discord
+  id: Discord.Discord
+  name: Discord
+  category: communication
+  popular: true
+- alias: slack
+  id: SlackTechnologies.Slack
+  name: Slack
+  category: communication
+- alias: zoom
+  id: Zoom.Zoom
+  name: Zoom
+  category: communication
+- alias: thunderbird
+  id: Mozilla.Thunderbird
+  name: Thunderbird
+  category: communication
+- alias: libreoffice
+  id: TheDocumentFoundation.LibreOffice
+  name: LibreOffice
+  category: productivity
+- alias: obsidian
+  id: Obsidian.Obsidian
+  name: Obsidian
+  category: productivity
+- alias: acrobat-reader
+  id: Adobe.Acrobat.Reader.64-bit
+  name: Adobe Acrobat Reader
+  category: productivity
+- alias: bitwarden
+  id: Bitwarden.Bitwarden
+  name: Bitwarden
+  category: security
+  popular: true
+- alias: keepassxc
+  id: KeePassXCTeam.KeePassXC
+  name: KeePassXC
+  category: security
+- alias: steam
+  id: Valve.Steam
+  name: Steam
+  category: gaming
