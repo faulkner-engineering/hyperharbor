@@ -6,6 +6,7 @@ using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Host.Core.RemoteDesktop;
 using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Core.Wake;
@@ -90,6 +91,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         ResourceWarningsException => ContractInfo.ProblemCodes.ResourceWarnings,
         LifecycleConflictException { Code: { } code } => code,
         ConsoleConflictException conflict => conflict.Code,
+        RemoteDesktopConflictException conflict => conflict.Code,
         _ => null,
     };
 
@@ -123,6 +125,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             GuestCredentialRejectedException => (StatusCodes.Status422UnprocessableEntity, "Administrator credential rejected"),
             GuestAccountConflictException => (StatusCodes.Status409Conflict, "Cannot provision"),
             ConsoleConflictException => (StatusCodes.Status409Conflict, "Cannot open the console"),
+            RemoteDesktopConflictException => (StatusCodes.Status409Conflict, "Cannot change Remote Desktop"),
             ConsoleTicketRejectedException => (StatusCodes.Status403Forbidden, "Console ticket rejected"),
             ConsoleUnavailableException => (StatusCodes.Status502BadGateway, "Console unavailable"),
             GuestUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Guest unavailable"),

@@ -94,8 +94,15 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.9.0",
+    "apiVersion": "1.10.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "HostRemoteDesktop": {
+    "supported": true,
+    "enabled": true,
+    "port": 3389,
+    "firewallOpen": true,
+    "edition": "Windows 11 Pro"
   },
   "HostResources": {
     "logicalProcessorCount": 16,

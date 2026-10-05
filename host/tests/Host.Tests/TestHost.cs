@@ -70,6 +70,12 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IDiskFiles>(DiskFiles);
                 services.AddSingleton<IDiskCopier>(DiskCopier);
                 services.AddSingleton<IHostCapacityReader>(Capacity);
+
+                // Built on first use, so a test can set RemoteDesktop.Elevated before its first request.
+                services.AddSingleton(provider => new Core.RemoteDesktop.HostRemoteDesktopService(
+                    RemoteDesktop,
+                    provider.GetRequiredService<ILogger<Core.RemoteDesktop.HostRemoteDesktopService>>(),
+                    RemoteDesktop.Elevated));
                 services.AddSingleton<IHyperVHost>(HyperVHost);
                 services.AddSingleton<IHyperVBuilder>(Builder);
                 services.AddSingleton<IHyperVCompute>(Compute);
@@ -120,6 +126,8 @@ internal sealed class TestHost : IDisposable
     public FakeDiskCopier DiskCopier { get; } = new();
 
     public FakeHostCapacity Capacity { get; } = new();
+
+    public FakeRemoteDesktopSettings RemoteDesktop { get; } = new();
 
     public FakeHyperVHost HyperVHost { get; } = new();
 

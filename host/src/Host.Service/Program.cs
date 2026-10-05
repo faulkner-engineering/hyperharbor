@@ -10,6 +10,7 @@ using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Performance;
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Host.Core.RemoteDesktop;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Core.Updates;
@@ -222,6 +223,8 @@ builder.Services.AddSingleton<BackupLocation>();
 builder.Services.AddSingleton<VmDiskExportService>();
 builder.Services.AddOptions<LifecycleOptions>().Bind(builder.Configuration.GetSection(LifecycleOptions.SectionName));
 builder.Services.AddSingleton<IHostCapacityReader, WindowsHostCapacityReader>();
+builder.Services.AddSingleton<IRemoteDesktopSettings, WindowsRemoteDesktopSettings>();
+builder.Services.AddSingleton<HostRemoteDesktopService>();
 builder.Services.AddSingleton<IHyperVHost, CimHyperVHost>();
 builder.Services.AddSingleton(services => services.GetRequiredService<IOptions<LifecycleOptions>>().Value);
 // The tray can move the ISO library; its choice (host-settings.json) wins over Lifecycle:IsoFolder and the default.

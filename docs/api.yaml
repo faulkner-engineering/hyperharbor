@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.9.0
+  version: 1.10.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -186,6 +186,52 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/HyperVUnavailable"
+
+  /host/remote-desktop:
+    get:
+      tags: [Host]
+      operationId: getHostRemoteDesktop
+      summary: Get whether the host itself accepts Remote Desktop connections.
+      description: |
+        For maintenance sessions on the host. The client opens Remote Desktop to the host's
+        address and the user signs in with their Windows account there; the host never sends or
+        stores host credentials.
+      responses:
+        "200":
+          description: The host's Remote Desktop state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostRemoteDesktop"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /host/remote-desktop/enable:
+    post:
+      tags: [Host]
+      operationId: enableHostRemoteDesktop
+      summary: Allow Remote Desktop connections to the host.
+      description: |
+        Allows Remote Desktop connections and enables the Windows Firewall "Remote Desktop" rule
+        group. Network Level Authentication is left as it is. Returns 409 with
+        `code: remoteDesktopUnsupported` on editions without a Remote Desktop server (Windows Home),
+        or `code: requiresInstalledService` when the host runs without administrator rights.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "200":
+          description: Remote Desktop is allowed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostRemoteDesktop"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /host/gpu:
     get:
@@ -1684,7 +1730,8 @@ components:
             Set for errors a client handles differently from others with the same status:
             `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
             `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
-            `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`.
+            `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`,
+            `remoteDesktopUnsupported`, `requiresInstalledService`.
         errors:
           type: array
           description: Field-level validation problems (400).
@@ -2392,6 +2439,28 @@ components:
           oneOf:
             - $ref: "#/components/schemas/JobError"
             - type: "null"
+
+    HostRemoteDesktop:
+      type: object
+      required: [supported, enabled, port, firewallOpen, edition]
+      properties:
+        supported:
+          type: boolean
+          description: False on editions that cannot accept Remote Desktop connections (Windows Home).
+        enabled:
+          type: boolean
+          description: Remote Desktop connections to the host are allowed.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: The TCP port Remote Desktop listens on.
+        firewallOpen:
+          type: boolean
+          description: The Windows Firewall "Remote Desktop" rule group is enabled for the current profile.
+        edition:
+          type: string
+          description: The Windows edition, for display, for example "Windows 11 Pro".
 
     HostResources:
       type: object

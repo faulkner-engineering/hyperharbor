@@ -111,6 +111,7 @@ public class ContractFixtureTests
             [new DeleteBlocker(DeleteBlockerCode.DiskNotDeletable, DeleteBlockerScope.DeleteDisks, "In use.")]),
         ["JobError"] = new JobError("Deleting disks failed", "The file is in use."),
         ["HostResources"] = new HostResources(16, 32768, 20000, 4096, @"C:\ProgramData\Microsoft\Windows\Virtual Hard Disks", @"C:\Users\Public\Documents\HyperHarbor ISOs"),
+        ["HostRemoteDesktop"] = new HostRemoteDesktop(true, true, 3389, true, "Windows 11 Pro"),
         ["IsoImage"] = new IsoImage("Win11_24H2.iso", 5_800_000_000, Time, ["Win11 Dev"]),
 
         // Nulls on purpose: notesUrl, lastResult, and maintenanceTime are required but nullable.

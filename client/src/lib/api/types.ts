@@ -107,6 +107,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/remote-desktop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get whether the host itself accepts Remote Desktop connections.
+         * @description For maintenance sessions on the host. The client opens Remote Desktop to the host's
+         *     address and the user signs in with their Windows account there; the host never sends or
+         *     stores host credentials.
+         */
+        get: operations["getHostRemoteDesktop"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/remote-desktop/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Allow Remote Desktop connections to the host.
+         * @description Allows Remote Desktop connections and enables the Windows Firewall "Remote Desktop" rule
+         *     group. Network Level Authentication is left as it is. Returns 409 with
+         *     `code: remoteDesktopUnsupported` on editions without a Remote Desktop server (Windows Home),
+         *     or `code: requiresInstalledService` when the host runs without administrator rights.
+         */
+        post: operations["enableHostRemoteDesktop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/host/gpu": {
         parameters: {
             query?: never;
@@ -895,7 +940,8 @@ export interface components {
              * @description Set for errors a client handles differently from others with the same status:
              *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
              *     `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
-             *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`.
+             *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`,
+             *     `remoteDesktopUnsupported`, `requiresInstalledService`.
              */
             code?: string;
             /** @description Field-level validation problems (400). */
@@ -1386,6 +1432,18 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             error: components["schemas"]["JobError"] | null;
+        };
+        HostRemoteDesktop: {
+            /** @description False on editions that cannot accept Remote Desktop connections (Windows Home). */
+            supported: boolean;
+            /** @description Remote Desktop connections to the host are allowed. */
+            enabled: boolean;
+            /** @description The TCP port Remote Desktop listens on. */
+            port: number;
+            /** @description The Windows Firewall "Remote Desktop" rule group is enabled for the current profile. */
+            firewallOpen: boolean;
+            /** @description The Windows edition, for display, for example "Windows 11 Pro". */
+            edition: string;
         };
         HostResources: {
             logicalProcessorCount: number;
@@ -1954,6 +2012,50 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    getHostRemoteDesktop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The host's Remote Desktop state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostRemoteDesktop"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    enableHostRemoteDesktop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Remote Desktop is allowed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostRemoteDesktop"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            409: components["responses"]["Conflict"];
         };
     };
     getHostGpu: {

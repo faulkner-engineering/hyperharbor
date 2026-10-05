@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.9.0";
+    public const string ApiVersion = "1.10.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -41,5 +41,11 @@ public static class ContractInfo
 
         /// <summary>409: the host runs without being installed, so it does not update itself.</summary>
         public const string UpdatesUnsupported = "updatesUnsupported";
+
+        /// <summary>409: the host's Windows edition cannot accept Remote Desktop connections (Home).</summary>
+        public const string RemoteDesktopUnsupported = "remoteDesktopUnsupported";
+
+        /// <summary>409: the host process lacks administrator rights for this change; the installed service has them.</summary>
+        public const string RequiresInstalledService = "requiresInstalledService";
     }
 }

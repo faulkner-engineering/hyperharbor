@@ -1,6 +1,7 @@
 using System.Reflection;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Lifecycle;
+using HyperHarbor.Host.Core.RemoteDesktop;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Service.Security;
@@ -19,6 +20,10 @@ public static class HostEndpoints
     {
         endpoints.MapGet(ContractInfo.BasePath + "/host", GetHostInfo).WithName("getHostInfo");
         endpoints.MapGet(ContractInfo.BasePath + "/host/resources", GetResourcesAsync).WithName("getHostResources");
+        endpoints.MapGet(ContractInfo.BasePath + "/host/remote-desktop", GetRemoteDesktop).WithName("getHostRemoteDesktop");
+        endpoints.MapPost(ContractInfo.BasePath + "/host/remote-desktop/enable", EnableRemoteDesktop).WithName("enableHostRemoteDesktop")
+            .Audited()
+            .RequireElevation();
         endpoints.MapGet(ContractInfo.BasePath + "/isos", ListIsosAsync).WithName("listIsos");
         endpoints.MapPut(ContractInfo.BasePath + "/isos/{name}", UploadIsoAsync).WithName("uploadIso")
             .Audited<string>(name => $"name={name}")
@@ -65,6 +70,12 @@ public static class HostEndpoints
             await location.DisplayFolderAsync(cancellationToken),
             library.Folder));
     }
+
+    private static Ok<HostRemoteDesktop> GetRemoteDesktop(HostRemoteDesktopService remoteDesktop) =>
+        TypedResults.Ok(remoteDesktop.Get());
+
+    private static Ok<HostRemoteDesktop> EnableRemoteDesktop(HostRemoteDesktopService remoteDesktop) =>
+        TypedResults.Ok(remoteDesktop.Enable());
 
     private static async Task<Ok<IReadOnlyList<IsoImage>>> ListIsosAsync(IsoLibraryService isos, CancellationToken cancellationToken) =>
         TypedResults.Ok(await isos.ListAsync(cancellationToken));
