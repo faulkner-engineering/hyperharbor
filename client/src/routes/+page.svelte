@@ -23,6 +23,7 @@
   import PairingPanel from "$lib/components/PairingPanel.svelte";
   import VmList from "$lib/components/VmList.svelte";
   import WakePanel from "$lib/components/WakePanel.svelte";
+  import HostUpdatePanel from "$lib/components/HostUpdatePanel.svelte";
   import ProvisionDialog from "$lib/components/ProvisionDialog.svelte";
   import ElevationDialog from "$lib/components/ElevationDialog.svelte";
   import DeleteVmDialog from "$lib/components/DeleteVmDialog.svelte";
@@ -48,6 +49,7 @@
   let unpairing = $state(false);
   let offline = $state(false);
   let showWake = $state(false);
+  let showUpdates = $state(false);
   let provisioning = $state<Vm | null>(null);
   let connectingVmId = $state<string | null>(null);
   let consoleVmId = $state<string | null>(null);
@@ -72,6 +74,7 @@
     vmError = null;
     offline = false;
     showWake = false;
+    showUpdates = false;
     provisioning = null;
     confirmTurnOff = null;
     deleting = null;
@@ -314,6 +317,7 @@
             <button type="button" onclick={() => (showWake = !showWake)}>
               Wake-on-LAN
             </button>
+            <button type="button" onclick={() => (showUpdates = !showUpdates)}>Updates</button>
             <button type="button" onclick={unpairSelected} disabled={unpairing}>Unpair</button>
             <button
               type="button"
@@ -427,6 +431,12 @@
       {#if selectedHost.paired && showWake}
         {#key selectedHost.key}
           <WakePanel host={selectedHost} />
+        {/key}
+      {/if}
+
+      {#if selectedHost.paired && showUpdates}
+        {#key selectedHost.key}
+          <HostUpdatePanel host={selectedHost} />
         {/key}
       {/if}
     {/if}

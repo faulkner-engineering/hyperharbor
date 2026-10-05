@@ -81,6 +81,17 @@ pub struct UnattendedInstallRequest {
     pub computer_name: Option<String>,
 }
 
+/// Body of PUT /host/update/settings (api.yaml HostUpdateSettings).
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostUpdateSettings {
+    pub channel: String,
+    /// "auto", "notify", or "off".
+    pub mode: String,
+    /// HH:mm host local time, or None for no maintenance time. Always sent: the host requires it.
+    pub maintenance_time: Option<String>,
+}
+
 /// Body of PATCH /vms/{vmId}/compute (api.yaml UpdateVmComputeRequest). Unset fields stay as they are.
 #[derive(Clone, Debug, Default, Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -685,6 +696,35 @@ impl ApiClient {
         self.get_json(host, paired, resource.path()).await
     }
 
+    /// POST /host/update/check. Returns the HostUpdateStatus; the check itself runs on the host.
+    pub async fn check_host_update(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired(host, paired, reqwest::Method::POST, "/host/update/check")
+            .await?;
+        parse(response).await
+    }
+
+    /// PUT /host/update/settings (needs elevation). Returns the HostUpdateStatus.
+    pub async fn set_host_update_settings(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        settings: &HostUpdateSettings,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::PUT,
+            "/host/update/settings",
+            &to_body(settings)?,
+        )
+        .await
+    }
+
     /// GET /vms/{vmId}/compute.
     pub async fn get_vm_compute(
         &self,
@@ -1058,11 +1098,13 @@ pub enum HostResource {
     Switches,
     UnattendProfiles,
     Gpu,
+    Update,
 }
 
 impl HostResource {
     fn path(self) -> &'static str {
         match self {
+            HostResource::Update => "/host/update",
             HostResource::Resources => "/host/resources",
             HostResource::Isos => "/isos",
             HostResource::Switches => "/switches",
@@ -1258,6 +1300,20 @@ fn encode_base64(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::hosts::ManualHost;
+
+    #[test]
+    fn update_settings_always_send_the_maintenance_time() {
+        // The host requires maintenanceTime; null means "none".
+        let none = HostUpdateSettings {
+            channel: "beta".into(),
+            mode: "notify".into(),
+            maintenance_time: None,
+        };
+        assert_eq!(
+            to_body(&none).unwrap(),
+            json!({ "channel": "beta", "mode": "notify", "maintenanceTime": null })
+        );
+    }
 
     #[test]
     fn candidates_put_loopback_first_for_local_hosts() {

@@ -257,16 +257,20 @@ builder.Services.AddSingleton(services => new HostActivity(
     () => services.GetRequiredService<VmJobStore>().AnyRunning || services.GetRequiredService<PairingService>().HasPendingRequest,
     services.GetRequiredService<TimeProvider>()));
 
+// Update settings: the Update section, with the owner's choices from host-settings.json applied.
+builder.Services.AddSingleton(builder.Configuration.GetSection(UpdateOptions.SectionName).Get<UpdateOptions>() ?? new UpdateOptions());
+builder.Services.AddSingleton(services => new UpdateSettings(services.GetRequiredService<UpdateOptions>(), services.GetRequiredService<HostSettingsStore>()));
+
 if (isWindowsService)
 {
     // update\health.json, which the update helper waits for after starting a new version of the service.
     builder.Services.AddHostedService<HealthReporter>();
 
     // Updates apply to the installed service only: checks, downloads, self-tests, and the handoff to the helper.
-    builder.Services.AddSingleton(builder.Configuration.GetSection(UpdateOptions.SectionName).Get<UpdateOptions>() ?? new UpdateOptions());
     builder.Services.AddSingleton(services =>
     {
         var options = services.GetRequiredService<UpdateOptions>();
+        var settings = services.GetRequiredService<UpdateSettings>();
         var downloader = new UpdateDownloader(UpdateDownloader.CreateHttpClient($"HyperHarbor-Host/{HostVersion.Current}"), options);
         var gate = new SelfTestGate(dataDirectory, new SelfTestProcess(), SelfTestGate.DefaultTimeout);
         var preparer = new UpdatePreparer(options, downloader, new UnsignedPackageVerifier(), gate, dataDirectory);
@@ -274,7 +278,7 @@ if (isWindowsService)
             preparer,
             new UpdateStateStore(dataDirectory),
             services.GetRequiredService<HostActivity>(),
-            () => options,
+            settings.Current,
             HostVersion.Current,
             UpdateTask.Run,
             services.GetRequiredService<TimeProvider>(),
@@ -367,6 +371,7 @@ app.MapPerformanceEndpoints();
 app.MapJobEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();
+app.MapUpdateEndpoints();
 
 if (selfTest is not null)
 {

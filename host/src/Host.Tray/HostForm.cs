@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using HyperHarbor.Shared.Contracts.Hosts;
 
 namespace HyperHarbor.Host.Tray;
 
@@ -27,9 +28,26 @@ internal sealed class HostForm : Form
     private readonly Button _changeBackupFolder;
     private readonly Label _console;
     private readonly Button _setUpConsole;
+    private readonly Label _update;
+    private readonly Button _updateAction;
+    private readonly Label _updateChannel;
+    private readonly Button _changeUpdateChannel;
+    private readonly ContextMenuStrip _channels = new();
+    private readonly Action<string> _setUpdateChannel;
+    private HostUpdateStatus? _updateStatus;
 
-    public HostForm(Action setPassphrase, Action manageDevices, Action changeIsoFolder, Action changeVmFolder, Action changeBackupFolder, Action setUpConsole)
+    /// <param name="checkOrInstallUpdate">Called with true to install the ready version, false to check now.</param>
+    public HostForm(
+        Action setPassphrase,
+        Action manageDevices,
+        Action changeIsoFolder,
+        Action changeVmFolder,
+        Action changeBackupFolder,
+        Action setUpConsole,
+        Action<bool> checkOrInstallUpdate,
+        Action<string> setUpdateChannel)
     {
+        _setUpdateChannel = setUpdateChannel;
         // Design at 96 DPI; WinForms scales fonts and padding to the monitor's DPI.
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -65,6 +83,8 @@ internal sealed class HostForm : Form
         _vmFolder = AddRow(layout, "VM storage", out _changeVmFolder, "Change folder…", changeVmFolder);
         _isoFolder = AddRow(layout, "ISO library", out _changeIsoFolder, "Change folder…", changeIsoFolder);
         _backupFolder = AddRow(layout, "VM backups", out _changeBackupFolder, "Change folder…", changeBackupFolder);
+        _update = AddRow(layout, "Updates", out _updateAction, "Check now", () => checkOrInstallUpdate(_updateStatus?.Activity == HostUpdateActivity.Ready));
+        _updateChannel = AddRow(layout, "Update channel", out _changeUpdateChannel, "Change channel…", ShowChannels);
         AddRow(layout, "Host log", out _, "Open logs folder", () => Open(Path.Combine(DataDirectory, "logs"), folder: true), $"Daily files in {Path.Combine(DataDirectory, "logs")}");
         AddRow(layout, "Audit log", out _, "Open audit log", () => Open(Path.Combine(DataDirectory, "audit.log"), folder: false), "Every change made from a client or this tray");
 
@@ -76,12 +96,97 @@ internal sealed class HostForm : Form
 
         Controls.Add(layout);
         ShowStatus(new HostStatus(Connected: false, PassphraseConfigured: null, DeviceCount: 0, IsoFolder: null, VmFolder: null, BackupFolder: null));
+        ShowUpdate(null);
+    }
+
+    private void ShowChannels() => _channels.Show(_changeUpdateChannel, new Point(0, _changeUpdateChannel.Height));
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _channels.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    /// <summary>Shows the update status; null while the service is not connected.</summary>
+    public void ShowUpdate(HostUpdateStatus? status)
+    {
+        _updateStatus = status;
+        _updateAction.Text = status?.Activity == HostUpdateActivity.Ready ? "Install now" : "Check now";
+        _updateAction.Enabled = status is { Supported: true } && status.Activity is HostUpdateActivity.Idle or HostUpdateActivity.Ready;
+        _changeUpdateChannel.Enabled = status is { Supported: true };
+        _update.ForeColor = SystemColors.ControlText;
+
+        if (status is null)
+        {
+            _update.Text = "Unknown while the service is not running.";
+            _updateChannel.Text = string.Empty;
+            return;
+        }
+
+        if (!status.Supported)
+        {
+            _update.Text = $"Version {status.CurrentVersion}. {status.Message}";
+            _updateChannel.Text = "Install the host to follow a release channel.";
+            return;
+        }
+
+        var lines = new List<string> { $"Version {status.CurrentVersion}." };
+        lines.Add(status.Activity switch
+        {
+            HostUpdateActivity.Checking => "Checking for updates…",
+            HostUpdateActivity.Preparing => $"Downloading and testing version {status.AvailableVersion}…",
+            HostUpdateActivity.Ready => $"Version {status.AvailableVersion} is ready. " + (status.Mode == HostUpdateMode.Auto
+                ? "It installs when nothing is in progress, or at the maintenance time."
+                : "Choose Install now to install it; the host restarts."),
+            HostUpdateActivity.Installing => $"Installing version {status.AvailableVersion}. The host restarts.",
+            _ => status.Message ?? (status.LastCheck is null ? "Not checked yet." : "Up to date."),
+        });
+        if (status.Activity == HostUpdateActivity.Idle && status.Message is not null && status.Message.Contains("failed", StringComparison.OrdinalIgnoreCase))
+        {
+            _update.ForeColor = Color.Firebrick;
+        }
+
+        if (status.LastResult is { } result)
+        {
+            lines.Add($"Last update: {result}");
+        }
+
+        if (status.LastCheck is { } checkedAt)
+        {
+            lines.Add($"Checked {checkedAt.ToLocalTime():g}.");
+        }
+
+        _update.Text = string.Join(" ", lines);
+
+        var mode = status.Mode switch
+        {
+            HostUpdateMode.Notify => "Updates download automatically; you choose when to install.",
+            HostUpdateMode.Off => "Automatic checks are off.",
+            _ => status.MaintenanceTime is { } time
+                ? $"Updates install automatically when nothing is in progress, or after {time}."
+                : "Updates install automatically when nothing is in progress.",
+        };
+        _updateChannel.Text = $"Following the {status.Channel} channel. {mode}";
+
+        _channels.Items.Clear();
+        foreach (var channel in status.Channels)
+        {
+            var item = new ToolStripMenuItem(channel) { Checked = string.Equals(channel, status.Channel, StringComparison.OrdinalIgnoreCase) };
+            item.Click += (_, _) => _setUpdateChannel(channel);
+            _channels.Items.Add(item);
+        }
     }
 
     public void ShowStatus(HostStatus status)
     {
         var (connected, passphraseConfigured, deviceCount, isoFolder, vmFolder, backupFolder) = status;
-        _service.Text = connected ? "Host service running" : "Host service not running. Start it with Start-HyperHarbor.ps1.";
+        _service.Text = connected
+            ? "Host service running"
+            : "Host service not running. Start the HyperHarbor Host service, or Start-HyperHarbor.ps1 for a host that is not installed.";
         _service.ForeColor = connected ? SystemColors.ControlText : Color.Firebrick;
 
         _vmFolder.Text = connected && vmFolder is not null

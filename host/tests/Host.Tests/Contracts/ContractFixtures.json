@@ -94,7 +94,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.8.0",
+    "apiVersion": "1.9.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostResources": {
@@ -104,6 +104,31 @@
     "memoryReserveMb": 4096,
     "virtualHardDiskFolder": "C:\\ProgramData\\Microsoft\\Windows\\Virtual Hard Disks",
     "isoFolder": "C:\\Users\\Public\\Documents\\HyperHarbor ISOs"
+  },
+  "HostUpdateSettings": {
+    "channel": "stable",
+    "mode": "notify",
+    "maintenanceTime": "03:00"
+  },
+  "HostUpdateStatus": {
+    "supported": true,
+    "mode": "auto",
+    "channel": "stable",
+    "channels": [
+      "beta",
+      "stable"
+    ],
+    "maintenanceTime": null,
+    "currentVersion": "0.1.0",
+    "availableVersion": "0.2.0",
+    "notesUrl": null,
+    "activity": "ready",
+    "lastCheck": "2026-10-03T12:00:00\u002B00:00",
+    "message": "Version 0.2.0 is ready to install.",
+    "lastResult": null,
+    "rolledBack": [
+      "0.1.5"
+    ]
   },
   "IsoImage": {
     "name": "Win11_24H2.iso",

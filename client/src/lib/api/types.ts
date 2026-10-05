@@ -21,6 +21,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's update status and settings.
+         * @description The installed host updates itself from its release channel: it checks periodically,
+         *     downloads and verifies a newer version, tests it against a copy of its data, and installs
+         *     it when nothing is in progress (or at the maintenance time), rolling back if it does not
+         *     start. `supported` is false for a host run without installing it; such a host does not
+         *     update itself.
+         */
+        get: operations["getHostUpdate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/update/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check the release channel now.
+         * @description Starts a check and returns at once; poll `GET /host/update` for the result. A newer
+         *     version is then downloaded and tested, and installed according to the update mode.
+         */
+        post: operations["checkHostUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/update/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change the update channel, mode, and maintenance time.
+         * @description These decide what code the host runs, so the request needs elevation.
+         */
+        put: operations["setHostUpdateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/host/resources": {
         parameters: {
             query?: never;
@@ -870,6 +935,70 @@ export interface components {
             /** @description SHA-256 fingerprint of the host TLS certificate, uppercase hex. */
             certificateFingerprint: string;
         };
+        /**
+         * @description auto installs when nothing is in progress (or at the maintenance time); notify downloads
+         *     and tests a new version but installs it only when the owner chooses Install now in the tray;
+         *     off does not check.
+         * @enum {string}
+         */
+        HostUpdateMode: "auto" | "notify" | "off";
+        /**
+         * @description preparing means downloading, verifying, and testing a new version; ready means it waits to
+         *     be installed; installing means the host is about to restart on it.
+         * @enum {string}
+         */
+        HostUpdateActivity: "idle" | "checking" | "preparing" | "ready" | "installing";
+        /**
+         * @example {
+         *       "supported": true,
+         *       "mode": "auto",
+         *       "channel": "stable",
+         *       "channels": [
+         *         "stable",
+         *         "beta"
+         *       ],
+         *       "maintenanceTime": "03:00",
+         *       "currentVersion": "0.1.0",
+         *       "availableVersion": "0.2.0",
+         *       "notesUrl": "https://github.com/faulkner-engineering/hyperharbor/releases/tag/v0.2.0",
+         *       "activity": "ready",
+         *       "lastCheck": "2026-10-04T12:00:00Z",
+         *       "message": "Version 0.2.0 is ready to install.",
+         *       "lastResult": null,
+         *       "rolledBack": []
+         *     }
+         */
+        HostUpdateStatus: {
+            /** @description False when the host runs without being installed; it then does not update itself. */
+            supported: boolean;
+            mode: components["schemas"]["HostUpdateMode"];
+            channel: string;
+            /** @description The channels this host can follow. */
+            channels: string[];
+            /** @description Host local time (HH:mm) after which an install may start without waiting for idle. */
+            maintenanceTime: string | null;
+            currentVersion: string;
+            /** @description The newer version the channel offers, when there is one. */
+            availableVersion: string | null;
+            /** Format: uri */
+            notesUrl: string | null;
+            activity: components["schemas"]["HostUpdateActivity"];
+            /** Format: date-time */
+            lastCheck: string | null;
+            /** @description What the host is doing or why the last step failed. */
+            message: string | null;
+            /** @description How the last installation ended, for example a rollback. */
+            lastResult: string | null;
+            /** @description Versions that did not start here and were rolled back; they are not offered again. */
+            rolledBack: string[];
+        };
+        HostUpdateSettings: {
+            /** @description One of the status's channels. */
+            channel: string;
+            mode: components["schemas"]["HostUpdateMode"];
+            /** @description HH:mm host local time, or null for none. */
+            maintenanceTime: string | null;
+        };
         /** @enum {string} */
         VmState: "running" | "off" | "saved" | "paused" | "starting" | "stopping" | "saving" | "pausing" | "resuming" | "other";
         /**
@@ -1604,6 +1733,18 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /**
+         * @description The host runs without being installed, so it does not update itself
+         *     (`code: updatesUnsupported`).
+         */
+        UpdatesUnsupported: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
         /** @description The operation is not valid in the current state, or another operation is in progress on the VM. */
         Conflict: {
             headers: {
@@ -1720,6 +1861,77 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getHostUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Update status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostUpdateStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    checkHostUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The check has started. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostUpdateStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["UpdatesUnsupported"];
+        };
+    };
+    setHostUpdateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostUpdateSettings"];
+            };
+        };
+        responses: {
+            /** @description The settings were saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostUpdateStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            409: components["responses"]["UpdatesUnsupported"];
         };
     };
     getHostResources: {

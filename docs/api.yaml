@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.8.0
+  version: 1.9.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -93,6 +93,79 @@ paths:
                 $ref: "#/components/schemas/HostInfo"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /host/update:
+    get:
+      tags: [Host]
+      operationId: getHostUpdate
+      summary: Get the host's update status and settings.
+      description: |
+        The installed host updates itself from its release channel: it checks periodically,
+        downloads and verifies a newer version, tests it against a copy of its data, and installs
+        it when nothing is in progress (or at the maintenance time), rolling back if it does not
+        start. `supported` is false for a host run without installing it; such a host does not
+        update itself.
+      responses:
+        "200":
+          description: Update status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostUpdateStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /host/update/check:
+    post:
+      tags: [Host]
+      operationId: checkHostUpdate
+      summary: Check the release channel now.
+      description: |
+        Starts a check and returns at once; poll `GET /host/update` for the result. A newer
+        version is then downloaded and tested, and installed according to the update mode.
+      responses:
+        "202":
+          description: The check has started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostUpdateStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/UpdatesUnsupported"
+
+  /host/update/settings:
+    put:
+      tags: [Host]
+      operationId: setHostUpdateSettings
+      summary: Change the update channel, mode, and maintenance time.
+      description: |
+        These decide what code the host runs, so the request needs elevation.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HostUpdateSettings"
+      responses:
+        "200":
+          description: The settings were saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostUpdateStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          $ref: "#/components/responses/UpdatesUnsupported"
 
   /host/resources:
     get:
@@ -1524,6 +1597,14 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
+    UpdatesUnsupported:
+      description: |
+        The host runs without being installed, so it does not update itself
+        (`code: updatesUnsupported`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
     Conflict:
       description: The operation is not valid in the current state, or another operation is in progress on the VM.
       content:
@@ -1654,6 +1735,96 @@ components:
         version: 0.1.0
         apiVersion: 1.0.0
         certificateFingerprint: 3F2A9C1D4B5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D6E7F8
+
+    HostUpdateMode:
+      type: string
+      enum: [auto, notify, off]
+      description: |
+        auto installs when nothing is in progress (or at the maintenance time); notify downloads
+        and tests a new version but installs it only when the owner chooses Install now in the tray;
+        off does not check.
+
+    HostUpdateActivity:
+      type: string
+      enum: [idle, checking, preparing, ready, installing]
+      description: |
+        preparing means downloading, verifying, and testing a new version; ready means it waits to
+        be installed; installing means the host is about to restart on it.
+
+    HostUpdateStatus:
+      type: object
+      required:
+        [supported, mode, channel, channels, maintenanceTime, currentVersion, availableVersion,
+         notesUrl, activity, lastCheck, message, lastResult, rolledBack]
+      properties:
+        supported:
+          type: boolean
+          description: False when the host runs without being installed; it then does not update itself.
+        mode:
+          $ref: "#/components/schemas/HostUpdateMode"
+        channel:
+          type: string
+        channels:
+          type: array
+          items:
+            type: string
+          description: The channels this host can follow.
+        maintenanceTime:
+          type: [string, "null"]
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: Host local time (HH:mm) after which an install may start without waiting for idle.
+        currentVersion:
+          type: string
+        availableVersion:
+          type: [string, "null"]
+          description: The newer version the channel offers, when there is one.
+        notesUrl:
+          type: [string, "null"]
+          format: uri
+        activity:
+          $ref: "#/components/schemas/HostUpdateActivity"
+        lastCheck:
+          type: [string, "null"]
+          format: date-time
+        message:
+          type: [string, "null"]
+          description: What the host is doing or why the last step failed.
+        lastResult:
+          type: [string, "null"]
+          description: How the last installation ended, for example a rollback.
+        rolledBack:
+          type: array
+          items:
+            type: string
+          description: Versions that did not start here and were rolled back; they are not offered again.
+      example:
+        supported: true
+        mode: auto
+        channel: stable
+        channels: [stable, beta]
+        maintenanceTime: "03:00"
+        currentVersion: 0.1.0
+        availableVersion: 0.2.0
+        notesUrl: https://github.com/faulkner-engineering/hyperharbor/releases/tag/v0.2.0
+        activity: ready
+        lastCheck: "2026-10-04T12:00:00Z"
+        message: Version 0.2.0 is ready to install.
+        lastResult: null
+        rolledBack: []
+
+    HostUpdateSettings:
+      type: object
+      required: [channel, mode, maintenanceTime]
+      properties:
+        channel:
+          type: string
+          description: One of the status's channels.
+        mode:
+          $ref: "#/components/schemas/HostUpdateMode"
+        maintenanceTime:
+          type: [string, "null"]
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: HH:mm host local time, or null for none.
 
     VmState:
       type: string

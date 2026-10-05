@@ -9,6 +9,7 @@ using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Performance;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Updates;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Shared.Contracts.Ipc;
 
@@ -129,6 +130,8 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 await connection.SendAsync(new BackupFolderMessage(backups.Folder));
             }
 
+            await SendUpdateStatusAsync(connection);
+
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
             var lines = new BoundedLineReader(reader, MaxMessageLength);
             while (!stoppingToken.IsCancellationRequested && await lines.ReadLineAsync(stoppingToken) is { } line)
@@ -215,6 +218,52 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             case SetAdminPassphraseMessage set:
                 SetAdminPassphrase(set);
                 break;
+            case UpdateStatusQueryMessage:
+                await SendUpdateStatusAsync(connection);
+                break;
+            case CheckForUpdateMessage:
+                _services.GetService<UpdateCoordinator>()?.RequestCheck();
+                AuditTrayAction("trayUpdateCheck", null, null, null);
+                await SendUpdateStatusAsync(connection);
+                break;
+            case InstallUpdateMessage:
+                var accepted = _services.GetService<UpdateCoordinator>()?.RequestInstall() ?? false;
+                AuditTrayAction("trayUpdateInstall", null, null, null, $"accepted={accepted}", accepted ? AuditOutcome.Succeeded : AuditOutcome.Failed);
+                await SendUpdateStatusAsync(connection);
+                break;
+            case SetUpdateChannelMessage channel:
+                SetUpdateChannel(channel);
+                await SendUpdateStatusAsync(connection);
+                break;
+        }
+    }
+
+    private async Task SendUpdateStatusAsync(Connection connection)
+    {
+        if (_services.GetService<UpdateSettings>() is { } settings)
+        {
+            await connection.SendAsync(new UpdateStatusMessage(Api.UpdateEndpoints.Status(_services.GetService<UpdateCoordinator>(), settings)));
+        }
+    }
+
+    /// <summary>Changes the release channel from the tray. The mode and maintenance time are kept.</summary>
+    private void SetUpdateChannel(SetUpdateChannelMessage request)
+    {
+        if (_services.GetService<UpdateSettings>() is not { } settings)
+        {
+            return;
+        }
+
+        var current = settings.Current();
+        try
+        {
+            settings.Save(new UpdatePreferences(request.Channel, current.Mode, current.MaintenanceTime));
+            AuditTrayAction("traySetUpdateChannel", null, null, null, $"channel={request.Channel}");
+            _services.GetService<UpdateCoordinator>()?.RequestCheck();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("The tray asked for an unknown update channel: {Message}", ex.Message);
         }
     }
 

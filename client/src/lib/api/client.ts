@@ -12,6 +12,9 @@ export type VmJob = components["schemas"]["VmJob"];
 export type VmDeletePreview = components["schemas"]["VmDeletePreview"];
 export type DeleteBlocker = components["schemas"]["DeleteBlocker"];
 export type HostResources = components["schemas"]["HostResources"];
+export type HostUpdateStatus = components["schemas"]["HostUpdateStatus"];
+export type HostUpdateSettings = components["schemas"]["HostUpdateSettings"];
+export type HostUpdateMode = components["schemas"]["HostUpdateMode"];
 export type IsoImage = components["schemas"]["IsoImage"];
 export type VirtualSwitch = components["schemas"]["VirtualSwitch"];
 export type VmComputeSettings = components["schemas"]["VmComputeSettings"];
@@ -244,6 +247,17 @@ export const listIsos = (key: string) => invoke<IsoImage[]>("get_host_resource",
 
 export const listSwitches = (key: string) =>
   invoke<VirtualSwitch[]>("get_host_resource", { key, resource: "switches" });
+
+// Host updates. Only an installed host updates itself (status.supported).
+
+export const getHostUpdate = (key: string) =>
+  invoke<HostUpdateStatus>("get_host_resource", { key, resource: "update" });
+
+export const checkHostUpdate = (key: string) => invoke<HostUpdateStatus>("check_host_update", { key });
+
+/** Needs elevation: run it inside withElevation. */
+export const setHostUpdateSettings = (key: string, settings: HostUpdateSettings) =>
+  invoke<HostUpdateStatus>("set_host_update_settings", { key, settings });
 
 // ISO library. Files are chosen and read on the Rust side; the frontend only sees a pick ID.
 

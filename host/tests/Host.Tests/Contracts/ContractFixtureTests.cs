@@ -112,6 +112,12 @@ public class ContractFixtureTests
         ["JobError"] = new JobError("Deleting disks failed", "The file is in use."),
         ["HostResources"] = new HostResources(16, 32768, 20000, 4096, @"C:\ProgramData\Microsoft\Windows\Virtual Hard Disks", @"C:\Users\Public\Documents\HyperHarbor ISOs"),
         ["IsoImage"] = new IsoImage("Win11_24H2.iso", 5_800_000_000, Time, ["Win11 Dev"]),
+
+        // Nulls on purpose: notesUrl, lastResult, and maintenanceTime are required but nullable.
+        ["HostUpdateStatus"] = new HostUpdateStatus(
+            true, HostUpdateMode.Auto, "stable", ["beta", "stable"], null, "0.1.0", "0.2.0", null,
+            HostUpdateActivity.Ready, Time, "Version 0.2.0 is ready to install.", null, ["0.1.5"]),
+        ["HostUpdateSettings"] = new HostUpdateSettings("stable", HostUpdateMode.Notify, "03:00"),
         ["RenameIsoRequest"] = new RenameIsoRequest("Windows 11 24H2.iso"),
         ["VirtualSwitch"] = new VirtualSwitch("C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", "Default Switch", true),
 

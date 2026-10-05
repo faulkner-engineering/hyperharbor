@@ -1,0 +1,102 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/svelte";
+
+const invoke = vi.hoisted(() => vi.fn());
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
+
+import HostUpdatePanel from "./HostUpdatePanel.svelte";
+import type { HostEntry, HostUpdateStatus } from "$lib/api/client";
+
+const host: HostEntry = {
+  key: "mdns:host",
+  displayName: "TC-PC",
+  hostId: null,
+  hostName: null,
+  addresses: [],
+  port: 48443,
+  apiVersion: "1.9.0",
+  source: "discovered",
+  isLocal: false,
+  paired: true,
+  canWake: false,
+};
+
+const status = (overrides: Partial<HostUpdateStatus> = {}): HostUpdateStatus => ({
+  supported: true,
+  mode: "auto",
+  channel: "stable",
+  channels: ["beta", "stable"],
+  maintenanceTime: "03:00",
+  currentVersion: "0.1.0",
+  availableVersion: null,
+  notesUrl: null,
+  activity: "idle",
+  lastCheck: null,
+  message: null,
+  lastResult: null,
+  rolledBack: [],
+  ...overrides,
+});
+
+beforeEach(() => {
+  invoke.mockReset();
+});
+
+describe("HostUpdatePanel", () => {
+  it("shows the installed version, the channel, and a ready version", async () => {
+    invoke.mockResolvedValue(status({ activity: "ready", availableVersion: "0.2.0", lastResult: "Updated from 0.0.9 to 0.1.0." }));
+    render(HostUpdatePanel, { host });
+
+    expect(await screen.findByText(/Version 0\.2\.0 is ready\. It installs when nothing is in progress/)).toBeTruthy();
+    expect(screen.getByText(/Following the/).textContent).toContain("stable");
+    expect(screen.getByText(/or after 03:00/)).toBeTruthy();
+    expect(screen.getByText("Last update: Updated from 0.0.9 to 0.1.0.")).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("get_host_resource", { key: host.key, resource: "update" });
+  });
+
+  it("points to the host window when a ready version waits for the owner", async () => {
+    invoke.mockResolvedValue(status({ mode: "notify", activity: "ready", availableVersion: "0.2.0" }));
+    render(HostUpdatePanel, { host });
+
+    expect(await screen.findByText(/Install it from the HyperHarbor Host window on the host\./)).toBeTruthy();
+  });
+
+  it("checks now", async () => {
+    invoke.mockResolvedValueOnce(status()).mockResolvedValueOnce(status({ activity: "checking" }));
+    render(HostUpdatePanel, { host });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Check now" }));
+
+    expect(invoke).toHaveBeenCalledWith("check_host_update", { key: host.key });
+    expect(await screen.findByText("Checking for updates…")).toBeTruthy();
+  });
+
+  it("saves settings, sending no maintenance time when the field is empty", async () => {
+    invoke.mockResolvedValueOnce(status()).mockResolvedValueOnce(status({ channel: "beta", mode: "notify", maintenanceTime: null }));
+    render(HostUpdatePanel, { host });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Change settings…" }));
+    await fireEvent.change(screen.getByLabelText("Channel"), { target: { value: "beta" } });
+    await fireEvent.change(screen.getByLabelText("Mode"), { target: { value: "notify" } });
+    await fireEvent.input(screen.getByLabelText(/Maintenance time/), { target: { value: "" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("set_host_update_settings", {
+        key: host.key,
+        settings: { channel: "beta", mode: "notify", maintenanceTime: null },
+      }),
+    );
+  });
+
+  it("explains that a host run without installing does not update itself", async () => {
+    invoke.mockResolvedValue(
+      status({ supported: false, message: "Updates apply to the installed host. This one runs without being installed." }),
+    );
+    render(HostUpdatePanel, { host });
+
+    expect(await screen.findByText(/Updates apply to the installed host/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Check now" })).toBeNull();
+  });
+});

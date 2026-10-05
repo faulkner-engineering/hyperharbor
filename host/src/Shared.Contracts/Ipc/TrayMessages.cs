@@ -28,6 +28,11 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(GpuVmsMessage), "gpuVms")]
 [JsonDerivedType(typeof(StopGpuVmsMessage), "stopGpuVms")]
 [JsonDerivedType(typeof(GpuVmsStoppedMessage), "gpuVmsStopped")]
+[JsonDerivedType(typeof(UpdateStatusMessage), "updateStatus")]
+[JsonDerivedType(typeof(UpdateStatusQueryMessage), "updateStatusQuery")]
+[JsonDerivedType(typeof(CheckForUpdateMessage), "checkForUpdate")]
+[JsonDerivedType(typeof(InstallUpdateMessage), "installUpdate")]
+[JsonDerivedType(typeof(SetUpdateChannelMessage), "setUpdateChannel")]
 public abstract record TrayMessage;
 
 // Service to tray.
@@ -76,6 +81,21 @@ public sealed record GpuVmsMessage(IReadOnlyList<string> Running) : TrayMessage;
 
 /// <summary>The outcome of <see cref="StopGpuVmsMessage"/>.</summary>
 public sealed record GpuVmsStoppedMessage(IReadOnlyList<string> Stopped, IReadOnlyList<string> StillRunning) : TrayMessage;
+
+/// <summary>The host's update status, sent on connect and in answer to every update message.</summary>
+public sealed record UpdateStatusMessage(Hosts.HostUpdateStatus Status) : TrayMessage;
+
+/// <summary>Asks for <see cref="UpdateStatusMessage"/>; the HostForm window polls while it is open.</summary>
+public sealed record UpdateStatusQueryMessage : TrayMessage;
+
+/// <summary>Check the release channel now.</summary>
+public sealed record CheckForUpdateMessage : TrayMessage;
+
+/// <summary>Install the downloaded version as soon as nothing is in progress (Install now).</summary>
+public sealed record InstallUpdateMessage : TrayMessage;
+
+/// <summary>Follow another release channel; the mode and maintenance time stay as they are.</summary>
+public sealed record SetUpdateChannelMessage(string Channel) : TrayMessage;
 
 // Tray to service.
 

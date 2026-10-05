@@ -1,3 +1,4 @@
+using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Ipc;
 
 namespace HyperHarbor.Host.Tray;
@@ -27,6 +28,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly ShutdownGuard _shutdownGuard;
     private readonly System.Windows.Forms.Timer _gpuVmPoll;
     private IReadOnlyList<string> _gpuVms = [];
+    private readonly System.Windows.Forms.Timer _updatePoll;
+    private HostUpdateStatus? _update;
 
     /// <summary>Null until the service reports it.</summary>
     private bool? _passphraseConfigured;
@@ -69,6 +72,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _gpuVmPoll.Tick += (_, _) => QueryGpuVms();
         _gpuVmPoll.Start();
 
+        // Update progress (checking, downloading, installing) changes on its own, so the open window asks for it.
+        _updatePoll = new System.Windows.Forms.Timer { Interval = 5_000 };
+        _updatePoll.Tick += (_, _) =>
+        {
+            if (_connected && _hostForm is not null)
+            {
+                _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+            }
+        };
+        _updatePoll.Start();
+
         _pipe.Start();
     }
 
@@ -77,6 +91,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (disposing)
         {
             _gpuVmPoll.Dispose();
+            _updatePoll.Dispose();
             _shutdownGuard.Dispose();
             _pipe.Dispose();
             _pinForm?.Dispose();
@@ -108,6 +123,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _vmFolder = null;
             _backupFolder = null;
             _gpuVms = [];
+            _update = null;
+            _hostForm?.ShowUpdate(null);
         }
         else
         {
@@ -157,8 +174,30 @@ internal sealed class TrayApplicationContext : ApplicationContext
             case WakeFixRequestedMessage wakeFix:
                 _ = ApproveWakeFixAsync(wakeFix);
                 break;
+            case UpdateStatusMessage update:
+                OnUpdateStatus(update.Status);
+                break;
         }
     }
+
+    private void OnUpdateStatus(HostUpdateStatus status)
+    {
+        // In notify mode nothing installs by itself, so say once when a version is ready.
+        if (status is { Activity: HostUpdateActivity.Ready, Mode: HostUpdateMode.Notify } && _update?.Activity != HostUpdateActivity.Ready)
+        {
+            _notifyIcon.ShowBalloonTip(
+                10_000,
+                $"HyperHarbor {status.AvailableVersion} is ready",
+                "Open HyperHarbor Host and choose Install now. The host restarts.",
+                ToolTipIcon.Info);
+        }
+
+        _update = status;
+        _hostForm?.ShowUpdate(status);
+    }
+
+    private void CheckOrInstallUpdate(bool install) =>
+        _ = _pipe.SendAsync(install ? new InstallUpdateMessage() : new CheckForUpdateMessage());
 
     private void QueryGpuVms()
     {
@@ -270,9 +309,18 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (_hostForm is null)
         {
-            _hostForm = new HostForm(ShowPassphrase, ShowDevices, ChangeIsoFolder, ChangeVmFolder, ChangeBackupFolder, () => _ = SetUpConsoleAsync());
+            _hostForm = new HostForm(
+                ShowPassphrase,
+                ShowDevices,
+                ChangeIsoFolder,
+                ChangeVmFolder,
+                ChangeBackupFolder,
+                () => _ = SetUpConsoleAsync(),
+                CheckOrInstallUpdate,
+                channel => _ = _pipe.SendAsync(new SetUpdateChannelMessage(channel)));
             _hostForm.FormClosed += (_, _) => _hostForm = null;
             RefreshHost();
+            _hostForm.ShowUpdate(_connected ? _update : null);
         }
 
         _hostForm.Show();

@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.8.0";
+    public const string ApiVersion = "1.9.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -38,5 +38,8 @@ public static class ContractInfo
 
         /// <summary>503: the host is installing an update; retry after Retry-After.</summary>
         public const string Updating = "updating";
+
+        /// <summary>409: the host runs without being installed, so it does not update itself.</summary>
+        public const string UpdatesUnsupported = "updatesUnsupported";
     }
 }

@@ -88,6 +88,20 @@ public sealed class HostSettingsStore
 
     public void SetBackupFolder(string? folder) => Update(settings => settings with { BackupFolder = folder });
 
+    /// <summary>The update channel, mode, and maintenance time chosen from a client or the tray, or null for the configured defaults.</summary>
+    public Updates.UpdatePreferences? UpdatePreferences
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return Load().Update;
+            }
+        }
+    }
+
+    public void SetUpdatePreferences(Updates.UpdatePreferences preferences) => Update(settings => settings with { Update = preferences });
+
     private void Update(Func<Settings, Settings> change)
     {
         lock (_gate)
@@ -103,7 +117,7 @@ public sealed class HostSettingsStore
         ? JsonSerializer.Deserialize<Settings>(File.ReadAllBytes(_path), JsonOptions) ?? new Settings()
         : new Settings();
 
-    private sealed record Settings(string? IsoFolder = null, string? VmFolder = null, string? BackupFolder = null);
+    private sealed record Settings(string? IsoFolder = null, string? VmFolder = null, string? BackupFolder = null, Updates.UpdatePreferences? Update = null);
 }
 
 /// <summary>
