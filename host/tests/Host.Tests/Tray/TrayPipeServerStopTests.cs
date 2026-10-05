@@ -49,24 +49,35 @@ public sealed class TrayPipeServerStopTests : IDisposable
         await tray.ReceiveAsync();
         await tray.SendAsync(new RemoveDeviceMessage(device.DeviceId));
         Assert.Empty(Assert.IsType<DeviceListMessage>(await tray.ReceiveAsync()).Devices);
-        Assert.False(audit.Written);
+        Assert.True(audit.Started.Wait(TrayPipeServerTests.Timeout));
 
         await stop.CancelAsync();
-        await server.StopAsync(CancellationToken.None);
+        var stopping = server.StopAsync(CancellationToken.None);
 
+        // The audit write is held open, so a stop that waits for it cannot have finished.
+        Assert.NotSame(stopping, await Task.WhenAny(stopping, Task.Delay(TimeSpan.FromMilliseconds(300))));
+        Assert.False(audit.Written);
+
+        audit.Release.Set();
+        await stopping;
         Assert.True(audit.Written);
     }
 
-    /// <summary>Holds each write long enough that a stop which does not wait would see it unfinished.</summary>
+    /// <summary>Holds each write until the test releases it, so a stop which does not wait would see it unfinished.</summary>
     private sealed class SlowAuditLog : IAuditLog
     {
         private int _written;
+
+        public ManualResetEventSlim Started { get; } = new();
+
+        public ManualResetEventSlim Release { get; } = new();
 
         public bool Written => Volatile.Read(ref _written) == 1;
 
         public void Write(AuditEntry entry)
         {
-            Thread.Sleep(TimeSpan.FromMilliseconds(500));
+            Started.Set();
+            Release.Wait(TrayPipeServerTests.Timeout);
             Volatile.Write(ref _written, 1);
         }
     }
