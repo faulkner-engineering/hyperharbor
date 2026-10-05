@@ -1,10 +1,12 @@
 using System.Text;
 using DiscUtils.Iso9660;
 using HyperHarbor.Host.Core.Lifecycle;
+using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Tests.Unattend;
+using HyperHarbor.Shared.Contracts.Profiles;
 using HyperHarbor.Shared.Contracts.Unattend;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,6 +27,7 @@ public sealed class UnattendedCreationTests : IDisposable
     private readonly VmCredentialStore _credentials;
     private readonly UnattendedInstallStore _installs;
     private readonly Guid _userId;
+    private readonly SetupProfileStore _setupProfiles;
     private readonly VmCreationService _creation;
 
     public UnattendedCreationTests()
@@ -39,9 +42,10 @@ public sealed class UnattendedCreationTests : IDisposable
         _userId = users.GetOrCreateDefault().UserId;
         _credentials = new VmCredentialStore(data);
         _installs = new UnattendedInstallStore(data);
+        _setupProfiles = new SetupProfileStore(data, Catalogs.Default);
         var unattended = new UnattendedSetup(
             new UnattendProfileStore(data, () => "Central Standard Time"), new IsoInspector(), users, _credentials, _installs,
-            _power, _keyboard, TimeProvider.System, NullLogger<UnattendedSetup>.Instance, keyInterval: TimeSpan.Zero);
+            _power, _keyboard, TimeProvider.System, NullLogger<UnattendedSetup>.Instance, keyInterval: TimeSpan.Zero, _setupProfiles);
 
         _builder.OnDiskCreated = path => _files.Files.Add(path);
         var options = new LifecycleOptions { VmRootFolder = Path.Combine(_root, "vms") };
@@ -185,5 +189,35 @@ public sealed class UnattendedCreationTests : IDisposable
             _creation.StartAsync(_userId, Request(install: new UnattendedInstallRequest("windows-workstation", null, "far-too-long-computer-name")), null, CancellationToken.None));
 
         Assert.Contains(error.Errors, issue => issue.Field == "install.computerName");
+    }
+
+    [Fact]
+    public async Task ASetupProfile_IsKeptWithTheInstall_AsItWasWhenTheVmWasCreated()
+    {
+        var stored = _setupProfiles.Create(_userId, new SetupProfile("Workstation", null, [new("7zip")], null, null, null));
+
+        var job = await RunAsync(Request(install: new UnattendedInstallRequest("windows-workstation", SetupProfileId: stored.Id)));
+        _setupProfiles.Update(_userId, stored.Id, new SetupProfile("Workstation", null, [new("vscode")], null, null, null));
+
+        Assert.Equal(VmJobState.Succeeded, job.State);
+        var install = _installs.Find(_builder.CreatedVmId)!;
+        Assert.Equal("Workstation", install.SetupProfile!.Name);
+        Assert.Equal("7zip", Assert.Single(install.SetupProfile.Install!).Id);
+        Assert.False(install.AccountConfigured);
+        Assert.Null(install.SetupResult);
+    }
+
+    [Theory]
+    [InlineData("win11.iso", "windows-workstation", "missing-profile")]
+    [InlineData("ubuntu.iso", "ubuntu-dev-server", null)]
+    public async Task ASetupProfile_ThatIsMissingOrForLinux_IsRejected(string iso, string profile, string? setupProfileId)
+    {
+        setupProfileId ??= _setupProfiles.Create(_userId, new SetupProfile("Workstation", null, [new("7zip")], null, null, null)).Id;
+
+        var error = await Assert.ThrowsAsync<LifecycleValidationException>(() =>
+            _creation.StartAsync(_userId, Request(iso, new UnattendedInstallRequest(profile, SetupProfileId: setupProfileId)), null, CancellationToken.None));
+
+        Assert.Contains(error.Errors, issue => issue.Field == "install.setupProfileId");
+        Assert.Null(_builder.Configured);
     }
 }

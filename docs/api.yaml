@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.12.0
+  version: 1.13.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -3660,6 +3660,31 @@ components:
         computerName:
           type: [string, "null"]
           description: Windows only, at most 15 letters, digits, or hyphens. Null means derived from the VM name.
+        setupProfileId:
+          type: [string, "null"]
+          description: |
+            Windows only (API 1.13.0). An `id` from `GET /setup-profiles`, applied after the install is ready: its
+            packages, removals, and settings, with one restart when something needs it. The host keeps the profile
+            as it is now, so later edits do not change this install. Null means none.
+
+    SetupProfileResult:
+      type: object
+      required: [applied, problems, restarted, finishedAt]
+      properties:
+        applied:
+          type: integer
+          description: Items applied (packages, removals, tweaks, policies, the extension list).
+        problems:
+          type: array
+          items:
+            type: string
+          description: Items that could not be applied, each with the reason.
+        restarted:
+          type: boolean
+          description: The VM was restarted to finish, and Remote Desktop answered afterwards.
+        finishedAt:
+          type: string
+          format: date-time
 
     UnattendedInstallStatus:
       type: object
@@ -3686,14 +3711,23 @@ components:
         error:
           type: [string, "null"]
           description: Why the install failed.
+        setupProfileName:
+          type: [string, "null"]
+          description: The setup profile chosen at create time, if any (API 1.13.0).
+        setupResult:
+          description: What applying the setup profile did; null until it is done or without one.
+          oneOf:
+            - $ref: "#/components/schemas/SetupProfileResult"
+            - type: "null"
 
     UnattendedInstallState:
       type: string
       description: |
         `installing` (Setup is running), `awaitingConfirmation` (Ubuntu waits for "yes" at the console),
         `waitingForGuest` (no address yet), `waitingForRemoteAccess` (Remote Desktop or SSH not answering
-        yet), `configuring` (the host sets up the User account), then `ready`, `failed`, or `canceled`.
-      enum: [installing, awaitingConfirmation, waitingForGuest, waitingForRemoteAccess, configuring, ready, failed, canceled]
+        yet), `configuring` (the host sets up the User account), `applyingProfile` (the host applies the
+        setup profile, API 1.13.0), then `ready`, `failed`, or `canceled`.
+      enum: [installing, awaitingConfirmation, waitingForGuest, waitingForRemoteAccess, configuring, applyingProfile, ready, failed, canceled]
 
     GpuVendor:
       type: string

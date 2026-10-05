@@ -62,9 +62,15 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
 12a. Setup profiles: capture and pickers, added at the user's request (done 2026-10-05, API 1.12.0). YAML profiles per
    User (install: winget/Store ids or aliases; remove: Appx, capabilities, features; tweaks; browser with extensions
    and policies), JSON Schema, curated catalogs, Appx inventory with clean baselines, winget search, extension
-   resolver, capture from a VM, and the client's editor, pickers, and capture review. Applying a profile is 12b
-   (not started); 12a only has the alias resolver it will use. Golden images are later too (the Appx route takes
-   ?source=vm so another source fits).
+   resolver, capture from a VM, and the client's editor, pickers, and capture review. Golden images are later (the
+   Appx route takes ?source=vm so another source fits).
+12b. Apply setup profiles, added at the user's request. Part 1 (done 2026-10-05, API 1.13.0): a setup profile chosen in
+   the create dialog (install.setupProfileId, Windows only, snapshotted into the install record, data format 2) is
+   applied by the install watcher after the account is set up (state applyingProfile; baseline recorded first;
+   SetupProfilePlanner, SetupProfileApplication, PowerShellDirectProfileApplier: packages, removals, settings), with
+   one restart if needed, then Ready with setupResult. Verified live 2026-10-05: the applier on HyperHarbor-Test, and
+   create to Ready on HyperHarbor-Test2 (17 min, 7 items, no problems). The restart path is unit tested only. Next:
+   apply to an existing VM from its menu as a VmJob.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -399,11 +405,26 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     .NET keys closed at once and retry the unload, because a hive left loaded gives the account a temporary profile at
     its next sign-in (the first live run failed on exactly that unload). reg.exe writes errors to stderr, which ends a
     script under ErrorActionPreference Stop; switch to Continue around native commands whose exit code is checked.
-  - On TESTWINDOWSINSTALL (10.0.26300, fresh), winget export over PowerShell Direct produced no packages although Edge
-    and OneDrive were installed, so capture falls back to the Uninstall keys' program names with a warning. Not yet
-    understood (possibly winget's sources are not initialized for the administrator in that session).
+  - When winget export yields nothing, capture falls back to the Uninstall keys' program names with a warning.
   - Scripted edits with Node: in String.replace, the replacement string treats $' $& $` as patterns, which mangled
     a PowerShell regex ending in +$'. Pass a function (s.replace(a, () => b)) when the text can contain $.
+- Applying setup profiles (Phase 12b; spike and live runs on HyperHarbor-Test, Windows 11 Pro 24H2 media, 2026-10-05):
+  - winget.exe from the App Installer folder fails with "Access is denied" in a PowerShell Direct session as an
+    administrator that never signed in interactively. Running it as SYSTEM from a scheduled task fails with
+    0xC0000135 (DLL not found). What works: Add-AppxPackage -DisableDevelopmentMode -Register <App Installer
+    folder>\AppxManifest.xml for the account, then winget in the session (the packages and capture scripts both do it).
+  - The fresh image's winget (v1.11) then failed installs with 0x8A15000F "Data required by the source is missing";
+    winget source reset --force plus source update fixed it there. If not, the packages script adds
+    https://cdn.winget.microsoft.com/cache/source.msix. Codes treated as done: 0, 0x8A15002B, 0x8A150061; 0x8A150109
+    means done after a restart; 0x8A150010 (no machine-scope installer) retries without --scope machine.
+  - Invoke-Command -ArgumentList @($array) with one argument unrolls the array into separate arguments, so the
+    script block's single parameter got only the first package and the first registry write. Wrap it:
+    -ArgumentList (,@($array)). Several arguments (the removals script) are not affected.
+  - Remove-WindowsCapability for MathRecognizer reported no restart. HKCU tweaks go to the Default user hive
+    (C:\Users\Default\NTUSER.DAT under HKU\HyperHarborDefault), since the User's account has not signed in yet.
+    ExtensionSettings is one REG_SZ JSON value under the browser's policy key.
+  - After a restart the watcher counts Remote Desktop only after one check found it down (Windows answers for a few
+    seconds after the request, and a guest reboot does not reset uptime): 60 checks of 15 seconds.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):
@@ -499,5 +520,15 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
 - Setup profiles: HH_PROFILE_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs a read-only capture against a running Windows VM
   with a stored credential (reads the host's data folder, so run elevated; HH_PROFILE_LIVE_OUT=<file> saves the draft).
   HH_PACKAGE_SEARCH_LIVE=1 searches winget through pwsh; HH_EXTENSION_LIVE=1 checks catalog ids against the stores.
+- Live host harness (Host.Tests/Live/LiveHostHarness): the real host exe from the test build on a loopback port with
+  its own data folder (%LOCALAPPDATA%\HyperHarborHarness or HH_HARNESS_DATA), a seeded pairing, and a test passphrase,
+  so live tests drive the API without the user and without touching the installed host. HH_HARNESS_ISO_FOLDER and
+  HH_HARNESS_VM_FOLDER point it at images and VM storage (this PC: D:\ISOs, D:\VMs). It runs from Host.Tests\bin, so
+  do not rebuild Host.Tests while one runs (build to another folder with -o; ExtensionResolverTests then fail because
+  they look for catalogs/ above the output folder).
+  - HH_SPIKE_LIVE=1 HH_SPIKE_ISO=<image>: creates HyperHarbor-Test with an unattended install if missing (about 20
+    minutes) and runs the 12b spike checks. HH_PROFILE_APPLY_LIVE=1 HH_LIVE_GUEST_VM=<id>: applies a small profile
+    with the real applier and reads it back (about 30 s). HH_PROFILE_E2E_LIVE=1 HH_SPIKE_ISO=<image>: creates
+    HyperHarbor-Test2 with a setup profile and waits for Ready (about 25 minutes). Delete the throwaway VMs afterwards.
 - VM console automation: Msvm_Keyboard.TypeText can drop characters, so send TypeKey one key at a time.
   Read the screen with GetVirtualSystemThumbnailImage (RGB565) and confirm a prompt is gone before moving on.

@@ -8,9 +8,18 @@ is noted where it changes.
 Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
 note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
 
-## [Unreleased] (API 1.12.0)
+## [Unreleased] (API 1.13.0)
 
 ### Added
+- Choose a setup profile when creating a Windows VM with an automatic install (Create VM, after the computer name).
+  Once Windows is installed and your account is set up, the host installs the profile's apps with winget, removes
+  the apps, capabilities, and features it lists, writes its tweaks (your account's settings go to the Default user
+  profile, so they apply at your first sign-in) and browser policies, and installs its extensions (you can turn
+  them off, not remove them). It restarts the VM if something needs it. The VM list shows "Applying the setup
+  profile…", and the ready notice lists anything that could not be applied. The profile is kept as it was when
+  the VM was created. Needs a host at API 1.13.0; the host's data format changes to 2 (older records stay as they are).
+- API: install.setupProfileId on POST /vms, install state applyingProfile, and setupProfileName and setupResult on
+  GET /vms/{vmId}/install. The host audits applySetupProfile with counts only.
 - Setup profiles: YAML files on the host that list what to install (winget ids, Microsoft Store ids, or aliases),
   what to remove (provisioned Appx packages, capabilities, features), registry tweaks, and a browser with its
   extensions and policies. Each id is written with its friendly name as a comment, and files reference a JSON Schema
@@ -19,7 +28,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   debloat preset, a tweak list, and an extension picker that takes a store link; import and export YAML files.
   Applying a profile to a VM comes later.
 - Capture setup profile (VM menu, running Windows VMs): reads what the VM has that a clean install does not, and
-  shows it in three columns to keep or drop before saving a profile. Removed packages are found by comparing with a
+  shows it in three columns to keep or drop before saving a profile. Capture now also lists winget packages in a
+  fresh VM whose administrator never signed in (App Installer is registered for it first). Removed packages are found by comparing with a
   clean baseline, recorded automatically after an unattended Windows install or on request.
 - Package search needs PowerShell 7 and the WinGet PowerShell module on the host; the tray's Set up package search
   installs both (one administrator prompt).

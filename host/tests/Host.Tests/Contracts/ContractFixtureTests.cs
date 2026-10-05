@@ -25,6 +25,8 @@ public class ContractFixtureTests
     private static readonly Guid VmId = Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b");
     private static readonly DateTimeOffset Time = new(2026, 10, 3, 12, 0, 0, TimeSpan.Zero);
 
+    private static readonly SetupProfileResult SetupResultSample = new(6, ["7-Zip: winget install failed (0x8A150011)."], true, new(2026, 10, 3, 12, 40, 0, TimeSpan.Zero));
+
     private static readonly VmComputeSettings ComputeSample = new(
         VmId, VmState.Running, 4, 4096, 4096, false, true, true, 1,
         [ComputeSetting.ProcessorCount, ComputeSetting.StartupMemoryMb, ComputeSetting.MaximumMemoryMb, ComputeSetting.DynamicMemory, ComputeSetting.NestedVirtualization]);
@@ -96,15 +98,16 @@ public class ContractFixtureTests
         ["VmComputeUpdate"] = new VmComputeUpdate(ComputeSample, null),
         ["CreateVmRequest"] = new CreateVmRequest("Win11 Dev", "Win11_24H2.iso", 64, 4, 4096, 8192, true, "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", true, false,
             new UnattendedInstallRequest("windows-workstation", "Windows 11 Pro", "WIN11-DEV")),
-        ["UnattendedInstallRequest"] = new UnattendedInstallRequest("ubuntu-dev-server"),
+        ["UnattendedInstallRequest"] = new UnattendedInstallRequest("windows-burner", "Windows 11 Pro", "DEV-BOX", "dev-workstation"),
         ["UnattendProfile"] = new UnattendProfile("windows-burner", "Windows Burner", true, InstallOs.Windows, "hhadmin", "Central Standard Time", "en-US",
             new WindowsInstallSettings("Windows 11 Pro", BypassHardwareChecks: true), null),
         ["UnattendProfileRequest"] = new UnattendProfileRequest("Build Server", InstallOs.Linux, "builder", "America/Chicago", "en-US", null,
             new LinuxInstallSettings(["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixture user@laptop"], ["git"], InstallDesktop: false)),
         ["WindowsInstallSettings"] = new WindowsInstallSettings("Windows 11 Pro", false, true, true, false, true),
         ["LinuxInstallSettings"] = new LinuxInstallSettings([], ["git", "curl"], true),
-        ["UnattendedInstallStatus"] = new UnattendedInstallStatus(VmId, "windows-burner", InstallOs.Windows, UnattendedInstallState.WaitingForRemoteAccess,
-            "Waiting for Remote Desktop to answer", Time, Time.AddMinutes(12), null),
+        ["UnattendedInstallStatus"] = new UnattendedInstallStatus(VmId, "windows-burner", InstallOs.Windows, UnattendedInstallState.Ready,
+            "Ready; 1 items of Dev workstation could not be applied", Time, Time.AddMinutes(40), null, "Dev workstation", SetupResultSample),
+        ["SetupProfileResult"] = SetupResultSample,
         ["GpuPartitionShare"] = new GpuPartitionShare(@"\\?\PCI#VEN_8086&DEV_9B41#3&1#{064092b3-625e-43bf-9eb5-dc845897dd59}\GPUPARAV", 60, 50, 50, 40),
         ["MmioSettings"] = new MmioSettings(1024, 32768),
         ["PerformanceRdpSettings"] = new PerformanceRdpSettings(HardwareEncoding: false),

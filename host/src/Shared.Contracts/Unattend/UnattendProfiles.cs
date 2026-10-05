@@ -79,10 +79,12 @@ public sealed record IsoInspection(
 /// <param name="ProfileId">An ID from GET /unattend-profiles.</param>
 /// <param name="WindowsEdition">An edition from the ISO's inspection. Null: the profile's default edition.</param>
 /// <param name="ComputerName">Windows only, at most 15 letters, digits, or hyphens. Null: derived from the VM name.</param>
+/// <param name="SetupProfileId">Windows only: one of the User's setup profiles, applied once the install is ready. Null: none.</param>
 public sealed record UnattendedInstallRequest(
     [property: JsonRequired] string ProfileId,
     string? WindowsEdition = null,
-    string? ComputerName = null);
+    string? ComputerName = null,
+    string? SetupProfileId = null);
 
 /// <summary>Where an unattended install is. Schema: UnattendedInstallState.</summary>
 public enum UnattendedInstallState
@@ -102,6 +104,9 @@ public enum UnattendedInstallState
     /// <summary>The host is setting up the User's account.</summary>
     Configuring,
 
+    /// <summary>The host is applying the setup profile chosen at create time (installs, removals, settings, a restart).</summary>
+    ApplyingProfile,
+
     Ready,
     Failed,
     Canceled,
@@ -110,6 +115,8 @@ public enum UnattendedInstallState
 /// <summary>An unattended install and how far it is. Schema: UnattendedInstallStatus.</summary>
 /// <param name="Step">What is happening now, for example "Waiting for Remote Desktop to answer".</param>
 /// <param name="Error">Why the install failed; null otherwise.</param>
+/// <param name="SetupProfileName">The setup profile chosen at create time; null when none was.</param>
+/// <param name="SetupResult">How applying the setup profile went, once it has run.</param>
 public sealed record UnattendedInstallStatus(
     Guid VmId,
     string ProfileId,
@@ -118,4 +125,12 @@ public sealed record UnattendedInstallStatus(
     string Step,
     DateTimeOffset StartedAt,
     DateTimeOffset UpdatedAt,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Error);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Error,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SetupProfileName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] SetupProfileResult? SetupResult = null);
+
+/// <summary>How applying a setup profile went. Schema: SetupProfileResult.</summary>
+/// <param name="Applied">Items that were applied (packages, removals, settings).</param>
+/// <param name="Problems">Items that could not be applied, in words; the install still finished.</param>
+/// <param name="Restarted">The VM was restarted to finish removals or settings.</param>
+public sealed record SetupProfileResult(int Applied, IReadOnlyList<string> Problems, bool Restarted, DateTimeOffset FinishedAt);

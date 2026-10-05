@@ -1,3 +1,6 @@
+using HyperHarbor.Host.Core.Audit;
+using HyperHarbor.Host.Core.Lifecycle;
+using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Unattend;
@@ -41,6 +44,7 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         _seedPath = Path.Combine(_directory, "Dev Box.hyperharbor-seed.iso");
         File.WriteAllBytes(_seedPath, [1]);
         _credentials.Save(VmId, new GuestCredential("hhadmin", OneTimePassword));
+        _power = new RestartingPower(_probe);
     }
 
     public void Dispose()
@@ -54,7 +58,11 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
     private readonly Profiles.FakeGuestProfileReader _profileReader = new();
     private AppxBaselineStore? _baselines;
 
-    private UnattendedInstallWatcher Watcher(bool recordBaselines = false)
+    private readonly FakeGuestProfileApplier _applier = new();
+    private readonly RestartingPower _power;
+    private readonly List<AuditEntry> _audit = [];
+
+    private UnattendedInstallWatcher Watcher(bool recordBaselines = false, bool applyProfiles = false)
     {
         AppxInventoryService? appx = null;
         if (recordBaselines)
@@ -63,15 +71,35 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
             appx = new AppxInventoryService(_inventory, _credentials, _profileReader, _baselines, Catalogs.Default, _time, NullLogger<AppxInventoryService>.Instance);
         }
 
+        if (!applyProfiles)
+        {
+            return new(
+                _installs, _inventory, _probe, _provisioning, _accounts, _credentials, _guest, _media, _time, _options,
+                NullLogger<UnattendedInstallWatcher>.Instance, appx);
+        }
+
         return new(
             _installs, _inventory, _probe, _provisioning, _accounts, _credentials, _guest, _media, _time, _options,
-            NullLogger<UnattendedInstallWatcher>.Instance, appx);
+            NullLogger<UnattendedInstallWatcher>.Instance, appx,
+            new SetupProfileApplication(new SetupProfilePlanner(Catalogs.Default), _applier), _power, new VmOperationLocks(), new ListAuditLog(_audit))
+        {
+            RestartPoll = TimeSpan.Zero,
+            RestartChecks = 4,
+        };
     }
 
-    private void Begin(InstallOs os = InstallOs.Windows, bool desktop = false) =>
+    private static readonly SetupProfile Workstation = new(
+        "Workstation",
+        null,
+        [new("7zip")],
+        new([new("Microsoft.BingNews")], null, [new("WorkFolders-Client")]),
+        [new("explorer.showFileExtensions")],
+        null);
+
+    private void Begin(InstallOs os = InstallOs.Windows, bool desktop = false, SetupProfile? profile = null) =>
         _installs.Save(new UnattendedInstall(VmId, _userId, "windows-workstation", os, desktop, _seedPath,
             os == InstallOs.Linux ? UnattendedInstallState.AwaitingConfirmation : UnattendedInstallState.Installing,
-            "Installing", _time.GetUtcNow(), _time.GetUtcNow()));
+            "Installing", _time.GetUtcNow(), _time.GetUtcNow(), SetupProfile: profile));
 
     private void Guest(VmState state, GuestOsFamily os = GuestOsFamily.Unknown, string? address = null)
     {
@@ -315,6 +343,197 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         await TickAsync(Watcher());
 
         Assert.Equal(UnattendedInstallState.Failed, Install.State);
+    }
+
+    [Fact]
+    public async Task ASetupProfile_IsAppliedAfterTheAccount_ThenTheInstallIsReady()
+    {
+        Begin(profile: Workstation);
+        var watcher = Watcher(recordBaselines: true, applyProfiles: true);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+        var statesSeen = new List<UnattendedInstallState>();
+        _applier.OnCall = _ => statesSeen.Add(Install.State);
+
+        await TickAsync(watcher, times: 2);
+
+        Assert.Equal(UnattendedInstallState.Ready, Install.State);
+        Assert.Equal("Ready", Install.Step);
+        Assert.True(Install.AccountConfigured);
+        Assert.All(statesSeen, state => Assert.Equal(UnattendedInstallState.ApplyingProfile, state));
+        Assert.Equal(["packages: 7-Zip", "remove: Microsoft.BingNews, WorkFolders-Client", "settings: Show file name extensions"], _applier.Calls);
+        // The steps run as the rotated administrator, and the clean baseline was read before anything changed.
+        Assert.All(_applier.AdminsUsed, admin => Assert.Equal(_credentials.Find(VmId)!.Password, admin.Password));
+        Assert.NotNull(_baselines!.Find("26100", "Professional"));
+        Assert.True(_profileReader.FirstReadOrder < _applier.FirstCallOrder);
+
+        var result = Install.SetupResult!;
+        Assert.Equal((4, false), (result.Applied, result.Restarted));
+        Assert.Empty(result.Problems);
+        Assert.Empty(_power.Calls);
+        var entry = Assert.Single(_audit);
+        Assert.Equal(("applySetupProfile", AuditOutcome.Succeeded, (Guid?)VmId, (Guid?)_userId), (entry.Action, entry.Outcome, entry.VmId, entry.UserId));
+        Assert.Equal("profile=Workstation, applied=4, problems=0, restarted=False", entry.Detail);
+    }
+
+    [Fact]
+    public async Task ItemsThatFail_AreProblems_AndARestartWaitsForRemoteDesktopToComeBack()
+    {
+        Begin(profile: Workstation);
+        var watcher = Watcher(applyProfiles: true);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+        _applier.Failing["7-Zip"] = "winget install failed (0x8A150011) as hhadmin with " + OneTimePassword;
+        _applier.Restart = "WorkFolders-Client";
+        _power.Answers = [true, false, true];
+
+        await TickAsync(watcher, times: 2);
+
+        Assert.Equal(UnattendedInstallState.Ready, Install.State);
+        Assert.Equal("Ready; 1 items of Workstation could not be applied", Install.Step);
+        Assert.Equal([VmAction.Restart], _power.Calls);
+        var result = Install.SetupResult!;
+        Assert.True(result.Restarted);
+        Assert.Equal(3, result.Applied);
+        var problem = Assert.Single(result.Problems);
+        Assert.StartsWith("7-Zip: winget install failed", problem, StringComparison.Ordinal);
+        Assert.Equal(AuditOutcome.Failed, Assert.Single(_audit).Outcome);
+    }
+
+    [Fact]
+    public async Task ARestartAfterWhichRemoteDesktopNeverReturns_IsAProblem_NotAHang()
+    {
+        Begin(profile: Workstation);
+        var watcher = Watcher(applyProfiles: true);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+        _applier.Restart = "WorkFolders-Client";
+        _power.Answers = [false];
+
+        await TickAsync(watcher, times: 2);
+
+        Assert.Equal(UnattendedInstallState.Ready, Install.State);
+        Assert.False(Install.SetupResult!.Restarted);
+        Assert.Contains("did not answer Remote Desktop", Assert.Single(Install.SetupResult.Problems), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AGuestThatStopsAnsweringWhileApplying_IsRetried_WithoutSettingUpTheAccountAgain()
+    {
+        Begin(profile: Workstation);
+        var watcher = Watcher(applyProfiles: true);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+        _applier.Failure = new GuestUnavailableException("PowerShell Direct did not respond in time.");
+
+        await TickAsync(watcher, times: 2);
+
+        Assert.Equal(UnattendedInstallState.WaitingForRemoteAccess, Install.State);
+        Assert.True(Install.AccountConfigured);
+        Assert.Equal(1, Install.Attempts);
+        Assert.Contains("did not respond in time", Install.Error, StringComparison.Ordinal);
+        var passwordsSet = _guest.PasswordsSet.Count;
+
+        _applier.Failure = null;
+        _time.Advance(TimeSpan.FromMinutes(2));
+        await TickAsync(watcher);
+
+        Assert.Equal(UnattendedInstallState.Ready, Install.State);
+        Assert.Equal(passwordsSet, _guest.PasswordsSet.Count);
+        Assert.NotNull(Install.SetupResult);
+    }
+
+    [Fact]
+    public async Task ARejectedAdministratorWhileApplying_FailsTheInstall()
+    {
+        Begin(profile: Workstation);
+        var watcher = Watcher(applyProfiles: true);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+        _applier.Failure = new GuestCredentialRejectedException("The user name or password is incorrect.");
+
+        await TickAsync(watcher, times: 2);
+
+        Assert.Equal(UnattendedInstallState.Failed, Install.State);
+        Assert.Null(Install.SetupResult);
+    }
+
+    private sealed class FakeGuestProfileApplier : IGuestProfileApplier
+    {
+        public List<string> Calls { get; } = [];
+
+        public List<GuestCredential> AdminsUsed { get; } = [];
+
+        /// <summary>Items that fail, with their error.</summary>
+        public Dictionary<string, string> Failing { get; } = [];
+
+        /// <summary>The item whose removal needs a restart.</summary>
+        public string? Restart { get; set; }
+
+        public Exception? Failure { get; set; }
+
+        public Action<string>? OnCall { get; set; }
+
+        public int FirstCallOrder { get; private set; } = int.MaxValue;
+
+        public Task<IReadOnlyList<ApplyItemResult>> InstallPackagesAsync(Guid vmId, GuestCredential admin, IReadOnlyList<PackageInstall> packages, CancellationToken cancellationToken) =>
+            Run("packages", admin, packages.Select(package => package.Item).ToList());
+
+        public Task<IReadOnlyList<ApplyItemResult>> RemoveAsync(Guid vmId, GuestCredential admin, IReadOnlyList<ProfileItem> appx, IReadOnlyList<ProfileItem> capabilities, IReadOnlyList<ProfileItem> features, CancellationToken cancellationToken) =>
+            Run("remove", admin, [.. appx.Select(item => item.Id), .. capabilities.Select(item => item.Id), .. features.Select(item => item.Id)]);
+
+        public Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(Guid vmId, GuestCredential admin, IReadOnlyList<RegistryWrite> writes, CancellationToken cancellationToken) =>
+            Run("settings", admin, writes.Select(write => write.Item).Distinct().ToList());
+
+        private Task<IReadOnlyList<ApplyItemResult>> Run(string step, GuestCredential admin, List<string> items)
+        {
+            if (FirstCallOrder == int.MaxValue)
+            {
+                FirstCallOrder = Profiles.FakeGuestProfileReader.NextOrder();
+            }
+
+            OnCall?.Invoke(step);
+            AdminsUsed.Add(admin);
+            Calls.Add($"{step}: {string.Join(", ", items)}");
+            if (Failure is not null)
+            {
+                throw Failure;
+            }
+
+            IReadOnlyList<ApplyItemResult> results = items
+                .Select(item => Failing.TryGetValue(item, out var error) ? new ApplyItemResult(item, false, error) : new ApplyItemResult(item, true, RestartNeeded: item == Restart))
+                .ToList();
+            return Task.FromResult(results);
+        }
+    }
+
+    /// <summary>A restart makes the probe give <see cref="Answers"/> in order; the last one stays.</summary>
+    private sealed class RestartingPower(FakeProbe probe) : IHyperVPowerInvoker
+    {
+        public List<VmAction> Calls { get; } = [];
+
+        public bool[] Answers { get; set; } = [];
+
+        public Task InvokeAsync(Guid vmId, VmAction action, CancellationToken cancellationToken)
+        {
+            Calls.Add(action);
+            foreach (var answer in Answers)
+            {
+                probe.RdpAnswers.Enqueue(answer);
+            }
+
+            if (Answers.Length > 0)
+            {
+                probe.Rdp = Answers[^1];
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ListAuditLog(List<AuditEntry> entries) : IAuditLog
+    {
+        public void Write(AuditEntry entry) => entries.Add(entry);
     }
 
     private sealed class FakeProbe : IRemoteAccessProbe

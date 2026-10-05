@@ -1,6 +1,7 @@
 using System.Text.Json;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Profiles;
 using HyperHarbor.Shared.Contracts.Unattend;
 
 namespace HyperHarbor.Host.Core.Unattend;
@@ -15,6 +16,9 @@ namespace HyperHarbor.Host.Core.Unattend;
 /// <param name="Attempts">Failed attempts to set up the User's account; the watcher gives up after a few.</param>
 /// <param name="NextAttemptAt">When the watcher may try again after a failed attempt.</param>
 /// <param name="RunningSeconds">How long the VM has run during the install; time while it is off does not count.</param>
+/// <param name="SetupProfile">The setup profile chosen at create time, as it was then; applied after the account is set up.</param>
+/// <param name="AccountConfigured">The User's account is set up, so a retry or a host restart goes on with the setup profile.</param>
+/// <param name="SetupResult">How applying the setup profile went.</param>
 public sealed record UnattendedInstall(
     Guid VmId,
     Guid UserId,
@@ -29,7 +33,10 @@ public sealed record UnattendedInstall(
     string? Error = null,
     int Attempts = 0,
     DateTimeOffset? NextAttemptAt = null,
-    long RunningSeconds = 0)
+    long RunningSeconds = 0,
+    SetupProfile? SetupProfile = null,
+    bool AccountConfigured = false,
+    SetupProfileResult? SetupResult = null)
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsActive => State is not (UnattendedInstallState.Ready or UnattendedInstallState.Failed or UnattendedInstallState.Canceled);

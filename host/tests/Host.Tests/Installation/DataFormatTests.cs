@@ -1,4 +1,6 @@
 using HyperHarbor.Host.Core.Installation;
+using HyperHarbor.Host.Core.Unattend;
+using HyperHarbor.Shared.Contracts.Unattend;
 
 namespace HyperHarbor.Host.Tests.Installation;
 
@@ -76,5 +78,24 @@ public sealed class DataFormatTests : IDisposable
     public void AMissingMigration_IsAnError()
     {
         Assert.Throws<InvalidOperationException>(() => DataFormat.EnsureCurrent(_directory, current: 2, new Dictionary<int, Action<string>>()));
+    }
+
+    [Fact]
+    public void FormatOneInstalls_ReadAfterTheMigration_WithoutASetupProfile()
+    {
+        File.WriteAllText(Path.Combine(_directory, DataFormat.FileName), """{ "format": 1 }""");
+        File.WriteAllText(Path.Combine(_directory, "unattended-installs.json"), """
+            [{ "vmId": "4bcff7d6-c84d-4f34-88c7-7ea845092177", "userId": "e17ed7d6-09a0-436d-badc-8b3bdeb3c9dc",
+               "profileId": "windows-workstation", "os": "windows", "installDesktop": false, "seedPath": "C:\\VMs\\seed.iso",
+               "state": "ready", "step": "Ready", "startedAt": "2026-10-04T12:00:00Z", "updatedAt": "2026-10-04T12:30:00Z", "attempts": 0 }]
+            """);
+
+        DataFormat.EnsureCurrent(_directory);
+
+        Assert.Equal(2, DataFormat.Read(_directory));
+        var install = Assert.Single(new UnattendedInstallStore(_directory).List());
+        Assert.Equal(UnattendedInstallState.Ready, install.State);
+        Assert.Null(install.SetupProfile);
+        Assert.False(install.AccountConfigured);
     }
 }

@@ -17,8 +17,21 @@ internal sealed class FakeGuestProfileReader : IGuestProfileReader
 
     public List<GuestCredential> AdminsUsed { get; } = [];
 
+    private static int s_order;
+
+    /// <summary>When this reader first read the packages, on a counter shared with other fakes (see <see cref="NextOrder"/>).</summary>
+    public int FirstReadOrder { get; private set; } = int.MaxValue;
+
+    /// <summary>The next value of the shared counter, for fakes that check which of them ran first.</summary>
+    public static int NextOrder() => Interlocked.Increment(ref s_order);
+
     public Task<GuestAppxInventory> ReadAppxAsync(Guid vmId, GuestCredential admin, CancellationToken cancellationToken)
     {
+        if (FirstReadOrder == int.MaxValue)
+        {
+            FirstReadOrder = NextOrder();
+        }
+
         AdminsUsed.Add(admin);
         if (Failure is not null)
         {

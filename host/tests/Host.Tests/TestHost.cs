@@ -104,7 +104,8 @@ internal sealed class TestHost : IDisposable
                     Keyboard,
                     TimeProvider.System,
                     provider.GetRequiredService<ILogger<Core.Unattend.UnattendedSetup>>(),
-                    keyInterval: TimeSpan.Zero));
+                    keyInterval: TimeSpan.Zero,
+                    setupProfiles: provider.GetRequiredService<Core.Profiles.SetupProfileStore>()));
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
             }));

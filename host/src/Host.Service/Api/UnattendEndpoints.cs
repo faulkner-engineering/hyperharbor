@@ -62,7 +62,8 @@ public static class UnattendEndpoints
 
     private static Results<Ok<UnattendedInstallStatus>, ProblemHttpResult> GetInstall(Guid vmId, UnattendedInstallStore installs) =>
         installs.Find(vmId) is { } install
-            ? TypedResults.Ok(new UnattendedInstallStatus(install.VmId, install.ProfileId, install.Os, install.State, install.Step, install.StartedAt, install.UpdatedAt, install.Error))
+            ? TypedResults.Ok(new UnattendedInstallStatus(install.VmId, install.ProfileId, install.Os, install.State, install.Step, install.StartedAt, install.UpdatedAt, install.Error,
+                install.SetupProfile?.Name, install.SetupResult))
             : TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: "No unattended install", detail: $"Virtual machine {vmId} has no unattended install.");
 
     /// <summary>Stops following the install. The VM keeps running; it is finished from the console or with Set up.</summary>

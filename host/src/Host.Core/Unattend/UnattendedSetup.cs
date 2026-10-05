@@ -13,7 +13,8 @@ namespace HyperHarbor.Host.Core.Unattend;
 /// <param name="Edition">The Windows image name, in the ISO's own spelling; null for Linux.</param>
 /// <param name="MachineName">The Windows computer name or the Linux host name.</param>
 /// <param name="UserAccountName">The creating User's VM account, for example hh-owner.</param>
-public sealed record InstallPlan(UnattendProfile Profile, string? Edition, string MachineName, string SeedPath, string UserAccountName);
+/// <param name="SetupProfile">The setup profile to apply once the install is ready, as it is now; null for none.</param>
+public sealed record InstallPlan(UnattendProfile Profile, string? Edition, string MachineName, string SeedPath, string UserAccountName, Shared.Contracts.Profiles.SetupProfile? SetupProfile = null);
 
 /// <summary>
 /// The parts of VM creation that unattended installs add: checking the request against the ISO,
@@ -33,6 +34,7 @@ public sealed partial class UnattendedSetup
     public const int BootKeyPresses = 12;
 
     private readonly UnattendProfileStore _profiles;
+    private readonly Profiles.SetupProfileStore? _setupProfiles;
     private readonly IsoInspector _inspector;
     private readonly UserStore _users;
     private readonly VmCredentialStore _credentials;
@@ -54,8 +56,10 @@ public sealed partial class UnattendedSetup
         IVmKeyboard keyboard,
         TimeProvider time,
         ILogger<UnattendedSetup> logger,
-        TimeSpan? keyInterval = null)
+        TimeSpan? keyInterval = null,
+        Profiles.SetupProfileStore? setupProfiles = null)
     {
+        _setupProfiles = setupProfiles;
         _profiles = profiles;
         _inspector = inspector;
         _users = users;
@@ -162,7 +166,45 @@ public sealed partial class UnattendedSetup
             errors.Add(new("name", $"An answer file already exists at {seedPath}. Choose another name or remove the file."));
         }
 
-        return errors.Count > 0 ? null : new InstallPlan(profile, edition, machineName, seedPath, user.VmAccountName);
+        var setupProfile = SetupProfileFor(userId, request.SetupProfileId, os, errors);
+        return errors.Count > 0 ? null : new InstallPlan(profile, edition, machineName, seedPath, user.VmAccountName, setupProfile);
+    }
+
+    /// <summary>The User's setup profile as it is now, so later edits do not change an install in progress.</summary>
+    private Shared.Contracts.Profiles.SetupProfile? SetupProfileFor(Guid userId, string? setupProfileId, InstallOs os, List<ValidationIssue> errors)
+    {
+        if (string.IsNullOrWhiteSpace(setupProfileId))
+        {
+            return null;
+        }
+
+        const string field = "install.setupProfileId";
+        if (os != InstallOs.Windows)
+        {
+            errors.Add(new(field, "Setup profiles apply to Windows installs only."));
+            return null;
+        }
+
+        if (_setupProfiles is null)
+        {
+            errors.Add(new(field, "Setup profiles are not available on this host."));
+            return null;
+        }
+
+        try
+        {
+            return _setupProfiles.Get(userId, setupProfileId).Profile;
+        }
+        catch (Profiles.SetupProfileNotFoundException)
+        {
+            errors.Add(new(field, "The setup profile was not found. Choose another one."));
+        }
+        catch (Lifecycle.LifecycleValidationException ex)
+        {
+            errors.Add(new(field, $"The setup profile's file on the host does not read: {string.Join(" ", ex.Errors.Select(issue => issue.Message))}"));
+        }
+
+        return null;
     }
 
     /// <summary>Writes the answer file ISO with a new one-time administrator password.</summary>
@@ -198,7 +240,8 @@ public sealed partial class UnattendedSetup
             profile.Os == InstallOs.Linux ? UnattendedInstallState.AwaitingConfirmation : UnattendedInstallState.Installing,
             profile.Os == InstallOs.Linux ? "Type yes in the console to start the install" : "Installing Windows",
             now,
-            now));
+            now,
+            SetupProfile: plan.SetupProfile));
 
         report("Starting the virtual machine");
         await _power.InvokeAsync(vmId, VmAction.Start, cancellationToken).ConfigureAwait(false);

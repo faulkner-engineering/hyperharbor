@@ -207,6 +207,9 @@ public sealed class PowerShellDirectProfileReader : IGuestProfileReader
                     $installer = Get-AppxPackage -AllUsers -Name Microsoft.DesktopAppInstaller | Sort-Object Version -Descending | Select-Object -First 1
                     $winget = if ($installer) { Join-Path $installer.InstallLocation 'winget.exe' } else { $null }
                     if (-not $winget -or -not (Test-Path $winget)) { throw 'winget (App Installer) is not installed in this VM.' }
+                    # An account that never signed in interactively gets "Access is denied" from winget.exe until
+                    # App Installer is registered for it.
+                    Add-AppxPackage -DisableDevelopmentMode -Register (Join-Path $installer.InstallLocation 'AppxManifest.xml')
                     $file = Join-Path $env:TEMP ('hyperharbor-export-' + [guid]::NewGuid() + '.json')
                     $output = & $winget export --output $file --accept-source-agreements --disable-interactivity 2>&1 | Out-String
                     if (-not (Test-Path $file)) { throw ("winget export wrote nothing (exit code $LASTEXITCODE). " + $output.Trim()) }

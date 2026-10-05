@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Lifecycle;
+using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Shared.Contracts.Profiles;
@@ -51,6 +53,10 @@ public sealed class UnattendedInstallWatcher
     private readonly InstallWatcherOptions _options;
     private readonly ILogger<UnattendedInstallWatcher> _logger;
     private readonly AppxInventoryService? _appx;
+    private readonly SetupProfileApplication? _setup;
+    private readonly IHyperVPowerInvoker? _power;
+    private readonly VmOperationLocks? _locks;
+    private readonly IAuditLog? _audit;
     private readonly ConcurrentDictionary<Guid, Task> _configuring = new();
     private DateTimeOffset? _lastTick;
 
@@ -66,9 +72,17 @@ public sealed class UnattendedInstallWatcher
         TimeProvider time,
         InstallWatcherOptions options,
         ILogger<UnattendedInstallWatcher> logger,
-        AppxInventoryService? appx = null)
+        AppxInventoryService? appx = null,
+        SetupProfileApplication? setup = null,
+        IHyperVPowerInvoker? power = null,
+        VmOperationLocks? locks = null,
+        IAuditLog? audit = null)
     {
         _appx = appx;
+        _setup = setup;
+        _power = power;
+        _locks = locks;
+        _audit = audit;
         _installs = installs;
         _inventory = inventory;
         _probe = probe;
@@ -187,13 +201,25 @@ public sealed class UnattendedInstallWatcher
             return;
         }
 
-        var configuring = Save(install, UnattendedInstallState.Configuring,
-            install.Os == InstallOs.Linux && install.InstallDesktop ? "Setting up your account and the desktop (several minutes)" : "Setting up your account");
+        // An install whose account is already set up (a retry, or a host restart while applying) goes on with the
+        // setup profile; everything else sets up the account first.
+        var resume = install.AccountConfigured && install.SetupProfile is not null;
+        var started = resume
+            ? Save(install, UnattendedInstallState.ApplyingProfile, $"Applying {install.SetupProfile!.Name}")
+            : Save(install, UnattendedInstallState.Configuring,
+                install.Os == InstallOs.Linux && install.InstallDesktop ? "Setting up your account and the desktop (several minutes)" : "Setting up your account");
         _configuring[install.VmId] = Task.Run(async () =>
         {
             try
             {
-                await ConfigureAsync(configuring, address).ConfigureAwait(false);
+                if (resume)
+                {
+                    await ApplySetupProfileAsync(started).ConfigureAwait(false);
+                }
+                else
+                {
+                    await ConfigureAsync(started, address).ConfigureAwait(false);
+                }
             }
             finally
             {
@@ -248,11 +274,143 @@ public sealed class UnattendedInstallWatcher
         }
 
         await RemoveSeedAsync(install, CancellationToken.None).ConfigureAwait(false);
-        Save(install with { Error = null, NextAttemptAt = null }, UnattendedInstallState.Ready, "Ready");
-        _logger.LogInformation("The unattended install of VM {VmId} is ready.", install.VmId);
+
+        // A fresh install is the cleanest Windows there is, so the baseline is taken before any setup profile.
         if (install.Os == InstallOs.Windows)
         {
             await RecordAppxBaselineAsync(install.VmId).ConfigureAwait(false);
+        }
+
+        if (install.SetupProfile is not null && _setup is not null)
+        {
+            var applying = Save(install with { AccountConfigured = true, Attempts = 0, Error = null, NextAttemptAt = null },
+                UnattendedInstallState.ApplyingProfile, $"Applying {install.SetupProfile.Name}");
+            await ApplySetupProfileAsync(applying).ConfigureAwait(false);
+            return;
+        }
+
+        Save(install with { AccountConfigured = true, Error = null, NextAttemptAt = null }, UnattendedInstallState.Ready, "Ready");
+        _logger.LogInformation("The unattended install of VM {VmId} is ready.", install.VmId);
+    }
+
+    /// <summary>
+    /// Applies the setup profile chosen at create time, restarts the VM once when something needs it, and marks the
+    /// install ready. Items that fail become problems; a guest that does not answer is retried with the usual backoff,
+    /// and the whole profile is applied again then (installs and removals are safe to repeat).
+    /// </summary>
+    private async Task ApplySetupProfileAsync(UnattendedInstall install)
+    {
+        var profile = install.SetupProfile!;
+        if (_setup is null)
+        {
+            Fail(install, "This host cannot apply setup profiles.");
+            return;
+        }
+
+        var admin = _credentials.Find(install.VmId);
+        if (admin is null)
+        {
+            Fail(install, "The administrator credential is missing, so the setup profile cannot be applied.");
+            return;
+        }
+
+        var current = install;
+        ApplyOutcome outcome;
+        var restarted = false;
+        try
+        {
+            using var held = _locks?.Acquire(install.VmId, "Applying the setup profile");
+            outcome = await _setup.ApplyAsync(install.VmId, admin, profile, step => current = Save(current, UnattendedInstallState.ApplyingProfile, step), CancellationToken.None).ConfigureAwait(false);
+            if (outcome.RestartNeeded && _power is not null)
+            {
+                current = Save(current, UnattendedInstallState.ApplyingProfile, $"Applying {profile.Name}: restarting to finish");
+                try
+                {
+                    await _power.InvokeAsync(install.VmId, VmAction.Restart, CancellationToken.None).ConfigureAwait(false);
+                    restarted = await WaitForRemoteDesktopAsync(install.VmId).ConfigureAwait(false);
+                }
+                catch (VmActionNotAllowedException)
+                {
+                    // The guest did not take the restart (no shutdown component contact); the problem below says so.
+                }
+
+                if (!restarted)
+                {
+                    outcome = outcome with { Problems = [.. outcome.Problems, "The VM did not answer Remote Desktop within 15 minutes of a restart. Restart it yourself to finish."] };
+                }
+            }
+        }
+        catch (GuestCredentialRejectedException ex)
+        {
+            Fail(current, GuestErrors.Clean(ex.Message, admin.Password));
+            return;
+        }
+        catch (Exception ex) when (GuestErrors.IsGuestError(ex) || ex is VmBusyException or HyperVUnavailableException or HyperVCallException or HyperVOperationException)
+        {
+            Retry(current, GuestErrors.Clean(ex.Message, admin.Password));
+            return;
+        }
+
+        var result = new SetupProfileResult(outcome.Applied, outcome.Problems, restarted, _time.GetUtcNow());
+        Save(current with { SetupResult = result, Error = null, NextAttemptAt = null }, UnattendedInstallState.Ready,
+            outcome.Problems.Count == 0 ? "Ready" : $"Ready; {outcome.Problems.Count} items of {profile.Name} could not be applied");
+        _logger.LogInformation(
+            "Applied the setup profile {Profile} to VM {VmId}: {Applied} items, {Problems} problems, restarted {Restarted}.",
+            profile.Name, install.VmId, outcome.Applied, outcome.Problems.Count, restarted);
+        WriteAudit(install, profile.Name, result);
+    }
+
+    /// <summary>How often the wait after a restart checks the guest.</summary>
+    internal TimeSpan RestartPoll { get; init; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>Checks after a restart before giving up: 60 of 15 seconds, 15 minutes.</summary>
+    internal int RestartChecks { get; init; } = 60;
+
+    /// <summary>
+    /// True once the restarted VM answers Remote Desktop again. Windows keeps answering for a few seconds after the
+    /// restart request, so an answer counts only after one check found it not answering (or not running); a guest
+    /// reboot does not reset uptime, so that is the only sign of the restart.
+    /// </summary>
+    private async Task<bool> WaitForRemoteDesktopAsync(Guid vmId)
+    {
+        var wentDown = false;
+        for (var check = 0; check < RestartChecks; check++)
+        {
+            await Task.Delay(RestartPoll, _time).ConfigureAwait(false);
+            var vm = await _inventory.GetAsync(vmId, CancellationToken.None).ConfigureAwait(false);
+            var answers = vm is { State: VmState.Running } && Ipv4(vm) is { } address
+                && await _probe.RdpAnswersAsync(address, CancellationToken.None).ConfigureAwait(false);
+            if (answers && wentDown)
+            {
+                return true;
+            }
+
+            wentDown |= !answers;
+        }
+
+        return false;
+    }
+
+    private void WriteAudit(UnattendedInstall install, string profileName, SetupProfileResult result)
+    {
+        if (_audit is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _audit.Write(new AuditEntry(
+                _time.GetUtcNow(),
+                "applySetupProfile",
+                result.Problems.Count == 0 ? AuditOutcome.Succeeded : AuditOutcome.Failed,
+                UserId: install.UserId,
+                VmId: install.VmId,
+                Detail: $"profile={profileName}, applied={result.Applied}, problems={result.Problems.Count}, restarted={result.Restarted}"));
+        }
+        catch (AuditUnavailableException ex)
+        {
+            _logger.LogWarning("The audit entry for applying {Profile} to VM {VmId} was not written: {Message}", profileName, install.VmId, ex.Message);
         }
     }
 
