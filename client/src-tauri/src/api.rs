@@ -81,6 +81,15 @@ pub struct UnattendedInstallRequest {
     pub computer_name: Option<String>,
 }
 
+/// The fields of api.yaml HostRemoteDesktop that the client acts on.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostRemoteDesktop {
+    pub supported: bool,
+    pub enabled: bool,
+    pub port: u16,
+}
+
 /// Body of PUT /host/update/settings (api.yaml HostUpdateSettings).
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -127,6 +136,11 @@ struct ProblemDetails {
     #[serde(default)]
     warnings: Vec<Issue>,
 }
+
+/// Set by the client (not the host) when the host does not have the requested route.
+pub const HOST_OUTDATED: &str = "hostOutdated";
+
+const HOST_OUTDATED_MESSAGE: &str = "This host's HyperHarbor version does not have this feature yet. Update the host (Host > Updates in this client, or Install now from the tray icon on the host) and try again.";
 
 /// The host's problem code when a request lacks a valid elevation token.
 pub const ELEVATION_REQUIRED: &str = "elevationRequired";
@@ -708,6 +722,35 @@ impl ApiClient {
         parse(response).await
     }
 
+    /// GET /host/remote-desktop.
+    pub async fn host_remote_desktop(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<HostRemoteDesktop, ClientError> {
+        let value = self
+            .get_resource(host, paired, HostResource::RemoteDesktop)
+            .await?;
+        serde_json::from_value(value).map_err(|e| ClientError::InvalidResponse(e.to_string()))
+    }
+
+    /// POST /host/remote-desktop/enable (needs elevation). Returns the HostRemoteDesktop.
+    pub async fn enable_host_remote_desktop(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/host/remote-desktop/enable",
+            )
+            .await?;
+        parse(response).await
+    }
+
     /// PUT /host/update/settings (needs elevation). Returns the HostUpdateStatus.
     pub async fn set_host_update_settings(
         &self,
@@ -1099,6 +1142,7 @@ pub enum HostResource {
     UnattendProfiles,
     Gpu,
     Update,
+    RemoteDesktop,
 }
 
 impl HostResource {
@@ -1110,6 +1154,7 @@ impl HostResource {
             HostResource::Switches => "/switches",
             HostResource::UnattendProfiles => "/unattend-profiles",
             HostResource::Gpu => "/host/gpu",
+            HostResource::RemoteDesktop => "/host/remote-desktop",
         }
     }
 }
@@ -1232,6 +1277,21 @@ async fn check(response: reqwest::Response) -> Result<reqwest::Response, ClientE
     }
 
     let problem = response.json::<ProblemDetails>().await.ok();
+
+    // Every 404 the host sends on purpose explains itself in `detail`. A bare 404 comes from a
+    // route the host does not have: it runs an older version than this client.
+    let has_detail = problem
+        .as_ref()
+        .is_some_and(|p| p.detail.as_deref().is_some_and(|d| !d.is_empty()));
+    if status == reqwest::StatusCode::NOT_FOUND && !has_detail {
+        return Err(ClientError::Api {
+            status: 404,
+            message: HOST_OUTDATED_MESSAGE.into(),
+            code: Some(HOST_OUTDATED.into()),
+            issues: Vec::new(),
+        });
+    }
+
     let message = problem
         .as_ref()
         .and_then(|p| p.detail.clone().filter(|d| !d.is_empty()))
@@ -2376,6 +2436,53 @@ mod server_tests {
         let request = &server.requests()[0];
         assert_eq!(request.method, "POST");
         assert_eq!(request.path, format!("/api/v1/vms/{VM_ID}/console/tunnel"));
+    }
+
+    #[tokio::test]
+    async fn a_route_the_host_lacks_reports_an_outdated_host() {
+        // What ASP.NET's status code pages send for an unmatched route.
+        let server = TestServer::start("127.0.0.1:0", |_| {
+            Reply::json(
+                404,
+                r#"{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Not Found","status":404}"#,
+            )
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+
+        let result = api()
+            .host_remote_desktop(&target, &paired(server.certificate_hash()))
+            .await;
+
+        match result {
+            Err(error @ ClientError::Api { status: 404, .. }) => {
+                assert_eq!(error.problem_code(), Some(HOST_OUTDATED));
+                assert!(error.to_string().contains("Update the host"));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_404_with_a_detail_keeps_the_hosts_message() {
+        let server = TestServer::start("127.0.0.1:0", |_| {
+            Reply::json(
+                404,
+                r#"{"title":"Virtual machine not found","status":404,"detail":"Virtual machine x was not found."}"#,
+            )
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+
+        let result = api()
+            .get_vm_compute(&target, &paired(server.certificate_hash()), VM_ID)
+            .await;
+
+        match result {
+            Err(error @ ClientError::Api { status: 404, .. }) => {
+                assert_eq!(error.problem_code(), None);
+                assert_eq!(error.to_string(), "Virtual machine x was not found.");
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[tokio::test]

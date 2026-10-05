@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { UnattendedInstallState, Vm, VmAction, VmState } from "$lib/api/client";
+  import Menu from "./Menu.svelte";
 
   interface Props {
     vms: Vm[];
@@ -15,6 +16,7 @@
     onaction?: (vm: Vm, action: VmAction) => void;
     onsettings?: (vm: Vm) => void;
     onperformance?: (vm: Vm) => void;
+    onmonitors?: (vm: Vm) => void;
     ondelete?: (vm: Vm) => void;
   }
 
@@ -29,14 +31,9 @@
     onaction,
     onsettings,
     onperformance,
+    onmonitors,
     ondelete,
   }: Props = $props();
-
-  /** Runs a menu item and closes its menu. */
-  function choose(event: MouseEvent, run: () => void) {
-    (event.currentTarget as HTMLElement).closest("details")?.removeAttribute("open");
-    run();
-  }
 
   /** How long a running VM may go without reporting its OS before the list stops saying "Detecting". */
   const OS_DETECTION_SECONDS = 180;
@@ -185,45 +182,43 @@
                 onclick={() => onconsole?.(vm)}>{consoleVmId === vm.id ? "Opening…" : "Console"}</button
               >
             {/if}
-            <details class="menu">
-              <summary aria-label="Actions for {vm.name}" title="More actions">⋮</summary>
-              <div class="menu-items">
-                {#if (vm.state === "running" || vm.state === "paused") && primary !== "console"}
-                  <button
-                    type="button"
-                    disabled={consoleVmId !== null}
-                    onclick={(event) => choose(event, () => onconsole?.(vm))}>{consoleVmId === vm.id ? "Opening console…" : "Console"}</button
-                  >
-                {/if}
-                {#if vm.state === "running"}
-                  <button type="button" disabled={actionVmId !== null} onclick={(event) => choose(event, () => onaction?.(vm, "shutdown"))}>
-                    Shut down
-                  </button>
-                  <button type="button" disabled={actionVmId !== null} onclick={(event) => choose(event, () => onaction?.(vm, "restart"))}>
-                    Restart
-                  </button>
-                {/if}
-                {#if vm.state === "running" || vm.state === "paused"}
-                  <button type="button" disabled={actionVmId !== null} onclick={(event) => choose(event, () => onaction?.(vm, "save"))}>
-                    Save state
-                  </button>
-                {/if}
-                {#if canForceOff(vm.state)}
-                  <button
-                    type="button"
-                    class="danger"
-                    disabled={actionVmId !== null}
-                    onclick={(event) => choose(event, () => onaction?.(vm, "turnOff"))}>Force shut off…</button
-                  >
-                {/if}
-                <hr />
-                <button type="button" onclick={(event) => choose(event, () => onsettings?.(vm))}>Settings…</button>
-                {#if vm.guestOs.family !== "linux"}
-                  <button type="button" onclick={(event) => choose(event, () => onperformance?.(vm))}>Performance mode…</button>
-                {/if}
-                <button type="button" class="danger" onclick={(event) => choose(event, () => ondelete?.(vm))}>Delete…</button>
-              </div>
-            </details>
+            <Menu label="⋮" ariaLabel="Actions for {vm.name}" title="More actions">
+              {#if (vm.state === "running" || vm.state === "paused") && primary !== "console"}
+                <button
+                  type="button"
+                  disabled={consoleVmId !== null}
+                  onclick={() => onconsole?.(vm)}>{consoleVmId === vm.id ? "Opening console…" : "Console"}</button
+                >
+              {/if}
+              {#if vm.state === "running"}
+                <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "shutdown")}>
+                  Shut down
+                </button>
+                <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "restart")}>
+                  Restart
+                </button>
+              {/if}
+              {#if vm.state === "running" || vm.state === "paused"}
+                <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "save")}>
+                  Save state
+                </button>
+              {/if}
+              {#if canForceOff(vm.state)}
+                <button
+                  type="button"
+                  class="danger"
+                  disabled={actionVmId !== null}
+                  onclick={() => onaction?.(vm, "turnOff")}>Force shut off…</button
+                >
+              {/if}
+              <hr />
+              <button type="button" onclick={() => onsettings?.(vm)}>Settings…</button>
+              {#if vm.guestOs.family !== "linux"}
+                <button type="button" onclick={() => onperformance?.(vm)}>Performance mode…</button>
+              {/if}
+              <button type="button" onclick={() => onmonitors?.(vm)}>Monitors…</button>
+              <button type="button" class="danger" onclick={() => ondelete?.(vm)}>Delete…</button>
+            </Menu>
           </td>
         </tr>
       {/each}
@@ -332,7 +327,7 @@
     white-space: nowrap;
   }
 
-  .actions button {
+  .actions > button {
     padding: 0.3rem 0.8rem;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -341,76 +336,15 @@
     cursor: pointer;
   }
 
-  .actions button.primary {
+  .actions > button.primary {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--accent-fg);
   }
 
-  .actions button:disabled {
+  .actions > button:disabled {
     opacity: 0.5;
     cursor: default;
-  }
-
-  .menu {
-    display: inline-block;
-    position: relative;
-    margin-left: 0.35rem;
-  }
-
-  .menu summary {
-    list-style: none;
-    padding: 0.3rem 0.5rem;
-    font-weight: 700;
-    line-height: 1;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .menu summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .menu-items {
-    position: absolute;
-    right: 0;
-    z-index: 5;
-    display: flex;
-    flex-direction: column;
-    min-width: 10rem;
-    margin-top: 0.25rem;
-    padding: 0.25rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
-  }
-
-  .menu-items button {
-    border: none;
-    text-align: left;
-    padding: 0.4rem 0.6rem;
-  }
-
-  .menu-items button:hover {
-    background: var(--hover);
-  }
-
-  .menu-items button.danger {
-    color: var(--danger);
-  }
-
-  .menu-items button:disabled:hover {
-    background: none;
-  }
-
-  .menu-items hr {
-    width: 100%;
-    margin: 0.25rem 0;
-    border: none;
-    border-top: 1px solid var(--border);
   }
 
   .visually-hidden {

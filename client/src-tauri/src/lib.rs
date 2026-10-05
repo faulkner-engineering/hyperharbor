@@ -4,6 +4,7 @@ mod discovery;
 mod error;
 mod hosts;
 mod identity;
+mod monitors;
 mod paired;
 mod rdp;
 mod spake2;
@@ -22,6 +23,7 @@ use crate::api::{ApiClient, PendingPairing};
 use crate::error::ClientError;
 use crate::hosts::{HostEntry, HostRegistry, HostSource};
 use crate::identity::ClientIdentity;
+use crate::monitors::{Monitor, MonitorChoice, MonitorChoiceStore};
 use crate::paired::{PairedHost, PairedHostStore};
 
 /// Event emitted to the frontend whenever the host list changes.
@@ -36,6 +38,8 @@ struct AppState {
     picked_isos: std::sync::Mutex<HashMap<String, std::path::PathBuf>>,
     /// Cancel flags of running uploads, by the same ID.
     uploads: std::sync::Mutex<HashMap<String, Arc<std::sync::atomic::AtomicBool>>>,
+    /// Which monitors each VM's Remote Desktop sessions use.
+    monitors: MonitorChoiceStore,
     // Kept alive so mDNS browsing continues for the lifetime of the app.
     _mdns: Option<mdns_sd::ServiceDaemon>,
 }
@@ -224,7 +228,96 @@ async fn connect_vm(
             return Err(ClientError::VmUnreachable(connection.address.clone()));
         }
     }
-    rdp::launch(&connection, &rdp::file_directory())
+    let layout = state
+        .monitors
+        .get(&paired.host_id, &vm_id)
+        .resolve(&monitors::list());
+    rdp::launch(&connection, &layout, &rdp::file_directory())
+}
+
+/// The fixed ID under which the host's own Remote Desktop session keeps its monitor choice.
+const HOST_SESSION_ID: &str = "host";
+
+/// Opens Remote Desktop to the host itself for maintenance. mstsc asks for the host's Windows
+/// account; HyperHarbor sends and stores no host credentials.
+#[tauri::command]
+async fn connect_host(state: State<'_, AppState>, key: String) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let remote_desktop = state.api.host_remote_desktop(&host, &paired).await?;
+    if !remote_desktop.supported || !remote_desktop.enabled {
+        return Err(ClientError::RdpFailed(
+            "Remote Desktop is off on the host.".into(),
+        ));
+    }
+
+    let port = remote_desktop.port;
+    let mut candidates: Vec<String> = Vec::new();
+    for address in host.addresses.iter().chain(paired.addresses.iter()) {
+        if rdp::is_valid_host_address(address) && !candidates.contains(address) {
+            candidates.push(address.clone());
+        }
+    }
+    // IPv4 first: link-local IPv6 addresses carry a zone that mstsc cannot use.
+    candidates.sort_by_key(|address| address.parse::<std::net::Ipv4Addr>().is_err());
+
+    let probe = candidates.clone();
+    let reachable = tauri::async_runtime::spawn_blocking(move || {
+        probe
+            .into_iter()
+            .find(|address| rdp::is_reachable(address, port))
+    })
+    .await
+    .unwrap_or(None);
+    let Some(address) = reachable else {
+        return Err(ClientError::RdpFailed(format!(
+            "this device cannot reach {} on port {port}. Check that the host's firewall allows Remote Desktop on this network.",
+            candidates.first().map_or(host.display_name.as_str(), String::as_str)
+        )));
+    };
+
+    let layout = state
+        .monitors
+        .get(&paired.host_id, HOST_SESSION_ID)
+        .resolve(&monitors::list());
+    rdp::launch_host(&address, port, &layout, &rdp::file_directory())
+}
+
+/// Allows Remote Desktop connections to the host (needs elevation). Returns the HostRemoteDesktop.
+#[tauri::command]
+async fn enable_host_remote_desktop(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.enable_host_remote_desktop(&host, &paired).await
+}
+
+/// This device's monitors, in the order mstsc numbers them.
+#[tauri::command]
+fn list_monitors() -> Vec<Monitor> {
+    monitors::list()
+}
+
+/// The monitors Connect uses for a VM. Kept on this device, per paired host and VM.
+#[tauri::command]
+fn get_monitor_choice(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<MonitorChoice, ClientError> {
+    let (_, paired) = state.paired_host(&key)?;
+    Ok(state.monitors.get(&paired.host_id, &vm_id))
+}
+
+#[tauri::command]
+fn set_monitor_choice(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    choice: MonitorChoice,
+) -> Result<(), ClientError> {
+    let (_, paired) = state.paired_host(&key)?;
+    state.monitors.set(&paired.host_id, &vm_id, choice)
 }
 
 /// Opens the VM's console (its video output, also before an OS is installed) in mstsc, through
@@ -806,6 +899,7 @@ pub fn run() {
                 pending: tokio::sync::Mutex::new(HashMap::new()),
                 picked_isos: std::sync::Mutex::new(HashMap::new()),
                 uploads: std::sync::Mutex::new(HashMap::new()),
+                monitors: MonitorChoiceStore::new(Some(config_dir.join("client-settings.json"))),
                 _mdns: mdns,
             });
             Ok(())
@@ -843,7 +937,12 @@ pub fn run() {
             rename_iso,
             delete_iso,
             connect_vm,
+            connect_host,
+            enable_host_remote_desktop,
             open_console,
+            list_monitors,
+            get_monitor_choice,
+            set_monitor_choice,
             inspect_iso,
             save_unattend_profile,
             delete_unattend_profile,

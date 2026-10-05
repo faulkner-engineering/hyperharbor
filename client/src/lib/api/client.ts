@@ -15,6 +15,7 @@ export type HostResources = components["schemas"]["HostResources"];
 export type HostUpdateStatus = components["schemas"]["HostUpdateStatus"];
 export type HostUpdateSettings = components["schemas"]["HostUpdateSettings"];
 export type HostUpdateMode = components["schemas"]["HostUpdateMode"];
+export type HostRemoteDesktop = components["schemas"]["HostRemoteDesktop"];
 export type IsoImage = components["schemas"]["IsoImage"];
 export type VirtualSwitch = components["schemas"]["VirtualSwitch"];
 export type VmComputeSettings = components["schemas"]["VmComputeSettings"];
@@ -70,6 +71,10 @@ export const ProblemCodes = {
   vmMustBeOff: "vmMustBeOff",
   gpuUnavailable: "gpuUnavailable",
   credentialRequired: "credentialRequired",
+  remoteDesktopUnsupported: "remoteDesktopUnsupported",
+  requiresInstalledService: "requiresInstalledService",
+  /** Set by the client: the host does not have the route, because it runs an older version. */
+  hostOutdated: "hostOutdated",
 } as const;
 
 export interface WakeFixOutcome {
@@ -92,6 +97,25 @@ export interface HostEntry {
   paired: boolean;
   /** Wake-on-LAN details are cached, so a wake signal can be sent while the host is asleep. */
   canWake: boolean;
+}
+
+/**
+ * True when the host's API version is at least `minimum` ("major.minor.patch"). A host whose version
+ * is unknown (added by address, or remembered while asleep) is assumed to support it; if it does
+ * not, the request fails with problem code hostOutdated.
+ */
+export function hostSupports(host: Pick<HostEntry, "apiVersion">, minimum: string): boolean {
+  const parse = (version: string) => {
+    const parts = version.split("-")[0].split(".").map(Number);
+    return parts.length === 3 && parts.every(Number.isInteger) ? parts : null;
+  };
+  const have = host.apiVersion ? parse(host.apiVersion) : null;
+  const need = parse(minimum);
+  if (!have || !need) return true;
+  for (let i = 0; i < 3; i++) {
+    if (have[i] !== need[i]) return have[i] > need[i];
+  }
+  return true;
 }
 
 /** Error returned by Tauri commands. Mirrors ClientError in src-tauri/src/error.rs. */
@@ -209,6 +233,37 @@ export const connectVm = (key: string, vmId: string, address: string) =>
  */
 export const openConsole = (key: string, vmId: string) => invoke<void>("open_console", { key, vmId });
 
+/** A monitor of this device, in physical pixels. Mirrors Monitor in src-tauri/src/monitors.rs. */
+export interface Monitor {
+  /** Stable identity (the monitor's device path). */
+  key: string;
+  /** The ID `mstsc /l` shows. */
+  mstscId: number;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  primary: boolean;
+}
+
+export type MonitorMode = "single" | "all" | "selected";
+
+/** Which monitors Connect uses for a VM. `selected` holds monitor keys. */
+export interface MonitorChoice {
+  mode: MonitorMode;
+  selected: string[];
+}
+
+export const listMonitors = () => invoke<Monitor[]>("list_monitors");
+
+/** The VM's monitor choice, kept on this device. A VM without one uses one monitor. */
+export const getMonitorChoice = (key: string, vmId: string) =>
+  invoke<MonitorChoice>("get_monitor_choice", { key, vmId });
+
+export const setMonitorChoice = (key: string, vmId: string, choice: MonitorChoice) =>
+  invoke<void>("set_monitor_choice", { key, vmId, choice });
+
 export const isOffline =(error: unknown) => isClientError(error) && error.code === "unreachable";
 
 /** True when the host returned this problem code. */
@@ -258,6 +313,22 @@ export const checkHostUpdate = (key: string) => invoke<HostUpdateStatus>("check_
 /** Needs elevation: run it inside withElevation. */
 export const setHostUpdateSettings = (key: string, settings: HostUpdateSettings) =>
   invoke<HostUpdateStatus>("set_host_update_settings", { key, settings });
+
+/** The API version that added Remote Desktop to the host. */
+export const RemoteDesktopApiVersion = "1.10.0";
+
+// Remote Desktop to the host itself. mstsc asks for the host's Windows account; no host
+// credentials pass through HyperHarbor.
+
+export const getHostRemoteDesktop = (key: string) =>
+  invoke<HostRemoteDesktop>("get_host_resource", { key, resource: "remoteDesktop" });
+
+/** Needs elevation: run it inside withElevation. */
+export const enableHostRemoteDesktop = (key: string) =>
+  invoke<HostRemoteDesktop>("enable_host_remote_desktop", { key });
+
+/** Opens Remote Desktop to the host. Resolves once mstsc has been launched. */
+export const connectHost = (key: string) => invoke<void>("connect_host", { key });
 
 // ISO library. Files are chosen and read on the Rust side; the frontend only sees a pick ID.
 

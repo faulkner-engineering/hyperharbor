@@ -132,9 +132,11 @@ pub async fn open(
     // If mstsc fails to start, `stop` is dropped here, which also ends the listener.
     rdp::start(
         rdp::Launch {
-            credential_host: "127.0.0.1",
-            user_name: &session.user_name,
-            password: &session.password,
+            credential: Some(rdp::LaunchCredential {
+                host: "127.0.0.1",
+                user_name: &session.user_name,
+                password: &session.password,
+            }),
             file_name: format!("hyperharbor-console-{port}.rdp"),
             contents: console_rdp_file(port, &session.user_name, &session.pcb),
             window_title_key: format!("127.0.0.1:{port}"),

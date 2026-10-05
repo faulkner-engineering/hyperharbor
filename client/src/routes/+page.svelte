@@ -15,6 +15,9 @@
     performVmAction,
     type VmAction,
     type HostEntry,
+    type HostRemoteDesktop,
+    hostSupports,
+    RemoteDesktopApiVersion,
     type Vm,
   } from "$lib/api/client";
   import { onMount } from "svelte";
@@ -36,6 +39,9 @@
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
   import InstallProfiles from "$lib/components/InstallProfiles.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
+  import MonitorsDialog from "$lib/components/MonitorsDialog.svelte";
+  import Menu from "$lib/components/Menu.svelte";
+  import { openHostRemoteDesktop } from "$lib/hostRemoteDesktop";
   import BrandMark from "$lib/brand/BrandMark.svelte";
   import { toasts } from "$lib/toasts.svelte";
 
@@ -58,13 +64,18 @@
   let deleting = $state<Vm | null>(null);
   let editing = $state<Vm | null>(null);
   let tuning = $state<Vm | null>(null);
+  let choosingMonitors = $state<Vm | null>(null);
   let creating = $state(false);
+  let connectingHost = $state(false);
+  /** The host's Remote Desktop state while asking whether to turn it on, and the answer's resolver. */
+  let enablingRemoteDesktop = $state<{ state: HostRemoteDesktop; answer: (confirmed: boolean) => void } | null>(null);
   let view = $state<"vms" | "isos" | "profiles">("vms");
   let now = $state(Date.now());
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
   // VMs are only fetched from paired hosts; others show the pairing panel instead.
   const pairedKey = $derived(selectedHost?.paired ? selectedHost.key : null);
+  const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
 
   function selectHost(key: string | null) {
     if (key === selectedKey) return;
@@ -80,7 +91,9 @@
     deleting = null;
     editing = null;
     tuning = null;
+    choosingMonitors = null;
     creating = false;
+    enablingRemoteDesktop?.answer(false);
     view = "vms";
     elevation.finish(false);
   }
@@ -143,6 +156,32 @@
     } finally {
       connectingVmId = null;
     }
+  }
+
+  async function connectToHost() {
+    const key = selectedKey;
+    const name = selectedHost?.displayName ?? "the host";
+    if (key === null) return;
+    connectingHost = true;
+    try {
+      const { outcome, state } = await openHostRemoteDesktop(
+        key,
+        (state) => new Promise((answer) => (enablingRemoteDesktop = { state, answer })),
+      );
+      if (outcome === "opened") toasts.show(`Opening Remote Desktop to ${name}. Sign in with your Windows account on it.`);
+      else if (outcome === "unsupported")
+        toasts.error(`${name} runs ${state.edition}, which cannot accept Remote Desktop connections. It needs Windows Pro, Enterprise, or Education.`);
+    } catch (error) {
+      if (!(error instanceof ElevationCancelled)) toasts.error(errorMessage(error));
+    } finally {
+      connectingHost = false;
+    }
+  }
+
+  function enableRemoteDesktopAnswered(confirmed: boolean) {
+    const pending = enablingRemoteDesktop;
+    enablingRemoteDesktop = null;
+    pending?.answer(confirmed);
   }
 
   async function openVmConsole(vm: Vm) {
@@ -314,16 +353,32 @@
             <button type="button" class="primary" onclick={() => (creating = true)} disabled={offline || vms === null}>
               + New VM
             </button>
-            <button type="button" onclick={() => (showWake = !showWake)}>
-              Wake-on-LAN
-            </button>
-            <button type="button" onclick={() => (showUpdates = !showUpdates)}>Updates</button>
-            <button type="button" onclick={unpairSelected} disabled={unpairing}>Unpair</button>
-            <button
-              type="button"
-              onclick={() => pairedKey && refreshVms(pairedKey)}
-              disabled={loading}>Refresh</button
-            >
+            <Menu label="Host ▾" ariaLabel="Host actions" variant="button">
+              {#if hostHasRemoteDesktop}
+                <button
+                  type="button"
+                  disabled={offline || connectingHost}
+                  title="Sign in to the host itself with its Windows account, for maintenance. Signing in as the account at its screen locks that screen."
+                  onclick={connectToHost}>{connectingHost ? "Opening Remote Desktop…" : "Remote Desktop to host"}</button
+                >
+              {:else}
+                <button
+                  type="button"
+                  disabled
+                  title="{selectedHost.displayName} runs an older HyperHarbor version. Update the host to use this."
+                  >Remote Desktop to host (update host)</button
+                >
+              {/if}
+              <button type="button" onclick={() => (showWake = !showWake)}>
+                {showWake ? "Hide Wake-on-LAN" : "Wake-on-LAN"}
+              </button>
+              <button type="button" onclick={() => (showUpdates = !showUpdates)}>
+                {showUpdates ? "Hide updates" : "Updates"}
+              </button>
+              <button type="button" onclick={() => pairedKey && refreshVms(pairedKey)} disabled={loading}>Refresh</button>
+              <hr />
+              <button type="button" class="danger" onclick={unpairSelected} disabled={unpairing}>Unpair</button>
+            </Menu>
           </div>
         {/if}
       </header>
@@ -384,6 +439,7 @@
             onaction={requestAction}
             onsettings={(vm) => (editing = vm)}
             onperformance={(vm) => (tuning = vm)}
+            onmonitors={(vm) => (choosingMonitors = vm)}
             ondelete={(vm) => (deleting = vm)}
           />
         {/if}
@@ -408,6 +464,9 @@
         {#if tuning}
           <PerformanceDialog host={selectedHost} vm={tuning} onclose={lifecycleClosed} />
         {/if}
+        {#if choosingMonitors}
+          <MonitorsDialog host={selectedHost} vm={choosingMonitors} onclose={() => (choosingMonitors = null)} />
+        {/if}
         {#if creating}
           <CreateVmDialog
             host={selectedHost}
@@ -422,6 +481,15 @@
             }}
           />
         {/if}
+      {/if}
+
+      {#if enablingRemoteDesktop}
+        <ConfirmDialog
+          title="Turn on Remote Desktop on {selectedHost.displayName}?"
+          message="This allows Remote Desktop connections to {selectedHost.displayName} ({enablingRemoteDesktop.state.edition}) and opens the Remote Desktop firewall rule. Anyone who knows a Windows account and password on it can then sign in from the network. It needs the admin passphrase."
+          confirmLabel="Turn on and connect"
+          onclose={enableRemoteDesktopAnswered}
+        />
       {/if}
 
       {#if elevation.pending && elevation.pending.hostKey === selectedHost.key}
@@ -549,10 +617,11 @@
 
   .header-actions {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
   }
 
-  header button {
+  .header-actions > button {
     padding: 0.4rem 0.9rem;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -561,12 +630,12 @@
     cursor: pointer;
   }
 
-  header button:disabled {
+  .header-actions > button:disabled {
     opacity: 0.5;
     cursor: default;
   }
 
-  header button.primary {
+  .header-actions > button.primary {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--accent-fg);
@@ -613,6 +682,7 @@
     background: none;
     color: inherit;
     text-decoration: underline;
+    cursor: pointer;
   }
 
   .placeholder {

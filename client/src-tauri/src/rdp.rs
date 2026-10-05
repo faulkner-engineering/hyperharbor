@@ -12,6 +12,7 @@ use serde::Deserialize;
 use zeroize::Zeroize;
 
 use crate::error::ClientError;
+use crate::monitors::MonitorLayout;
 
 /// Marks credentials this app created, so leftovers can be removed after a crash.
 pub const CREDENTIAL_COMMENT: &str = "HyperHarbor temporary credential";
@@ -104,12 +105,15 @@ impl Drop for VmConnection {
 ///
 /// In Performance mode the connection type is LAN with network and bandwidth auto-detection off, so
 /// mstsc does not lower quality while it measures the link.
+///
+/// `monitors` chooses one monitor (mstsc's default), all of them, or the ones picked in the client.
 pub fn rdp_file(
     address: &str,
     port: u16,
     user_name: &str,
     guest_os: GuestOs,
     performance_mode: bool,
+    monitors: &MonitorLayout,
 ) -> String {
     let linux = guest_os == GuestOs::Linux;
     let mut lines = vec![
@@ -136,6 +140,7 @@ pub fn rdp_file(
         lines.push("networkautodetect:i:0".to_string());
         lines.push("bandwidthautodetect:i:0".to_string());
     }
+    lines.extend(monitors.rdp_lines());
     lines.join("\r\n") + "\r\n"
 }
 
@@ -150,12 +155,82 @@ pub fn is_reachable(address: &str, port: u16) -> bool {
         .any(|target| TcpStream::connect_timeout(target, REACHABILITY_TIMEOUT).is_ok())
 }
 
-/// What to launch: a temporary credential for `TERMSRV/{credential_host}`, an .rdp file, and the
-/// text that appears in the title of mstsc's session window once it has connected.
-pub struct Launch<'a> {
-    pub credential_host: &'a str,
+/// The .rdp file for a maintenance session on the host itself. No user name is set and no
+/// credential is stored: mstsc asks for the host's Windows account (or uses one the user saved).
+pub fn host_rdp_file(address: &str, port: u16, monitors: &MonitorLayout) -> String {
+    let mut lines = vec![
+        format!("full address:s:{}", rdp_endpoint(address, port)),
+        "prompt for credentials:i:1".to_string(),
+        "enablecredsspsupport:i:1".to_string(),
+        "authentication level:i:2".to_string(),
+        "audiomode:i:0".to_string(),
+        "dynamic resolution:i:1".to_string(),
+        "smart sizing:i:0".to_string(),
+        "redirectclipboard:i:1".to_string(),
+    ];
+    lines.extend(monitors.rdp_lines());
+    lines.join("\r\n") + "\r\n"
+}
+
+/// "address:port", with an IPv6 address in brackets.
+fn rdp_endpoint(address: &str, port: u16) -> String {
+    match address.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V6(_)) => format!("[{address}]:{port}"),
+        _ => format!("{address}:{port}"),
+    }
+}
+
+/// True for an address that can go into an .rdp file: an IP address (IPv6 without a zone, which
+/// mstsc does not accept) or a host name of letters, digits, dots, and hyphens.
+pub fn is_valid_host_address(address: &str) -> bool {
+    if let Ok(ip) = address.parse::<std::net::IpAddr>() {
+        return !ip.is_unspecified();
+    }
+    !address.is_empty()
+        && address.len() <= 253
+        && !address.starts_with(['.', '-'])
+        && address
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))
+}
+
+/// Opens Remote Desktop to the host for maintenance. Nothing is written to the credential store;
+/// the .rdp file is removed once the session window opens.
+pub fn launch_host(
+    address: &str,
+    port: u16,
+    monitors: &MonitorLayout,
+    file_directory: &Path,
+) -> Result<(), ClientError> {
+    if !is_valid_host_address(address) || port == 0 {
+        return Err(ClientError::InvalidAddress);
+    }
+    start(
+        Launch {
+            credential: None,
+            file_name: format!(
+                "hyperharbor-host-{}.rdp",
+                address.replace([':', '/', '\\', '%'], "-")
+            ),
+            contents: host_rdp_file(address, port, monitors),
+            window_title_key: address.to_string(),
+        },
+        file_directory,
+        None,
+    )
+}
+
+/// A temporary credential for `TERMSRV/{host}`, removed once the session opens.
+pub struct LaunchCredential<'a> {
+    pub host: &'a str,
     pub user_name: &'a str,
     pub password: &'a str,
+}
+
+/// What to launch: an optional temporary credential, an .rdp file, and the text that appears in
+/// the title of mstsc's session window once it has connected.
+pub struct Launch<'a> {
+    pub credential: Option<LaunchCredential<'a>>,
     pub file_name: String,
     pub contents: String,
     pub window_title_key: String,
@@ -163,13 +238,19 @@ pub struct Launch<'a> {
 
 /// Writes the credential, launches mstsc, and removes the credential and file in the background once
 /// the session has opened (or mstsc exits, or the wait times out).
-pub fn launch(connection: &VmConnection, file_directory: &Path) -> Result<(), ClientError> {
+pub fn launch(
+    connection: &VmConnection,
+    monitors: &MonitorLayout,
+    file_directory: &Path,
+) -> Result<(), ClientError> {
     connection.validate()?;
     start(
         Launch {
-            credential_host: &connection.address,
-            user_name: &connection.user_name,
-            password: &connection.password,
+            credential: Some(LaunchCredential {
+                host: &connection.address,
+                user_name: &connection.user_name,
+                password: &connection.password,
+            }),
             file_name: format!(
                 "hyperharbor-{}.rdp",
                 connection.address.replace([':', '/', '\\'], "-")
@@ -180,6 +261,7 @@ pub fn launch(connection: &VmConnection, file_directory: &Path) -> Result<(), Cl
                 &connection.user_name,
                 connection.guest_os,
                 connection.performance_mode,
+                monitors,
             ),
             window_title_key: connection.address.clone(),
         },
@@ -195,8 +277,19 @@ pub fn start(
     file_directory: &Path,
     on_exit: Option<Box<dyn FnOnce() + Send>>,
 ) -> Result<(), ClientError> {
-    let target = format!("TERMSRV/{}", launch.credential_host);
-    credentials::write(&target, launch.user_name, launch.password)?;
+    let target = match &launch.credential {
+        Some(credential) => {
+            let target = format!("TERMSRV/{}", credential.host);
+            credentials::write(&target, credential.user_name, credential.password)?;
+            Some(target)
+        }
+        None => None,
+    };
+    let remove_credential = move || {
+        if let Some(target) = &target {
+            let _ = credentials::delete(target);
+        }
+    };
 
     let file = file_directory.join(&launch.file_name);
     let started = std::fs::write(&file, &launch.contents)
@@ -213,7 +306,7 @@ pub fn start(
             let key = launch.window_title_key;
             std::thread::spawn(move || {
                 wait_for_session(&mut child, &key);
-                let _ = credentials::delete(&target);
+                remove_credential();
                 let _ = std::fs::remove_file(&file);
                 if let Some(on_exit) = on_exit {
                     let _ = child.wait();
@@ -223,7 +316,7 @@ pub fn start(
             Ok(())
         }
         Err(error) => {
-            let _ = credentials::delete(&target);
+            remove_credential();
             let _ = std::fs::remove_file(&file);
             Err(error)
         }
@@ -434,7 +527,14 @@ mod tests {
 
     #[test]
     fn rdp_file_signs_in_and_enables_redirection() {
-        let file = rdp_file("192.168.0.50", 3389, r".\hh-owner", GuestOs::Windows, false);
+        let file = rdp_file(
+            "192.168.0.50",
+            3389,
+            r".\hh-owner",
+            GuestOs::Windows,
+            false,
+            &MonitorLayout::Single,
+        );
         let lines: Vec<&str> = file.lines().collect();
 
         for expected in [
@@ -453,11 +553,82 @@ mod tests {
         assert!(!file.contains("password"));
         assert!(!file.contains("connection type"));
         assert!(!file.contains("autodetect"));
+        assert!(!file.contains("multimon"));
+    }
+
+    #[test]
+    fn rdp_file_uses_the_chosen_monitors() {
+        let file = rdp_file(
+            "192.168.0.50",
+            3389,
+            "hh-owner",
+            GuestOs::Windows,
+            false,
+            &MonitorLayout::Selected(vec![2, 0]),
+        );
+        let lines: Vec<&str> = file.lines().collect();
+
+        assert!(lines.contains(&"use multimon:i:1"));
+        assert!(lines.contains(&"selectedmonitors:s:2,0"));
+        assert!(lines.contains(&"dynamic resolution:i:1"));
+    }
+
+    #[test]
+    fn host_rdp_file_asks_for_credentials_and_names_no_user() {
+        let file = host_rdp_file("192.168.0.10", 3389, &MonitorLayout::All);
+        let lines: Vec<&str> = file.lines().collect();
+
+        for expected in [
+            "full address:s:192.168.0.10:3389",
+            "prompt for credentials:i:1",
+            "enablecredsspsupport:i:1",
+            "authentication level:i:2",
+            "use multimon:i:1",
+        ] {
+            assert!(lines.contains(&expected), "missing {expected}");
+        }
+        assert!(!file.contains("username"));
+        assert!(!file.contains("password"));
+        assert!(file.ends_with("\r\n"));
+    }
+
+    #[test]
+    fn host_rdp_file_brackets_ipv6_addresses() {
+        let file = host_rdp_file("fd00::10", 3390, &MonitorLayout::Single);
+
+        assert!(file
+            .lines()
+            .any(|line| line == "full address:s:[fd00::10]:3390"));
+    }
+
+    #[test]
+    fn host_addresses_must_be_ip_addresses_or_plain_host_names() {
+        for valid in ["192.168.0.10", "fd00::10", "tc-pc", "tc-pc.local"] {
+            assert!(is_valid_host_address(valid), "{valid}");
+        }
+        for invalid in [
+            "",
+            "0.0.0.0",
+            "fe80::1%12",
+            "host\r\nusername:s:x",
+            "host:3389",
+            "-host",
+            "host name",
+        ] {
+            assert!(!is_valid_host_address(invalid), "{invalid:?}");
+        }
     }
 
     #[test]
     fn rdp_file_in_performance_mode_uses_lan_without_auto_detection() {
-        let file = rdp_file("192.168.0.50", 3389, "hh-owner", GuestOs::Windows, true);
+        let file = rdp_file(
+            "192.168.0.50",
+            3389,
+            "hh-owner",
+            GuestOs::Windows,
+            true,
+            &MonitorLayout::Single,
+        );
         let lines: Vec<&str> = file.lines().collect();
 
         for expected in [
@@ -471,7 +642,14 @@ mod tests {
 
     #[test]
     fn rdp_file_for_linux_uses_tls_sign_in_without_windows_redirection() {
-        let file = rdp_file("172.25.190.7", 3389, "hh-owner", GuestOs::Linux, false);
+        let file = rdp_file(
+            "172.25.190.7",
+            3389,
+            "hh-owner",
+            GuestOs::Linux,
+            false,
+            &MonitorLayout::Single,
+        );
         let lines: Vec<&str> = file.lines().collect();
 
         assert!(lines.contains(&"username:s:hh-owner"));
@@ -592,7 +770,11 @@ mod tests {
         std::fs::create_dir_all(&directory).unwrap();
         let address = "10.0.0.5\r\nalternate shell:s:cmd.exe";
 
-        let result = launch(&connection(address, "hh-owner"), &directory);
+        let result = launch(
+            &connection(address, "hh-owner"),
+            &MonitorLayout::Single,
+            &directory,
+        );
 
         let files = std::fs::read_dir(&directory).unwrap().count();
         let _ = std::fs::remove_dir_all(&directory);
