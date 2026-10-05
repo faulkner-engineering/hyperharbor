@@ -8,9 +8,24 @@ is noted where it changes.
 Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
 note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
 
-## [Unreleased]
+## [Unreleased] (API 1.12.0)
 
 ### Added
+- Setup profiles: YAML files on the host that list what to install (winget ids, Microsoft Store ids, or aliases),
+  what to remove (provisioned Appx packages, capabilities, features), registry tweaks, and a browser with its
+  extensions and policies. Each id is written with its friendly name as a comment, and files reference a JSON Schema
+  (schemas/profile.v1.schema.json) so editors can check them. New Setup profiles tab in the client: build profiles
+  with a package picker (Popular, and winget search), an Appx checklist read from a running VM with ratings and a
+  debloat preset, a tweak list, and an extension picker that takes a store link; import and export YAML files.
+  Applying a profile to a VM comes later.
+- Capture setup profile (VM menu, running Windows VMs): reads what the VM has that a clean install does not, and
+  shows it in three columns to keep or drop before saving a profile. Removed packages are found by comparing with a
+  clean baseline, recorded automatically after an unattended Windows install or on request.
+- Package search needs PowerShell 7 and the WinGet PowerShell module on the host; the tray's Set up package search
+  installs both (one administrator prompt).
+- API: setup profile routes (list, get, create, update, delete, import, export, schema, catalog), GET /packages/search
+  and /packages/catalog, GET /extensions/resolve and /extensions/catalog, GET /vms/{vmId}/appx, POST
+  /vms/{vmId}/appx-baseline, POST /vms/{vmId}/profile-capture; problem code wingetUnavailable.
 - The host stays awake while a paired device uses it, so a host woken with Wake-on-LAN no longer goes back to
   sleep after about 2 minutes (Windows' unattended sleep timeout). It stays awake for 10 minutes after the
   client's last contact (an open client checks in every few seconds), while work such as a console session or

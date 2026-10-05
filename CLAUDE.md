@@ -59,6 +59,12 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    /host/update, POST /host/update/check, PUT /host/update/settings elevated, API 1.9.0; tray Updates and
    Update channel rows with Check now and Install now; client Updates panel), 11.7 release packaging
    (done 2026-10-04; the workflow has not run on GitHub yet), 11.8 live test against a published release.
+12a. Setup profiles: capture and pickers, added at the user's request (done 2026-10-05, API 1.12.0). YAML profiles per
+   User (install: winget/Store ids or aliases; remove: Appx, capabilities, features; tweaks; browser with extensions
+   and policies), JSON Schema, curated catalogs, Appx inventory with clean baselines, winget search, extension
+   resolver, capture from a VM, and the client's editor, pickers, and capture review. Applying a profile is 12b
+   (not started); 12a only has the alias resolver it will use. Golden images are later too (the Appx route takes
+   ?source=vm so another source fits).
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -89,7 +95,12 @@ per-device VM accounts and a user management UI.
   Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService), Lifecycle/ (create, delete,
   compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
   VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants),
-  Power/ (VM power actions; KeepAwake: the power request that keeps the host awake during remote use)
+  Power/ (VM power actions; KeepAwake: the power request that keeps the host awake during remote use),
+  Profiles/ (setup profiles: Catalogs, ProfileYamlReader/Writer, ProfileValidator, PackageAliasResolver,
+  ExtensionIdParser, SetupProfileStore, AppxBaselines, AppxInventoryService, GuestProfileReader (PowerShell Direct
+  scripts), PackageSearch (pwsh), ExtensionResolver, ProfileCaptureService)
+- catalogs/*.yaml (packages, extensions, appx, tweaks, browsers) and schemas/profile.v1.schema.json at the repository
+  root, embedded in Host.Core; they are data people read and edit, checked by CatalogTests and ProfileFormatTests
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
   elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/),
   ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console).
@@ -367,6 +378,32 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   host without the route, and the client's api.rs check() turns it into problem code hostOutdated with an
   update hint. Gate UI for features added in a newer API version with hostSupports(host, "x.y.z") in client.ts
   (mDNS hosts report apiVersion; unknown versions pass and rely on hostOutdated).
+- Setup profiles (Phase 12a):
+  - Formats: profiles are <data>\profiles\<user id>\<id>.yaml (ids from the name; catalog, import, and schema are
+    reserved route words). ProfileYamlWriter writes each id with its friendly name as a trailing comment and the
+    $schema modeline; ProfileYamlReader reads the comments back (YamlDotNet Scanner with skipComments: false), so files
+    round-trip. The schema is authored by hand; TheSchema_AndTheModel_HaveTheSameProperties keeps it equal to the DTOs.
+    Appx baselines: <data>\appx-baselines.json, keyed "10.0.<CurrentBuild>/<EditionID>", recorded by the install
+    watcher after an unattended Windows install (only if missing) or by POST /vms/{id}/appx-baseline.
+  - Package search: Microsoft.WinGet.Client refuses Windows PowerShell 5.1 as SYSTEM ("not supported in Windows
+    PowerShell") but works in PowerShell 7 (verified 2026-10-05: pwsh 7.6.6 as SYSTEM, about 2 s). winget installs
+    PowerShell 7.6 as a per-user MSIX by default, which SYSTEM cannot run; the setup helper (--setup-package-search,
+    tray "Set up package search") uses --installer-type wix --scope machine. Without it, search answers 409
+    wingetUnavailable.
+  - Extensions: the Chrome Web Store no longer lists uBlock Origin or ClearURLs (Manifest V2); uBlock Origin is an
+    Edge-only catalog entry (store: edge). HH_EXTENSION_LIVE=1 checks every catalog id against its store; run it when
+    editing catalogs/extensions.yaml. Browsers install some extensions themselves (browsers.yaml builtInExtensions);
+    capture lists them unticked.
+  - Capture runs three PowerShell Direct reads as the VM's stored administrator (about 18 s on TESTWINDOWSINSTALL).
+    HKCU values come from the account's loaded hive or NTUSER.DAT loaded under HKU\HyperHarborCapture; read it with
+    .NET keys closed at once and retry the unload, because a hive left loaded gives the account a temporary profile at
+    its next sign-in (the first live run failed on exactly that unload). reg.exe writes errors to stderr, which ends a
+    script under ErrorActionPreference Stop; switch to Continue around native commands whose exit code is checked.
+  - On TESTWINDOWSINSTALL (10.0.26300, fresh), winget export over PowerShell Direct produced no packages although Edge
+    and OneDrive were installed, so capture falls back to the Uninstall keys' program names with a warning. Not yet
+    understood (possibly winget's sources are not initialized for the administrator in that session).
+  - Scripted edits with Node: in String.replace, the replacement string treats $' $& $` as patterns, which mangled
+    a PowerShell regex ending in +$'. Pass a function (s.replace(a, () => b)) when the text can contain $.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):
@@ -459,5 +496,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   this PC often has little free RAM.
 - For throwaway VMs, create HyperHarbor-Test and delete it afterwards (LifecycleLiveTests does both, with a
   1 GB disk in a temporary folder). Ask before changing any other VM.
+- Setup profiles: HH_PROFILE_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs a read-only capture against a running Windows VM
+  with a stored credential (reads the host's data folder, so run elevated; HH_PROFILE_LIVE_OUT=<file> saves the draft).
+  HH_PACKAGE_SEARCH_LIVE=1 searches winget through pwsh; HH_EXTENSION_LIVE=1 checks catalog ids against the stores.
 - VM console automation: Msvm_Keyboard.TypeText can drop characters, so send TypeKey one key at a time.
   Read the screen with GetVirtualSystemThumbnailImage (RGB565) and confirm a prompt is gone before moving on.
