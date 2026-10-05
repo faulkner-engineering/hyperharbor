@@ -306,6 +306,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/setup-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the calling User's setup profiles.
+         * @description By name. A file on the host that no longer reads (for example after a hand edit) is listed
+         *     with `error` set.
+         */
+        get: operations["listSetupProfiles"];
+        put?: never;
+        /**
+         * Save a new setup profile for the calling User.
+         * @description Needs elevation, because a profile decides what is installed and removed in VMs. The profile is
+         *     checked against the schema and the catalogs (`400` with `errors` by field path, for example
+         *     `install[3]`), tidied (duplicates dropped, names filled in from the catalogs), and saved under
+         *     an ID made from its name.
+         */
+        post: operations["createSetupProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup-profiles/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a setup profile from a YAML file.
+         * @description The body is the file (at most 256 KB). A file that is not a profile is `400` with an error on
+         *     the `yaml` field; a profile with problems is `400` with errors by field path.
+         */
+        post: operations["importSetupProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup-profiles/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the JSON Schema of setup profile files. */
+        get: operations["getSetupProfileSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup-profiles/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A setup profile ID (its file name on the host). */
+                profileId: components["parameters"]["SetupProfileId"];
+            };
+            cookie?: never;
+        };
+        /** Get one of the calling User's setup profiles. */
+        get: operations["getSetupProfile"];
+        /** Replace one of the calling User's setup profiles. */
+        put: operations["updateSetupProfile"];
+        post?: never;
+        /** Delete one of the calling User's setup profiles. */
+        delete: operations["deleteSetupProfile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup-profiles/{profileId}/yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A setup profile ID (its file name on the host). */
+                profileId: components["parameters"]["SetupProfileId"];
+            };
+            cookie?: never;
+        };
+        /** Get the profile's YAML file as stored, for export. */
+        get: operations["exportSetupProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/unattend-profiles": {
         parameters: {
             query?: never;
@@ -1602,6 +1710,76 @@ export interface components {
             /** @description Required when `os` is linux. */
             linux?: components["schemas"]["LinuxInstallSettings"] | null;
         };
+        /**
+         * @description A setup profile. In YAML files it also has `schemaVersion: 1`, and each item's name is a comment
+         *     after its id; see schemas/profile.v1.schema.json for the id forms.
+         */
+        SetupProfile: {
+            name: string;
+            description?: string;
+            /** @description winget ids (they contain a dot), Microsoft Store ids (12 capitals and digits), or package aliases resolved when the profile is applied. */
+            install?: components["schemas"]["ProfileItem"][];
+            remove?: components["schemas"]["ProfileRemove"];
+            tweaks?: components["schemas"]["ProfileTweak"][];
+            browser?: components["schemas"]["ProfileBrowser"];
+        };
+        ProfileItem: {
+            id: string;
+            /** @description The friendly name; written as a comment after the id in YAML. */
+            name?: string;
+        };
+        ProfileRemove: {
+            /** @description Provisioned package names without the version, for example Microsoft.BingNews. */
+            appx?: components["schemas"]["ProfileItem"][];
+            capabilities?: components["schemas"]["ProfileItem"][];
+            features?: components["schemas"]["ProfileItem"][];
+        };
+        /** @description A curated tweak (`id`) or a custom registry value (`registry`), never both. */
+        ProfileTweak: {
+            id?: string;
+            name?: string;
+            registry?: components["schemas"]["RegistryTweak"];
+        };
+        /** @enum {string} */
+        RegistryValueType: "dword" | "qword" | "string";
+        RegistryTweak: {
+            /** @description Starts with HKLM\ or HKCU\ (HKCU applies to the User's account in the VM). */
+            key: string;
+            /** @description The value name; empty for the key's default value. */
+            name: string;
+            type: components["schemas"]["RegistryValueType"];
+            /** @description Decimal for dword and qword. */
+            value: string;
+        };
+        ProfileBrowser: {
+            app: components["schemas"]["ProfileItem"];
+            /** @description Chrome Web Store ids, or edge:<id> for the Edge Add-ons store. */
+            extensions?: components["schemas"]["ProfileItem"][];
+            /** @description Browser policies by friendly key from the browser catalog; values as text. */
+            policies?: {
+                [key: string]: string;
+            };
+        };
+        SetupProfileSummary: {
+            id: string;
+            name: string;
+            description: string | null;
+            installCount: number;
+            removeCount: number;
+            tweakCount: number;
+            extensionCount: number;
+            browser: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Why the file on the host does not read; the counts are then zero. */
+            error: string | null;
+        };
+        StoredSetupProfile: {
+            id: string;
+            /** Format: date-time */
+            updatedAt: string;
+            profile: components["schemas"]["SetupProfile"];
+        };
         /** @description Settings for installing an OS without anyone at the console. Profiles never hold passwords. */
         UnattendProfile: {
             /** @description A slug for built-in profiles, a GUID for the User's own. */
@@ -1914,6 +2092,8 @@ export interface components {
         VmId: string;
         /** @description An unattended profile ID. */
         ProfileId: string;
+        /** @description A setup profile ID (its file name on the host). */
+        SetupProfileId: string;
         /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
         IsoName: string;
         /** @description Job ID returned when the job was started. */
@@ -2353,6 +2533,212 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+        };
+    };
+    listSetupProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profiles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupProfileSummary"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createSetupProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupProfile"];
+            };
+        };
+        responses: {
+            /** @description The saved profile. */
+            201: {
+                headers: {
+                    /** @description URL of the profile. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredSetupProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
+    importSetupProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/yaml": string;
+            };
+        };
+        responses: {
+            /** @description The saved profile. */
+            201: {
+                headers: {
+                    /** @description URL of the profile. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredSetupProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
+    getSetupProfileSchema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description schemas/profile.v1.schema.json. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/schema+json": Record<string, never>;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getSetupProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A setup profile ID (its file name on the host). */
+                profileId: components["parameters"]["SetupProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredSetupProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSetupProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A setup profile ID (its file name on the host). */
+                profileId: components["parameters"]["SetupProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupProfile"];
+            };
+        };
+        responses: {
+            /** @description The saved profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredSetupProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSetupProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A setup profile ID (its file name on the host). */
+                profileId: components["parameters"]["SetupProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile was deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exportSetupProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A setup profile ID (its file name on the host). */
+                profileId: components["parameters"]["SetupProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/yaml": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     listUnattendProfiles: {

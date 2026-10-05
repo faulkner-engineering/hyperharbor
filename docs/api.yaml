@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.11.0
+  version: 1.12.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -70,6 +70,13 @@ tags:
       included), while work is in progress, and while someone is signed in to it over Remote
       Desktop. Clients that keep a Remote Desktop or console window open check in with
       `GET /host` about once a minute.
+  - name: Profiles
+    description: |
+      Setup profiles: what to install (winget), remove (provisioned Appx packages, capabilities,
+      features), and change (registry tweaks, a browser with extensions and policies) in a Windows VM.
+      Each User's profiles are YAML files on the host that follow schemas/profile.v1.schema.json
+      (`GET /setup-profiles/schema`); every id in them is followed by a comment with its friendly name.
+      Applying a profile is not part of this version.
   - name: Jobs
     description: Progress of long-running VM operations such as creation and deletion.
   - name: Auth
@@ -489,6 +496,197 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
+
+  /setup-profiles:
+    get:
+      tags: [Profiles]
+      operationId: listSetupProfiles
+      summary: List the calling User's setup profiles.
+      description: |
+        By name. A file on the host that no longer reads (for example after a hand edit) is listed
+        with `error` set.
+      responses:
+        "200":
+          description: The profiles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SetupProfileSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Profiles]
+      operationId: createSetupProfile
+      summary: Save a new setup profile for the calling User.
+      description: |
+        Needs elevation, because a profile decides what is installed and removed in VMs. The profile is
+        checked against the schema and the catalogs (`400` with `errors` by field path, for example
+        `install[3]`), tidied (duplicates dropped, names filled in from the catalogs), and saved under
+        an ID made from its name.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupProfile"
+      responses:
+        "201":
+          description: The saved profile.
+          headers:
+            Location:
+              description: URL of the profile.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoredSetupProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+
+  /setup-profiles/import:
+    post:
+      tags: [Profiles]
+      operationId: importSetupProfile
+      summary: Save a setup profile from a YAML file.
+      description: |
+        The body is the file (at most 256 KB). A file that is not a profile is `400` with an error on
+        the `yaml` field; a profile with problems is `400` with errors by field path.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema:
+              type: string
+      responses:
+        "201":
+          description: The saved profile.
+          headers:
+            Location:
+              description: URL of the profile.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoredSetupProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+
+  /setup-profiles/schema:
+    get:
+      tags: [Profiles]
+      operationId: getSetupProfileSchema
+      summary: Get the JSON Schema of setup profile files.
+      responses:
+        "200":
+          description: schemas/profile.v1.schema.json.
+          content:
+            application/schema+json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /setup-profiles/{profileId}:
+    parameters:
+      - $ref: "#/components/parameters/SetupProfileId"
+    get:
+      tags: [Profiles]
+      operationId: getSetupProfile
+      summary: Get one of the calling User's setup profiles.
+      responses:
+        "200":
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoredSetupProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Profiles]
+      operationId: updateSetupProfile
+      summary: Replace one of the calling User's setup profiles.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupProfile"
+      responses:
+        "200":
+          description: The saved profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoredSetupProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Profiles]
+      operationId: deleteSetupProfile
+      summary: Delete one of the calling User's setup profiles.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "204":
+          description: The profile was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /setup-profiles/{profileId}/yaml:
+    parameters:
+      - $ref: "#/components/parameters/SetupProfileId"
+    get:
+      tags: [Profiles]
+      operationId: exportSetupProfile
+      summary: Get the profile's YAML file as stored, for export.
+      responses:
+        "200":
+          description: The file.
+          content:
+            application/yaml:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /unattend-profiles:
     get:
@@ -1643,6 +1841,14 @@ components:
       schema:
         type: string
         maxLength: 64
+    SetupProfileId:
+      name: profileId
+      in: path
+      required: true
+      description: A setup profile ID (its file name on the host).
+      schema:
+        type: string
+        pattern: "^[a-z0-9][a-z0-9-]{0,47}$"
     IsoName:
       name: name
       in: path
@@ -2711,6 +2917,147 @@ components:
           oneOf:
             - $ref: "#/components/schemas/LinuxInstallSettings"
             - type: "null"
+
+    SetupProfile:
+      type: object
+      description: |
+        A setup profile. In YAML files it also has `schemaVersion: 1`, and each item's name is a comment
+        after its id; see schemas/profile.v1.schema.json for the id forms.
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 60
+        description:
+          type: string
+          maxLength: 500
+        install:
+          type: array
+          description: winget ids (they contain a dot), Microsoft Store ids (12 capitals and digits), or package aliases resolved when the profile is applied.
+          items:
+            $ref: "#/components/schemas/ProfileItem"
+        remove:
+          $ref: "#/components/schemas/ProfileRemove"
+        tweaks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileTweak"
+        browser:
+          $ref: "#/components/schemas/ProfileBrowser"
+
+    ProfileItem:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          description: The friendly name; written as a comment after the id in YAML.
+
+    ProfileRemove:
+      type: object
+      properties:
+        appx:
+          type: array
+          description: Provisioned package names without the version, for example Microsoft.BingNews.
+          items:
+            $ref: "#/components/schemas/ProfileItem"
+        capabilities:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileItem"
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileItem"
+
+    ProfileTweak:
+      type: object
+      description: A curated tweak (`id`) or a custom registry value (`registry`), never both.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        registry:
+          $ref: "#/components/schemas/RegistryTweak"
+
+    RegistryValueType:
+      type: string
+      enum: [dword, qword, string]
+
+    RegistryTweak:
+      type: object
+      required: [key, name, type, value]
+      properties:
+        key:
+          type: string
+          description: Starts with HKLM\ or HKCU\ (HKCU applies to the User's account in the VM).
+        name:
+          type: string
+          description: The value name; empty for the key's default value.
+        type:
+          $ref: "#/components/schemas/RegistryValueType"
+        value:
+          type: string
+          description: Decimal for dword and qword.
+
+    ProfileBrowser:
+      type: object
+      required: [app]
+      properties:
+        app:
+          $ref: "#/components/schemas/ProfileItem"
+        extensions:
+          type: array
+          description: Chrome Web Store ids, or edge:<id> for the Edge Add-ons store.
+          items:
+            $ref: "#/components/schemas/ProfileItem"
+        policies:
+          type: object
+          description: Browser policies by friendly key from the browser catalog; values as text.
+          additionalProperties:
+            type: string
+
+    SetupProfileSummary:
+      type: object
+      required: [id, name, description, installCount, removeCount, tweakCount, extensionCount, browser, updatedAt, error]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: [string, "null"]
+        installCount:
+          type: integer
+        removeCount:
+          type: integer
+        tweakCount:
+          type: integer
+        extensionCount:
+          type: integer
+        browser:
+          type: [string, "null"]
+        updatedAt:
+          type: string
+          format: date-time
+        error:
+          type: [string, "null"]
+          description: Why the file on the host does not read; the counts are then zero.
+
+    StoredSetupProfile:
+      type: object
+      required: [id, updatedAt, profile]
+      properties:
+        id:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        profile:
+          $ref: "#/components/schemas/SetupProfile"
 
     UnattendProfile:
       type: object

@@ -6,6 +6,7 @@ using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.RemoteDesktop;
 using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Core.VmConsole;
@@ -106,6 +107,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             IncorrectPassphraseException => (StatusCodes.Status403Forbidden, "Incorrect passphrase"),
             IsoNotFoundException => (StatusCodes.Status404NotFound, "Image not found"),
             UnattendProfileNotFoundException => (StatusCodes.Status404NotFound, "Profile not found"),
+            SetupProfileNotFoundException => (StatusCodes.Status404NotFound, "Setup profile not found"),
             InsufficientStorageException => (StatusCodes.Status507InsufficientStorage, "Not enough space"),
             ElevationRateLimitedException => (StatusCodes.Status429TooManyRequests, "Too many attempts"),
             BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),

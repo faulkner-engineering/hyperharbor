@@ -5,6 +5,7 @@ using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Auth;
 using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Pairing;
+using HyperHarbor.Shared.Contracts.Profiles;
 using HyperHarbor.Shared.Contracts.Unattend;
 using HyperHarbor.Shared.Contracts.Vms;
 using HyperHarbor.Shared.Contracts.Wake;
@@ -27,6 +28,20 @@ public class ContractFixtureTests
     private static readonly VmComputeSettings ComputeSample = new(
         VmId, VmState.Running, 4, 4096, 4096, false, true, true, 1,
         [ComputeSetting.ProcessorCount, ComputeSetting.StartupMemoryMb, ComputeSetting.MaximumMemoryMb, ComputeSetting.DynamicMemory, ComputeSetting.NestedVirtualization]);
+
+    private static readonly SetupProfile SetupProfileSample = new(
+        "Dev workstation",
+        "Tools for development VMs",
+        [new ProfileItem("Git.Git", "Git"), new ProfileItem("vscode", "Visual Studio Code")],
+        new ProfileRemove([new ProfileItem("Microsoft.BingNews", "Microsoft News")], [], [new ProfileItem("MicrosoftWindowsPowerShellV2Root", "Windows PowerShell 2.0")]),
+        [
+            new ProfileTweak("explorer.showFileExtensions", "Show file name extensions"),
+            new ProfileTweak(Name: "Disable web results in Start", Registry: new RegistryTweak(@"HKCU\Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", RegistryValueType.Dword, "1")),
+        ],
+        new ProfileBrowser(
+            new ProfileItem("Brave.Brave", "Brave"),
+            [new ProfileItem("cjpalhdlnbpafiamejdnhcphjbkeiagm", "uBlock Origin")],
+            new Dictionary<string, string> { ["passwordManager"] = "false" }));
 
     private static Dictionary<string, object> Samples() => new()
     {
@@ -120,6 +135,16 @@ public class ContractFixtureTests
             HostUpdateActivity.Ready, Time, "Version 0.2.0 is ready to install.", null, ["0.1.5"]),
         ["HostUpdateSettings"] = new HostUpdateSettings("stable", HostUpdateMode.Notify, "03:00"),
         ["RenameIsoRequest"] = new RenameIsoRequest("Windows 11 24H2.iso"),
+        ["SetupProfile"] = SetupProfileSample,
+        ["ProfileItem"] = new ProfileItem("Git.Git", "Git"),
+        ["ProfileRemove"] = SetupProfileSample.Remove!,
+        ["ProfileTweak"] = SetupProfileSample.Tweaks![1],
+        ["RegistryTweak"] = SetupProfileSample.Tweaks![1].Registry!,
+        ["ProfileBrowser"] = SetupProfileSample.Browser!,
+        ["StoredSetupProfile"] = new StoredSetupProfile("dev-workstation", Time, SetupProfileSample),
+
+        // Nulls on purpose: description, browser, and error are required but nullable.
+        ["SetupProfileSummary"] = new SetupProfileSummary("dev-workstation", "Dev workstation", null, 4, 2, 2, 1, null, Time, null),
         ["VirtualSwitch"] = new VirtualSwitch("C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", "Default Switch", true),
 
         // Nulls on purpose: vmId and error are required but nullable.

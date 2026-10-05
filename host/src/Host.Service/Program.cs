@@ -10,6 +10,7 @@ using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Performance;
 using HyperHarbor.Host.Core.Power;
+using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.RemoteDesktop;
 using HyperHarbor.Host.Core.Security;
@@ -244,6 +245,8 @@ builder.Services.AddSingleton(services => new VmStorageLocation(
     services.GetRequiredService<IHyperVHost>()));
 // Unattended installs: profiles, ISO inspection, answer files, and the install records the readiness watcher follows.
 builder.Services.AddSingleton(new UnattendProfileStore(dataDirectory));
+builder.Services.AddSingleton(Catalogs.Default);
+builder.Services.AddSingleton(services => new SetupProfileStore(dataDirectory, services.GetRequiredService<Catalogs>()));
 builder.Services.AddSingleton<IsoInspector>();
 builder.Services.AddSingleton(new UnattendedInstallStore(dataDirectory));
 builder.Services.AddSingleton<IVmKeyboard, CimVmKeyboard>();
@@ -386,6 +389,7 @@ app.MapAuthEndpoints();
 app.MapVmEndpoints();
 app.MapConsoleEndpoints();
 app.MapUnattendEndpoints();
+app.MapSetupProfileEndpoints();
 app.MapPerformanceEndpoints();
 app.MapJobEndpoints();
 app.MapPairingEndpoints();

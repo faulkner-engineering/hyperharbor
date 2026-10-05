@@ -58,3 +58,21 @@ public sealed record ProfileBrowser(
     [property: JsonRequired] ProfileItem App,
     IReadOnlyList<ProfileItem>? Extensions,
     IReadOnlyDictionary<string, string>? Policies);
+
+/// <summary>A saved setup profile as listed. Schema: SetupProfileSummary.</summary>
+/// <param name="Id">The file name on the host, without .yaml.</param>
+/// <param name="Error">Set when the file on the host cannot be read (for example after a hand edit); the counts are then zero.</param>
+public sealed record SetupProfileSummary(
+    string Id,
+    string Name,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Description,
+    int InstallCount,
+    int RemoveCount,
+    int TweakCount,
+    int ExtensionCount,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Browser,
+    DateTimeOffset UpdatedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Error);
+
+/// <summary>A saved setup profile. Schema: StoredSetupProfile.</summary>
+public sealed record StoredSetupProfile(string Id, DateTimeOffset UpdatedAt, SetupProfile Profile);
