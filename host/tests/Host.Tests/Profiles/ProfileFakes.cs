@@ -31,6 +31,57 @@ internal sealed class FakeGuestProfileReader : IGuestProfileReader
             Edition,
             Appx.Select(name => new GuestAppxPackage(name, "1.0.0.0", "8wekyb3d8bbwe")).ToList()));
     }
+
+    /// <summary>winget export's ids; null as when winget cannot run in the guest.</summary>
+    public List<string>? Winget { get; set; } = ["Git.Git", "Microsoft.VisualStudioCode", "Microsoft.Edge", "Microsoft.VCRedist.2015+.x64"];
+
+    public List<string> Programs { get; set; } = ["Git", "Microsoft Visual Studio Code (User)", "Contoso Tool"];
+
+    public List<GuestExtension> Extensions { get; set; } =
+    [
+        new("brave", "eimadpbcbfnmbkopoojfekhnkhdbieeh", "Dark Reader"),
+        new("brave", "ghbmnnjooekpmoecnnnilnnbdlolhkhi", "Google Docs Offline"),
+        new("edge", "edge:odfafepnkmbhccpbejgmiehpchacaeak", "uBlock Origin"),
+    ];
+
+    /// <summary>Registry values by "key|name"; anything not here reads as absent.</summary>
+    public Dictionary<string, string?> Values { get; set; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [@"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced|HideFileExt"] = "0",
+        [@"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize|AppsUseLightTheme"] = "0",
+        [@"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize|SystemUsesLightTheme"] = "1",
+    };
+
+    public bool ProfileFound { get; set; } = true;
+
+    public List<string> AccountsRead { get; } = [];
+
+    public Task<GuestInstalledSoftware> ReadInstalledAsync(Guid vmId, GuestCredential admin, CancellationToken cancellationToken)
+    {
+        AdminsUsed.Add(admin);
+        return Failure is not null
+            ? throw Failure
+            : Task.FromResult(new GuestInstalledSoftware(Winget, Winget is null ? "winget export wrote nothing (exit code -1978335212)." : null, Programs));
+    }
+
+    public Task<GuestBrowsersAndSettings> ReadBrowsersAndSettingsAsync(
+        Guid vmId,
+        GuestCredential admin,
+        string userAccount,
+        IReadOnlyList<(string Id, string UserData)> browsers,
+        IReadOnlyList<GuestRegistryRead> values,
+        CancellationToken cancellationToken)
+    {
+        AdminsUsed.Add(admin);
+        AccountsRead.Add(userAccount);
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        var read = values.ToDictionary(value => $"{value.Key}|{value.Name}", value => Values.GetValueOrDefault($"{value.Key}|{value.Name}"), StringComparer.OrdinalIgnoreCase);
+        return Task.FromResult(new GuestBrowsersAndSettings(ProfileFound, Extensions, read));
+    }
 }
 
 /// <summary>Package search with fixed results, or unavailable like a host without PowerShell 7.</summary>

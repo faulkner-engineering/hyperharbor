@@ -253,6 +253,7 @@ builder.Services.AddSingleton(services => new SetupProfileStore(dataDirectory, s
 builder.Services.AddSingleton(new AppxBaselineStore(dataDirectory));
 builder.Services.AddSingleton<IGuestProfileReader, PowerShellDirectProfileReader>();
 builder.Services.AddSingleton<AppxInventoryService>();
+builder.Services.AddSingleton<ProfileCaptureService>();
 builder.Services.AddSingleton<IPackageSearch, PwshPackageSearch>();
 builder.Services.AddSingleton<IExtensionResolver>(services => new StoreExtensionResolver(
     StoreExtensionResolver.CreateHttpClient($"HyperHarbor-Host/{HostVersion.Current}"),

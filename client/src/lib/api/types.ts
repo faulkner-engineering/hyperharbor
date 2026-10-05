@@ -830,6 +830,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/profile-capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capture a draft setup profile from a running Windows VM.
+         * @description Reads the VM over PowerShell Direct as its stored administrator, without changing it: winget
+         *     export (what to install), the provisioned Appx packages against the clean baseline (what was
+         *     removed), the catalog tweaks that are set, and the store extensions in the calling User's
+         *     browser profiles (Chrome, Edge, Brave). Nothing is saved; the client builds a profile from the
+         *     items the user keeps. Takes up to a few minutes.
+         */
+        post: operations["captureSetupProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/performance": {
         parameters: {
             query?: never;
@@ -1994,6 +2021,40 @@ export interface components {
             /** @description The store icon as a data URL; null for catalog entries and when the store has none. */
             iconDataUrl: string | null;
             inCatalog: boolean;
+        };
+        DraftItem: {
+            /** @description What goes into the profile (a winget id, package name, tweak id, or extension id). */
+            id: string;
+            name: string;
+            /** @description Whether the review screen starts with it ticked. */
+            selected: boolean;
+            note: string | null;
+        };
+        DraftBrowser: {
+            /** @description The browser's winget id. */
+            app: string;
+            name: string;
+            /** @description The browser the review starts with (the one with the most extensions). */
+            selected: boolean;
+            extensions: components["schemas"]["DraftItem"][];
+        };
+        ProfileDraft: {
+            /** Format: uuid */
+            vmId: string;
+            vmName: string;
+            build: string;
+            edition: string;
+            baseline: components["schemas"]["AppxBaselineInfo"] | null;
+            /** @description From winget export in the VM; packages that come with Windows start unticked. */
+            install: components["schemas"]["DraftItem"][];
+            /** @description Provisioned packages in the clean baseline that the VM no longer has. */
+            removeAppx: components["schemas"]["DraftItem"][];
+            /** @description Catalog tweaks whose values are set in the VM. */
+            tweaks: components["schemas"]["DraftItem"][];
+            browsers: components["schemas"]["DraftBrowser"][];
+            /** @description Installed programs, listed only when winget could not run in the VM. */
+            otherPrograms: string[];
+            warnings: string[];
         };
         /** @description Settings for installing an OS without anyone at the console. Profiles never hold passwords. */
         UnattendProfile: {
@@ -3678,6 +3739,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AppxBaselineInfo"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description Not a running Windows guest (`code: vmNotRunning`), or no administrator credential
+             *     (`code: credentialRequired`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+            503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    captureSetupProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The draft. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileDraft"];
                 };
             };
             401: components["responses"]["Unauthorized"];

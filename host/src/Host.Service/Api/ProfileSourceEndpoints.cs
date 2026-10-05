@@ -1,6 +1,7 @@
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Service.Audit;
+using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Profiles;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -18,6 +19,7 @@ public static class ProfileSourceEndpoints
         var vms = endpoints.MapGroup(VmEndpoints.BasePath);
         vms.MapGet("/{vmId:guid}/appx", ListAppxAsync).WithName("listVmAppx");
         vms.MapPost("/{vmId:guid}/appx-baseline", RecordBaselineAsync).WithName("recordAppxBaseline").Audited();
+        vms.MapPost("/{vmId:guid}/profile-capture", CaptureAsync).WithName("captureSetupProfile").Audited();
 
         endpoints.MapGet(ContractInfo.BasePath + "/packages/search", SearchPackagesAsync).WithName("searchPackages");
         endpoints.MapGet(ContractInfo.BasePath + "/packages/catalog", PackageCatalog).WithName("listPackageCatalog");
@@ -70,6 +72,10 @@ public static class ProfileSourceEndpoints
 
         return TypedResults.Ok(await appx.ListAsync(vmId, cancellationToken));
     }
+
+    /// <summary>Reads only; the draft is returned, and nothing is saved until the client saves a profile.</summary>
+    private static async Task<Ok<ProfileDraft>> CaptureAsync(Guid vmId, ProfileCaptureService capture, HttpContext context, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await capture.CaptureAsync(vmId, context.User.UserId(), cancellationToken));
 
     private static async Task<Ok<AppxBaselineInfo>> RecordBaselineAsync(Guid vmId, AppxInventoryService appx, CancellationToken cancellationToken) =>
         TypedResults.Ok((await appx.RecordBaselineAsync(vmId, AppxBaselineSource.Manual, onlyIfMissing: false, cancellationToken))!);

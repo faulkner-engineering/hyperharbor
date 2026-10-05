@@ -47,6 +47,25 @@
     "scope": "deleteDisksOrCheckpoints",
     "message": "C:\\VMs\\Base.vhdx is also used by Web."
   },
+  "DraftBrowser": {
+    "app": "Brave.Brave",
+    "name": "Brave",
+    "selected": true,
+    "extensions": [
+      {
+        "id": "eimadpbcbfnmbkopoojfekhnkhdbieeh",
+        "name": "Dark Reader",
+        "selected": true,
+        "note": null
+      }
+    ]
+  },
+  "DraftItem": {
+    "id": "Git.Git",
+    "name": "Git",
+    "selected": true,
+    "note": null
+  },
   "ElevateRequest": {
     "passphrase": "Fixture passphrase"
   },
@@ -263,6 +282,57 @@
     "policies": {
       "passwordManager": "false"
     }
+  },
+  "ProfileDraft": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "vmName": "Dev Box",
+    "build": "10.0.26100.2033",
+    "edition": "Professional",
+    "baseline": {
+      "key": "10.0.26100/Professional",
+      "build": "10.0.26100.2033",
+      "edition": "Professional",
+      "recordedAt": "2026-10-03T12:00:00\u002B00:00",
+      "source": "unattendedInstall",
+      "vmName": "TESTWINDOWSINSTALL",
+      "approximate": false
+    },
+    "install": [
+      {
+        "id": "Microsoft.Edge",
+        "name": "Microsoft.Edge",
+        "selected": false,
+        "note": "Usually part of Windows or of another package."
+      }
+    ],
+    "removeAppx": [
+      {
+        "id": "Microsoft.BingNews",
+        "name": "Microsoft News",
+        "selected": true,
+        "note": null
+      }
+    ],
+    "tweaks": [
+      {
+        "id": "explorer.showFileExtensions",
+        "name": "Show file name extensions",
+        "selected": true,
+        "note": null
+      }
+    ],
+    "browsers": [
+      {
+        "app": "Brave.Brave",
+        "name": "Brave",
+        "selected": true,
+        "extensions": []
+      }
+    ],
+    "otherPrograms": [],
+    "warnings": [
+      "There is no clean Appx baseline for Windows 10.0.26100.2033 Professional."
+    ]
   },
   "ProfileItem": {
     "id": "Git.Git",

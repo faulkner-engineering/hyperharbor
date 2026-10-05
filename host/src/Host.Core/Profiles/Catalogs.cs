@@ -84,10 +84,18 @@ public sealed class BrowserPolicyEntry
     public Dictionary<string, string>? Values { get; set; }
 }
 
+/// <summary>An extension a browser installs by itself, by profile id.</summary>
+public sealed class BuiltInExtension
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+}
+
 public sealed class BrowserCatalog
 {
     public List<BrowserCatalogEntry> Browsers { get; set; } = [];
     public List<BrowserPolicyEntry> Policies { get; set; } = [];
+    public List<BuiltInExtension> BuiltInExtensions { get; set; } = [];
 }
 
 /// <summary>
@@ -107,6 +115,7 @@ public sealed class Catalogs
         var browsers = yaml.Deserialize<BrowserCatalog>(read("browsers.yaml"));
         Browsers = browsers.Browsers;
         Policies = browsers.Policies;
+        BuiltInExtensions = browsers.BuiltInExtensions.Select(extension => extension.Id).ToHashSet(StringComparer.Ordinal);
 
         AliasIndex = Packages.ToDictionary(entry => entry.Alias, StringComparer.OrdinalIgnoreCase);
         PackageIdIndex = Packages.GroupBy(entry => entry.Id, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
@@ -132,6 +141,9 @@ public sealed class Catalogs
     public IReadOnlyList<BrowserCatalogEntry> Browsers { get; }
 
     public IReadOnlyList<BrowserPolicyEntry> Policies { get; }
+
+    /// <summary>Profile ids of extensions browsers install by themselves.</summary>
+    public IReadOnlySet<string> BuiltInExtensions { get; }
 
     public IReadOnlyDictionary<string, PackageCatalogEntry> AliasIndex { get; }
 

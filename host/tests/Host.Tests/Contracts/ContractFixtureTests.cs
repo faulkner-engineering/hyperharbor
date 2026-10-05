@@ -141,6 +141,22 @@ public class ContractFixtureTests
         ["SetupProfile"] = SetupProfileSample,
         ["AppxBaselineInfo"] = AppxBaselineSample,
         ["PackageSearchResult"] = new PackageSearchResult("Git.Git", "Git", "2.55.0.5", "winget"),
+
+        // Null on purpose: note is required but nullable.
+        ["DraftItem"] = new DraftItem("Git.Git", "Git", true, null),
+        ["DraftBrowser"] = new DraftBrowser("Brave.Brave", "Brave", true, [new DraftItem("eimadpbcbfnmbkopoojfekhnkhdbieeh", "Dark Reader", true, null)]),
+        ["ProfileDraft"] = new ProfileDraft(
+            VmId,
+            "Dev Box",
+            "10.0.26100.2033",
+            "Professional",
+            AppxBaselineSample,
+            [new DraftItem("Microsoft.Edge", "Microsoft.Edge", false, "Usually part of Windows or of another package.")],
+            [new DraftItem("Microsoft.BingNews", "Microsoft News", true, null)],
+            [new DraftItem("explorer.showFileExtensions", "Show file name extensions", true, null)],
+            [new DraftBrowser("Brave.Brave", "Brave", true, [])],
+            [],
+            ["There is no clean Appx baseline for Windows 10.0.26100.2033 Professional."]),
         ["PackageCatalogItem"] = new PackageCatalogItem("vscode", "Microsoft.VisualStudioCode", "Visual Studio Code", "development", true),
 
         // Null on purpose: edgeId is required but nullable.

@@ -1425,6 +1425,43 @@ paths:
         "503":
           $ref: "#/components/responses/GuestUnavailable"
 
+  /vms/{vmId}/profile-capture:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [Profiles]
+      operationId: captureSetupProfile
+      summary: Capture a draft setup profile from a running Windows VM.
+      description: |
+        Reads the VM over PowerShell Direct as its stored administrator, without changing it: winget
+        export (what to install), the provisioned Appx packages against the clean baseline (what was
+        removed), the catalog tweaks that are set, and the store extensions in the calling User's
+        browser profiles (Chrome, Edge, Brave). Nothing is saved; the client builds a profile from the
+        items the user keeps. Takes up to a few minutes.
+      responses:
+        "200":
+          description: The draft.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileDraft"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            Not a running Windows guest (`code: vmNotRunning`), or no administrator credential
+            (`code: credentialRequired`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "502":
+          $ref: "#/components/responses/GuestOperationFailed"
+        "503":
+          $ref: "#/components/responses/GuestUnavailable"
+
   /vms/{vmId}/performance:
     parameters:
       - $ref: "#/components/parameters/VmId"
@@ -3418,6 +3455,84 @@ components:
           description: The store icon as a data URL; null for catalog entries and when the store has none.
         inCatalog:
           type: boolean
+
+    DraftItem:
+      type: object
+      required: [id, name, selected, note]
+      properties:
+        id:
+          type: string
+          description: What goes into the profile (a winget id, package name, tweak id, or extension id).
+        name:
+          type: string
+        selected:
+          type: boolean
+          description: Whether the review screen starts with it ticked.
+        note:
+          type: [string, "null"]
+
+    DraftBrowser:
+      type: object
+      required: [app, name, selected, extensions]
+      properties:
+        app:
+          type: string
+          description: The browser's winget id.
+        name:
+          type: string
+        selected:
+          type: boolean
+          description: The browser the review starts with (the one with the most extensions).
+        extensions:
+          type: array
+          items:
+            $ref: "#/components/schemas/DraftItem"
+
+    ProfileDraft:
+      type: object
+      required: [vmId, vmName, build, edition, baseline, install, removeAppx, tweaks, browsers, otherPrograms, warnings]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        vmName:
+          type: string
+        build:
+          type: string
+        edition:
+          type: string
+        baseline:
+          oneOf:
+            - $ref: "#/components/schemas/AppxBaselineInfo"
+            - type: "null"
+        install:
+          type: array
+          description: From winget export in the VM; packages that come with Windows start unticked.
+          items:
+            $ref: "#/components/schemas/DraftItem"
+        removeAppx:
+          type: array
+          description: Provisioned packages in the clean baseline that the VM no longer has.
+          items:
+            $ref: "#/components/schemas/DraftItem"
+        tweaks:
+          type: array
+          description: Catalog tweaks whose values are set in the VM.
+          items:
+            $ref: "#/components/schemas/DraftItem"
+        browsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/DraftBrowser"
+        otherPrograms:
+          type: array
+          description: Installed programs, listed only when winget could not run in the VM.
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
 
     UnattendProfile:
       type: object

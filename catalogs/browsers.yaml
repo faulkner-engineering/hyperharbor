@@ -3,6 +3,7 @@
 #   updateUrl (what ExtensionInstallForcelist uses for Chrome Web Store ids).
 # policies: key (friendly, used in profiles), name, policy (the browser's policy name), type (boolean |
 #   integer | string), appliesTo (browser ids), description, values (optional, for integers with fixed meanings).
+# builtInExtensions: extensions browsers install by themselves (profile ids); capture lists them unticked.
 browsers:
   - id: chrome
     name: Google Chrome
@@ -26,6 +27,13 @@ browsers:
     policyRoot: HKLM\SOFTWARE\Policies\BraveSoftware\Brave
     userData: BraveSoftware\Brave-Browser\User Data
     updateUrl: https://clients2.google.com/service/update2/crx
+builtInExtensions:
+  - id: ghbmnnjooekpmoecnnnilnnbdlolhkhi
+    name: Google Docs Offline
+  - id: edge:jmjflgjpcpepeafmmgdpfkogkghcpiha
+    name: Edge relevant text changes
+  - id: nmmhkkegccagdldgiimedpiccmgmieda
+    name: Chrome Web Store Payments
 policies:
   - key: homepage
     name: Home page
