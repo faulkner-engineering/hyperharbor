@@ -220,7 +220,11 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
 - Other LAN devices need an inbound firewall rule for TCP 48443. The packaged host's start script creates it;
   a dev run from source does not.
 - Tray (WinForms) windows must set AutoScaleDimensions = 96x96 with AutoScaleMode.Dpi and size from content;
-  the tray runs PerMonitorV2. Fixed pixel layouts were unreadable at higher display scaling.
+  the tray runs PerMonitorV2. Fixed pixel layouts were unreadable at higher display scaling. A window sized
+  only from content ran off the bottom of scaled screens, so HostForm puts its sections on tabs whose pages
+  scroll (AutoScroll, undocked tables) and FitToContent sizes it to the largest tab within the work area
+  (WindowFit, unit tested), again after OnDpiChanged: a window created at the primary monitor's DPI is
+  rescaled when it lands on another monitor. Add new HostForm rows to a tab, not to a taller window.
 - mDNS on the host goes through DnsServiceRegister (dnsapi.dll). Do not bind UDP 5353 in the host.
 - Hyper-V (verified on a live host):
   - GetSummaryInformation fills only the requested fields; always request Name (code 0).

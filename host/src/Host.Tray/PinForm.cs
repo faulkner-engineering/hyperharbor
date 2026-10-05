@@ -25,6 +25,8 @@ internal sealed class PinForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
+        // At high scaling the window can be taller than the space below the centered position.
+        Shown += (_, _) => this.KeepOnScreen();
         TopMost = true;
         ShowInTaskbar = true;
         Font = new Font("Segoe UI", 11f);

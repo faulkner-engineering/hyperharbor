@@ -16,6 +16,13 @@ note anything that needs action, such as updating the host, a new elevation requ
   finishes first. Hosts before API 1.11.0 install only from their tray, and the client shows no button for them.
 - API: `POST /host/update/install` (elevated), problem code `updateNotReady`.
 
+### Fixed
+- The HyperHarbor Host window (double-click the tray icon) no longer runs past the bottom of scaled or
+  high-resolution screens. Its sections are on tabs (Overview, Storage, Updates, Logs) that scroll, the window
+  can be resized, it opens within the screen's work area, and it refits when moved to a monitor with other
+  scaling. The Updates tab reads "Updates (ready)" while a version waits to install. The pairing PIN and
+  admin passphrase windows are also kept on screen.
+
 ## [0.1.2] - 2026-10-05 (API 1.10.0; installed on DESKTOP-65QRD0H for testing, not released)
 
 ### Added

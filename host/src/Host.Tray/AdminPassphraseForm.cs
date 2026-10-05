@@ -30,6 +30,8 @@ internal sealed class AdminPassphraseForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
+        // At high scaling the window can be taller than the space below the centered position.
+        Shown += (_, _) => this.KeepOnScreen();
         ShowInTaskbar = true;
         Font = new Font("Segoe UI", 10f);
         Padding = new Padding(20);
