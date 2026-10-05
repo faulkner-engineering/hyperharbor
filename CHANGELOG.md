@@ -8,7 +8,9 @@ is noted where it changes.
 Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
 note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
 
-## [Unreleased] (API 1.11.0)
+## [Unreleased]
+
+## [0.1.3] - 2026-10-05 (API 1.11.0)
 
 ### Added
 - "Install <version> now" in the client's Updates panel installs a downloaded and tested update right away,
@@ -23,7 +25,7 @@ note anything that needs action, such as updating the host, a new elevation requ
   scaling. The Updates tab reads "Updates (ready)" while a version waits to install. The pairing PIN and
   admin passphrase windows are also kept on screen.
 
-## [0.1.2] - 2026-10-05 (API 1.10.0; installed on DESKTOP-65QRD0H for testing, not released)
+## [0.1.2] - 2026-10-05 (API 1.10.0)
 
 ### Added
 - Remote Desktop to the host itself for maintenance, from the client's Host menu. mstsc asks for the host's
