@@ -20,9 +20,9 @@ public sealed class FileLoggerProvider : ILoggerProvider
 
     private readonly string _folder;
     private readonly TimeProvider _time;
-    private readonly Channel<string> _lines = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
+    /// <summary>Lines to write, and flush markers (a TaskCompletionSource) completed once every line before them is written.</summary>
+    private readonly Channel<object> _lines = Channel.CreateUnbounded<object>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Task _writer;
-    private readonly System.Collections.Concurrent.ConcurrentQueue<TaskCompletionSource> _flushRequests = new();
     private readonly IReadOnlyCollection<SecurityIdentifier> _readers;
 
     /// <param name="readers">Accounts that may also read new log files (see <see cref="ProtectedFile.OpenAppend"/>).</param>
@@ -58,9 +58,10 @@ public sealed class FileLoggerProvider : ILoggerProvider
     /// <summary>Waits until everything logged so far is on disk. For tests.</summary>
     internal async Task FlushAsync()
     {
-        var done = new TaskCompletionSource();
-        _flushRequests.Enqueue(done);
-        _lines.Writer.TryWrite(string.Empty);
+        // The marker travels with the lines, so it completes only after the lines logged before it. Completing
+        // asynchronously keeps the caller's continuation off the writer task.
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _lines.Writer.TryWrite(done);
         await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
@@ -77,13 +78,16 @@ public sealed class FileLoggerProvider : ILoggerProvider
         {
             while (await _lines.Reader.WaitToReadAsync().ConfigureAwait(false))
             {
-                while (_lines.Reader.TryRead(out var line))
+                while (_lines.Reader.TryRead(out var item))
                 {
-                    if (line.Length == 0)
+                    if (item is TaskCompletionSource flushed)
                     {
+                        stream?.Flush();
+                        flushed.TrySetResult();
                         continue;
                     }
 
+                    var line = (string)item;
                     try
                     {
                         var path = CurrentPath;
@@ -106,10 +110,6 @@ public sealed class FileLoggerProvider : ILoggerProvider
                 }
 
                 stream?.Flush();
-                while (_flushRequests.TryDequeue(out var request))
-                {
-                    request.TrySetResult();
-                }
             }
         }
         finally
