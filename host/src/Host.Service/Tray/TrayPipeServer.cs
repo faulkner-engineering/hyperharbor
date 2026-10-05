@@ -29,6 +29,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
     private readonly string _pipeName;
     private readonly SecurityIdentifier? _trayUser;
     private readonly ConcurrentDictionary<Guid, Connection> _connections = new();
+    private readonly ConcurrentDictionary<Task, byte> _handlers = new();
 
     /// <summary>Longest message accepted from a tray, in characters. Longer input closes the connection.</summary>
     public const int MaxMessageLength = 64 * 1024;
@@ -97,7 +98,26 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 break;
             }
 
-            _ = HandleConnectionAsync(pipe, stoppingToken);
+            var handler = HandleConnectionAsync(pipe, stoppingToken);
+            _handlers[handler] = 0;
+            _ = handler.ContinueWith(finished => _handlers.TryRemove(finished, out _), TaskScheduler.Default);
+        }
+    }
+
+    /// <summary>
+    /// Stops accepting trays, then waits for each connection to finish the message it is handling (an
+    /// unpair, for example, writes its audit entry after the device list goes out).
+    /// </summary>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken);
+        try
+        {
+            await Task.WhenAll(_handlers.Keys).WaitAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
+        {
+            // Shutting down regardless: a connection that does not finish in time is abandoned.
         }
     }
 
