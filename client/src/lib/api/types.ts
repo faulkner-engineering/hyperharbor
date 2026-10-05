@@ -372,6 +372,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/setup-profiles/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the tweaks, browsers, and browser policies the profile editor offers. */
+        get: operations["getSetupProfileCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/setup-profiles/{profileId}": {
         parameters: {
             query?: never;
@@ -2056,6 +2073,37 @@ export interface components {
             otherPrograms: string[];
             warnings: string[];
         };
+        TweakCatalogItem: {
+            id: string;
+            name: string;
+            category: string;
+            note: string | null;
+        };
+        BrowserCatalogItem: {
+            /** @description chrome, edge, or brave. */
+            id: string;
+            name: string;
+            wingetId: string;
+            alias: string;
+        };
+        BrowserPolicyItem: {
+            /** @description The friendly key profiles use. */
+            key: string;
+            name: string;
+            /** @enum {string} */
+            type: "boolean" | "integer" | "string";
+            appliesTo: string[];
+            description: string | null;
+            /** @description For integers with fixed meanings, value to label. */
+            values: {
+                [key: string]: string;
+            } | null;
+        };
+        SetupProfileCatalog: {
+            tweaks: components["schemas"]["TweakCatalogItem"][];
+            browsers: components["schemas"]["BrowserCatalogItem"][];
+            policies: components["schemas"]["BrowserPolicyItem"][];
+        };
         /** @description Settings for installing an OS without anyone at the console. Profiles never hold passwords. */
         UnattendProfile: {
             /** @description A slug for built-in profiles, a GUID for the User's own. */
@@ -2906,6 +2954,27 @@ export interface operations {
                 };
                 content: {
                     "application/schema+json": Record<string, never>;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getSetupProfileCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The catalog. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupProfileCatalog"];
                 };
             };
             401: components["responses"]["Unauthorized"];

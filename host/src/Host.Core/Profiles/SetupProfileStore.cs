@@ -21,6 +21,9 @@ public sealed partial class SetupProfileStore
     public const int MaxProfiles = 100;
     public const int MaxFileBytes = 256 * 1024;
 
+    /// <summary>Route segments under /setup-profiles that a profile id must not take.</summary>
+    private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal) { "catalog", "import", "schema" };
+
     [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,47}$")]
     private static partial Regex Id();
 
@@ -205,7 +208,7 @@ public sealed partial class SetupProfileStore
 
         slug = slug.Length > 40 ? slug[..40].TrimEnd('-') : slug;
         var id = slug;
-        for (var n = 2; File.Exists(Path.Combine(folder, id + ".yaml")); n++)
+        for (var n = 2; Reserved.Contains(id) || File.Exists(Path.Combine(folder, id + ".yaml")); n++)
         {
             id = $"{slug}-{n}";
         }

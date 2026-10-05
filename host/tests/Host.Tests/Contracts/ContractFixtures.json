@@ -17,6 +17,24 @@
     "note": null,
     "inBaseline": null
   },
+  "BrowserCatalogItem": {
+    "id": "brave",
+    "name": "Brave",
+    "wingetId": "Brave.Brave",
+    "alias": "brave"
+  },
+  "BrowserPolicyItem": {
+    "key": "passwordManager",
+    "name": "Offer to save passwords",
+    "type": "boolean",
+    "appliesTo": [
+      "chrome",
+      "edge",
+      "brave"
+    ],
+    "description": null,
+    "values": null
+  },
   "ConsoleSession": {
     "ticket": "fixture-ticket",
     "userName": "HOSTPC\\hhc-owner",
@@ -445,6 +463,38 @@
       }
     }
   },
+  "SetupProfileCatalog": {
+    "tweaks": [
+      {
+        "id": "taskbar.disableWidgets",
+        "name": "Turn off Widgets",
+        "category": "taskbar",
+        "note": "Uses the policy."
+      }
+    ],
+    "browsers": [
+      {
+        "id": "edge",
+        "name": "Microsoft Edge",
+        "wingetId": "Microsoft.Edge",
+        "alias": "edge"
+      }
+    ],
+    "policies": [
+      {
+        "key": "restoreOnStartup",
+        "name": "On startup",
+        "type": "integer",
+        "appliesTo": [
+          "chrome"
+        ],
+        "description": "What opens at startup.",
+        "values": {
+          "5": "Open the New Tab page"
+        }
+      }
+    ]
+  },
   "SetupProfileSummary": {
     "id": "dev-workstation",
     "name": "Dev workstation",
@@ -519,6 +569,12 @@
         }
       }
     }
+  },
+  "TweakCatalogItem": {
+    "id": "explorer.showFileExtensions",
+    "name": "Show file name extensions",
+    "category": "explorer",
+    "note": null
   },
   "UnattendProfile": {
     "id": "windows-burner",

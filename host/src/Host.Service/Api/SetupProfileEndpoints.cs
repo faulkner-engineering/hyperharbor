@@ -29,6 +29,7 @@ public static class SetupProfileEndpoints
             .Audited()
             .RequireElevation();
         profiles.MapGet("/schema", Schema).WithName("getSetupProfileSchema");
+        profiles.MapGet("/catalog", Catalog).WithName("getSetupProfileCatalog");
         profiles.MapGet("/{profileId}", Get).WithName("getSetupProfile");
         profiles.MapGet("/{profileId}/yaml", Export).WithName("exportSetupProfile");
         profiles.MapPut("/{profileId}", Update).WithName("updateSetupProfile")
@@ -66,6 +67,11 @@ public static class SetupProfileEndpoints
 
     private static ContentHttpResult Export(string profileId, SetupProfileStore store, HttpContext context) =>
         TypedResults.Text(store.GetYaml(context.User.UserId(), profileId), YamlMediaType, Encoding.UTF8);
+
+    private static Ok<SetupProfileCatalog> Catalog(Catalogs catalogs) => TypedResults.Ok(new SetupProfileCatalog(
+        catalogs.Tweaks.Select(tweak => new TweakCatalogItem(tweak.Id, tweak.Name, tweak.Category, tweak.Note)).ToList(),
+        catalogs.Browsers.Select(browser => new BrowserCatalogItem(browser.Id, browser.Name, browser.WingetId, browser.Alias)).ToList(),
+        catalogs.Policies.Select(policy => new BrowserPolicyItem(policy.Key, policy.Name, policy.Type, policy.AppliesTo, policy.Description, policy.Values)).ToList()));
 
     private static ContentHttpResult Schema() =>
         TypedResults.Text(Catalogs.ProfileSchema, "application/schema+json", Encoding.UTF8);

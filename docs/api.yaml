@@ -604,6 +604,21 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /setup-profiles/catalog:
+    get:
+      tags: [Profiles]
+      operationId: getSetupProfileCatalog
+      summary: Get the tweaks, browsers, and browser policies the profile editor offers.
+      responses:
+        "200":
+          description: The catalog.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupProfileCatalog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /setup-profiles/{profileId}:
     parameters:
       - $ref: "#/components/parameters/SetupProfileId"
@@ -3533,6 +3548,74 @@ components:
           type: array
           items:
             type: string
+
+    TweakCatalogItem:
+      type: object
+      required: [id, name, category, note]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        note:
+          type: [string, "null"]
+
+    BrowserCatalogItem:
+      type: object
+      required: [id, name, wingetId, alias]
+      properties:
+        id:
+          type: string
+          description: chrome, edge, or brave.
+        name:
+          type: string
+        wingetId:
+          type: string
+        alias:
+          type: string
+
+    BrowserPolicyItem:
+      type: object
+      required: [key, name, type, appliesTo, description, values]
+      properties:
+        key:
+          type: string
+          description: The friendly key profiles use.
+        name:
+          type: string
+        type:
+          type: string
+          enum: [boolean, integer, string]
+        appliesTo:
+          type: array
+          items:
+            type: string
+        description:
+          type: [string, "null"]
+        values:
+          type: [object, "null"]
+          description: For integers with fixed meanings, value to label.
+          additionalProperties:
+            type: string
+
+    SetupProfileCatalog:
+      type: object
+      required: [tweaks, browsers, policies]
+      properties:
+        tweaks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TweakCatalogItem"
+        browsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrowserCatalogItem"
+        policies:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrowserPolicyItem"
 
     UnattendProfile:
       type: object

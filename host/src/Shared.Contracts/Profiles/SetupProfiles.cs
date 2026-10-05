@@ -114,3 +114,31 @@ public sealed record ResolvedExtension(
     string Name,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? IconDataUrl,
     bool InCatalog);
+
+/// <summary>A curated tweak, for the profile editor. Schema: TweakCatalogItem.</summary>
+public sealed record TweakCatalogItem(
+    string Id,
+    string Name,
+    string Category,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Note);
+
+/// <summary>A browser a profile can configure. Schema: BrowserCatalogItem.</summary>
+public sealed record BrowserCatalogItem(string Id, string Name, string WingetId, string Alias);
+
+/// <summary>A browser policy a profile can set by its friendly key. Schema: BrowserPolicyItem.</summary>
+/// <param name="Type">boolean, integer, or string.</param>
+/// <param name="AppliesTo">Browser ids (chrome, edge, brave).</param>
+/// <param name="Values">For integers with fixed meanings: value to label.</param>
+public sealed record BrowserPolicyItem(
+    string Key,
+    string Name,
+    string Type,
+    IReadOnlyList<string> AppliesTo,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Description,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] IReadOnlyDictionary<string, string>? Values);
+
+/// <summary>What the profile editor offers besides packages and extensions. Schema: SetupProfileCatalog.</summary>
+public sealed record SetupProfileCatalog(
+    IReadOnlyList<TweakCatalogItem> Tweaks,
+    IReadOnlyList<BrowserCatalogItem> Browsers,
+    IReadOnlyList<BrowserPolicyItem> Policies);
