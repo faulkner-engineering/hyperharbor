@@ -115,6 +115,35 @@ public sealed class InstallLayoutTests : IDisposable
     }
 
     [Fact]
+    public async Task Stage_WaitsForALockedExecutableToBeReleased()
+    {
+        var version = SemanticVersion.Parse("1.0.0");
+        var staged = _layout.Stage(WriteExecutable("old"), version);
+        var locked = new FileStream(staged, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var release = Task.Delay(TimeSpan.FromSeconds(1)).ContinueWith(_ => locked.Dispose(), TaskScheduler.Default);
+
+        _layout.Stage(WriteExecutable("new"), version, unlockTimeout: TimeSpan.FromSeconds(10));
+
+        await release;
+        Assert.Equal("new", File.ReadAllText(staged));
+    }
+
+    [Fact]
+    public void Stage_GivesUpWhenTheExecutableStaysLocked()
+    {
+        var version = SemanticVersion.Parse("1.0.0");
+        var staged = _layout.Stage(WriteExecutable("old"), version);
+
+        using (new FileStream(staged, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var failure = Record.Exception(() => _layout.Stage(WriteExecutable("new"), version, unlockTimeout: TimeSpan.FromSeconds(1)));
+            Assert.True(failure is IOException or UnauthorizedAccessException, $"Unexpected failure: {failure}");
+        }
+
+        Assert.Equal("old", File.ReadAllText(staged));
+    }
+
+    [Fact]
     public void Activate_RefusesAVersionThatIsNotStaged()
     {
         Assert.Throws<FileNotFoundException>(() => _layout.Activate(SemanticVersion.Parse("9.9.9")));

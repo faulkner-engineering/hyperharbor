@@ -6,6 +6,7 @@ using System.ServiceProcess;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Service.VmConsole;
 using HyperHarbor.Shared.Contracts.Ipc;
 using Microsoft.Win32;
@@ -26,18 +27,41 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ListenTimeout = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// How long to wait for a stopped host's executable to become replaceable. The service control manager
+    /// reports Stopped a few seconds before the process has exited and released its image.
+    /// </summary>
+    private static readonly TimeSpan UnlockTimeout = TimeSpan.FromSeconds(30);
+
     private static string DataDirectory => HostIdentityStore.DefaultDataDirectory;
 
     /// <param name="parentProcessId">The unelevated installer waiting for this one; it is not stopped.</param>
     public async Task InstallAsync(SemanticVersion version, int port, SecurityIdentifier trayUser, int? parentProcessId)
     {
         progress.Report("Stopping the running host");
-        StopService();
+        var wasRunning = StopService();
         StopHostProcesses(parentProcessId);
+        try
+        {
+            await InstallStoppedAsync(version, port, trayUser);
+        }
+        catch
+        {
+            // A failed install must not leave the host down: the service runs whatever current points at.
+            if (wasRunning && TryStartService())
+            {
+                progress.Report("The installation failed, so the host that was running was started again");
+            }
 
+            throw;
+        }
+    }
+
+    private async Task InstallStoppedAsync(SemanticVersion version, int port, SecurityIdentifier trayUser)
+    {
         var previous = layout.CurrentVersion;
         progress.Report($"Copying HyperHarbor {version} to {layout.VersionFolder(version)}");
-        layout.Stage(Environment.ProcessPath!, version);
+        layout.Stage(Environment.ProcessPath!, version, UnlockTimeout);
         layout.Activate(version);
         foreach (var pruned in layout.PruneExcept(version, previous))
         {
@@ -67,7 +91,8 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
             FirewallRule.Add(port);
         }
 
-        if (!File.Exists(Path.Combine(DataDirectory, ConsoleSetupHelper.AccountsFileName)))
+        // Read the store rather than test for the file: older versions left an empty file after removing the accounts.
+        if (new ConsoleAccountStore(DataDirectory).List().Count == 0)
         {
             progress.Report("Creating the console account");
             var (succeeded, message) = await RunConsoleSetupAsync(ConsoleSetupHelper.SetupSwitch);
@@ -145,17 +170,18 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
         }
     }
 
-    private static void StopService()
+    /// <returns>True when the service was running (or stopping) and is now stopped.</returns>
+    private static bool StopService()
     {
         if (!ServiceRegistration.Exists(HostService.Name))
         {
-            return;
+            return false;
         }
 
         using var service = new ServiceController(HostService.Name);
         if (service.Status is ServiceControllerStatus.Stopped)
         {
-            return;
+            return false;
         }
 
         if (service.Status is not ServiceControllerStatus.StopPending)
@@ -164,6 +190,22 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
         }
 
         service.WaitForStatus(ServiceControllerStatus.Stopped, StopTimeout);
+        return true;
+    }
+
+    private static bool TryStartService()
+    {
+        try
+        {
+            using var service = new ServiceController(HostService.Name);
+            service.Start();
+            service.WaitForStatus(ServiceControllerStatus.Running, StartTimeout);
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ServiceProcess.TimeoutException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Stops trays and portable hosts, which lock the executables and hold the port and the pipe.</summary>

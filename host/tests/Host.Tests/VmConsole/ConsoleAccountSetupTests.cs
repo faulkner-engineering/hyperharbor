@@ -63,6 +63,9 @@ public sealed class ConsoleAccountSetupTests : IDisposable
         Assert.Equal([ConsoleService.Trustee("hhc-owner")], _access.Revokes);
         Assert.Equal(["hhc-owner"], _accounts.Deleted);
         Assert.Empty(_store.List());
+
+        // Its presence means "set up" to the tray and the installer, so it must go with the last account.
+        Assert.False(File.Exists(Path.Combine(_directory, ConsoleAccountStore.FileName)));
     }
 
     [Theory]

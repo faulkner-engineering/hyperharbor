@@ -56,8 +56,11 @@ public sealed class InstallLayout
     /// Copies <paramref name="sourceExecutable"/> into the version's folder. An identical file already there is
     /// kept, so installing the running version again does not touch the locked executable.
     /// </summary>
+    /// <param name="unlockTimeout">
+    /// How long to keep trying to replace an executable that is still locked by a process that is exiting.
+    /// </param>
     /// <returns>The executable's path in the version folder.</returns>
-    public string Stage(string sourceExecutable, SemanticVersion version)
+    public string Stage(string sourceExecutable, SemanticVersion version, TimeSpan unlockTimeout = default)
     {
         var folder = VersionFolder(version);
         Directory.CreateDirectory(folder);
@@ -70,8 +73,19 @@ public sealed class InstallLayout
         // Copied beside the target and then moved, so a failed copy never leaves a truncated executable.
         var partial = target + ".partial";
         File.Copy(sourceExecutable, partial, overwrite: true);
-        File.Move(partial, target, overwrite: true);
-        return target;
+        var deadline = DateTime.UtcNow + unlockTimeout;
+        while (true)
+        {
+            try
+            {
+                File.Move(partial, target, overwrite: true);
+                return target;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(TimeSpan.FromMilliseconds(500));
+            }
+        }
     }
 
     /// <summary>Points current at the version's folder, which must hold the executable.</summary>

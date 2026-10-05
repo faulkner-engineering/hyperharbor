@@ -57,6 +57,14 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IWakeFixApprover>(Tray);
                 services.AddSingleton<IWakeEnvironmentReader>(Wake);
                 services.AddSingleton<ISleepController>(Sleep);
+
+                // The real coordinator applies fixes itself in an elevated process; tests run elevated or not,
+                // so they pin the unelevated path, which asks the tray.
+                services.AddSingleton(services => new WakeFixCoordinator(
+                    Wake,
+                    Tray,
+                    services.GetRequiredService<ILogger<WakeFixCoordinator>>(),
+                    isElevated: false));
                 services.AddSingleton<IGuestAccountManager>(Guest);
                 services.AddSingleton<IHyperVStorage>(Storage);
                 services.AddSingleton<IDiskFiles>(DiskFiles);

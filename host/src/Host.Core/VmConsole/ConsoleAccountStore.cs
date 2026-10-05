@@ -79,7 +79,17 @@ public sealed class ConsoleAccountStore
                 return false;
             }
 
-            Write(credentials);
+            // The file's presence means "console access is set up" to the tray, the installer, and the start
+            // script, so removing the last account removes the file.
+            if (credentials.Count == 0)
+            {
+                File.Delete(_path);
+            }
+            else
+            {
+                Write(credentials);
+            }
+
             return true;
         }
     }
