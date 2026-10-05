@@ -5,7 +5,8 @@
 .DESCRIPTION
     1. Runs the host and client test suites (skip with -SkipTests).
     2. Publishes the host (service, tray, and installer) as one self-contained executable,
-       dist\HyperHarbor-Host-<version>.exe. dist\host holds the same executable with the portable
+       dist\HyperHarbor-Host-<version>.exe, and its update manifest dist\latest.json (a prerelease
+       version is on the beta channel). dist\host holds the same executable with the portable
        start and stop scripts from packaging/host, for development runs.
     3. Builds the Tauri client and copies its NSIS installer and portable executable.
 
@@ -131,6 +132,10 @@ if (-not $ClientOnly) {
     Copy-Item (Join-Path $staging 'HyperHarbor.Host.exe') $hostExe -Force
     Remove-Item (Join-Path $dist "HyperHarbor-Host-$version-portable.zip") -ErrorAction SilentlyContinue
     Write-Host "Host: $hostExe (double-click to install, or HyperHarbor.Host.exe --help)" -ForegroundColor Green
+
+    # The update manifest for this executable, written (and checked) by the code that reads it.
+    $manifest = Join-Path $dist 'latest.json'
+    Invoke-Step 'Write update manifest' { & (Join-Path $staging 'HyperHarbor.Host.exe') write-update-manifest $manifest | Out-String | Write-Host }
 }
 
 if (-not $HostOnly) {

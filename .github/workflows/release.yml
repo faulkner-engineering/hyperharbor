@@ -1,0 +1,83 @@
+name: Release
+
+# Pushing a tag vX.Y.Z (or vX.Y.Z-beta.N) builds, tests, and packages a release and attaches it to a DRAFT
+# GitHub release. Nothing reaches hosts until someone publishes the draft:
+#   - stable: hosts read releases/latest/download/latest.json, which follows the newest published,
+#     non-prerelease release.
+#   - beta: publishing a prerelease copies its latest.json to the fixed "channel-beta" release, which beta
+#     hosts read (the beta-channel job below).
+
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  draft:
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/src-tauri
+
+      - name: The tag matches the host and client versions
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $hostVersion = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $clientVersion = (Get-Content client/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne $hostVersion -or $tag -ne $clientVersion) {
+            throw "Tag $tag does not match the host version $hostVersion and the client version $clientVersion."
+          }
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci --no-audit --no-fund
+
+      - name: Test and package (full build)
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      - name: Create the draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $assets = @("dist/HyperHarbor-Host-$version.exe", 'dist/latest.json') + (Get-ChildItem dist/*-setup.exe).FullName
+          $arguments = @('release', 'create', '${{ github.ref_name }}') + $assets + @('--draft', '--title', "HyperHarbor $version", '--generate-notes')
+          if ($version.Contains('-')) { $arguments += '--prerelease' }
+          gh @arguments
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)." }
+
+  beta-channel:
+    if: github.event_name == 'release' && github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Point the beta channel at this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release download "$TAG" --repo "$REPO" --pattern latest.json --dir manifest
+          if ! gh release view channel-beta --repo "$REPO" > /dev/null 2>&1; then
+            gh release create channel-beta --repo "$REPO" --prerelease --title "Beta channel" \
+              --notes "Holds the beta channel's update manifest (latest.json). Do not delete."
+          fi
+          gh release upload channel-beta manifest/latest.json --repo "$REPO" --clobber

@@ -28,6 +28,9 @@ internal enum HostMode
 
     /// <summary>update-run: the update helper, started as SYSTEM by the "HyperHarbor\Update" task.</summary>
     UpdateRun,
+
+    /// <summary>write-update-manifest: latest.json for a release of this executable (release tooling).</summary>
+    WriteUpdateManifest,
     Help,
 }
 
@@ -40,6 +43,7 @@ internal static class HostCommandLine
     public const string UninstallVerb = "uninstall";
     public const string SaveWakeDiagnosticsVerb = "save-wake-diagnostics";
     public const string UpdateRunVerb = "update-run";
+    public const string WriteUpdateManifestVerb = "write-update-manifest";
 
     public const string Usage =
         """
@@ -79,6 +83,7 @@ internal static class HostCommandLine
             UninstallVerb => (HostMode.Uninstall, rest),
             SaveWakeDiagnosticsVerb => (HostMode.SaveWakeDiagnostics, rest),
             UpdateRunVerb => (HostMode.UpdateRun, rest),
+            WriteUpdateManifestVerb => (HostMode.WriteUpdateManifest, rest),
             "help" or "--help" or "-h" or "/?" => (HostMode.Help, rest),
             WakeFixHelper.Switch when args.Length is 2 or 3 => (HostMode.ApplyWakeFixes, args),
             SelfTestGate.Switch when args.Length == 3 => (HostMode.SelfTest, args),
@@ -90,5 +95,5 @@ internal static class HostCommandLine
 
     /// <summary>Modes that print to the terminal they were started from.</summary>
     public static bool WritesToConsole(HostMode mode) =>
-        mode is HostMode.Install or HostMode.Uninstall or HostMode.ListVms or HostMode.SaveWakeDiagnostics or HostMode.Help;
+        mode is HostMode.Install or HostMode.Uninstall or HostMode.ListVms or HostMode.SaveWakeDiagnostics or HostMode.Help or HostMode.WriteUpdateManifest;
 }

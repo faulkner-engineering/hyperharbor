@@ -90,5 +90,36 @@ public sealed class UpdateManifestTests
         Assert.Contains("Install 1.1.0 first", decision.Detail, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Create_WritesAManifestThatEveryHostAccepts()
+    {
+        var executable = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllBytes(executable, Releases.Package);
+
+            var created = UpdateManifest.Create(
+                executable, SemanticVersion.Parse("1.2.0"), "stable", "https://github.com/faulkner-engineering/hyperharbor/releases/",
+                "1.0.0", 2, "1.9.0", new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero));
+            var parsed = UpdateManifest.Parse(created.ToJson(), Options);
+            var properties = System.Text.Json.Nodes.JsonNode.Parse(created.ToJson())!.AsObject().Select(property => property.Key).Order();
+            Assert.Equal(
+                ["apiVersion", "channel", "dataFormat", "minimumUpdateFrom", "notesUrl", "packages", "publishedAt", "schemaVersion", "verification", "version"],
+                properties);
+
+            Assert.Equal("1.2.0", parsed.Version);
+            Assert.Equal("1.0.0", parsed.MinimumUpdateFrom);
+            Assert.Equal(2, parsed.DataFormat);
+            Assert.Equal("https://github.com/faulkner-engineering/hyperharbor/releases/tag/v1.2.0", parsed.NotesUrl);
+            Assert.Equal(Releases.PackageUrl, parsed.HostPackage.Url);
+            Assert.Equal(Releases.Package.Length, parsed.HostPackage.Size);
+            Assert.Equal(Releases.Sha256(Releases.Package), parsed.HostPackage.Sha256);
+        }
+        finally
+        {
+            File.Delete(executable);
+        }
+    }
+
     private static UpdateManifest Parse(string json) => UpdateManifest.Parse(Encoding.UTF8.GetBytes(json), Options);
 }

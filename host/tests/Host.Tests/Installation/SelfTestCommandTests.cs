@@ -48,6 +48,36 @@ public sealed class SelfTestCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteUpdateManifest_DescribesThisExecutable()
+    {
+        var output = Path.Combine(_data, "latest.json");
+        var start = new System.Diagnostics.ProcessStartInfo(Executable)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        foreach (var argument in new[] { "write-update-manifest", output, "--minimum-update-from", "0.0.1" })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var process = System.Diagnostics.Process.Start(start)!;
+        var error = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        Assert.True(process.ExitCode == 0, error);
+        var manifest = Core.Updates.UpdateManifest.Parse(File.ReadAllBytes(output), new Core.Updates.UpdateOptions());
+        Assert.Equal(BuiltVersion, manifest.ParsedVersion);
+        Assert.Equal(new FileInfo(Executable).Length, manifest.HostPackage.Size);
+        Assert.Equal("0.0.1", manifest.MinimumUpdateFrom);
+        Assert.Equal(DataFormat.Current, manifest.DataFormat);
+        using var file = File.OpenRead(Executable);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(file)).ToLowerInvariant(), manifest.HostPackage.Sha256);
+    }
+
+    [Fact]
     public async Task AnUnreadableStore_FailsTheStoresCheck()
     {
         File.WriteAllText(Path.Combine(_data, "paired-devices.json"), "{ this is not json");

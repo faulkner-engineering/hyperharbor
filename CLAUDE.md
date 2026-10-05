@@ -56,8 +56,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    broken 0.1.2 rolled back to 0.1.1 in 10 s), 11.5 idle gate and maintenance window (done 2026-10-04; unit
    and API tests only until a real release exists), 11.6 API, tray, and client (done 2026-10-04: GET
    /host/update, POST /host/update/check, PUT /host/update/settings elevated, API 1.9.0; tray Updates and
-   Update channel rows with Check now and Install now; client Updates panel), 11.7 release packaging,
-   11.8 live test.
+   Update channel rows with Check now and Install now; client Updates panel), 11.7 release packaging
+   (done 2026-10-04; the workflow has not run on GitHub yet), 11.8 live test against a published release.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -170,6 +170,13 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - dist\host\Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
   Hyper-V Administrators membership), then starts "HyperHarbor.Host.exe run" and "--tray". Builds are unsigned.
 - Verified on 2026-10-02: packaged host plus client paired and listed VMs across machines.
+- package.ps1 also writes dist\latest.json with "HyperHarbor.Host.exe write-update-manifest" (the code that
+  reads manifests writes it; a prerelease version goes to the beta channel).
+- Releases (.github/workflows/release.yml): push tag vX.Y.Z (must equal both versions); the workflow tests,
+  runs package.ps1, and creates a DRAFT release with the host exe, latest.json, and the client installer.
+  Publishing the draft is the owner's step: stable hosts read releases/latest/download/latest.json (newest
+  published non-prerelease); publishing a prerelease copies its latest.json to the fixed "channel-beta"
+  release that beta hosts read.
 
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),

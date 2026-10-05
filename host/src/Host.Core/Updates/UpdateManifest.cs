@@ -47,9 +47,48 @@ public sealed record UpdateManifest(
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
+    [JsonIgnore]
     public SemanticVersion ParsedVersion => SemanticVersion.Parse(Version);
 
+    /// <summary>
+    /// The manifest for a release of <paramref name="executable"/> (HyperHarbor.Host.exe): its size and SHA-256,
+    /// and its URL as a GitHub release asset under <paramref name="releaseBaseUrl"/> (…/releases/download/v&lt;version&gt;).
+    /// </summary>
+    public static UpdateManifest Create(
+        string executable,
+        SemanticVersion version,
+        string channel,
+        string releaseBaseUrl,
+        string? minimumUpdateFrom,
+        int dataFormat,
+        string apiVersion,
+        DateTimeOffset publishedAt)
+    {
+        using var file = File.OpenRead(executable);
+        var sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(file)).ToLowerInvariant();
+        var baseUrl = releaseBaseUrl.TrimEnd('/');
+        var tag = $"v{version}";
+        return new UpdateManifest(
+            SupportedSchemaVersion,
+            channel,
+            version.ToString(),
+            publishedAt,
+            minimumUpdateFrom,
+            dataFormat,
+            apiVersion,
+            $"{baseUrl}/tag/{tag}",
+            [new UpdatePackage(HostComponent, HostArch, $"{baseUrl}/download/{tag}/HyperHarbor-Host-{version}.exe", file.Length, sha256)],
+            JsonDocument.Parse("{}").RootElement);
+    }
+
+    public byte[] ToJson() => JsonSerializer.SerializeToUtf8Bytes(this, new JsonSerializerOptions(JsonOptions)
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    });
+
     /// <summary>The host package (component "host", arch "x64").</summary>
+    [JsonIgnore]
     public UpdatePackage HostPackage => Packages.Single(package =>
         string.Equals(package.Component, HostComponent, StringComparison.OrdinalIgnoreCase) &&
         string.Equals(package.Arch, HostArch, StringComparison.OrdinalIgnoreCase));

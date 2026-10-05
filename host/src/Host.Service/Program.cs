@@ -69,6 +69,8 @@ if (!isWindowsService)
         case HostMode.ConsoleSetup:
             // Elevated helper that creates or removes the host console accounts (tray or the installer).
             return await ConsoleSetupCommand.RunAsync(args);
+        case HostMode.WriteUpdateManifest:
+            return WriteManifestCommand.Run(args);
         case HostMode.UpdateRun:
             return await UpdateRunCommand.RunAsync();
         case HostMode.SelfTest:
