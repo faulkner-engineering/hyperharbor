@@ -1218,6 +1218,87 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
 
+  /vms/{vmId}/appx:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [Profiles]
+      operationId: listVmAppx
+      summary: List a VM's provisioned Appx packages, rated and compared with the clean baseline.
+      description: |
+        Reads a running Windows VM over PowerShell Direct as its stored administrator. Each package
+        carries a removal rating from HyperHarbor's Appx catalog (`safe` ones make up the debloat
+        preset). `baseline` is the clean list for the VM's build and edition (`approximate` when only
+        another edition of the same build has one), recorded when an unattended install finished or on
+        request; null when there is none.
+      parameters:
+        - name: source
+          in: query
+          required: false
+          description: Where to read from. Only `vm` (the default) today.
+          schema:
+            type: string
+            enum: [vm]
+      responses:
+        "200":
+          description: The packages.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmAppxInventory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            The VM is not a running Windows guest (`code: vmNotRunning`), or HyperHarbor has no
+            administrator credential for it (`code: credentialRequired`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "502":
+          $ref: "#/components/responses/GuestOperationFailed"
+        "503":
+          $ref: "#/components/responses/GuestUnavailable"
+
+  /vms/{vmId}/appx-baseline:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [Profiles]
+      operationId: recordAppxBaseline
+      summary: Record this VM's provisioned packages as the clean baseline for its build and edition.
+      description: |
+        Use it on a VM installed by hand that nothing has been removed from yet. It replaces an existing
+        baseline for the same build and edition.
+      responses:
+        "200":
+          description: The recorded baseline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppxBaselineInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            Not a running Windows guest (`code: vmNotRunning`), or no administrator credential
+            (`code: credentialRequired`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "502":
+          $ref: "#/components/responses/GuestOperationFailed"
+        "503":
+          $ref: "#/components/responses/GuestUnavailable"
+
   /vms/{vmId}/performance:
     parameters:
       - $ref: "#/components/parameters/VmId"
@@ -3058,6 +3139,87 @@ components:
           format: date-time
         profile:
           $ref: "#/components/schemas/SetupProfile"
+
+    AppxRating:
+      type: string
+      enum: [unrated, safe, caution, keep]
+      description: |
+        From HyperHarbor's Appx catalog. `safe`: nothing depends on it (the debloat preset).
+        `caution`: removable, but often expected. `keep`: frameworks, the Store, and security pieces.
+
+    AppxBaselineSource:
+      type: string
+      enum: [unattendedInstall, manual]
+
+    AppxBaselineInfo:
+      type: object
+      required: [key, build, edition, recordedAt, source, vmName, approximate]
+      properties:
+        key:
+          type: string
+          description: Major build and edition, for example 10.0.26100/Professional.
+        build:
+          type: string
+        edition:
+          type: string
+        recordedAt:
+          type: string
+          format: date-time
+        source:
+          $ref: "#/components/schemas/AppxBaselineSource"
+        vmName:
+          type: [string, "null"]
+        approximate:
+          type: boolean
+          description: The baseline is for the same build but another edition.
+
+    AppxPackage:
+      type: object
+      required: [name, friendlyName, version, publisher, rating, note, inBaseline]
+      properties:
+        name:
+          type: string
+          description: The package name without the version; what profiles list under remove.appx.
+        friendlyName:
+          type: string
+        version:
+          type: string
+        publisher:
+          type: string
+        rating:
+          $ref: "#/components/schemas/AppxRating"
+        note:
+          type: [string, "null"]
+        inBaseline:
+          type: [boolean, "null"]
+          description: Whether the clean baseline has it; null without a baseline.
+
+    VmAppxInventory:
+      type: object
+      required: [vmId, build, edition, baseline, packages, removedFromBaseline]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        build:
+          type: string
+          description: The full build, for example 10.0.26100.2033.
+        edition:
+          type: string
+          description: EditionID, for example Professional.
+        baseline:
+          oneOf:
+            - $ref: "#/components/schemas/AppxBaselineInfo"
+            - type: "null"
+        packages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppxPackage"
+        removedFromBaseline:
+          type: array
+          description: In the baseline but no longer in the VM.
+          items:
+            $ref: "#/components/schemas/AppxPackage"
 
     UnattendProfile:
       type: object

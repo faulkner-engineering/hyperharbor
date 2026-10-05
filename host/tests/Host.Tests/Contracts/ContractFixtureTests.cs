@@ -43,6 +43,9 @@ public class ContractFixtureTests
             [new ProfileItem("cjpalhdlnbpafiamejdnhcphjbkeiagm", "uBlock Origin")],
             new Dictionary<string, string> { ["passwordManager"] = "false" }));
 
+    private static readonly AppxBaselineInfo AppxBaselineSample = new(
+        "10.0.26100/Professional", "10.0.26100.2033", "Professional", Time, AppxBaselineSource.UnattendedInstall, "TESTWINDOWSINSTALL", false);
+
     private static Dictionary<string, object> Samples() => new()
     {
         ["HostInfo"] = new HostInfo(Guid.Parse("6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f"), "TC-PC", "0.1.0", ContractInfo.ApiVersion, new string('A', 64)),
@@ -136,6 +139,17 @@ public class ContractFixtureTests
         ["HostUpdateSettings"] = new HostUpdateSettings("stable", HostUpdateMode.Notify, "03:00"),
         ["RenameIsoRequest"] = new RenameIsoRequest("Windows 11 24H2.iso"),
         ["SetupProfile"] = SetupProfileSample,
+        ["AppxBaselineInfo"] = AppxBaselineSample,
+
+        // Nulls on purpose: note and inBaseline are required but nullable.
+        ["AppxPackage"] = new AppxPackage("Contoso.Extra", "Contoso.Extra", "1.0.0.0", "Contoso", AppxRating.Unrated, null, null),
+        ["VmAppxInventory"] = new VmAppxInventory(
+            VmId,
+            "10.0.26100.2033",
+            "Professional",
+            AppxBaselineSample,
+            [new AppxPackage("Microsoft.BingNews", "Microsoft News", "4.55.62231.0", "Microsoft", AppxRating.Safe, null, true)],
+            [new AppxPackage("Clipchamp.Clipchamp", "Clipchamp", "", "Clipchamp", AppxRating.Safe, null, true)]),
         ["ProfileItem"] = new ProfileItem("Git.Git", "Git"),
         ["ProfileRemove"] = SetupProfileSample.Remove!,
         ["ProfileTweak"] = SetupProfileSample.Tweaks![1],

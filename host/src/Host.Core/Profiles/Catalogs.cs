@@ -1,3 +1,4 @@
+using HyperHarbor.Shared.Contracts.Profiles;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -21,14 +22,6 @@ public sealed class ExtensionCatalogEntry
     public string Category { get; set; } = "";
     public string Description { get; set; } = "";
     public string? EdgeId { get; set; }
-}
-
-public enum AppxRating
-{
-    Unrated,
-    Safe,
-    Caution,
-    Keep,
 }
 
 /// <summary>A provisioned Appx package with its removal rating. catalogs/appx.yaml.</summary>

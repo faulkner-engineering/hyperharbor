@@ -247,6 +247,9 @@ builder.Services.AddSingleton(services => new VmStorageLocation(
 builder.Services.AddSingleton(new UnattendProfileStore(dataDirectory));
 builder.Services.AddSingleton(Catalogs.Default);
 builder.Services.AddSingleton(services => new SetupProfileStore(dataDirectory, services.GetRequiredService<Catalogs>()));
+builder.Services.AddSingleton(new AppxBaselineStore(dataDirectory));
+builder.Services.AddSingleton<IGuestProfileReader, PowerShellDirectProfileReader>();
+builder.Services.AddSingleton<AppxInventoryService>();
 builder.Services.AddSingleton<IsoInspector>();
 builder.Services.AddSingleton(new UnattendedInstallStore(dataDirectory));
 builder.Services.AddSingleton<IVmKeyboard, CimVmKeyboard>();
@@ -390,6 +393,7 @@ app.MapVmEndpoints();
 app.MapConsoleEndpoints();
 app.MapUnattendEndpoints();
 app.MapSetupProfileEndpoints();
+app.MapProfileSourceEndpoints();
 app.MapPerformanceEndpoints();
 app.MapJobEndpoints();
 app.MapPairingEndpoints();

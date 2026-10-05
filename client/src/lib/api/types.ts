@@ -698,6 +698,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/appx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List a VM's provisioned Appx packages, rated and compared with the clean baseline.
+         * @description Reads a running Windows VM over PowerShell Direct as its stored administrator. Each package
+         *     carries a removal rating from HyperHarbor's Appx catalog (`safe` ones make up the debloat
+         *     preset). `baseline` is the clean list for the VM's build and edition (`approximate` when only
+         *     another edition of the same build has one), recorded when an unattended install finished or on
+         *     request; null when there is none.
+         */
+        get: operations["listVmAppx"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/appx-baseline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record this VM's provisioned packages as the clean baseline for its build and edition.
+         * @description Use it on a VM installed by hand that nothing has been removed from yet. It replaces an existing
+         *     baseline for the same build and edition.
+         */
+        post: operations["recordAppxBaseline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/performance": {
         parameters: {
             query?: never;
@@ -1779,6 +1830,49 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             profile: components["schemas"]["SetupProfile"];
+        };
+        /**
+         * @description From HyperHarbor's Appx catalog. `safe`: nothing depends on it (the debloat preset).
+         *     `caution`: removable, but often expected. `keep`: frameworks, the Store, and security pieces.
+         * @enum {string}
+         */
+        AppxRating: "unrated" | "safe" | "caution" | "keep";
+        /** @enum {string} */
+        AppxBaselineSource: "unattendedInstall" | "manual";
+        AppxBaselineInfo: {
+            /** @description Major build and edition, for example 10.0.26100/Professional. */
+            key: string;
+            build: string;
+            edition: string;
+            /** Format: date-time */
+            recordedAt: string;
+            source: components["schemas"]["AppxBaselineSource"];
+            vmName: string | null;
+            /** @description The baseline is for the same build but another edition. */
+            approximate: boolean;
+        };
+        AppxPackage: {
+            /** @description The package name without the version; what profiles list under remove.appx. */
+            name: string;
+            friendlyName: string;
+            version: string;
+            publisher: string;
+            rating: components["schemas"]["AppxRating"];
+            note: string | null;
+            /** @description Whether the clean baseline has it; null without a baseline. */
+            inBaseline: boolean | null;
+        };
+        VmAppxInventory: {
+            /** Format: uuid */
+            vmId: string;
+            /** @description The full build, for example 10.0.26100.2033. */
+            build: string;
+            /** @description EditionID, for example Professional. */
+            edition: string;
+            baseline: components["schemas"]["AppxBaselineInfo"] | null;
+            packages: components["schemas"]["AppxPackage"][];
+            /** @description In the baseline but no longer in the VM. */
+            removedFromBaseline: components["schemas"]["AppxPackage"][];
         };
         /** @description Settings for installing an OS without anyone at the console. Profiles never hold passwords. */
         UnattendProfile: {
@@ -3277,6 +3371,88 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+        };
+    };
+    listVmAppx: {
+        parameters: {
+            query?: {
+                /** @description Where to read from. Only `vm` (the default) today. */
+                source?: "vm";
+            };
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The packages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmAppxInventory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not a running Windows guest (`code: vmNotRunning`), or HyperHarbor has no
+             *     administrator credential for it (`code: credentialRequired`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+            503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    recordAppxBaseline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recorded baseline. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppxBaselineInfo"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description Not a running Windows guest (`code: vmNotRunning`), or no administrator credential
+             *     (`code: credentialRequired`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+            503: components["responses"]["GuestUnavailable"];
         };
     };
     getVmPerformance: {

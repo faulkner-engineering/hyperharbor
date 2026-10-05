@@ -1,4 +1,22 @@
 {
+  "AppxBaselineInfo": {
+    "key": "10.0.26100/Professional",
+    "build": "10.0.26100.2033",
+    "edition": "Professional",
+    "recordedAt": "2026-10-03T12:00:00\u002B00:00",
+    "source": "unattendedInstall",
+    "vmName": "TESTWINDOWSINSTALL",
+    "approximate": false
+  },
+  "AppxPackage": {
+    "name": "Contoso.Extra",
+    "friendlyName": "Contoso.Extra",
+    "version": "1.0.0.0",
+    "publisher": "Contoso",
+    "rating": "unrated",
+    "note": null,
+    "inBaseline": null
+  },
   "ConsoleSession": {
     "ticket": "fixture-ticket",
     "userName": "HOSTPC\\hhc-owner",
@@ -500,6 +518,42 @@
     "action": "shutdown",
     "accepted": true,
     "state": "running"
+  },
+  "VmAppxInventory": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "build": "10.0.26100.2033",
+    "edition": "Professional",
+    "baseline": {
+      "key": "10.0.26100/Professional",
+      "build": "10.0.26100.2033",
+      "edition": "Professional",
+      "recordedAt": "2026-10-03T12:00:00\u002B00:00",
+      "source": "unattendedInstall",
+      "vmName": "TESTWINDOWSINSTALL",
+      "approximate": false
+    },
+    "packages": [
+      {
+        "name": "Microsoft.BingNews",
+        "friendlyName": "Microsoft News",
+        "version": "4.55.62231.0",
+        "publisher": "Microsoft",
+        "rating": "safe",
+        "note": null,
+        "inBaseline": true
+      }
+    ],
+    "removedFromBaseline": [
+      {
+        "name": "Clipchamp.Clipchamp",
+        "friendlyName": "Clipchamp",
+        "version": "",
+        "publisher": "Clipchamp",
+        "rating": "safe",
+        "note": null,
+        "inBaseline": true
+      }
+    ]
   },
   "VmComputeSettings": {
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",

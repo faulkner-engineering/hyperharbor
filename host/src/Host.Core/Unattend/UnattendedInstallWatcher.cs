@@ -2,7 +2,10 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using HyperHarbor.Host.Core.HyperV;
+using HyperHarbor.Host.Core.Lifecycle;
+using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Shared.Contracts.Profiles;
 using HyperHarbor.Shared.Contracts.Unattend;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging;
@@ -47,6 +50,7 @@ public sealed class UnattendedInstallWatcher
     private readonly TimeProvider _time;
     private readonly InstallWatcherOptions _options;
     private readonly ILogger<UnattendedInstallWatcher> _logger;
+    private readonly AppxInventoryService? _appx;
     private readonly ConcurrentDictionary<Guid, Task> _configuring = new();
     private DateTimeOffset? _lastTick;
 
@@ -61,8 +65,10 @@ public sealed class UnattendedInstallWatcher
         IVmMedia media,
         TimeProvider time,
         InstallWatcherOptions options,
-        ILogger<UnattendedInstallWatcher> logger)
+        ILogger<UnattendedInstallWatcher> logger,
+        AppxInventoryService? appx = null)
     {
+        _appx = appx;
         _installs = installs;
         _inventory = inventory;
         _probe = probe;
@@ -244,6 +250,31 @@ public sealed class UnattendedInstallWatcher
         await RemoveSeedAsync(install, CancellationToken.None).ConfigureAwait(false);
         Save(install with { Error = null, NextAttemptAt = null }, UnattendedInstallState.Ready, "Ready");
         _logger.LogInformation("The unattended install of VM {VmId} is ready.", install.VmId);
+        if (install.Os == InstallOs.Windows)
+        {
+            await RecordAppxBaselineAsync(install.VmId).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// A fresh unattended install is the cleanest Windows there is, so it becomes the Appx baseline for its build
+    /// and edition unless one exists. Failing to record it never fails the install.
+    /// </summary>
+    private async Task RecordAppxBaselineAsync(Guid vmId)
+    {
+        if (_appx is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _appx.RecordBaselineAsync(vmId, AppxBaselineSource.UnattendedInstall, onlyIfMissing: true, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (GuestErrors.IsGuestError(ex) || ex is LifecycleConflictException or HyperVUnavailableException or HyperVCallException or IOException)
+        {
+            _logger.LogWarning("The clean Appx baseline was not recorded from VM {VmId}: {Error}", vmId, ex.Message);
+        }
     }
 
     /// <summary>Backs off 1, 2, 4, 8 minutes between attempts, then fails.</summary>

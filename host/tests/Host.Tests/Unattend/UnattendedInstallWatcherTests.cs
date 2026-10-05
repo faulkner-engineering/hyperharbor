@@ -1,6 +1,8 @@
+using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Core.Users;
+using HyperHarbor.Shared.Contracts.Profiles;
 using HyperHarbor.Shared.Contracts.Unattend;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -49,9 +51,22 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         }
     }
 
-    private UnattendedInstallWatcher Watcher() => new(
-        _installs, _inventory, _probe, _provisioning, _accounts, _credentials, _guest, _media, _time, _options,
-        NullLogger<UnattendedInstallWatcher>.Instance);
+    private readonly Profiles.FakeGuestProfileReader _profileReader = new();
+    private AppxBaselineStore? _baselines;
+
+    private UnattendedInstallWatcher Watcher(bool recordBaselines = false)
+    {
+        AppxInventoryService? appx = null;
+        if (recordBaselines)
+        {
+            _baselines = new AppxBaselineStore(_directory);
+            appx = new AppxInventoryService(_inventory, _credentials, _profileReader, _baselines, Catalogs.Default, _time, NullLogger<AppxInventoryService>.Instance);
+        }
+
+        return new(
+            _installs, _inventory, _probe, _provisioning, _accounts, _credentials, _guest, _media, _time, _options,
+            NullLogger<UnattendedInstallWatcher>.Instance, appx);
+    }
 
     private void Begin(InstallOs os = InstallOs.Windows, bool desktop = false) =>
         _installs.Save(new UnattendedInstall(VmId, _userId, "windows-workstation", os, desktop, _seedPath,
@@ -75,6 +90,40 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
     }
 
     private UnattendedInstall Install => _installs.Find(VmId)!;
+
+    [Fact]
+    public async Task AFinishedWindowsInstall_RecordsTheCleanAppxBaseline_OnceForItsBuild()
+    {
+        Begin();
+        var watcher = Watcher(recordBaselines: true);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+
+        await TickAsync(watcher, times: 2);
+
+        Assert.Equal(UnattendedInstallState.Ready, Install.State);
+        var (baseline, approximate) = _baselines!.Find("26100", "Professional")!.Value;
+        Assert.False(approximate);
+        Assert.Equal(AppxBaselineSource.UnattendedInstall, baseline.Source.How);
+        Assert.Contains("Microsoft.BingNews", baseline.Packages);
+        // The baseline is read with the rotated administrator password, not the one from the answer file.
+        Assert.Equal(_credentials.Find(VmId)!.Password, Assert.Single(_profileReader.AdminsUsed).Password);
+    }
+
+    [Fact]
+    public async Task ABaselineThatCannotBeRead_DoesNotFailTheInstall()
+    {
+        Begin();
+        _profileReader.Failure = new GuestUnavailableException("PowerShell Direct did not respond in time.");
+        var watcher = Watcher(recordBaselines: true);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+
+        await TickAsync(watcher, times: 2);
+
+        Assert.Equal(UnattendedInstallState.Ready, Install.State);
+        Assert.Null(_baselines!.Find("26100", "Professional"));
+    }
 
     [Fact]
     public async Task VmIsMarkedProvisionedOnlyAfterRdpAnswers()

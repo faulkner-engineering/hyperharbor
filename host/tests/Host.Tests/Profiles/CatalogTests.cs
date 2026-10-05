@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using HyperHarbor.Host.Core.Profiles;
+using HyperHarbor.Shared.Contracts.Profiles;
 
 namespace HyperHarbor.Host.Tests.Profiles;
 

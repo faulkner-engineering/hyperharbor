@@ -70,9 +70,15 @@ public sealed class RdpPerformancePolicyTests
     [Theory]
     [InlineData("performance")]
     [InlineData("accounts")]
+    [InlineData("appx")]
     public void HostScripts_ParseInWindowsPowerShell(string which)
     {
-        var script = which == "performance" ? PowerShellDirectPerformanceSetup.Script : PowerShellDirectAccountManager.Script;
+        var script = which switch
+        {
+            "performance" => PowerShellDirectPerformanceSetup.Script,
+            "accounts" => PowerShellDirectAccountManager.Script,
+            _ => Core.Profiles.PowerShellDirectProfileReader.AppxScript,
+        };
         var check = "$e = $null; [void][System.Management.Automation.Language.Parser]::ParseInput([Console]::In.ReadToEnd(), [ref]$null, [ref]$e); $e.Count";
         var start = new ProcessStartInfo("powershell.exe") { RedirectStandardInput = true, RedirectStandardOutput = true, UseShellExecute = false };
         foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(check)) })
