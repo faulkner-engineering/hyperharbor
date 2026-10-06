@@ -21,6 +21,9 @@
   let { host }: Props = $props();
 
   const POLL_MS = 5000;
+  /** While Check now waits for the host, it polls faster and gives up after CHECK_TIMEOUT_MS. */
+  const CHECK_POLL_MS = 1500;
+  const CHECK_TIMEOUT_MS = 90_000;
 
   let status = $state<HostUpdateStatus | null>(null);
   let loadError = $state<string | null>(null);
@@ -34,6 +37,13 @@
   let startingInstall = $state(false);
   /** The version this device asked the host to install, until the host runs it or gives up. */
   let installTarget = $state<string | null>(null);
+  /**
+   * A check this device asked for, until the host reports a newer lastCheck. The host answers Check now before the
+   * check runs (older hosts even report it as idle), so the reply alone says nothing about the result.
+   */
+  let pendingCheck = $state<{ since: number; before: string | null } | null>(null);
+  /** What the last check from this device found, shown until the next one. */
+  let checkOutcome = $state<{ text: string; failed: boolean; at: Date } | null>(null);
 
   // Older hosts install only from their tray.
   const canInstallHere = $derived(hostSupports(host, InstallUpdateApiVersion));
@@ -41,12 +51,14 @@
   // Checking, downloading, and installing move on by themselves, so watch them until they settle.
   const working = $derived(
     installTarget !== null ||
+      pendingCheck !== null ||
       (status !== null && (status.activity === "checking" || status.activity === "preparing" || status.activity === "installing")),
   );
 
   const summary = $derived.by(() => {
     if (!status) return "";
     if (!status.supported) return status.message ?? "This host does not update itself.";
+    if (pendingCheck) return "Checking for updates…";
     switch (status.activity) {
       case "checking":
         return "Checking for updates…";
@@ -71,6 +83,7 @@
       loadError = null;
       // The host runs the new version, or came back without it (rolled back, or the install was refused).
       if (installTarget && (status.currentVersion === installTarget || status.activity === "idle")) installTarget = null;
+      settleCheck();
     } catch (error) {
       // While an update installs the host restarts, so a failed poll is expected for a while.
       loadError = status?.activity === "installing" || installTarget ? null : errorMessage(error);
@@ -83,19 +96,48 @@
 
   $effect(() => {
     if (!working) return;
-    const timer = setInterval(() => void load(), POLL_MS);
+    const timer = setInterval(() => void load(), pendingCheck ? CHECK_POLL_MS : POLL_MS);
     return () => clearInterval(timer);
   });
 
   async function checkNow() {
     checking = true;
+    checkOutcome = null;
+    const before = status?.lastCheck ?? null;
     try {
       status = await checkHostUpdate(host.key);
       loadError = null;
+      pendingCheck = { since: Date.now(), before };
+      settleCheck();
     } catch (error) {
       loadError = errorMessage(error);
     } finally {
       checking = false;
+    }
+  }
+
+  /** Ends a pending check once the host reports a new check time, or after CHECK_TIMEOUT_MS. */
+  function settleCheck() {
+    if (!pendingCheck || !status) return;
+    if (status.lastCheck !== pendingCheck.before && status.activity !== "checking") {
+      const failed = status.message?.startsWith("The update check failed") ?? false;
+      checkOutcome = {
+        failed,
+        at: new Date(),
+        text: failed
+          ? (status.message ?? "The update check failed.")
+          : status.availableVersion
+            ? `Found version ${status.availableVersion}.`
+            : `Up to date. ${status.currentVersion} is the newest version on the ${status.channel} channel.`,
+      };
+      pendingCheck = null;
+    } else if (Date.now() - pendingCheck.since > CHECK_TIMEOUT_MS) {
+      checkOutcome = {
+        failed: true,
+        at: new Date(),
+        text: "The host has not finished checking after 90 seconds. It may not reach GitHub; the host log has details.",
+      };
+      pendingCheck = null;
     }
   }
 
@@ -174,6 +216,11 @@
           Skipped because they did not start on this host: {status.rolledBack.join(", ")}.
         </p>
       {/if}
+      {#if checkOutcome}
+        <p class:error={checkOutcome.failed} role="status">
+          {checkOutcome.text} <span class="muted">({checkOutcome.at.toLocaleTimeString()})</span>
+        </p>
+      {/if}
       {#if status.lastCheck}
         <p class="muted">Checked {new Date(status.lastCheck).toLocaleString()}.</p>
       {/if}
@@ -220,8 +267,8 @@
               >{startingInstall ? "Starting the install…" : `Install ${status.availableVersion} now`}</button
             >
           {/if}
-          <button type="button" onclick={checkNow} disabled={checking || working}>
-            {checking ? "Checking…" : "Check now"}
+          <button type="button" onclick={checkNow} disabled={checking || working} aria-busy={checking || pendingCheck !== null}>
+            {checking || pendingCheck ? "Checking…" : "Check now"}
           </button>
           <button type="button" onclick={startEditing} disabled={working}>Change settings…</button>
         </div>

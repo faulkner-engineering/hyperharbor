@@ -98,6 +98,8 @@ public sealed class UpdateCoordinatorTests : IDisposable
         Assert.Empty(_server.Requested);
 
         _coordinator.RequestCheck();
+        // The check shows as started before the tick that runs it, so Check now has something to show.
+        Assert.Equal(UpdateActivity.Checking, _coordinator.Status.Activity);
         await _coordinator.TickAsync(CancellationToken.None);
 
         Assert.Equal([Releases.ManifestUrl], _server.Requested);

@@ -76,7 +76,8 @@ public sealed class UpdateCoordinator(
                     current.ToString(),
                     _decision?.Kind is UpdateDecisionKind.Available or UpdateDecisionKind.NeedsIntermediateVersion or UpdateDecisionKind.Skipped ? _decision.Offered.ToString() : null,
                     _decision?.Kind == UpdateDecisionKind.Available ? _manifest?.NotesUrl : null,
-                    _activity,
+                    // A requested check runs at the next tick; report it at once, so whoever asked sees it started.
+                    _checkRequested && _activity is UpdateActivity.Idle or UpdateActivity.Ready ? UpdateActivity.Checking : _activity,
                     _lastCheck,
                     _message,
                     state.LastResult,

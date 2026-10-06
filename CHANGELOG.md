@@ -10,6 +10,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- Check now (client Updates panel) gave no feedback: the host answers before the check runs, so the button
+  went straight back and the old status stayed. The panel now shows Checking… until the host reports the check,
+  then says what it found (up to date, a new version, or why the check failed), or that the host did not finish
+  within 90 seconds. This works with hosts from before this fix too. The host now reports a requested check as
+  checking at once, and the tray's Check now shows Checking… as soon as it is clicked.
+
 ## [0.1.4] - 2026-10-05 (API 1.14.0)
 
 ### Added

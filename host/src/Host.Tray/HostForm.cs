@@ -96,7 +96,7 @@ internal sealed class HostForm : Form
 
         var updates = AddPage("Updates");
         _updatesPage = _pages[^1];
-        _update = AddRow(updates, "Updates", out _updateAction, "Check now", () => checkOrInstallUpdate(_updateStatus?.Activity == HostUpdateActivity.Ready));
+        _update = AddRow(updates, "Updates", out _updateAction, "Check now", () => UpdateActionClicked(checkOrInstallUpdate));
         _updateChannel = AddRow(updates, "Update channel", out _changeUpdateChannel, "Change channel…", ShowChannels);
 
         var logs = AddPage("Logs");
@@ -199,6 +199,23 @@ internal sealed class HostForm : Form
         }
 
         base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Check now shows that it started right away and stays disabled until the service reports the check; the
+    /// status that arrives next replaces this.
+    /// </summary>
+    private void UpdateActionClicked(Action<bool> checkOrInstallUpdate)
+    {
+        var install = _updateStatus?.Activity == HostUpdateActivity.Ready;
+        if (!install)
+        {
+            _updateAction.Enabled = false;
+            _update.ForeColor = SystemColors.ControlText;
+            _update.Text = $"Version {_updateStatus?.CurrentVersion}. Checking for updates…";
+        }
+
+        checkOrInstallUpdate(install);
     }
 
     /// <summary>Shows the update status; null while the service is not connected.</summary>

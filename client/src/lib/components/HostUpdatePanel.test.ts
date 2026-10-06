@@ -86,14 +86,47 @@ describe("HostUpdatePanel", () => {
     expect((screen.getByRole("button", { name: "Check now" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("checks now", async () => {
-    invoke.mockResolvedValueOnce(status()).mockResolvedValueOnce(status({ activity: "checking" }));
+  it("checks now and says what the check found", async () => {
+    const checked = "2026-10-05T20:00:00Z";
+    // The host answers before the check runs (an older one still says idle), then reports the new check time.
+    invoke
+      .mockResolvedValueOnce(status({ lastCheck: "2026-10-05T08:00:00Z" }))
+      .mockResolvedValueOnce(status({ lastCheck: "2026-10-05T08:00:00Z" }))
+      .mockResolvedValue(status({ lastCheck: checked }));
     render(HostUpdatePanel, { host });
 
     await fireEvent.click(await screen.findByRole("button", { name: "Check now" }));
 
     expect(invoke).toHaveBeenCalledWith("check_host_update", { key: host.key });
     expect(await screen.findByText("Checking for updates…")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Checking…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByText(/Up to date\. 0\.1\.0 is the newest version on the stable channel\./, {}, { timeout: 4000 })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Check now" })).toBeTruthy();
+  });
+
+  it("reports a failed check", async () => {
+    invoke
+      .mockResolvedValueOnce(status())
+      .mockResolvedValueOnce(status({ activity: "checking" }))
+      .mockResolvedValue(status({ lastCheck: "2026-10-05T20:00:00Z", message: "The update check failed: No such host is known." }));
+    render(HostUpdatePanel, { host });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Check now" }));
+
+    const outcome = await screen.findByText(/The update check failed: No such host is known\./, { selector: "p[role=status]" }, { timeout: 4000 });
+    expect(outcome.classList.contains("error")).toBe(true);
+  });
+
+  it("says when a newer version was found", async () => {
+    invoke
+      .mockResolvedValueOnce(status())
+      .mockResolvedValueOnce(status({ activity: "checking" }))
+      .mockResolvedValue(status({ lastCheck: "2026-10-05T20:00:00Z", activity: "preparing", availableVersion: "0.1.5" }));
+    render(HostUpdatePanel, { host });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Check now" }));
+
+    expect(await screen.findByText("Found version 0.1.5.", {}, { timeout: 4000 })).toBeTruthy();
   });
 
   it("saves settings, sending no maintenance time when the field is empty", async () => {
