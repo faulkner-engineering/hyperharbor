@@ -1,0 +1,80 @@
+[
+  {
+    "value": {
+      "connected": true,
+      "passphraseConfigured": true,
+      "devices": [
+        {
+          "id": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+          "name": "Laptop",
+          "fingerprint": "AB12CD34EF567890AB12CD34EF567890",
+          "pairedAt": "2026-10-05T12:00:00\u002B00:00"
+        }
+      ],
+      "vmFolder": {
+        "folder": "D:\\VMs",
+        "isDefault": false
+      },
+      "isoFolder": "D:\\ISOs",
+      "backupFolder": "C:\\Users\\Public\\Documents\\HyperHarbor Backups",
+      "consoleReady": true,
+      "packageSearchReady": false,
+      "update": {
+        "supported": true,
+        "mode": "auto",
+        "channel": "stable",
+        "channels": [
+          "beta",
+          "stable"
+        ],
+        "maintenanceTime": "03:00",
+        "currentVersion": "0.1.4",
+        "availableVersion": "0.1.5",
+        "notesUrl": "https://github.com/faulkner-engineering/hyperharbor/releases/tag/v0.1.5",
+        "activity": "ready",
+        "lastCheck": "2026-10-05T12:00:00\u002B00:00",
+        "message": "Version 0.1.5 is ready to install.",
+        "lastResult": "Updated from 0.1.3 to 0.1.4.",
+        "rolledBack": []
+      },
+      "busy": [
+        "folder:iso"
+      ],
+      "pairing": {
+        "pairingId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+        "deviceName": "Laptop",
+        "pin": "440141",
+        "expiresAt": "2026-10-05T12:02:00\u002B00:00"
+      },
+      "dataDirectory": "C:\\ProgramData\\HyperHarbor"
+    },
+    "type": "state"
+  },
+  {
+    "value": {
+      "connected": false,
+      "passphraseConfigured": null,
+      "devices": [],
+      "vmFolder": null,
+      "isoFolder": null,
+      "backupFolder": null,
+      "consoleReady": false,
+      "packageSearchReady": false,
+      "update": null,
+      "busy": [],
+      "pairing": null,
+      "dataDirectory": "C:\\ProgramData\\HyperHarbor"
+    },
+    "type": "state"
+  },
+  {
+    "kind": "success",
+    "title": "Admin passphrase saved",
+    "text": "Paired devices now need it to change VMs.",
+    "type": "toast"
+  },
+  {
+    "page": "devices",
+    "type": "navigate"
+  }
+]

@@ -1,39 +1,55 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using HyperHarbor.Host.Tray.Window;
 using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Ipc;
+using Microsoft.Web.WebView2.Core;
 
 namespace HyperHarbor.Host.Tray;
 
 /// <summary>
-/// Owns the notification area icon, its menu, and the host, pairing, device, and passphrase windows.
+/// Owns the notification area icon and its menu, the pipe to the service, and the two HTML windows (the host window
+/// and the pairing PIN window, both <see cref="WebWindow"/>). Every change goes to the windows as one
+/// <see cref="TrayViewState"/>; what the user does there comes back as <see cref="ITrayActions"/> calls.
 /// </summary>
-internal sealed class TrayApplicationContext : ApplicationContext
+internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
 {
+    /// <summary>Where the service keeps its data unless DataDirectory is configured.</summary>
+    public static readonly string DataDirectory =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "HyperHarbor");
+
+    /// <summary>A check the service never reports ends after this long, so the page stops waiting.</summary>
+    private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(90);
+
+    /// <summary>A hidden host window is kept this long, so opening it again is instant, then released.</summary>
+    private static readonly TimeSpan KeepHiddenWindow = TimeSpan.FromMinutes(10);
+
     private readonly NotifyIcon _notifyIcon;
     private readonly TrayIconProvider _iconProvider;
     private readonly ToolStripMenuItem _status;
-    private readonly TrayPipeClient _pipe;
-    private IReadOnlyList<TrayDevice> _devices = [];
-    private PinForm? _pinForm;
-    private DevicesForm? _devicesForm;
     private readonly ToolStripMenuItem _passphraseItem;
-    private AdminPassphraseForm? _passphraseForm;
-    private HostForm? _hostForm;
-    private bool _connected;
-    private string? _isoFolder;
-    private bool _isoFolderChanging;
-    private VmFolderMessage? _vmFolder;
-    private bool _vmFolderChanging;
-    private string? _backupFolder;
-    private bool _backupFolderChanging;
+    private readonly TrayPipeClient _pipe;
     private readonly ShutdownGuard _shutdownGuard;
     private readonly System.Windows.Forms.Timer _gpuVmPoll;
-    private IReadOnlyList<string> _gpuVms = [];
     private readonly System.Windows.Forms.Timer _updatePoll;
-    private HostUpdateStatus? _update;
+    private readonly System.Windows.Forms.Timer _releaseHostWindow;
+    private readonly HashSet<string> _busy = [];
+    private readonly bool _webViewAvailable = TrayWebView.RuntimeVersion is not null;
 
-    /// <summary>Null until the service reports it.</summary>
+    private WebWindow? _hostWindow;
+    private WebWindow? _pinWindow;
+    private bool _connected;
     private bool? _passphraseConfigured;
-    private bool _passphraseSaving;
+    private IReadOnlyList<TrayDevice> _devices = [];
+    private string? _isoFolder;
+    private VmFolderMessage? _vmFolder;
+    private string? _backupFolder;
+    private IReadOnlyList<string> _gpuVms = [];
+    private HostUpdateStatus? _update;
+    private PairingStartedMessage? _pairing;
+    private (DateTimeOffset? LastCheck, DateTimeOffset StartedAt)? _pendingCheck;
+    private int _pollTicks;
 
     public TrayApplicationContext()
     {
@@ -44,9 +60,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(open);
         menu.Items.Add(_status);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Paired devices…", null, (_, _) => ShowDevices());
-        _passphraseItem = new ToolStripMenuItem("Set admin passphrase…", null, (_, _) => ShowPassphrase()) { Enabled = false };
+        menu.Items.Add("Paired devices…", null, (_, _) => ShowHost("devices"));
+        _passphraseItem = new ToolStripMenuItem("Set admin passphrase…", null, (_, _) => ShowHost("passphrase")) { Enabled = false };
         menu.Items.Add(_passphraseItem);
+        if (!_webViewAvailable)
+        {
+            menu.Items.Add("Install the WebView2 Runtime…", null, (_, _) => Launch(TrayWebView.DownloadUrl));
+        }
+
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
@@ -72,16 +93,21 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _gpuVmPoll.Tick += (_, _) => QueryGpuVms();
         _gpuVmPoll.Start();
 
-        // Update progress (checking, downloading, installing) changes on its own, so the open window asks for it.
-        _updatePoll = new System.Windows.Forms.Timer { Interval = 5_000 };
-        _updatePoll.Tick += (_, _) =>
+        // Update progress changes on its own, so the open window asks for it: every second while something moves.
+        _updatePoll = new System.Windows.Forms.Timer { Interval = 1_000 };
+        _updatePoll.Tick += (_, _) => PollUpdate();
+        _updatePoll.Start();
+
+        _releaseHostWindow = new System.Windows.Forms.Timer { Interval = (int)KeepHiddenWindow.TotalMilliseconds };
+        _releaseHostWindow.Tick += (_, _) =>
         {
-            if (_connected && _hostForm is not null)
+            _releaseHostWindow.Stop();
+            if (_hostWindow is { Visible: false })
             {
-                _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+                _hostWindow.Dispose();
+                _hostWindow = null;
             }
         };
-        _updatePoll.Start();
 
         _pipe.Start();
     }
@@ -92,12 +118,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             _gpuVmPoll.Dispose();
             _updatePoll.Dispose();
+            _releaseHostWindow.Dispose();
             _shutdownGuard.Dispose();
             _pipe.Dispose();
-            _pinForm?.Dispose();
-            _devicesForm?.Dispose();
-            _hostForm?.Dispose();
-            _passphraseForm?.Dispose();
+            _hostWindow?.Dispose();
+            _pinWindow?.Dispose();
             _notifyIcon.Visible = false;
             _notifyIcon.ContextMenuStrip?.Dispose();
             _notifyIcon.Dispose();
@@ -105,6 +130,106 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
 
         base.Dispose(disposing);
+    }
+
+    /// <summary>Opens the host window, optionally at a page (devices, passphrase, ...).</summary>
+    internal void ShowHost(string? page = null)
+    {
+        if (!_webViewAvailable)
+        {
+            _notifyIcon.ShowBalloonTip(10_000, "HyperHarbor needs the WebView2 Runtime", "Choose Install the WebView2 Runtime in this menu, then open HyperHarbor Host again.", ToolTipIcon.Warning);
+            return;
+        }
+
+        _releaseHostWindow.Stop();
+        if (_hostWindow is null)
+        {
+            var window = new WebWindow("HyperHarbor Host", "host", new Size(980, 660), new Size(720, 500)) { HideOnClose = true };
+            window.PlaceOn(Screen.FromPoint(Cursor.Position));
+            window.MessageReceived += OnPageMessage;
+            window.Hidden += () => _releaseHostWindow.Start();
+            _hostWindow = window;
+            _ = InitializeAsync(window);
+            PushState();
+            if (_connected)
+            {
+                _ = _pipe.SendAsync(new ListDevicesMessage());
+                _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+            }
+        }
+
+        if (page is not null)
+        {
+            _hostWindow.Post(new HostToPage.Navigate(page));
+        }
+
+        _hostWindow.ShowWhenReady();
+    }
+
+    private async Task InitializeAsync(WebWindow window)
+    {
+        try
+        {
+            await window.InitializeAsync(await TrayWebView.EnvironmentAsync());
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or WebView2RuntimeNotFoundException)
+        {
+            _notifyIcon.ShowBalloonTip(10_000, "HyperHarbor could not open its window", ex.Message, ToolTipIcon.Warning);
+            if (ReferenceEquals(window, _hostWindow))
+            {
+                _hostWindow = null;
+            }
+            else if (ReferenceEquals(window, _pinWindow))
+            {
+                _pinWindow = null;
+            }
+
+            window.Dispose();
+        }
+    }
+
+    private bool HostWindowOpen => _hostWindow is { Visible: true, IsDisposed: false };
+
+    private void OnPageMessage(JsonElement message) => TrayCommands.Dispatch(message, this);
+
+    /// <summary>Sends the current state to the open windows.</summary>
+    private void PushState()
+    {
+        var state = new HostToPage.State(new TrayViewState(
+            _connected,
+            _passphraseConfigured,
+            _devices.Select(device => new TrayViewDevice(device.DeviceId, device.Name, device.CertificateFingerprint, device.PairedAt)).ToList(),
+            _vmFolder is null ? null : new TrayViewFolder(_vmFolder.Folder, _vmFolder.IsDefault),
+            _isoFolder,
+            _backupFolder,
+            ConsoleAccessSetup.IsSetUp(DataDirectory),
+            PackageSearchSetupHelper.IsSetUp,
+            _connected ? _update : null,
+            _busy.Order(StringComparer.Ordinal).ToList(),
+            _pairing is null ? null : new TrayViewPairing(_pairing.PairingId, _pairing.DeviceName, _pairing.Pin, _pairing.ExpiresAt),
+            DataDirectory));
+        _hostWindow?.Post(state);
+        _pinWindow?.Post(state);
+    }
+
+    /// <summary>In the host window when it is open, otherwise as a notification.</summary>
+    private void Notify(string kind, string title, string text)
+    {
+        if (HostWindowOpen)
+        {
+            _hostWindow!.Post(new HostToPage.Toast(kind, title, text));
+            return;
+        }
+
+        _notifyIcon.ShowBalloonTip(kind == "error" ? 15_000 : 5_000, title, text, kind == "error" ? ToolTipIcon.Warning : ToolTipIcon.Info);
+    }
+
+    private void SetBusy(string key, bool busy)
+    {
+        if (busy ? _busy.Add(key) : _busy.Remove(key))
+        {
+            PushState();
+        }
     }
 
     private void OnConnectionChanged(bool connected)
@@ -116,7 +241,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         // The service does not report sessions to the tray yet, so the icon shows only awake or asleep.
         _iconProvider.State = connected ? TrayIconState.Awake : TrayIconState.Asleep;
-        if (!connected)
+        if (connected)
+        {
+            QueryGpuVms();
+            if (_hostWindow is not null)
+            {
+                _ = _pipe.SendAsync(new ListDevicesMessage());
+                _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+            }
+        }
+        else
         {
             _passphraseConfigured = null;
             _isoFolder = null;
@@ -124,18 +258,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _backupFolder = null;
             _gpuVms = [];
             _update = null;
-            _hostForm?.ShowUpdate(null);
-        }
-        else
-        {
-            QueryGpuVms();
+            _pendingCheck = null;
+            _busy.Clear();
+            EndPairing();
         }
 
-        RefreshHost();
-        if (!connected)
-        {
-            _pinForm?.Close();
-        }
+        PushState();
     }
 
     private void OnMessage(TrayMessage message)
@@ -143,24 +271,27 @@ internal sealed class TrayApplicationContext : ApplicationContext
         switch (message)
         {
             case PairingStartedMessage started:
-                ShowPin(started);
+                StartPairing(started);
                 break;
             case PairingEndedMessage ended:
                 OnPairingEnded(ended);
                 break;
             case DeviceListMessage list:
                 _devices = list.Devices;
-                _devicesForm?.ShowDevices(_devices);
-                RefreshHost();
+                _busy.RemoveWhere(key => key.StartsWith("device:", StringComparison.Ordinal));
+                PushState();
                 break;
             case VmFolderMessage vmFolder:
-                OnVmFolder(vmFolder);
+                _vmFolder = vmFolder;
+                FolderReported("vm", vmFolder.Error, "VM storage changed", $"New VMs are created in {vmFolder.Folder}.");
                 break;
             case IsoFolderMessage isoFolder:
-                OnIsoFolder(isoFolder);
+                _isoFolder = isoFolder.Folder;
+                FolderReported("iso", isoFolder.Error, "ISO library moved", $"New images are stored in {isoFolder.Folder}.");
                 break;
             case BackupFolderMessage backupFolder:
-                OnBackupFolder(backupFolder);
+                _backupFolder = backupFolder.Folder;
+                FolderReported("backup", backupFolder.Error, "Backup folder changed", $"Disk exports go to {backupFolder.Folder}.");
                 break;
             case AdminPassphraseStatusMessage status:
                 OnPassphraseStatus(status);
@@ -180,24 +311,83 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private void FolderReported(string which, string? error, string title, string text)
+    {
+        if (_busy.Remove("folder:" + which))
+        {
+            if (error is null)
+            {
+                Notify("success", title, text);
+            }
+            else
+            {
+                Notify("error", "The folder was not changed", error);
+            }
+        }
+
+        PushState();
+    }
+
+    private void OnPassphraseStatus(AdminPassphraseStatusMessage status)
+    {
+        _passphraseConfigured = status.Configured;
+        _passphraseItem.Text = status.Configured ? "Change admin passphrase…" : "Set admin passphrase…";
+        if (status.Configured && _busy.Remove("passphrase"))
+        {
+            Notify("success", "Admin passphrase saved", "Paired devices now need it to change VMs.");
+        }
+
+        PushState();
+    }
+
     private void OnUpdateStatus(HostUpdateStatus status)
     {
         // In notify mode nothing installs by itself, so say once when a version is ready.
         if (status is { Activity: HostUpdateActivity.Ready, Mode: HostUpdateMode.Notify } && _update?.Activity != HostUpdateActivity.Ready)
         {
-            _notifyIcon.ShowBalloonTip(
-                10_000,
-                $"HyperHarbor {status.AvailableVersion} is ready",
-                "Open HyperHarbor Host and choose Install now. The host restarts.",
-                ToolTipIcon.Info);
+            Notify("info", $"HyperHarbor {status.AvailableVersion} is ready", "Open Updates and choose Install now. The host restarts.");
         }
 
         _update = status;
-        _hostForm?.ShowUpdate(status);
+
+        // A check this tray asked for ends when the service reports a newer check (older services answer before the
+        // check runs and do not report it as checking), or after CheckTimeout.
+        if (_pendingCheck is { } pending && status.Activity != HostUpdateActivity.Checking
+            && (status.LastCheck != pending.LastCheck || DateTimeOffset.UtcNow - pending.StartedAt > CheckTimeout))
+        {
+            _pendingCheck = null;
+            _busy.Remove("update");
+            if (status.LastCheck == pending.LastCheck)
+            {
+                Notify("error", "The update check did not finish", "The host did not report a result within 90 seconds. Its log has details.");
+            }
+            else if (status.Message?.StartsWith("The update check failed", StringComparison.Ordinal) == true)
+            {
+                Notify("error", "The update check failed", status.Message);
+            }
+            else if (status.AvailableVersion is null)
+            {
+                Notify("success", "Up to date", $"{status.CurrentVersion} is the newest version on the {status.Channel} channel.");
+            }
+        }
+
+        PushState();
     }
 
-    private void CheckOrInstallUpdate(bool install) =>
-        _ = _pipe.SendAsync(install ? new InstallUpdateMessage() : new CheckForUpdateMessage());
+    private void PollUpdate()
+    {
+        if (!_connected || !HostWindowOpen)
+        {
+            return;
+        }
+
+        // Every second while something moves; every five seconds otherwise.
+        var moving = _pendingCheck is not null || _update?.Activity is HostUpdateActivity.Checking or HostUpdateActivity.Preparing or HostUpdateActivity.Installing;
+        if (moving || ++_pollTicks % 5 == 0)
+        {
+            _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+        }
+    }
 
     private void QueryGpuVms()
     {
@@ -236,172 +426,133 @@ internal sealed class TrayApplicationContext : ApplicationContext
         var result = await WakeFixApproval.HandleAsync(request, Environment.ProcessPath);
         await _pipe.SendAsync(result);
 
-        var (title, icon) = result.Outcome switch
+        var (title, kind) = result.Outcome switch
         {
-            "applied" => ("Wake-on-LAN settings updated", ToolTipIcon.Info),
-            "failed" => ("Wake-on-LAN settings not updated", ToolTipIcon.Warning),
-            _ => (string.Empty, ToolTipIcon.None),
+            "applied" => ("Wake-on-LAN settings updated", "success"),
+            "failed" => ("Wake-on-LAN settings not updated", "error"),
+            _ => (string.Empty, string.Empty),
         };
         if (title.Length > 0)
         {
-            _notifyIcon.ShowBalloonTip(5000, title, result.Detail ?? "Check the settings again from the client.", icon);
+            Notify(kind, title, result.Detail ?? "Check the settings again from the client.");
         }
     }
 
-    private void ShowPin(PairingStartedMessage started)
+    private void StartPairing(PairingStartedMessage started)
     {
-        _pinForm?.Close();
-        _pinForm = new PinForm(started.DeviceName, started.Pin, started.ExpiresAt, () => _ = _pipe.SendAsync(new CancelPairingMessage()))
+        _pairing = started;
+        if (!_webViewAvailable)
         {
-            PairingId = started.PairingId,
-        };
-        _pinForm.FormClosed += (sender, _) =>
-        {
-            if (ReferenceEquals(sender, _pinForm))
-            {
-                _pinForm = null;
-            }
-        };
-        _pinForm.Show();
-        _pinForm.Activate();
+            // Without WebView2 the PIN goes in a notification, so pairing still works.
+            _notifyIcon.ShowBalloonTip(60_000, $"Pairing request from \"{started.DeviceName}\"", $"Enter {started.Pin[..3]} {started.Pin[3..]} on that device to pair it.", ToolTipIcon.Info);
+            return;
+        }
 
+        if (_pinWindow is null)
+        {
+            var window = new WebWindow("HyperHarbor pairing", "pin", new Size(440, 400), new Size(400, 360))
+            {
+                TopMost = true,
+                MaximizeBox = false,
+                MinimizeBox = false,
+            };
+            window.PlaceOn(Screen.FromPoint(Cursor.Position));
+            window.MessageReceived += OnPageMessage;
+            window.FormClosed += (sender, _) =>
+            {
+                if (ReferenceEquals(sender, _pinWindow))
+                {
+                    _pinWindow = null;
+                    if (_pairing is { } open)
+                    {
+                        // Closing the PIN window cancels the request, as Cancel does.
+                        CancelPairing(open.PairingId);
+                    }
+                }
+            };
+            _pinWindow = window;
+            _ = InitializeAsync(window);
+        }
+
+        PushState();
+        _pinWindow.ShowWhenReady();
         _notifyIcon.ShowBalloonTip(5000, "Pairing request", $"\"{started.DeviceName}\" wants to pair with this PC.", ToolTipIcon.Info);
     }
 
     private void OnPairingEnded(PairingEndedMessage ended)
     {
-        if (_pinForm?.PairingId == ended.PairingId)
+        if (_pairing?.PairingId == ended.PairingId)
         {
-            _pinForm.Close();
+            EndPairing();
         }
 
-        var (title, text, icon) = ended.Outcome switch
+        var (title, text, kind) = ended.Outcome switch
         {
-            "paired" => ("Device paired", $"\"{ended.DeviceName}\" can now connect to this PC.", ToolTipIcon.Info),
-            "tooManyAttempts" => ("Pairing failed", $"Too many incorrect PINs from \"{ended.DeviceName}\".", ToolTipIcon.Warning),
-            "expired" => ("Pairing expired", $"The PIN for \"{ended.DeviceName}\" expired.", ToolTipIcon.None),
-            _ => (string.Empty, string.Empty, ToolTipIcon.None),
+            "paired" => ("Device paired", $"\"{ended.DeviceName}\" can now connect to this PC.", "success"),
+            "tooManyAttempts" => ("Pairing failed", $"Too many incorrect PINs from \"{ended.DeviceName}\".", "error"),
+            "expired" => ("Pairing expired", $"The PIN for \"{ended.DeviceName}\" expired.", "info"),
+            _ => (string.Empty, string.Empty, string.Empty),
         };
 
         if (title.Length > 0)
         {
-            _notifyIcon.ShowBalloonTip(5000, title, text, icon);
-        }
-    }
-
-    private void ShowPassphrase()
-    {
-        if (_passphraseForm is null)
-        {
-            _passphraseForm = new AdminPassphraseForm(_passphraseConfigured == true, async hash =>
-            {
-                _passphraseSaving = true;
-                await _pipe.SendAsync(hash);
-            });
-            _passphraseForm.FormClosed += (_, _) => _passphraseForm = null;
+            Notify(kind, title, text);
         }
 
-        _passphraseForm.Show();
-        _passphraseForm.Activate();
+        PushState();
     }
 
-    internal void ShowHost()
+    private void EndPairing()
     {
-        if (_hostForm is null)
-        {
-            _hostForm = new HostForm(
-                ShowPassphrase,
-                ShowDevices,
-                ChangeIsoFolder,
-                ChangeVmFolder,
-                ChangeBackupFolder,
-                () => _ = SetUpConsoleAsync(),
-                () => _ = SetUpPackageSearchAsync(),
-                CheckOrInstallUpdate,
-                channel => _ = _pipe.SendAsync(new SetUpdateChannelMessage(channel)));
-            _hostForm.FormClosed += (_, _) => _hostForm = null;
-            RefreshHost();
-            _hostForm.ShowUpdate(_connected ? _update : null);
-        }
-
-        _hostForm.Show();
-        _hostForm.Activate();
+        _pairing = null;
+        var window = _pinWindow;
+        _pinWindow = null;
+        window?.Close();
     }
 
-    private async Task SetUpPackageSearchAsync()
+    // ITrayActions: what the page asks for.
+
+    public void SetPassphrase(string passphrase)
     {
-        var answer = MessageBox.Show(
-            _hostForm,
-            "HyperHarbor will install PowerShell 7 and the WinGet PowerShell module (Microsoft.WinGet.Client) for all users on this PC, " +
-            "so the host service can search winget packages for setup profiles. This downloads them from Microsoft and the PowerShell Gallery." +
-            $"{Environment.NewLine}{Environment.NewLine}Windows will ask for administrator permission. Continue?",
-            "Set up package search",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question,
-            MessageBoxDefaultButton.Button1);
-        if (answer != DialogResult.Yes)
+        if (!_connected)
         {
+            Notify("error", "The passphrase was not saved", "The host service is not running.");
+            PushState();
             return;
         }
 
-        var (succeeded, message) = await PackageSearchSetup.RunAsync(Environment.ProcessPath);
-        RefreshHost();
-        MessageBox.Show(_hostForm, message, "Set up package search", MessageBoxButtons.OK, succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-    }
-
-    private async Task SetUpConsoleAsync()
-    {
-        var answer = MessageBox.Show(
-            _hostForm,
-            "HyperHarbor will create a standard local account on this PC for each HyperHarbor user (for example hhc-owner). " +
-            "It cannot sign in to Windows; paired devices use it only to open the consoles of VMs, and its password changes every time they do." +
-            $"{Environment.NewLine}{Environment.NewLine}Windows will ask for administrator permission. Continue?",
-            "Set up console access",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question,
-            MessageBoxDefaultButton.Button1);
-        if (answer != DialogResult.Yes)
+        if (AdminPassphrase.Validate(passphrase) is { } problem)
         {
+            Notify("error", "The passphrase was not saved", problem);
+            PushState();
             return;
         }
 
-        // The tray is the host executable, so setup also works while the service is stopped.
-        var (succeeded, message) = await ConsoleAccessSetup.RunAsync(Environment.ProcessPath, HostForm.DataDirectory);
-        RefreshHost();
-        MessageBox.Show(_hostForm, message, "Set up console access", MessageBoxButtons.OK, succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        SetBusy("passphrase", true);
+
+        // PBKDF2 with 600,000 iterations takes a moment; only the hash leaves this process.
+        _ = Task.Run(() => AdminPassphrase.CreateHash(passphrase)).ContinueWith(
+            hash => _ = _pipe.SendAsync(hash.Result),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion,
+            TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    private void ChangeIsoFolder()
+    public void RemoveDevice(Guid deviceId)
     {
-        if (ChooseFolder("Choose where the host stores the ISO images clients add. Images already in the current folder stay there.", _isoFolder) is { } folder)
+        SetBusy("device:" + deviceId, true);
+        _ = _pipe.SendAsync(new RemoveDeviceMessage(deviceId));
+    }
+
+    public void ChooseFolder(TrayFolder folder)
+    {
+        var (key, description, current) = folder switch
         {
-            _isoFolderChanging = true;
-            _ = _pipe.SendAsync(new SetIsoFolderMessage(folder));
-        }
-    }
+            TrayFolder.Vm => ("vm", "Choose where the host creates new VMs. Each VM gets its own folder here; existing VMs stay where they are.", _vmFolder is { IsDefault: false } chosen ? chosen.Folder : null),
+            TrayFolder.Iso => ("iso", "Choose where the host stores the ISO images clients add. Images already in the current folder stay there.", _isoFolder),
+            _ => ("backup", "Choose where the host puts VM disk exports. Each export gets its own folder here; earlier exports stay where they are.", _backupFolder),
+        };
 
-    private void ChangeVmFolder()
-    {
-        var current = _vmFolder is { IsDefault: false } chosen ? chosen.Folder : null;
-        if (ChooseFolder("Choose where the host creates new VMs. Each VM gets its own folder here; existing VMs stay where they are.", current) is { } folder)
-        {
-            _vmFolderChanging = true;
-            _ = _pipe.SendAsync(new SetVmFolderMessage(folder));
-        }
-    }
-
-    private void ChangeBackupFolder()
-    {
-        if (ChooseFolder("Choose where the host puts VM disk exports. Each export gets its own folder here; earlier exports stay where they are.", _backupFolder) is { } folder)
-        {
-            _backupFolderChanging = true;
-            _ = _pipe.SendAsync(new SetBackupFolderMessage(folder));
-        }
-    }
-
-    /// <returns>The chosen folder, or null when the user cancelled or kept the current one.</returns>
-    private string? ChooseFolder(string description, string? current)
-    {
         using var dialog = new FolderBrowserDialog
         {
             Description = description,
@@ -409,82 +560,100 @@ internal sealed class TrayApplicationContext : ApplicationContext
             SelectedPath = current ?? string.Empty,
             ShowNewFolderButton = true,
         };
-        return dialog.ShowDialog(_hostForm) == DialogResult.OK && !string.Equals(dialog.SelectedPath, current, StringComparison.OrdinalIgnoreCase)
-            ? dialog.SelectedPath
-            : null;
+        if (dialog.ShowDialog(_hostWindow) != DialogResult.OK || string.Equals(dialog.SelectedPath, current, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        SetBusy("folder:" + key, true);
+        TrayMessage request = folder switch
+        {
+            TrayFolder.Vm => new SetVmFolderMessage(dialog.SelectedPath),
+            TrayFolder.Iso => new SetIsoFolderMessage(dialog.SelectedPath),
+            _ => new SetBackupFolderMessage(dialog.SelectedPath),
+        };
+        _ = _pipe.SendAsync(request);
     }
 
-    private void OnIsoFolder(IsoFolderMessage message)
+    public void SetUpConsole() =>
+        _ = RunHelperAsync("console", "Console access", () => ConsoleAccessSetup.RunAsync(Environment.ProcessPath, DataDirectory));
+
+    public void SetUpPackageSearch() =>
+        _ = RunHelperAsync("packageSearch", "Package search", () => PackageSearchSetup.RunAsync(Environment.ProcessPath));
+
+    /// <summary>Runs an elevated helper (the page asked first and shows it as in progress) and reports the result.</summary>
+    private async Task RunHelperAsync(string key, string title, Func<Task<(bool Succeeded, string Message)>> run)
     {
-        _isoFolder = message.Folder;
-        RefreshHost();
-        if (_isoFolderChanging)
+        if (!_busy.Add(key))
         {
-            _isoFolderChanging = false;
-            ReportFolderChange(message.Error, "ISO library moved", $"New images are stored in {message.Folder}.");
+            return;
+        }
+
+        PushState();
+        try
+        {
+            var (succeeded, message) = await run();
+            Notify(succeeded ? "success" : "error", succeeded ? $"{title} is set up" : $"{title} was not set up", message);
+        }
+        finally
+        {
+            _busy.Remove(key);
+            PushState();
         }
     }
 
-    private void OnVmFolder(VmFolderMessage message)
+    public void CheckForUpdate()
     {
-        _vmFolder = message;
-        RefreshHost();
-        if (_vmFolderChanging)
-        {
-            _vmFolderChanging = false;
-            ReportFolderChange(message.Error, "VM storage changed", $"New VMs are created in {message.Folder}.");
-        }
+        _pendingCheck = (_update?.LastCheck, DateTimeOffset.UtcNow);
+        SetBusy("update", true);
+        _ = _pipe.SendAsync(new CheckForUpdateMessage());
     }
 
-    private void OnBackupFolder(BackupFolderMessage message)
+    public void InstallUpdate() => _ = _pipe.SendAsync(new InstallUpdateMessage());
+
+    public void SetUpdateChannel(string channel) => _ = _pipe.SendAsync(new SetUpdateChannelMessage(channel));
+
+    public void Open(string target)
     {
-        _backupFolder = message.Folder;
-        RefreshHost();
-        if (_backupFolderChanging)
+        var (path, folder) = target == "logs" ? (Path.Combine(DataDirectory, "logs"), true) : (Path.Combine(DataDirectory, "audit.log"), false);
+        if (folder ? !Directory.Exists(path) : !File.Exists(path))
         {
-            _backupFolderChanging = false;
-            ReportFolderChange(message.Error, "Backup folder changed", $"Disk exports go to {message.Folder}.");
+            Notify("info", "Nothing to open yet", $"{path} does not exist yet. The host service creates it when it starts.");
+            return;
+        }
+
+        try
+        {
+            // The log files grant access only to Administrators, SYSTEM, and the account running the service.
+            Process.Start(new ProcessStartInfo(folder ? "explorer.exe" : "notepad.exe", $"\"{path}\"") { UseShellExecute = true });
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Notify("error", $"Could not open {Path.GetFileName(path)}", ex.Message);
         }
     }
 
-    private void ReportFolderChange(string? error, string title, string text)
+    public void OpenUrl(string url)
     {
-        if (error is not null)
+        if (WebWindow.IsExternalLinkAllowed(url))
         {
-            MessageBox.Show(_hostForm, error, "HyperHarbor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-        else
-        {
-            _notifyIcon.ShowBalloonTip(5000, title, text, ToolTipIcon.Info);
+            Launch(url);
         }
     }
 
-    private void RefreshHost() =>
-        _hostForm?.ShowStatus(new HostStatus(_connected, _passphraseConfigured, _devices.Count, _isoFolder, _vmFolder, _backupFolder));
-
-    private void OnPassphraseStatus(AdminPassphraseStatusMessage status)
+    public void CancelPairing(Guid pairingId)
     {
-        _passphraseConfigured = status.Configured;
-        _passphraseItem.Text = status.Configured ? "Change admin passphrase…" : "Set admin passphrase…";
-        RefreshHost();
-        if (_passphraseSaving && status.Configured)
+        if (_pairing?.PairingId != pairingId)
         {
-            _passphraseSaving = false;
-            _notifyIcon.ShowBalloonTip(5000, "Admin passphrase saved", "Paired devices now need it to change VMs.", ToolTipIcon.Info);
-        }
-    }
-
-    private void ShowDevices()
-    {
-        if (_devicesForm is null)
-        {
-            _devicesForm = new DevicesForm(id => _pipe.SendAsync(new RemoveDeviceMessage(id)));
-            _devicesForm.FormClosed += (_, _) => _devicesForm = null;
-            _devicesForm.ShowDevices(_devices);
-            _ = _pipe.SendAsync(new ListDevicesMessage());
+            return;
         }
 
-        _devicesForm.Show();
-        _devicesForm.Activate();
+        _ = _pipe.SendAsync(new CancelPairingMessage());
+        EndPairing();
+        PushState();
     }
+
+    public void CloseWindow() => _hostWindow?.Close();
+
+    private static void Launch(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 }

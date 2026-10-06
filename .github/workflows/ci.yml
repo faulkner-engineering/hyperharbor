@@ -19,6 +19,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: host/src/Host.Tray/webui/package-lock.json
+      # The tray window's HTML app; the host build embeds it.
+      - name: Tray window app
+        working-directory: host/src/Host.Tray/webui
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+          npm test
+          npm audit --audit-level=high
       - name: Build (analyzers and NuGet audit fail the build)
         run: dotnet build HyperHarbor.sln -warnaserror
       - name: Test with coverage
@@ -80,6 +90,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      # The host build runs npm for the tray window's HTML app.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

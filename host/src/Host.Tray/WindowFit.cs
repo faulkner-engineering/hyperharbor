@@ -36,14 +36,4 @@ internal static class WindowFit
             size.Width,
             size.Height),
         workingArea);
-
-    /// <summary>Moves (and if needed shrinks) the form so all of it is on the screen it is mostly on.</summary>
-    public static void KeepOnScreen(this Form form)
-    {
-        var placed = PlaceInside(form.Bounds, Screen.FromControl(form).WorkingArea);
-        if (placed != form.Bounds)
-        {
-            form.Bounds = placed;
-        }
-    }
 }

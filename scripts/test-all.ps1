@@ -59,6 +59,15 @@ function Invoke-Check([string]$Title, [string]$Directory, [scriptblock]$Command)
 }
 
 if (-not $ClientOnly) {
+    # The tray window's HTML app (the host build embeds it, and runs npm ci when node_modules is missing).
+    $trayUi = Join-Path $repo 'host\src\Host.Tray\webui'
+    Invoke-Check 'Tray window npm ci' $trayUi { npm ci --no-audit --no-fund }
+    Invoke-Check 'Tray window type check' $trayUi { npm run check }
+    Invoke-Check 'Tray window tests' $trayUi { npm test }
+    if (-not $SkipAudit) {
+        Invoke-Check 'Tray window npm audit' $trayUi { npm audit --audit-level=high }
+    }
+
     $solution = Join-Path $repo 'HyperHarbor.sln'
     Invoke-Check 'Host build' $repo { dotnet build $solution -warnaserror }
     if ($Coverage) {

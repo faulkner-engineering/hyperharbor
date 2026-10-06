@@ -1,0 +1,11 @@
+<Project>
+
+  <!-- The WebView2 package (Host.Tray, and transitively every project that references it) also references its WPF
+       control, which pulls in a WindowsBase these WinForms projects cannot unify. Only the WinForms control is used. -->
+  <Target Name="DropWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -139,7 +139,7 @@ per-device VM accounts and a user management UI.
   /host/update/settings or the tray's channel menu) over UpdateOptions. UpdateEndpoints.Status builds the
   HostUpdateStatus for the API and the tray; a host run without installing reports supported=false and
   answers check and settings with 409 updatesUnsupported. The tray polls UpdateStatusQueryMessage while the
-  HostForm window is open; Install now comes from the tray (InstallUpdateMessage) or from POST /host/update/install
+  host window is open (every second while something moves); Install now comes from the tray (InstallUpdateMessage) or from POST /host/update/install
   (elevated, audited; 409 updateNotReady unless a version is prepared). The endpoint calls RequestInstall in
   Response.OnCompleted, because its own in-flight request would otherwise keep HostActivity busy until the next tick.
 - host/src/Host.Core/Updates: UpdateOptions (Update section: channel, channel manifest URLs, allowed hosts,
@@ -147,9 +147,18 @@ per-device VM accounts and a user management UI.
   skips rolled-back versions, minimumUpdateFrom), UpdateDownloader (https and allowed hosts on every redirect
   hop, size and SHA-256 while streaming), PackageSignatures (UnsignedPackageVerifier holds the marked SIGNING
   HOOK), UpdatePreparer (manifest, decision, then download, hash, signatures, self-test; a failure deletes it).
-- host/src/Host.Tray: WinForms tray (a library; TrayApp.Run is single-instance per session). HostForm (double-click the icon) shows service status, the admin passphrase
-  (set or change), paired devices, console access (Set up console access runs the elevated helper), and opens
-  the logs; PinForm, DevicesForm, AdminPassphraseForm
+- host/src/Host.Tray: the tray (a library; TrayApp.Run is single-instance per session). The notification icon, its
+  menu, the pipe client, and ShutdownGuard are WinForms; the windows are HTML in WebView2 (since 2026-10-05, the
+  user's choice). TrayApplicationContext owns both windows (the host window, double-click the icon; the pairing PIN
+  window), pushes one TrayViewState to them on every change, and implements ITrayActions for what the page asks.
+  Window/: WebWindow (Form + WebView2; serves the embedded app from https://tray.hyperharbor.invalid/, blocks other
+  navigation, opens only the project's GitHub links outside, shows itself when the page posts "ready", hides on
+  close), TrayWebView (the shared environment, data in %LOCALAPPDATA%\HyperHarbor\TrayWebView), TrayUiResources,
+  BridgeMessages (TrayViewState and the messages to the page), TrayCommands (the page's messages to ITrayActions).
+  webui/: the app (Vite + Svelte 5 + TypeScript, no SvelteKit): store.svelte.ts, bridge.ts (mirrors BridgeMessages;
+  bridge.fixtures.json from TrayWindowTests, HH_WRITE_TRAY_FIXTURES=1), text.ts (all status words), pages/, components/.
+  The project's EmbedTrayUi target runs npm ci (when node_modules is missing) and npm run build, then embeds dist.
+  Without the WebView2 Runtime the tray offers its download and shows the PIN in a notification.
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
   identity.rs (key in Credential Manager), paired.rs, rdp.rs (mstsc launch), console.rs (loopback listener and
@@ -240,12 +249,22 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
 - Files under %ProgramData%\HyperHarbor that grant access (certificate, paired devices) go through ProtectedFile.
 - Other LAN devices need an inbound firewall rule for TCP 48443. The packaged host's start script creates it;
   a dev run from source does not.
-- Tray (WinForms) windows must set AutoScaleDimensions = 96x96 with AutoScaleMode.Dpi and size from content;
-  the tray runs PerMonitorV2. Fixed pixel layouts were unreadable at higher display scaling. A window sized
-  only from content ran off the bottom of scaled screens, so HostForm puts its sections on tabs whose pages
-  scroll (AutoScroll, undocked tables) and FitToContent sizes it to the largest tab within the work area
-  (WindowFit, unit tested), again after OnDpiChanged: a window created at the primary monitor's DPI is
-  rescaled when it lands on another monitor. Add new HostForm rows to a tab, not to a taller window.
+- Tray windows (WebView2, 2026-10-05):
+  - WebWindow.PlaceOn sizes the window for its monitor's DPI (GetDpiForMonitor) within the work area (WindowFit)
+    with AutoScaleMode None; WinForms' own DPI scaling would scale it twice. The page scales itself.
+  - The page must send "ready" right after its first render, not from requestAnimationFrame: the window is hidden
+    until then, and a hidden WebView2 runs no animation frames (the first build never showed its window).
+  - Folder names differ from C# folders only by case at your peril: Windows paths ignore case, so a "ui" npm folder
+    and a "Ui" C# folder are the same folder (hence webui/ and Window/).
+  - The WebView2 package also references its WPF control, which breaks WinForms builds (MSB3277 on WindowsBase);
+    Directory.Build.targets drops that reference for every project. Host.Service sets
+    PublishReferencesDocumentationFiles=false, or WebView2's XML docs land beside the single executable.
+  - Messages to the page use ContractJson.Options (enums as camelCase strings); nullable TrayViewState fields need
+    [JsonIgnore(Condition = Never)] because those options leave nulls out, and the page checks === null.
+  - The CSP is strict (default-src 'none'; scripts and styles from 'self' only): no inline scripts or style tags.
+    Svelte's style: directives and transitions set styles through the CSSOM, which the CSP allows.
+  - UI automation: InvokePattern on WebView2 elements works once the accessibility tree exists; retry the first
+    FindFirst for a few seconds.
 - mDNS on the host goes through DnsServiceRegister (dnsapi.dll). Do not bind UDP 5353 in the host.
 - Hyper-V (verified on a live host):
   - GetSummaryInformation fills only the requested fields; always request Name (code 0).

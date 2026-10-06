@@ -8,6 +8,9 @@
     <RootNamespace>HyperHarbor.Host.Tray</RootNamespace>
     <AssemblyName>HyperHarbor.Host.Tray</AssemblyName>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+    <!-- The window's HTML app has its own build (webui/, npm); none of its files are items of this project. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);webui\**</DefaultItemExcludes>
+    <TrayUiDirectory>$(MSBuildProjectDirectory)\webui</TrayUiDirectory>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,5 +25,34 @@
   <ItemGroup>
     <InternalsVisibleTo Include="HyperHarbor.Host.Tests" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+  </ItemGroup>
+
+  <!-- What the UI build reads; a change to any of them builds it again. -->
+  <ItemGroup>
+    <TrayUiInput Include="$(TrayUiDirectory)\src\**\*" />
+    <TrayUiInput Include="$(TrayUiDirectory)\index.html;$(TrayUiDirectory)\package.json;$(TrayUiDirectory)\package-lock.json;$(TrayUiDirectory)\vite.config.ts" />
+  </ItemGroup>
+
+  <!-- Installs the UI's packages once (npm ci). -->
+  <Target Name="RestoreTrayUi" Condition="!Exists('$(TrayUiDirectory)\node_modules')">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(TrayUiDirectory)" />
+  </Target>
+
+  <!-- Builds the UI into webui\dist when its sources changed. -->
+  <Target Name="BuildTrayUi" DependsOnTargets="RestoreTrayUi" Inputs="@(TrayUiInput)" Outputs="$(TrayUiDirectory)\dist\index.html">
+    <Exec Command="npm run build" WorkingDirectory="$(TrayUiDirectory)" />
+  </Target>
+
+  <!-- Embeds every file of webui\dist as HyperHarbor.Tray.Ui/<path>, which TrayUiResources serves to WebView2. The
+       items are added here, after the build, because webui\dist does not exist when the project is first evaluated. -->
+  <Target Name="EmbedTrayUi" BeforeTargets="BeforeBuild" DependsOnTargets="BuildTrayUi">
+    <ItemGroup>
+      <TrayUiFile Include="$(TrayUiDirectory)\dist\**\*" />
+      <EmbeddedResource Include="@(TrayUiFile)" LogicalName="HyperHarbor.Tray.Ui/$([System.String]::Copy('%(RecursiveDir)%(Filename)%(Extension)').Replace('\', '/'))" />
+    </ItemGroup>
+  </Target>
 
 </Project>

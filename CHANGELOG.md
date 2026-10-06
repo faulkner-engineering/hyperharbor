@@ -10,7 +10,19 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Changed
+- A new HyperHarbor Host window on the host PC (double-click the tray icon). It matches the client app, follows
+  Windows' light and dark theme, and sizes itself for the display it opens on. Sections are in a sidebar (Overview,
+  Devices, Storage, Updates, Logs). Everything you start shows its progress where you started it: setting the
+  passphrase, setting up console access or package search, changing a folder, removing a device, and update
+  checks (with Check, Download and test, Ready, and Install steps). Confirmations and results appear in the
+  window instead of message boxes. The pairing PIN has its own window with a countdown. The tray needs the
+  Microsoft Edge WebView2 Runtime, which Windows 11 includes; without it, the tray offers the download and shows
+  pairing PINs as notifications.
+
 ### Fixed
+- Check now could do nothing at all once the host service had run for a while: each quiet minute left a wait
+  behind that took the next request. Fixed in the host; update the host to get it.
 - Check now (client Updates panel) gave no feedback: the host answers before the check runs, so the button
   went straight back and the old status stayed. The panel now shows Checking… until the host reports the check,
   then says what it found (up to date, a new version, or why the check failed), or that the host did not finish

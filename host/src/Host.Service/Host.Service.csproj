@@ -12,6 +12,8 @@
     <RootNamespace>HyperHarbor.Host.Service</RootNamespace>
     <AssemblyName>HyperHarbor.Host</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- Packages' XML documentation (WebView2's) would land beside the single executable. -->
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
   </PropertyGroup>
 
   <ItemGroup>
