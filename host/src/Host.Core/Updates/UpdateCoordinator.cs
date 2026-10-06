@@ -51,6 +51,7 @@ public sealed class UpdateCoordinator(
 
     private readonly object _gate = new();
     private readonly SemaphoreSlim _requested = new(0);
+    private Task? _pendingRequest;
     private DateTimeOffset? _lastCheck;
     private UpdateManifest? _manifest;
     private UpdateDecision? _decision;
@@ -127,8 +128,23 @@ public sealed class UpdateCoordinator(
         return true;
     }
 
-    /// <summary>Completes at the next request, or when <paramref name="cancellationToken"/> is canceled.</summary>
-    public Task WaitForRequestAsync(CancellationToken cancellationToken) => _requested.WaitAsync(cancellationToken);
+    /// <summary>
+    /// Waits until <paramref name="interval"/> passes or a check or install is requested, whichever comes first. The
+    /// wait for a request carries over to the next call when the interval wins: a fresh wait every minute would leave
+    /// the old ones queued on the semaphore, and they would swallow later requests (Check now did nothing once the
+    /// service had run for a while).
+    /// </summary>
+    public async Task WaitForNextTickAsync(TimeSpan interval, CancellationToken cancellationToken)
+    {
+        _pendingRequest ??= _requested.WaitAsync(cancellationToken);
+        var finished = await Task.WhenAny(Task.Delay(interval, time, cancellationToken), _pendingRequest).ConfigureAwait(false);
+        if (finished == _pendingRequest)
+        {
+            _pendingRequest = null;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+    }
 
     public async Task TickAsync(CancellationToken cancellationToken)
     {

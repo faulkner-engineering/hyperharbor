@@ -90,6 +90,28 @@ public sealed class UpdateCoordinatorTests : IDisposable
         Assert.False(_coordinator.RequestInstall());
     }
 
+    /// <summary>
+    /// Seen live on 0.1.4: once the service had run for a while, Check now did nothing, because every quiet minute left
+    /// a wait queued on the request semaphore and those waits took the later requests.
+    /// </summary>
+    [Fact]
+    public async Task ARequest_WakesTheLoop_AfterManyQuietMinutes()
+    {
+        for (var minute = 0; minute < 5; minute++)
+        {
+            var quiet = _coordinator.WaitForNextTickAsync(TimeSpan.FromMinutes(1), CancellationToken.None);
+            _time.Advance(TimeSpan.FromMinutes(1));
+            await quiet.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        var waiting = _coordinator.WaitForNextTickAsync(TimeSpan.FromMinutes(1), CancellationToken.None);
+        Assert.False(waiting.IsCompleted);
+
+        _coordinator.RequestCheck();
+
+        await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     [Fact]
     public async Task Off_DoesNotCheck_UnlessAsked()
     {

@@ -14,8 +14,7 @@ internal sealed class UpdateService(UpdateCoordinator coordinator, ILogger<Updat
         {
             try
             {
-                await Task.WhenAny(Task.Delay(TickInterval, stoppingToken), coordinator.WaitForRequestAsync(stoppingToken));
-                stoppingToken.ThrowIfCancellationRequested();
+                await coordinator.WaitForNextTickAsync(TickInterval, stoppingToken);
                 await coordinator.TickAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
