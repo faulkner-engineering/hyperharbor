@@ -10,6 +10,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- Starting a VM now reports why it could not start. Before, a start that Hyper-V accepted but then failed, such as
+  when the host does not have enough free memory, did nothing and showed no message (a new VM then sat at
+  "installing OS" while off). The start request now waits for Hyper-V and the client shows its reason. Update the
+  host.
+
 ## [0.1.5] - 2026-10-05 (API 1.15.0)
 
 ### Added

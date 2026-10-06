@@ -30,10 +30,10 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
 
     public Task InvokeAsync(Guid vmId, VmAction action, CancellationToken cancellationToken)
     {
-        return Task.Run(() => Invoke(vmId, action), cancellationToken);
+        return Task.Run(() => InvokeCoreAsync(vmId, action, cancellationToken), cancellationToken);
     }
 
-    private static void Invoke(Guid vmId, VmAction action)
+    private static async Task InvokeCoreAsync(Guid vmId, VmAction action, CancellationToken cancellationToken)
     {
         using var session = CimSession.Create(null);
 
@@ -42,13 +42,15 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
             switch (action)
             {
                 case VmAction.Start:
-                    RequestStateChange(session, vmId, action, RequestedStateEnabled);
+                    // Start runs as a job that fails when the host cannot give the VM its memory; wait so the
+                    // caller gets Hyper-V's reason instead of a VM that silently stays off.
+                    await RequestStateChangeAsync(session, vmId, action, RequestedStateEnabled, cancellationToken).ConfigureAwait(false);
                     break;
                 case VmAction.TurnOff:
-                    RequestStateChange(session, vmId, action, RequestedStateDisabled);
+                    await RequestStateChangeAsync(session, vmId, action, RequestedStateDisabled, null).ConfigureAwait(false);
                     break;
                 case VmAction.Save:
-                    RequestStateChange(session, vmId, action, RequestedStateOffline);
+                    await RequestStateChangeAsync(session, vmId, action, RequestedStateOffline, null).ConfigureAwait(false);
                     break;
                 case VmAction.Shutdown:
                     InvokeShutdownComponent(session, vmId, action, "InitiateShutdown");
@@ -72,7 +74,12 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
         }
     }
 
-    private static void RequestStateChange(CimSession session, Guid vmId, VmAction action, ushort requestedState)
+    private static async Task RequestStateChangeAsync(
+        CimSession session,
+        Guid vmId,
+        VmAction action,
+        ushort requestedState,
+        CancellationToken? waitForJob)
     {
         using var system = QuerySingle(session, $"SELECT * FROM Msvm_ComputerSystem WHERE Name = '{vmId:D}'")
             ?? throw new VmNotFoundException(vmId);
@@ -84,6 +91,11 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
 
         using var result = session.InvokeMethod(Namespace, system, "RequestStateChange", parameters);
         EnsureAccepted(action, "RequestStateChange", result);
+
+        if (waitForJob is { } token && GetReturnCode(result) == ReturnJobStarted)
+        {
+            await HyperVCim.CompleteAsync(session, result, "starting the virtual machine", token).ConfigureAwait(false);
+        }
     }
 
     private static void InvokeShutdownComponent(CimSession session, Guid vmId, VmAction action, string methodName)
