@@ -8,7 +8,9 @@ is noted where it changes.
 Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
 note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
 
-## [Unreleased] (API 1.15.0)
+## [Unreleased]
+
+## [0.1.5] - 2026-10-05 (API 1.15.0)
 
 ### Added
 - Update progress: while the host downloads and tests a new version, the client's Updates panel and the host
