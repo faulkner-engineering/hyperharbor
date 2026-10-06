@@ -10,6 +10,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Changed
+- The client now explains how to install software that needs administrator approval in a VM: add it to a setup
+  profile and use Apply setup profile…, which the host runs as the VM's administrator (a note in the Apply dialog and
+  on the Setup profiles tab), shown in a small info popup next to the Setup profile label and the tab's description.
+
 ### Fixed
 - Starting a VM now reports why it could not start. Before, a start that Hyper-V accepted but then failed, such as
   when the host does not have enough free memory, did nothing and showed no message (a new VM then sat at

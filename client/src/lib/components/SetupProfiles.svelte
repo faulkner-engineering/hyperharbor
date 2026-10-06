@@ -18,6 +18,7 @@
   import { toasts } from "$lib/toasts.svelte";
   import { onMount } from "svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import InfoTip from "./InfoTip.svelte";
   import SetupProfileEditor from "./SetupProfileEditor.svelte";
 
   interface Props {
@@ -117,6 +118,11 @@
     Setup profiles list what to install, remove, and change in a Windows VM. Build one here, or capture one from a VM
     you have set up (Capture setup profile in the VM's menu). They are YAML files on the host; export one to edit it
     in a text editor. Saving, importing, or deleting asks for the admin passphrase.
+    <InfoTip label="About installing software that needs administrator approval">
+      To install software that needs administrator approval, add it to a profile and use Apply setup profile… in the
+      VM's menu. The host installs it as the VM's administrator, so there is no administrator prompt to answer inside
+      the VM. Your HyperHarbor account in the VM stays a standard user.
+    </InfoTip>
   </p>
   <div class="buttons">
     <button type="button" onclick={() => (editing = { profileId: null, initial: emptyProfile() })}>New profile</button>

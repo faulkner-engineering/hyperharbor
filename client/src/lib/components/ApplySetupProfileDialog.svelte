@@ -11,6 +11,7 @@
   } from "$lib/api/client";
   import { ElevationCancelled, waitForJob, withElevation } from "$lib/lifecycle.svelte";
   import Dialog from "./Dialog.svelte";
+  import InfoTip from "./InfoTip.svelte";
   import JobProgress from "./JobProgress.svelte";
 
   interface Props {
@@ -70,7 +71,14 @@
     {:else if usable.length === 0}
       <p class="muted">You have no setup profiles yet. Create one on the Setup profiles tab, or capture one from a VM.</p>
     {:else}
-      <label for="apply-profile">Setup profile</label>
+      <div class="label-row">
+        <label for="apply-profile">Setup profile</label>
+        <InfoTip label="About installing software that needs administrator approval">
+          The host runs this as {vm.name}'s administrator, so software that needs administrator approval installs
+          without a prompt. Your HyperHarbor account in the VM stays a standard user. Only packages winget or the
+          Microsoft Store can install silently are supported.
+        </InfoTip>
+      </div>
       <select id="apply-profile" bind:value={profileId} disabled={busy || job !== null}>
         {#each usable as profile (profile.id)}
           <option value={profile.id}>{profile.name}</option>
@@ -126,6 +134,12 @@
 </Dialog>
 
 <style>
+  .label-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
   .problems {
     margin: 0 0 0.5rem 1.2rem;
     padding: 0;
