@@ -67,6 +67,24 @@ describe("VmList row actions", () => {
     expect((await openMenu()).queryByRole("button", { name: "Capture setup profile…" })).toBeNull();
   });
 
+  it("offers Apply setup profile for running Windows VMs that are not still installing", async () => {
+    const onapplyprofile = vi.fn();
+    const running = provisioned("running");
+    const { unmount } = render(VmList, { vms: [running], onapplyprofile });
+
+    await fireEvent.click((await openMenu()).getByRole("button", { name: "Apply setup profile…" }));
+    expect(onapplyprofile).toHaveBeenCalledWith(running);
+    unmount();
+
+    const installing = render(VmList, { vms: [{ ...running, installState: "applyingProfile" }], onapplyprofile });
+    expect((await openMenu()).queryByRole("button", { name: "Apply setup profile…" })).toBeNull();
+    installing.unmount();
+
+    // A host without the route gets no handler, so no item.
+    render(VmList, { vms: [running] });
+    expect((await openMenu()).queryByRole("button", { name: "Apply setup profile…" })).toBeNull();
+  });
+
   it("leaves Capture setup profile out for hosts without setup profiles", async () => {
     render(VmList, { vms: [provisioned("running")] });
 

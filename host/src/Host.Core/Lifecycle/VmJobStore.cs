@@ -10,6 +10,7 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// <param name="Step">What the job is doing now, for example "Deleting disks".</param>
 /// <param name="ErrorTitle">Set when <paramref name="State"/> is Failed.</param>
 /// <param name="ErrorDetail">Safe to show to the client; unexpected failures get a generic message.</param>
+/// <param name="SetupResult">What an applySetupProfile job did.</param>
 public sealed record VmJobSnapshot(
     Guid Id,
     VmJobKind Kind,
@@ -21,7 +22,8 @@ public sealed record VmJobSnapshot(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string? ErrorTitle,
-    string? ErrorDetail);
+    string? ErrorDetail,
+    Shared.Contracts.Unattend.SetupProfileResult? SetupResult = null);
 
 /// <summary>Handed to a job's work so it can report progress.</summary>
 public sealed class VmJobContext
@@ -49,6 +51,9 @@ public sealed class VmJobContext
     /// </summary>
     /// <exception cref="InvalidOperationException">The job already has a virtual machine.</exception>
     public void AttachVm(Guid vmId) => _store.Attach(_jobId, vmId);
+
+    /// <summary>Records what an applySetupProfile job did, for the job's snapshot.</summary>
+    public void ReportSetupResult(Shared.Contracts.Unattend.SetupProfileResult result) => _store.SetSetupResult(_jobId, result);
 }
 
 /// <summary>
@@ -167,6 +172,7 @@ public sealed class VmJobStore : IDisposable
         VmJobKind.ApplyPerformance => "applying Performance mode",
         VmJobKind.PerformanceGuestSetup => "setting up the guest for Performance mode",
         VmJobKind.ExportDisks => "exporting the disks",
+        VmJobKind.ApplySetupProfile => "applying a setup profile",
         _ => kind.ToString(),
     };
 
@@ -177,6 +183,17 @@ public sealed class VmJobStore : IDisposable
             if (_jobs.TryGetValue(jobId, out var entry) && entry.Snapshot.State == VmJobState.Running)
             {
                 entry.Snapshot = entry.Snapshot with { Step = step, PercentComplete = percentComplete, UpdatedAt = _time.GetUtcNow() };
+            }
+        }
+    }
+
+    internal void SetSetupResult(Guid jobId, Shared.Contracts.Unattend.SetupProfileResult result)
+    {
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue(jobId, out var entry))
+            {
+                entry.Snapshot = entry.Snapshot with { SetupResult = result, UpdatedAt = _time.GetUtcNow() };
             }
         }
     }

@@ -5,6 +5,8 @@ using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Profiles;
+using HyperHarbor.Shared.Contracts.Unattend;
+using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace HyperHarbor.Host.Service.Api;
@@ -38,7 +40,23 @@ public static class SetupProfileEndpoints
         profiles.MapDelete("/{profileId}", Delete).WithName("deleteSetupProfile")
             .Audited<string>(profileId => $"profileId={profileId}")
             .RequireElevation();
+
+        endpoints.MapGroup(VmEndpoints.BasePath).MapPost("/{vmId:guid}/setup-profile", ApplyAsync).WithName("applyVmSetupProfile")
+            .Audited<ApplySetupProfileRequest>(request => $"profileId={request.ProfileId}, restartIfNeeded={request.RestartIfNeeded}")
+            .RequireElevation();
         return endpoints;
+    }
+
+    private static async Task<Accepted<VmJob>> ApplyAsync(
+        Guid vmId,
+        ApplySetupProfileRequest request,
+        SetupProfileJobs setup,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var job = await setup.StartAsync(vmId, context.User.UserId(), request, context.CompletionAuditor(), cancellationToken);
+        context.Audit()!.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }
 
     private static string Describe(SetupProfile profile) =>

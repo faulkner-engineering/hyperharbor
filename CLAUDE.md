@@ -69,8 +69,11 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    applied by the install watcher after the account is set up (state applyingProfile; baseline recorded first;
    SetupProfilePlanner, SetupProfileApplication, PowerShellDirectProfileApplier: packages, removals, settings), with
    one restart if needed, then Ready with setupResult. Verified live 2026-10-05: the applier on HyperHarbor-Test, and
-   create to Ready on HyperHarbor-Test2 (17 min, 7 items, no problems). The restart path is unit tested only. Next:
-   apply to an existing VM from its menu as a VmJob.
+   create to Ready on HyperHarbor-Test2 (17 min, 7 items, no problems). Part 2 (done 2026-10-05, API 1.14.0): POST
+   /vms/{vmId}/setup-profile starts an applySetupProfile job (SetupProfileJobs) on a running Windows VM; HKCU values also
+   go to the User's account hive when it has a profile in the VM; restartIfNeeded uses GuestRestart (shared with the
+   watcher); the job's setupResult carries restartPending. Client: VM menu Apply setup profile… (ApplySetupProfileDialog). Verified live 2026-10-05 (HH_PROFILE_EXISTING_LIVE): 7 items, the account hive written. No
+   removal in the live runs needed a restart (MathRecognizer, SmbDirect), so the restart path is unit tested only.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -85,7 +88,7 @@ per-device VM accounts and a user management UI.
 - Never store VM passwords in plaintext. Never bind the API to 0.0.0.0 without mTLS.
 - Rotated VM passwords live in host memory only for the reuse window and are never logged or persisted.
   VM admin credentials for provisioning are stored only with DPAPI through ProtectedFile.
-- Ask before any destructive Hyper-V operation.
+- Ask before any destructive Hyper-V operation, except on throwaway VMs created for tests (deleting those is allowed).
 - After any change, without asking (the user's standing instruction): stop everything running from dist/
   (HyperHarbor.Host processes: host and tray; the portable client), rebuild with
   scripts\package.ps1 -Fast (add -SkipTests once the change's tests have passed, and -HostOnly or -ClientOnly
@@ -419,12 +422,16 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     means done after a restart; 0x8A150010 (no machine-scope installer) retries without --scope machine.
   - Invoke-Command -ArgumentList @($array) with one argument unrolls the array into separate arguments, so the
     script block's single parameter got only the first package and the first registry write. Wrap it:
-    -ArgumentList (,@($array)). Several arguments (the removals script) are not affected.
+    -ArgumentList (,@($array)). With several arguments, pass @($array) as is: (,@($array)), $other wraps it once too
+    often, and the script saw one item whose name was the whole list.
   - Remove-WindowsCapability for MathRecognizer reported no restart. HKCU tweaks go to the Default user hive
     (C:\Users\Default\NTUSER.DAT under HKU\HyperHarborDefault), since the User's account has not signed in yet.
     ExtensionSettings is one REG_SZ JSON value under the browser's policy key.
-  - After a restart the watcher counts Remote Desktop only after one check found it down (Windows answers for a few
+  - After a restart, GuestRestart counts Remote Desktop only after one check found it down (Windows answers for a few
     seconds after the request, and a guest reboot does not reset uptime): 60 checks of 15 seconds.
+  - The User's account hive: loaded under HKU\<SID> while it is signed in, otherwise its NTUSER.DAT loaded under
+    HKU\HyperHarborUser. An account that never signed in has no profile, so only the Default hive changes. The live
+    test gives the account a profile with userenv CreateProfile, which needs no sign-in.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):
@@ -529,6 +536,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   - HH_SPIKE_LIVE=1 HH_SPIKE_ISO=<image>: creates HyperHarbor-Test with an unattended install if missing (about 20
     minutes) and runs the 12b spike checks. HH_PROFILE_APPLY_LIVE=1 HH_LIVE_GUEST_VM=<id>: applies a small profile
     with the real applier and reads it back (about 30 s). HH_PROFILE_E2E_LIVE=1 HH_SPIKE_ISO=<image>: creates
-    HyperHarbor-Test2 with a setup profile and waits for Ready (about 25 minutes). Delete the throwaway VMs afterwards.
+    HyperHarbor-Test2 with a setup profile and waits for Ready (about 25 minutes). HH_PROFILE_EXISTING_LIVE=1
+    HH_SPIKE_ISO=<image>: creates HyperHarbor-Test, applies a profile through the API with a restart, checks the
+    account's hive, and deletes the VM. Throwaway VMs created for tests may be deleted without asking (the user's
+    decision, 2026-10-05); ask before changing any other VM.
 - VM console automation: Msvm_Keyboard.TypeText can drop characters, so send TypeKey one key at a time.
   Read the screen with GetVirtualSystemThumbnailImage (RGB565) and confirm a prompt is gone before moving on.

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.13.0
+  version: 1.14.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -1571,6 +1571,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
 
+  /vms/{vmId}/setup-profile:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [Profiles]
+      operationId: applyVmSetupProfile
+      summary: Apply one of your setup profiles to a running Windows VM.
+      description: |
+        Starts an `applySetupProfile` job (API 1.14.0). Over PowerShell Direct, as HyperHarbor's administrator
+        for the VM, it installs the profile's packages with winget, removes its apps, capabilities, and features,
+        and writes its tweaks and browser policies and extensions. Account settings go to the Default user profile
+        and, when your account in the VM already has a profile, to that account too (a signed-in session sees some
+        of them only after signing out). With restartIfNeeded, the VM restarts once when something needs it and the
+        job waits for Remote Desktop to answer again. Items that fail are listed in the job's setupResult; the job
+        fails only when the guest cannot be reached.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplySetupProfileRequest"
+      responses:
+        "202":
+          description: The job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          description: The VM or the setup profile does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "409":
+          description: |
+            The VM is not a running Windows guest, its unattended install is still in progress, HyperHarbor has no
+            administrator credential for it (`code` is `credentialRequired`), or another operation holds the VM.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
   /vms/{vmId}/performance/guest-setup:
     parameters:
       - $ref: "#/components/parameters/VmId"
@@ -2892,7 +2949,7 @@ components:
 
     VmJobKind:
       type: string
-      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks]
+      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile]
 
     VmJobState:
       type: string
@@ -2939,6 +2996,23 @@ components:
           oneOf:
             - $ref: "#/components/schemas/JobError"
             - type: "null"
+        setupResult:
+          description: What an `applySetupProfile` job did, once it succeeded (API 1.14.0). Omitted for other jobs.
+          oneOf:
+            - $ref: "#/components/schemas/SetupProfileResult"
+            - type: "null"
+
+    ApplySetupProfileRequest:
+      type: object
+      required: [profileId]
+      properties:
+        profileId:
+          type: string
+          description: An `id` from `GET /setup-profiles`.
+        restartIfNeeded:
+          type: boolean
+          default: true
+          description: Restart the VM once when something needs it. False leaves the restart to the user (restartPending).
 
     HostRemoteDesktop:
       type: object
@@ -3685,6 +3759,9 @@ components:
         finishedAt:
           type: string
           format: date-time
+        restartPending:
+          type: boolean
+          description: Something needs a restart that was not done, because the request asked not to restart (API 1.14.0).
 
     UnattendedInstallStatus:
       type: object

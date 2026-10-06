@@ -58,7 +58,7 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
     private readonly Profiles.FakeGuestProfileReader _profileReader = new();
     private AppxBaselineStore? _baselines;
 
-    private readonly FakeGuestProfileApplier _applier = new();
+    private readonly Profiles.FakeGuestProfileApplier _applier = new();
     private readonly RestartingPower _power;
     private readonly List<AuditEntry> _audit = [];
 
@@ -81,11 +81,10 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         return new(
             _installs, _inventory, _probe, _provisioning, _accounts, _credentials, _guest, _media, _time, _options,
             NullLogger<UnattendedInstallWatcher>.Instance, appx,
-            new SetupProfileApplication(new SetupProfilePlanner(Catalogs.Default), _applier), _power, new VmOperationLocks(), new ListAuditLog(_audit))
-        {
-            RestartPoll = TimeSpan.Zero,
-            RestartChecks = 4,
-        };
+            new SetupProfileApplication(new SetupProfilePlanner(Catalogs.Default), _applier),
+            new GuestRestart(_inventory, _probe, _power, _time) { Poll = TimeSpan.Zero, Checks = 4 },
+            new VmOperationLocks(),
+            new ListAuditLog(_audit));
     }
 
     private static readonly SetupProfile Workstation = new(
@@ -458,57 +457,8 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         Assert.Null(Install.SetupResult);
     }
 
-    private sealed class FakeGuestProfileApplier : IGuestProfileApplier
-    {
-        public List<string> Calls { get; } = [];
-
-        public List<GuestCredential> AdminsUsed { get; } = [];
-
-        /// <summary>Items that fail, with their error.</summary>
-        public Dictionary<string, string> Failing { get; } = [];
-
-        /// <summary>The item whose removal needs a restart.</summary>
-        public string? Restart { get; set; }
-
-        public Exception? Failure { get; set; }
-
-        public Action<string>? OnCall { get; set; }
-
-        public int FirstCallOrder { get; private set; } = int.MaxValue;
-
-        public Task<IReadOnlyList<ApplyItemResult>> InstallPackagesAsync(Guid vmId, GuestCredential admin, IReadOnlyList<PackageInstall> packages, CancellationToken cancellationToken) =>
-            Run("packages", admin, packages.Select(package => package.Item).ToList());
-
-        public Task<IReadOnlyList<ApplyItemResult>> RemoveAsync(Guid vmId, GuestCredential admin, IReadOnlyList<ProfileItem> appx, IReadOnlyList<ProfileItem> capabilities, IReadOnlyList<ProfileItem> features, CancellationToken cancellationToken) =>
-            Run("remove", admin, [.. appx.Select(item => item.Id), .. capabilities.Select(item => item.Id), .. features.Select(item => item.Id)]);
-
-        public Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(Guid vmId, GuestCredential admin, IReadOnlyList<RegistryWrite> writes, CancellationToken cancellationToken) =>
-            Run("settings", admin, writes.Select(write => write.Item).Distinct().ToList());
-
-        private Task<IReadOnlyList<ApplyItemResult>> Run(string step, GuestCredential admin, List<string> items)
-        {
-            if (FirstCallOrder == int.MaxValue)
-            {
-                FirstCallOrder = Profiles.FakeGuestProfileReader.NextOrder();
-            }
-
-            OnCall?.Invoke(step);
-            AdminsUsed.Add(admin);
-            Calls.Add($"{step}: {string.Join(", ", items)}");
-            if (Failure is not null)
-            {
-                throw Failure;
-            }
-
-            IReadOnlyList<ApplyItemResult> results = items
-                .Select(item => Failing.TryGetValue(item, out var error) ? new ApplyItemResult(item, false, error) : new ApplyItemResult(item, true, RestartNeeded: item == Restart))
-                .ToList();
-            return Task.FromResult(results);
-        }
-    }
-
     /// <summary>A restart makes the probe give <see cref="Answers"/> in order; the last one stays.</summary>
-    private sealed class RestartingPower(FakeProbe probe) : IHyperVPowerInvoker
+    internal sealed class RestartingPower(FakeProbe probe) : IHyperVPowerInvoker
     {
         public List<VmAction> Calls { get; } = [];
 
@@ -536,7 +486,7 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         public void Write(AuditEntry entry) => entries.Add(entry);
     }
 
-    private sealed class FakeProbe : IRemoteAccessProbe
+    internal sealed class FakeProbe : IRemoteAccessProbe
     {
         public bool Rdp { get; set; }
 

@@ -257,6 +257,8 @@ builder.Services.AddSingleton<ProfileCaptureService>();
 builder.Services.AddSingleton<SetupProfilePlanner>();
 builder.Services.AddSingleton<IGuestProfileApplier, PowerShellDirectProfileApplier>();
 builder.Services.AddSingleton<SetupProfileApplication>();
+builder.Services.AddSingleton<GuestRestart>();
+builder.Services.AddSingleton<SetupProfileJobs>();
 builder.Services.AddSingleton<IPackageSearch, PwshPackageSearch>();
 builder.Services.AddSingleton<IExtensionResolver>(services => new StoreExtensionResolver(
     StoreExtensionResolver.CreateHttpClient($"HyperHarbor-Host/{HostVersion.Current}"),

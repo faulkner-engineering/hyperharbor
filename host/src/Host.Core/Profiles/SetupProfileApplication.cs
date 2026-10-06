@@ -20,7 +20,16 @@ public interface IGuestProfileApplier
         IReadOnlyList<ProfileItem> features,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(Guid vmId, GuestCredential admin, IReadOnlyList<RegistryWrite> writes, CancellationToken cancellationToken);
+    /// <param name="userAccount">
+    /// The User's account in the VM (for example hh-owner). HKCU values go to the Default user hive, and also to this
+    /// account's hive when it already has a profile; null for the Default user hive only.
+    /// </param>
+    Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(
+        Guid vmId,
+        GuestCredential admin,
+        IReadOnlyList<RegistryWrite> writes,
+        string? userAccount,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>The outcome of applying a setup profile, before any restart.</summary>
@@ -34,7 +43,14 @@ public sealed record ApplyOutcome(int Applied, IReadOnlyList<string> Problems, b
 public sealed class SetupProfileApplication(SetupProfilePlanner planner, IGuestProfileApplier applier)
 {
     /// <param name="report">Called with what is happening now, for the install's Step text.</param>
-    public async Task<ApplyOutcome> ApplyAsync(Guid vmId, GuestCredential admin, SetupProfile profile, Action<string> report, CancellationToken cancellationToken)
+    /// <param name="userAccount">The User's account in the VM, whose own settings change too when it has a profile.</param>
+    public async Task<ApplyOutcome> ApplyAsync(
+        Guid vmId,
+        GuestCredential admin,
+        SetupProfile profile,
+        Action<string> report,
+        CancellationToken cancellationToken,
+        string? userAccount = null)
     {
         var plan = planner.Plan(profile);
         var results = new List<ApplyItemResult>();
@@ -56,7 +72,7 @@ public sealed class SetupProfileApplication(SetupProfilePlanner planner, IGuestP
             if (plan.Registry.Count > 0)
             {
                 report($"Applying {profile.Name}: writing settings");
-                results.AddRange(await applier.WriteSettingsAsync(vmId, admin, plan.Registry, cancellationToken).ConfigureAwait(false));
+                results.AddRange(await applier.WriteSettingsAsync(vmId, admin, plan.Registry, userAccount, cancellationToken).ConfigureAwait(false));
             }
         }
         catch (Exception ex) when (GuestErrors.IsGuestError(ex))

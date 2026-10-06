@@ -11,6 +11,7 @@ public enum VmJobKind
     ApplyPerformance,
     PerformanceGuestSetup,
     ExportDisks,
+    ApplySetupProfile,
 }
 
 /// <summary>Schema: VmJobState.</summary>
@@ -28,6 +29,7 @@ public sealed record JobError(string Title, string Detail);
 /// <param name="VmId">Null until a create job has defined its virtual machine.</param>
 /// <param name="Step">What the job is doing now, for example "Deleting disks".</param>
 /// <param name="Error">Set when <paramref name="State"/> is failed.</param>
+/// <param name="SetupResult">What an applySetupProfile job did, once it succeeded; omitted otherwise.</param>
 public sealed record VmJob(
     Guid Id,
     VmJobKind Kind,
@@ -37,4 +39,5 @@ public sealed record VmJob(
     int PercentComplete,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] JobError? Error);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] JobError? Error,
+    Unattend.SetupProfileResult? SetupResult = null);

@@ -893,6 +893,21 @@ async fn get_vm_performance(
     state.api.get_vm_performance(&host, &paired, &vm_id).await
 }
 
+/// Applies a setup profile to a running Windows VM. Needs elevation; returns the job.
+#[tauri::command]
+async fn apply_vm_setup_profile(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    request: api::ApplySetupProfileRequest,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .apply_vm_setup_profile(&host, &paired, &vm_id, &request)
+        .await
+}
+
 /// Turns Performance mode on or changes it. Needs elevation; returns the job.
 #[tauri::command]
 async fn apply_vm_performance(
@@ -1168,6 +1183,7 @@ pub fn run() {
             install_host_update,
             set_host_update_settings,
             get_vm_install,
+            apply_vm_setup_profile,
             get_vm_compute,
             update_vm_compute,
             pick_iso_file,

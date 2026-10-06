@@ -464,6 +464,13 @@ export const SetupProfileInstallApiVersion = "1.13.0";
 export const getVmInstall = (key: string, vmId: string) =>
   invoke<UnattendedInstallStatus>("get_vm_install", { key, vmId });
 
+/** The API version that added applying a setup profile to an existing VM. */
+export const ApplySetupProfileApiVersion = "1.14.0";
+
+/** Applies one of the User's setup profiles to a running Windows VM; returns the applySetupProfile job. */
+export const applyVmSetupProfile = (key: string, vmId: string, profileId: string, restartIfNeeded: boolean) =>
+  invoke<VmJob>("apply_vm_setup_profile", { key, vmId, request: { profileId, restartIfNeeded } });
+
 export const getVmCompute = (key: string, vmId: string) =>
   invoke<VmComputeSettings>("get_vm_compute", { key, vmId });
 

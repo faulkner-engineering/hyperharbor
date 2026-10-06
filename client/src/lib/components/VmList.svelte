@@ -19,6 +19,8 @@
     onmonitors?: (vm: Vm) => void;
     /** Capture a setup profile from a running Windows VM; leave unset for hosts without setup profiles. */
     oncapture?: (vm: Vm) => void;
+    /** Apply a setup profile to a running Windows VM; leave unset for hosts that cannot. */
+    onapplyprofile?: (vm: Vm) => void;
     ondelete?: (vm: Vm) => void;
   }
 
@@ -35,6 +37,7 @@
     onperformance,
     onmonitors,
     oncapture,
+    onapplyprofile,
     ondelete,
   }: Props = $props();
 
@@ -223,6 +226,9 @@
               <button type="button" onclick={() => onmonitors?.(vm)}>Monitors…</button>
               {#if oncapture && vm.state === "running" && vm.guestOs.family === "windows"}
                 <button type="button" onclick={() => oncapture(vm)}>Capture setup profile…</button>
+              {/if}
+              {#if onapplyprofile && vm.state === "running" && vm.guestOs.family === "windows" && !vm.installState}
+                <button type="button" onclick={() => onapplyprofile(vm)}>Apply setup profile…</button>
               {/if}
               <button type="button" class="danger" onclick={() => ondelete?.(vm)}>Delete…</button>
             </Menu>

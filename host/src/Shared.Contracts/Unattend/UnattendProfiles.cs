@@ -133,4 +133,10 @@ public sealed record UnattendedInstallStatus(
 /// <param name="Applied">Items that were applied (packages, removals, settings).</param>
 /// <param name="Problems">Items that could not be applied, in words; the install still finished.</param>
 /// <param name="Restarted">The VM was restarted to finish removals or settings.</param>
-public sealed record SetupProfileResult(int Applied, IReadOnlyList<string> Problems, bool Restarted, DateTimeOffset FinishedAt);
+/// <param name="RestartPending">Something needs a restart that was not done (the request asked not to restart).</param>
+public sealed record SetupProfileResult(int Applied, IReadOnlyList<string> Problems, bool Restarted, DateTimeOffset FinishedAt, bool RestartPending = false);
+
+/// <summary>Applies one of the User's setup profiles to a running Windows VM. Schema: ApplySetupProfileRequest.</summary>
+/// <param name="ProfileId">An id from GET /setup-profiles.</param>
+/// <param name="RestartIfNeeded">Restart the VM once when something needs it; false leaves that to the user.</param>
+public sealed record ApplySetupProfileRequest([property: JsonRequired] string ProfileId, bool RestartIfNeeded = true);

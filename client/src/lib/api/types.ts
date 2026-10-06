@@ -911,6 +911,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/setup-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one of your setup profiles to a running Windows VM.
+         * @description Starts an `applySetupProfile` job (API 1.14.0). Over PowerShell Direct, as HyperHarbor's administrator
+         *     for the VM, it installs the profile's packages with winget, removes its apps, capabilities, and features,
+         *     and writes its tweaks and browser policies and extensions. Account settings go to the Default user profile
+         *     and, when your account in the VM already has a profile, to that account too (a signed-in session sees some
+         *     of them only after signing out). With restartIfNeeded, the VM restarts once when something needs it and the
+         *     job waits for Remote Desktop to answer again. Items that fail are listed in the job's setupResult; the job
+         *     fails only when the guest cannot be reached.
+         */
+        post: operations["applyVmSetupProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/performance/guest-setup": {
         parameters: {
             query?: never;
@@ -1716,7 +1745,7 @@ export interface components {
             blockers: components["schemas"]["DeleteBlocker"][];
         };
         /** @enum {string} */
-        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks";
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile";
         /** @enum {string} */
         VmJobState: "running" | "succeeded" | "failed";
         JobError: {
@@ -1741,6 +1770,17 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             error: components["schemas"]["JobError"] | null;
+            /** @description What an `applySetupProfile` job did, once it succeeded (API 1.14.0). Omitted for other jobs. */
+            setupResult?: components["schemas"]["SetupProfileResult"] | null;
+        };
+        ApplySetupProfileRequest: {
+            /** @description An `id` from `GET /setup-profiles`. */
+            profileId: string;
+            /**
+             * @description Restart the VM once when something needs it. False leaves the restart to the user (restartPending).
+             * @default true
+             */
+            restartIfNeeded: boolean;
         };
         HostRemoteDesktop: {
             /** @description False on editions that cannot accept Remote Desktop connections (Windows Home). */
@@ -2141,6 +2181,8 @@ export interface components {
             restarted: boolean;
             /** Format: date-time */
             finishedAt: string;
+            /** @description Something needs a restart that was not done, because the request asked not to restart (API 1.14.0). */
+            restartPending?: boolean;
         };
         UnattendedInstallStatus: {
             /** Format: uuid */
@@ -3981,6 +4023,59 @@ export interface operations {
             403: components["responses"]["ElevationRequired"];
             404: components["responses"]["NotFound"];
             /** @description The VM is not off (`code` is `vmMustBeOff`), or another operation holds it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    applyVmSetupProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplySetupProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            /** @description The VM or the setup profile does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The VM is not a running Windows guest, its unattended install is still in progress, HyperHarbor has no
+             *     administrator credential for it (`code` is `credentialRequired`), or another operation holds the VM.
+             */
             409: {
                 headers: {
                     [name: string]: unknown;

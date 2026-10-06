@@ -90,6 +90,14 @@ pub struct UnattendedInstallRequest {
     pub setup_profile_id: Option<String>,
 }
 
+/// Body of POST /vms/{vmId}/setup-profile (api.yaml ApplySetupProfileRequest).
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplySetupProfileRequest {
+    pub profile_id: String,
+    pub restart_if_needed: bool,
+}
+
 /// The fields of api.yaml HostRemoteDesktop that the client acts on.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1034,6 +1042,24 @@ impl ApiClient {
     }
 
     /// PUT /vms/{vmId}/performance. The host validates the settings; returns the job.
+    /// POST /vms/{vmId}/setup-profile (needs elevation). Returns the applySetupProfile job.
+    pub async fn apply_vm_setup_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        request: &ApplySetupProfileRequest,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "setup-profile")?,
+            &to_body(request)?,
+        )
+        .await
+    }
+
     pub async fn apply_vm_performance(
         &self,
         host: &HostEntry,
@@ -2394,12 +2420,19 @@ mod server_tests {
 
     #[test]
     fn lifecycle_requests_round_trip_the_contract_fixtures() {
-        for schema in ["VmDeleteRequest", "CreateVmRequest"] {
+        for schema in [
+            "VmDeleteRequest",
+            "CreateVmRequest",
+            "ApplySetupProfileRequest",
+        ] {
             let sample = fixture(schema);
             let body = match schema {
                 "VmDeleteRequest" => {
                     to_body(&serde_json::from_value::<DeleteVmRequest>(sample.clone()).unwrap())
                 }
+                "ApplySetupProfileRequest" => to_body(
+                    &serde_json::from_value::<ApplySetupProfileRequest>(sample.clone()).unwrap(),
+                ),
                 _ => to_body(&serde_json::from_value::<CreateVmRequest>(sample.clone()).unwrap()),
             }
             .unwrap();

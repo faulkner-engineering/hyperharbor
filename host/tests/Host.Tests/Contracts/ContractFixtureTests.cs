@@ -25,7 +25,7 @@ public class ContractFixtureTests
     private static readonly Guid VmId = Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b");
     private static readonly DateTimeOffset Time = new(2026, 10, 3, 12, 0, 0, TimeSpan.Zero);
 
-    private static readonly SetupProfileResult SetupResultSample = new(6, ["7-Zip: winget install failed (0x8A150011)."], true, new(2026, 10, 3, 12, 40, 0, TimeSpan.Zero));
+    private static readonly SetupProfileResult SetupResultSample = new(6, ["7-Zip: winget install failed (0x8A150011)."], true, new(2026, 10, 3, 12, 40, 0, TimeSpan.Zero), RestartPending: false);
 
     private static readonly VmComputeSettings ComputeSample = new(
         VmId, VmState.Running, 4, 4096, 4096, false, true, true, 1,
@@ -108,6 +108,7 @@ public class ContractFixtureTests
         ["UnattendedInstallStatus"] = new UnattendedInstallStatus(VmId, "windows-burner", InstallOs.Windows, UnattendedInstallState.Ready,
             "Ready; 1 items of Dev workstation could not be applied", Time, Time.AddMinutes(40), null, "Dev workstation", SetupResultSample),
         ["SetupProfileResult"] = SetupResultSample,
+        ["ApplySetupProfileRequest"] = new ApplySetupProfileRequest("dev-workstation", RestartIfNeeded: false),
         ["GpuPartitionShare"] = new GpuPartitionShare(@"\\?\PCI#VEN_8086&DEV_9B41#3&1#{064092b3-625e-43bf-9eb5-dc845897dd59}\GPUPARAV", 60, 50, 50, 40),
         ["MmioSettings"] = new MmioSettings(1024, 32768),
         ["PerformanceRdpSettings"] = new PerformanceRdpSettings(HardwareEncoding: false),

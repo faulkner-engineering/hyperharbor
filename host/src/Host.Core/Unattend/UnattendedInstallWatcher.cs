@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Lifecycle;
-using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Shared.Contracts.Profiles;
@@ -54,7 +53,7 @@ public sealed class UnattendedInstallWatcher
     private readonly ILogger<UnattendedInstallWatcher> _logger;
     private readonly AppxInventoryService? _appx;
     private readonly SetupProfileApplication? _setup;
-    private readonly IHyperVPowerInvoker? _power;
+    private readonly GuestRestart? _restart;
     private readonly VmOperationLocks? _locks;
     private readonly IAuditLog? _audit;
     private readonly ConcurrentDictionary<Guid, Task> _configuring = new();
@@ -74,13 +73,13 @@ public sealed class UnattendedInstallWatcher
         ILogger<UnattendedInstallWatcher> logger,
         AppxInventoryService? appx = null,
         SetupProfileApplication? setup = null,
-        IHyperVPowerInvoker? power = null,
+        GuestRestart? restart = null,
         VmOperationLocks? locks = null,
         IAuditLog? audit = null)
     {
         _appx = appx;
         _setup = setup;
-        _power = power;
+        _restart = restart;
         _locks = locks;
         _audit = audit;
         _installs = installs;
@@ -321,22 +320,13 @@ public sealed class UnattendedInstallWatcher
         {
             using var held = _locks?.Acquire(install.VmId, "Applying the setup profile");
             outcome = await _setup.ApplyAsync(install.VmId, admin, profile, step => current = Save(current, UnattendedInstallState.ApplyingProfile, step), CancellationToken.None).ConfigureAwait(false);
-            if (outcome.RestartNeeded && _power is not null)
+            if (outcome.RestartNeeded && _restart is not null)
             {
                 current = Save(current, UnattendedInstallState.ApplyingProfile, $"Applying {profile.Name}: restarting to finish");
-                try
-                {
-                    await _power.InvokeAsync(install.VmId, VmAction.Restart, CancellationToken.None).ConfigureAwait(false);
-                    restarted = await WaitForRemoteDesktopAsync(install.VmId).ConfigureAwait(false);
-                }
-                catch (VmActionNotAllowedException)
-                {
-                    // The guest did not take the restart (no shutdown component contact); the problem below says so.
-                }
-
+                restarted = await _restart.RestartAndWaitAsync(install.VmId, CancellationToken.None).ConfigureAwait(false);
                 if (!restarted)
                 {
-                    outcome = outcome with { Problems = [.. outcome.Problems, "The VM did not answer Remote Desktop within 15 minutes of a restart. Restart it yourself to finish."] };
+                    outcome = outcome with { Problems = [.. outcome.Problems, $"The VM did not answer Remote Desktop within {_restart.Timeout} of a restart. Restart it yourself to finish."] };
                 }
             }
         }
@@ -345,7 +335,7 @@ public sealed class UnattendedInstallWatcher
             Fail(current, GuestErrors.Clean(ex.Message, admin.Password));
             return;
         }
-        catch (Exception ex) when (GuestErrors.IsGuestError(ex) || ex is VmBusyException or HyperVUnavailableException or HyperVCallException or HyperVOperationException)
+        catch (Exception ex) when (GuestErrors.IsGuestError(ex) || ex is VmBusyException or HyperVUnavailableException or HyperVCallException or Power.HyperVOperationException)
         {
             Retry(current, GuestErrors.Clean(ex.Message, admin.Password));
             return;
@@ -358,37 +348,6 @@ public sealed class UnattendedInstallWatcher
             "Applied the setup profile {Profile} to VM {VmId}: {Applied} items, {Problems} problems, restarted {Restarted}.",
             profile.Name, install.VmId, outcome.Applied, outcome.Problems.Count, restarted);
         WriteAudit(install, profile.Name, result);
-    }
-
-    /// <summary>How often the wait after a restart checks the guest.</summary>
-    internal TimeSpan RestartPoll { get; init; } = TimeSpan.FromSeconds(15);
-
-    /// <summary>Checks after a restart before giving up: 60 of 15 seconds, 15 minutes.</summary>
-    internal int RestartChecks { get; init; } = 60;
-
-    /// <summary>
-    /// True once the restarted VM answers Remote Desktop again. Windows keeps answering for a few seconds after the
-    /// restart request, so an answer counts only after one check found it not answering (or not running); a guest
-    /// reboot does not reset uptime, so that is the only sign of the restart.
-    /// </summary>
-    private async Task<bool> WaitForRemoteDesktopAsync(Guid vmId)
-    {
-        var wentDown = false;
-        for (var check = 0; check < RestartChecks; check++)
-        {
-            await Task.Delay(RestartPoll, _time).ConfigureAwait(false);
-            var vm = await _inventory.GetAsync(vmId, CancellationToken.None).ConfigureAwait(false);
-            var answers = vm is { State: VmState.Running } && Ipv4(vm) is { } address
-                && await _probe.RdpAnswersAsync(address, CancellationToken.None).ConfigureAwait(false);
-            if (answers && wentDown)
-            {
-                return true;
-            }
-
-            wentDown |= !answers;
-        }
-
-        return false;
     }
 
     private void WriteAudit(UnattendedInstall install, string profileName, SetupProfileResult result)

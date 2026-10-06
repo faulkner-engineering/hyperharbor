@@ -20,6 +20,7 @@
     hostSupports,
     RemoteDesktopApiVersion,
     SetupProfilesApiVersion,
+    ApplySetupProfileApiVersion,
     type StoredSetupProfile,
     type Vm,
   } from "$lib/api/client";
@@ -43,6 +44,7 @@
   import InstallProfiles from "$lib/components/InstallProfiles.svelte";
   import SetupProfiles from "$lib/components/SetupProfiles.svelte";
   import CaptureReview from "$lib/components/CaptureReview.svelte";
+  import ApplySetupProfileDialog from "$lib/components/ApplySetupProfileDialog.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
   import MonitorsDialog from "$lib/components/MonitorsDialog.svelte";
   import Menu from "$lib/components/Menu.svelte";
@@ -77,6 +79,7 @@
   let enablingRemoteDesktop = $state<{ state: HostRemoteDesktop; answer: (confirmed: boolean) => void } | null>(null);
   let view = $state<"vms" | "isos" | "profiles" | "setup">("vms");
   let capturing = $state<Vm | null>(null);
+  let applyingProfile = $state<Vm | null>(null);
   let now = $state(Date.now());
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
@@ -84,6 +87,7 @@
   const pairedKey = $derived(selectedHost?.paired ? selectedHost.key : null);
   const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
+  const hostAppliesProfiles = $derived(selectedHost ? hostSupports(selectedHost, ApplySetupProfileApiVersion) : false);
   // Setup profiles read provisioned packages from running Windows VMs.
   const runningWindows = $derived((vms ?? []).filter((vm) => vm.state === "running" && vm.guestOs.family === "windows"));
 
@@ -103,6 +107,7 @@
     tuning = null;
     choosingMonitors = null;
     capturing = null;
+    applyingProfile = null;
     creating = false;
     enablingRemoteDesktop?.answer(false);
     view = "vms";
@@ -485,6 +490,7 @@
             onperformance={(vm) => (tuning = vm)}
             onmonitors={(vm) => (choosingMonitors = vm)}
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
+            onapplyprofile={hostAppliesProfiles ? (vm) => (applyingProfile = vm) : undefined}
             ondelete={(vm) => (deleting = vm)}
           />
         {/if}
@@ -493,6 +499,9 @@
         {/if}
         {#if capturing}
           <CaptureReview host={selectedHost} vm={capturing} onclose={captured} />
+        {/if}
+        {#if applyingProfile}
+          <ApplySetupProfileDialog host={selectedHost} vm={applyingProfile} onclose={() => (applyingProfile = null)} />
         {/if}
         {#if confirmTurnOff}
           <ConfirmDialog

@@ -8,9 +8,15 @@ is noted where it changes.
 Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
 note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
 
-## [Unreleased] (API 1.13.0)
+## [Unreleased] (API 1.14.0)
 
 ### Added
+- Apply setup profile (VM menu, running Windows VMs): applies one of your setup profiles to an existing VM, the same
+  way as after a new install. Your account's settings change too when you have signed in to the VM before (some
+  appear only after you sign out and back in). Choose whether HyperHarbor may restart the VM when a change needs
+  it; the dialog lists what was applied and anything that could not be. Needs a host at API 1.14.0.
+- API: POST /vms/{vmId}/setup-profile (elevated, audited) starts an applySetupProfile job, whose setupResult says
+  what it did; setupResult.restartPending reports a restart left to you.
 - Choose a setup profile when creating a Windows VM with an automatic install (Create VM, after the computer name).
   Once Windows is installed and your account is set up, the host installs the profile's apps with winget, removes
   the apps, capabilities, and features it lists, writes its tweaks (your account's settings go to the Default user

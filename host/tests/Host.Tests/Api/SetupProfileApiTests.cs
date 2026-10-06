@@ -152,6 +152,22 @@ public sealed class SetupProfileApiTests : IDisposable
 
     private Guid UserId => _host.Services.GetRequiredService<Core.Users.UserStore>().GetOrCreateDefault().UserId;
 
+    [Fact]
+    public async Task ApplyingToAVm_NeedsElevation_AProfileId_AndAVmThatExists()
+    {
+        var path = $"/api/v1/vms/{Guid.NewGuid()}/setup-profile";
+
+        var unelevated = await _client.PostAsJsonAsync(path, new { profileId = "dev-workstation" });
+        Assert.Equal(HttpStatusCode.Forbidden, unelevated.StatusCode);
+
+        var empty = await SendAsync(HttpMethod.Post, path, JsonContent.Create(new { }));
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+
+        var missing = await SendAsync(HttpMethod.Post, path, JsonContent.Create(new { profileId = "dev-workstation" }));
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal("Virtual machine not found", (string?)(await missing.Content.ReadFromJsonAsync<JsonObject>())!["title"]);
+    }
+
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content = null)
     {
         if (_token is null)

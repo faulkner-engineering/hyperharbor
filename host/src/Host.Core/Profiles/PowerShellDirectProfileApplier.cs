@@ -55,13 +55,19 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
         return ParseItems(result);
     }
 
-    public async Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(Guid vmId, GuestCredential admin, IReadOnlyList<RegistryWrite> writes, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(
+        Guid vmId,
+        GuestCredential admin,
+        IReadOnlyList<RegistryWrite> writes,
+        string? userAccount,
+        CancellationToken cancellationToken)
     {
         var result = await PowerShellDirectRunner.RunAsync(EncodedSettingsScript, new
         {
             vmId,
             admin.UserName,
             admin.Password,
+            account = userAccount,
             writes = writes.Select(write => new
             {
                 item = write.Item,
@@ -90,14 +96,21 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
             JsonObject found when found["items"] is null => [],
             _ => throw new GuestOperationException("The guest's setup results did not have the expected shape."),
         };
-        return items.OfType<JsonObject>()
-            .Where(item => (string?)item["item"] is { Length: > 0 })
-            .Select(item => new ApplyItemResult(
-                (string)item["item"]!,
-                (bool?)item["ok"] ?? false,
-                (string?)item["error"] is { Length: > 0 } error ? error.Trim() : null,
-                (bool?)item["restart"] ?? false))
-            .ToList();
+        try
+        {
+            return items.OfType<JsonObject>()
+                .Where(item => (string?)item["item"] is { Length: > 0 })
+                .Select(item => new ApplyItemResult(
+                    (string)item["item"]!,
+                    (bool?)item["ok"] ?? false,
+                    (string?)item["error"] is { Length: > 0 } error ? error.Trim() : null,
+                    (bool?)item["restart"] ?? false))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+        {
+            throw new GuestOperationException("The guest's setup results did not have the expected shape.");
+        }
     }
 
     private const string Connect = """
@@ -268,74 +281,94 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
         """ + Finish;
 
     /// <summary>
-    /// Host-side script: writes registry values to HKLM and to the Default user's hive (C:\Users\Default\NTUSER.DAT,
-    /// loaded under a temporary key and unloaded again), with .NET keys closed right away so the hive can unload.
+    /// Host-side script: writes registry values to HKLM and to the Default user's hive (C:\Users\Default\NTUSER.DAT),
+    /// and, when the User's account in the VM already has a profile, its values to that account's hive too: the
+    /// loaded one while it is signed in, otherwise its NTUSER.DAT. Hives are loaded under temporary keys and unloaded
+    /// again, with .NET keys closed right away so they can unload.
     /// </summary>
     internal const string SettingsScript = Connect + """
         try {
-            $result = Invoke-Command -Session $session -ArgumentList (,@($request.writes)) -ScriptBlock {
-                param($writes)
+            $result = Invoke-Command -Session $session -ArgumentList @($request.writes), $request.account -ScriptBlock {
+                param($writes, $account)
                 $items = @()
-                $hive = 'HyperHarborDefault'
-                $loaded = $false
-                $loadError = $null
-                if (@($writes | Where-Object { $_.target -eq 'default' }).Count -gt 0) {
-                    # reg.exe writes its errors to stderr, which must not end the script, so its exit code is checked.
+                $loadedHives = @()
+
+                # reg.exe writes its errors to stderr, which must not end the script, so its exit code is checked.
+                function Load($name, $file) {
                     $ErrorActionPreference = 'Continue'
-                    $output = & reg.exe load "HKU\$hive" (Join-Path $env:SystemDrive 'Users\Default\NTUSER.DAT') 2>&1 | Out-String
-                    $code = $LASTEXITCODE
-                    $ErrorActionPreference = 'Stop'
-                    if ($code -eq 0) { $loaded = $true } else { $loadError = 'The Default user profile could not be loaded: ' + $output.Trim() }
+                    $output = & reg.exe load "HKU\$name" $file 2>&1 | Out-String
+                    if ($LASTEXITCODE -ne 0) { throw ("$file could not be loaded: " + $output.Trim()) }
+                }
+
+                function WriteValue($root, $path, $write) {
+                    $text = [string]$write.value
+                    $hex = $text -match '^0x[0-9a-fA-F]+$'
+                    $key = $root.CreateSubKey($path)
+                    try {
+                        switch ($write.type) {
+                            'dword' {
+                                $number = if ($hex) { [Convert]::ToUInt32($text.Substring(2), 16) } elseif ($text.StartsWith('-')) { [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$text), 0) } else { [uint32]$text }
+                                $key.SetValue($write.name, [BitConverter]::ToInt32([BitConverter]::GetBytes($number), 0), [Microsoft.Win32.RegistryValueKind]::DWord)
+                            }
+                            'qword' {
+                                $number = if ($hex) { [Convert]::ToUInt64($text.Substring(2), 16) } elseif ($text.StartsWith('-')) { [BitConverter]::ToUInt64([BitConverter]::GetBytes([int64]$text), 0) } else { [uint64]$text }
+                                $key.SetValue($write.name, [BitConverter]::ToInt64([BitConverter]::GetBytes($number), 0), [Microsoft.Win32.RegistryValueKind]::QWord)
+                            }
+                            default { $key.SetValue($write.name, $text, [Microsoft.Win32.RegistryValueKind]::String) }
+                        }
+                    }
+                    finally { $key.Close() }
+                }
+
+                $userWrites = @($writes | Where-Object { $_.target -eq 'default' })
+                $defaultError = $null
+                $userHive = $null
+                $userError = $null
+                if ($userWrites.Count -gt 0) {
+                    try { Load 'HyperHarborDefault' (Join-Path $env:SystemDrive 'Users\Default\NTUSER.DAT'); $loadedHives += 'HyperHarborDefault' }
+                    catch { $defaultError = 'The Default user profile: ' + $_.Exception.Message }
+
+                    if ($account) {
+                        $sid = $null
+                        try { $sid = (Get-LocalUser -Name $account -ErrorAction Stop).SID.Value } catch { }
+                        $userProfile = if ($sid) { Get-CimInstance Win32_UserProfile | Where-Object { $_.SID -eq $sid } | Select-Object -First 1 } else { $null }
+                        if ($sid -and (Test-Path "Registry::HKEY_USERS\$sid")) { $userHive = $sid }
+                        elseif ($userProfile) {
+                            try { Load 'HyperHarborUser' (Join-Path $userProfile.LocalPath 'NTUSER.DAT'); $loadedHives += 'HyperHarborUser'; $userHive = 'HyperHarborUser' }
+                            catch { $userError = "The account $account" + ': ' + $_.Exception.Message }
+                        }
+                    }
                 }
 
                 try {
                     foreach ($write in $writes) {
                         try {
                             if ($write.target -eq 'default') {
-                                if (-not $loaded) { throw $loadError }
-                                $root = [Microsoft.Win32.Registry]::Users
-                                $path = $hive + '\' + $write.key
+                                if ($defaultError) { throw $defaultError }
+                                WriteValue ([Microsoft.Win32.Registry]::Users) ('HyperHarborDefault\' + $write.key) $write
+                                if ($userError) { throw $userError }
+                                if ($userHive) { WriteValue ([Microsoft.Win32.Registry]::Users) ($userHive + '\' + $write.key) $write }
                             }
-                            else {
-                                $root = [Microsoft.Win32.Registry]::LocalMachine
-                                $path = $write.key
-                            }
-
-                            $text = [string]$write.value
-                            $hex = $text -match '^0x[0-9a-fA-F]+$'
-                            $key = $root.CreateSubKey($path)
-                            try {
-                                switch ($write.type) {
-                                    'dword' {
-                                        $number = if ($hex) { [Convert]::ToUInt32($text.Substring(2), 16) } elseif ($text.StartsWith('-')) { [uint32][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$text), 0) } else { [uint32]$text }
-                                        $key.SetValue($write.name, [BitConverter]::ToInt32([BitConverter]::GetBytes($number), 0), [Microsoft.Win32.RegistryValueKind]::DWord)
-                                    }
-                                    'qword' {
-                                        $number = if ($hex) { [Convert]::ToUInt64($text.Substring(2), 16) } elseif ($text.StartsWith('-')) { [BitConverter]::ToUInt64([BitConverter]::GetBytes([int64]$text), 0) } else { [uint64]$text }
-                                        $key.SetValue($write.name, [BitConverter]::ToInt64([BitConverter]::GetBytes($number), 0), [Microsoft.Win32.RegistryValueKind]::QWord)
-                                    }
-                                    default { $key.SetValue($write.name, $text, [Microsoft.Win32.RegistryValueKind]::String) }
-                                }
-                            }
-                            finally { $key.Close() }
+                            else { WriteValue ([Microsoft.Win32.Registry]::LocalMachine) $write.key $write }
                             $items += @{ item = $write.item; ok = $true }
                         }
                         catch { $items += @{ item = $write.item; ok = $false; error = $_.Exception.Message } }
                     }
                 }
                 finally {
-                    if ($loaded) {
-                        # The hive must not stay loaded: new profiles copy C:\Users\Default only when it is free.
-                        $ErrorActionPreference = 'Continue'
+                    # A hive must not stay loaded: new profiles copy C:\Users\Default only when it is free, and an
+                    # account whose hive is loaded gets a temporary profile at its next sign-in.
+                    $ErrorActionPreference = 'Continue'
+                    foreach ($name in $loadedHives) {
                         $unloaded = $false
                         for ($attempt = 0; $attempt -lt 5 -and -not $unloaded; $attempt++) {
                             [GC]::Collect()
                             [GC]::WaitForPendingFinalizers()
-                            & reg.exe unload "HKU\$hive" 2>&1 | Out-Null
+                            & reg.exe unload "HKU\$name" 2>&1 | Out-Null
                             $unloaded = $LASTEXITCODE -eq 0
                             if (-not $unloaded) { Start-Sleep -Seconds 1 }
                         }
-                        if (-not $unloaded) { $items += @{ item = 'Default user settings'; ok = $false; error = 'The Default user profile stayed loaded; restart the VM before signing in for the first time.' } }
+                        if (-not $unloaded) { $items += @{ item = 'Account settings'; ok = $false; error = "The registry hive $name stayed loaded; restart the VM before signing in." } }
                     }
                 }
                 @{ items = $items }

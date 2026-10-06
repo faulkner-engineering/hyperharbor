@@ -1,5 +1,6 @@
 using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
+using HyperHarbor.Shared.Contracts.Profiles;
 
 namespace HyperHarbor.Host.Tests.Profiles;
 
@@ -133,5 +134,61 @@ internal sealed class FakeExtensionResolver : IExtensionResolver
         return parsed.Id == StoreOnlyId
             ? Task.FromResult(new Shared.Contracts.Profiles.ResolvedExtension(parsed.Store, parsed.Id, parsed.ProfileId, "Google Docs Offline", "data:image/png;base64,iVBORw0KGgo=", false))
             : throw new ExtensionNotFoundException($"The store has no extension {parsed.Id}.");
+    }
+}
+
+/// <summary>A guest that applies setup profile steps as tests decide, recording what it was asked.</summary>
+internal sealed class FakeGuestProfileApplier : IGuestProfileApplier
+{
+    public List<string> Calls { get; } = [];
+
+    public List<GuestCredential> AdminsUsed { get; } = [];
+
+    /// <summary>Items that fail, with their error.</summary>
+    public Dictionary<string, string> Failing { get; } = [];
+
+    /// <summary>The item whose removal needs a restart.</summary>
+    public string? Restart { get; set; }
+
+    public Exception? Failure { get; set; }
+
+    public Action<string>? OnCall { get; set; }
+
+    public int FirstCallOrder { get; private set; } = int.MaxValue;
+
+    public Task<IReadOnlyList<ApplyItemResult>> InstallPackagesAsync(Guid vmId, GuestCredential admin, IReadOnlyList<PackageInstall> packages, CancellationToken cancellationToken) =>
+        Run("packages", admin, packages.Select(package => package.Item).ToList());
+
+    public Task<IReadOnlyList<ApplyItemResult>> RemoveAsync(Guid vmId, GuestCredential admin, IReadOnlyList<ProfileItem> appx, IReadOnlyList<ProfileItem> capabilities, IReadOnlyList<ProfileItem> features, CancellationToken cancellationToken) =>
+        Run("remove", admin, [.. appx.Select(item => item.Id), .. capabilities.Select(item => item.Id), .. features.Select(item => item.Id)]);
+
+    /// <summary>The account each settings step was asked to change too.</summary>
+    public List<string?> UserAccounts { get; } = [];
+
+    public Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(Guid vmId, GuestCredential admin, IReadOnlyList<RegistryWrite> writes, string? userAccount, CancellationToken cancellationToken)
+    {
+        UserAccounts.Add(userAccount);
+        return Run("settings", admin, writes.Select(write => write.Item).Distinct().ToList());
+    }
+
+    private Task<IReadOnlyList<ApplyItemResult>> Run(string step, GuestCredential admin, List<string> items)
+    {
+        if (FirstCallOrder == int.MaxValue)
+        {
+            FirstCallOrder = Profiles.FakeGuestProfileReader.NextOrder();
+        }
+
+        OnCall?.Invoke(step);
+        AdminsUsed.Add(admin);
+        Calls.Add($"{step}: {string.Join(", ", items)}");
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        IReadOnlyList<ApplyItemResult> results = items
+            .Select(item => Failing.TryGetValue(item, out var error) ? new ApplyItemResult(item, false, error) : new ApplyItemResult(item, true, RestartNeeded: item == Restart))
+            .ToList();
+        return Task.FromResult(results);
     }
 }
