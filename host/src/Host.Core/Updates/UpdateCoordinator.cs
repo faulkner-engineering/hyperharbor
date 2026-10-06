@@ -16,7 +16,19 @@ public enum UpdateActivity
     Installing,
 }
 
+/// <summary>Where preparing a version stands.</summary>
+public enum UpdateStep
+{
+    Downloading,
+    Verifying,
+    Testing,
+}
+
+/// <param name="BytesDone">Bytes of the package received; all of them once downloading is done.</param>
+public sealed record UpdateProgress(UpdateStep Step, long BytesDone, long BytesTotal);
+
 /// <summary>What the tray and the API show about updates.</summary>
+/// <param name="Progress">While preparing a version: its step and bytes; null otherwise.</param>
 public sealed record UpdateStatus(
     UpdateMode Mode,
     string Channel,
@@ -27,7 +39,8 @@ public sealed record UpdateStatus(
     DateTimeOffset? LastCheck,
     string? Message,
     string? LastResult,
-    IReadOnlyList<string> RolledBack);
+    IReadOnlyList<string> RolledBack,
+    UpdateProgress? Progress = null);
 
 /// <summary>
 /// The service side of updates, ticked by the host every minute: checks the channel when due (or when asked),
@@ -52,6 +65,7 @@ public sealed class UpdateCoordinator(
     private readonly object _gate = new();
     private readonly SemaphoreSlim _requested = new(0);
     private Task? _pendingRequest;
+    private UpdateProgress? _progress;
     private DateTimeOffset? _lastCheck;
     private UpdateManifest? _manifest;
     private UpdateDecision? _decision;
@@ -82,7 +96,8 @@ public sealed class UpdateCoordinator(
                     _lastCheck,
                     _message,
                     state.LastResult,
-                    state.RolledBack);
+                    state.RolledBack,
+                    _activity == UpdateActivity.Preparing ? _progress : null);
             }
         }
     }
@@ -226,10 +241,23 @@ public sealed class UpdateCoordinator(
     private async Task PrepareAsync(CancellationToken cancellationToken)
     {
         var manifest = _manifest!;
+        lock (_gate)
+        {
+            _progress = null;
+        }
+
         Set(UpdateActivity.Preparing, $"Downloading and testing version {manifest.Version}.");
         try
         {
-            var prepared = await preparer.PrepareAsync(manifest, cancellationToken).ConfigureAwait(false);
+            // Reported straight through (not Progress<T>, which posts to a context the service does not have).
+            var progress = new InlineProgress<UpdateProgress>(value =>
+            {
+                lock (_gate)
+                {
+                    _progress = value;
+                }
+            });
+            var prepared = await preparer.PrepareAsync(manifest, progress, cancellationToken).ConfigureAwait(false);
             lock (_gate)
             {
                 _prepared = prepared;

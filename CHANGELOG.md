@@ -8,7 +8,12 @@ is noted where it changes.
 Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
 note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
 
-## [Unreleased]
+## [Unreleased] (API 1.15.0)
+
+### Added
+- Update progress: while the host downloads and tests a new version, the client's Updates panel and the host
+  window show how far the download is (MB and percent), then checking the package and testing it on a copy of the
+  host's data. API: GET /host/update has progress (step, bytesDone, bytesTotal) while preparing; update the host.
 
 ### Changed
 - A new HyperHarbor Host window on the host PC (double-click the tray icon). It matches the client app, follows

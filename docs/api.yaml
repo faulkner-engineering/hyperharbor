@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.14.0
+  version: 1.15.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -2348,6 +2348,25 @@ components:
         and tests a new version but installs it only when the owner chooses Install now in the tray;
         off does not check.
 
+    HostUpdateStep:
+      type: string
+      enum: [downloading, verifying, testing]
+      description: The step of preparing a version; testing is the new version's self-test on a copy of the data.
+
+    HostUpdateProgress:
+      type: object
+      required: [step, bytesDone, bytesTotal]
+      properties:
+        step:
+          $ref: "#/components/schemas/HostUpdateStep"
+        bytesDone:
+          type: integer
+          format: int64
+          description: Bytes of the package received; all of them once downloading is done.
+        bytesTotal:
+          type: integer
+          format: int64
+
     HostUpdateActivity:
       type: string
       enum: [idle, checking, preparing, ready, installing]
@@ -2401,6 +2420,11 @@ components:
           items:
             type: string
           description: Versions that did not start here and were rolled back; they are not offered again.
+        progress:
+          description: While preparing a version (API 1.15.0), its step and the bytes received; left out otherwise.
+          oneOf:
+            - $ref: "#/components/schemas/HostUpdateProgress"
+            - type: "null"
       example:
         supported: true
         mode: auto

@@ -31,11 +31,16 @@
         "currentVersion": "0.1.4",
         "availableVersion": "0.1.5",
         "notesUrl": "https://github.com/faulkner-engineering/hyperharbor/releases/tag/v0.1.5",
-        "activity": "ready",
+        "activity": "preparing",
         "lastCheck": "2026-10-05T12:00:00\u002B00:00",
-        "message": "Version 0.1.5 is ready to install.",
+        "message": "Downloading and testing version 0.1.5.",
         "lastResult": "Updated from 0.1.3 to 0.1.4.",
-        "rolledBack": []
+        "rolledBack": [],
+        "progress": {
+          "step": "downloading",
+          "bytesDone": 52428800,
+          "bytesTotal": 196083712
+        }
       },
       "busy": [
         "folder:iso"

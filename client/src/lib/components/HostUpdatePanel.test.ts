@@ -129,6 +129,20 @@ describe("HostUpdatePanel", () => {
     expect(await screen.findByText("Found version 0.1.5.", {}, { timeout: 4000 })).toBeTruthy();
   });
 
+  it("shows how far a new version has downloaded", async () => {
+    invoke.mockResolvedValue(
+      status({
+        activity: "preparing",
+        availableVersion: "0.1.5",
+        progress: { step: "downloading", bytesDone: 50 * 1024 * 1024, bytesTotal: 200 * 1024 * 1024 },
+      }),
+    );
+    render(HostUpdatePanel, { host });
+
+    expect(await screen.findByText("Downloading: 50 of 200 MB (25%)")).toBeTruthy();
+    expect((screen.getByRole("progressbar") as HTMLProgressElement).value).toBe(25);
+  });
+
   it("saves settings, sending no maintenance time when the field is empty", async () => {
     invoke.mockResolvedValueOnce(status()).mockResolvedValueOnce(status({ channel: "beta", mode: "notify", maintenanceTime: null }));
     render(HostUpdatePanel, { host });

@@ -55,6 +55,23 @@ public sealed class UpdatePreparerTests : IDisposable
     }
 
     [Fact]
+    public async Task Prepare_ReportsEachStep_InOrder()
+    {
+        var steps = new List<UpdateProgress>();
+
+        await _preparer.PrepareAsync(Manifest(), new SyncProgress(steps.Add), CancellationToken.None);
+
+        Assert.Equal([UpdateStep.Downloading, UpdateStep.Verifying, UpdateStep.Testing], steps.Select(step => step.Step).Distinct());
+        Assert.All(steps, step => Assert.Equal(Releases.Package.Length, step.BytesTotal));
+        Assert.Equal(Releases.Package.Length, steps.Last(step => step.Step == UpdateStep.Downloading).BytesDone);
+    }
+
+    private sealed class SyncProgress(Action<UpdateProgress> report) : IProgress<UpdateProgress>
+    {
+        public void Report(UpdateProgress value) => report(value);
+    }
+
+    [Fact]
     public async Task Prepare_WithAHashMismatch_NeverRunsTheSelfTest()
     {
         await Assert.ThrowsAsync<UpdateRejectedException>(() => _preparer.PrepareAsync(Manifest(sha256: new string('0', 64)), CancellationToken.None));

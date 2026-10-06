@@ -38,21 +38,30 @@ public sealed class UpdatePreparer(
     }
 
     /// <exception cref="UpdateRejectedException">The package failed a check; it was deleted.</exception>
-    public async Task<PreparedUpdate> PrepareAsync(UpdateManifest manifest, CancellationToken cancellationToken)
+    public Task<PreparedUpdate> PrepareAsync(UpdateManifest manifest, CancellationToken cancellationToken) =>
+        PrepareAsync(manifest, progress: null, cancellationToken);
+
+    /// <param name="progress">Told each step as it starts, and the bytes received while downloading.</param>
+    /// <exception cref="UpdateRejectedException">The package failed a check; it was deleted.</exception>
+    public async Task<PreparedUpdate> PrepareAsync(UpdateManifest manifest, IProgress<UpdateProgress>? progress, CancellationToken cancellationToken)
     {
+        var size = manifest.HostPackage.Size;
         var version = manifest.ParsedVersion;
         Directory.CreateDirectory(DownloadFolder);
         var path = Path.Combine(DownloadFolder, $"HyperHarbor.Host-{version}.exe");
         try
         {
-            await downloader.DownloadAsync(manifest.HostPackage, path, cancellationToken).ConfigureAwait(false);
+            var bytes = progress is null ? null : new InlineProgress<long>(done => progress.Report(new UpdateProgress(UpdateStep.Downloading, done, size)));
+            await downloader.DownloadAsync(manifest.HostPackage, path, bytes, cancellationToken).ConfigureAwait(false);
 
+            progress?.Report(new UpdateProgress(UpdateStep.Verifying, size, size));
             var signature = await signatures.VerifyAsync(path, manifest, cancellationToken).ConfigureAwait(false);
             if (!signature.Accepted)
             {
                 throw new UpdateRejectedException($"Version {version} failed signature verification: {signature.Detail}");
             }
 
+            progress?.Report(new UpdateProgress(UpdateStep.Testing, size, size));
             var selfTest = await gate.RunAsync(path, version, cancellationToken).ConfigureAwait(false);
             if (!selfTest.Passed)
             {

@@ -160,7 +160,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.14.0",
+    "apiVersion": "1.15.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -177,6 +177,11 @@
     "memoryReserveMb": 4096,
     "virtualHardDiskFolder": "C:\\ProgramData\\Microsoft\\Windows\\Virtual Hard Disks",
     "isoFolder": "C:\\Users\\Public\\Documents\\HyperHarbor ISOs"
+  },
+  "HostUpdateProgress": {
+    "step": "downloading",
+    "bytesDone": 52428800,
+    "bytesTotal": 196083712
   },
   "HostUpdateSettings": {
     "channel": "stable",

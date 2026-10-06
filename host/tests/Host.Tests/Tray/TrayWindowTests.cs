@@ -142,8 +142,8 @@ public sealed partial class TrayWindowTests
     {
         var time = new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero);
         var update = new HostUpdateStatus(true, HostUpdateMode.Auto, "stable", ["beta", "stable"], "03:00", "0.1.4", "0.1.5",
-            "https://github.com/faulkner-engineering/hyperharbor/releases/tag/v0.1.5", HostUpdateActivity.Ready, time, "Version 0.1.5 is ready to install.",
-            "Updated from 0.1.3 to 0.1.4.", []);
+            "https://github.com/faulkner-engineering/hyperharbor/releases/tag/v0.1.5", HostUpdateActivity.Preparing, time, "Downloading and testing version 0.1.5.",
+            "Updated from 0.1.3 to 0.1.4.", [], new HostUpdateProgress(HostUpdateStep.Downloading, 52_428_800, 196_083_712));
         object[] messages =
         [
             new HostToPage.State(new TrayViewState(

@@ -10,6 +10,7 @@
     setHostUpdateSettings,
     type HostEntry,
     type HostUpdateMode,
+    type HostUpdateProgress,
     type HostUpdateStatus,
   } from "$lib/api/client";
   import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
@@ -21,7 +22,7 @@
   let { host }: Props = $props();
 
   const POLL_MS = 5000;
-  /** While Check now waits for the host, it polls faster and gives up after CHECK_TIMEOUT_MS. */
+  /** While Check now waits for the host (it gives up after CHECK_TIMEOUT_MS) or a version downloads, it polls faster. */
   const CHECK_POLL_MS = 1500;
   const CHECK_TIMEOUT_MS = 90_000;
 
@@ -77,6 +78,19 @@
     }
   });
 
+  const MB = 1024 * 1024;
+
+  /** What preparing a version is doing (API 1.15.0 hosts report it), and how far it is when that is known. */
+  function preparationText(progress: HostUpdateProgress): { text: string; fraction: number | null } {
+    if (progress.step === "verifying") return { text: "Checking the downloaded package…", fraction: null };
+    if (progress.step === "testing") return { text: "Testing the new version on a copy of the host's data…", fraction: null };
+    const fraction = progress.bytesTotal > 0 ? Math.min(1, progress.bytesDone / progress.bytesTotal) : 0;
+    return {
+      text: `Downloading: ${(progress.bytesDone / MB).toFixed(0)} of ${(progress.bytesTotal / MB).toFixed(0)} MB (${Math.floor(fraction * 100)}%)`,
+      fraction,
+    };
+  }
+
   async function load() {
     try {
       status = await getHostUpdate(host.key);
@@ -96,7 +110,7 @@
 
   $effect(() => {
     if (!working) return;
-    const timer = setInterval(() => void load(), pendingCheck ? CHECK_POLL_MS : POLL_MS);
+    const timer = setInterval(() => void load(), pendingCheck || status?.activity === "preparing" ? CHECK_POLL_MS : POLL_MS);
     return () => clearInterval(timer);
   });
 
@@ -204,6 +218,17 @@
 
   {#if status}
     <p><strong>Version {status.currentVersion}.</strong> {summary}</p>
+    {#if status.activity === "preparing" && status.progress}
+      {@const progress = preparationText(status.progress)}
+      <div class="progress">
+        {#if progress.fraction === null}
+          <progress aria-label="Preparing version {status.availableVersion}"></progress>
+        {:else}
+          <progress aria-label="Preparing version {status.availableVersion}" max="100" value={Math.round(progress.fraction * 100)}></progress>
+        {/if}
+        <p class="muted">{progress.text}</p>
+      </div>
+    {/if}
 
     {#if status.supported}
       <p class="muted">Following the <strong>{status.channel}</strong> channel. {describeMode(status)}</p>
@@ -292,6 +317,18 @@
   h3 {
     margin: 0 0 0.75rem;
     font-size: 1.05rem;
+  }
+
+  .progress {
+    display: grid;
+    gap: 0.3rem;
+    margin: 0.4rem 0 0.6rem;
+  }
+
+  .progress progress {
+    width: 100%;
+    height: 0.5rem;
+    accent-color: var(--accent);
   }
 
   p {

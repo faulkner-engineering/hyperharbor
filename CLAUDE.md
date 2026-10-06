@@ -142,6 +142,10 @@ per-device VM accounts and a user management UI.
   host window is open (every second while something moves); Install now comes from the tray (InstallUpdateMessage) or from POST /host/update/install
   (elevated, audited; 409 updateNotReady unless a version is prepared). The endpoint calls RequestInstall in
   Response.OnCompleted, because its own in-flight request would otherwise keep HostActivity busy until the next tick.
+- Update progress (API 1.15.0): UpdatePreparer reports UpdateProgress (downloading with bytes from UpdateDownloader,
+  at most every 250 ms; verifying; testing) through InlineProgress (Progress<T> would post to the thread pool and
+  reorder reports); UpdateCoordinator.Status carries it while preparing, and HostUpdateStatus.progress exposes it.
+  The coordinator's WaitForNextTickAsync keeps one pending request wait across ticks (see UpdateCoordinatorTests).
 - host/src/Host.Core/Updates: UpdateOptions (Update section: channel, channel manifest URLs, allowed hosts,
   package size cap), UpdateManifest (latest.json schema 1 and its rules), UpdatePolicy (never a downgrade,
   skips rolled-back versions, minimumUpdateFrom), UpdateDownloader (https and allowed hosts on every redirect

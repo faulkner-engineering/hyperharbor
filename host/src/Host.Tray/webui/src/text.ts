@@ -1,6 +1,6 @@
 // Words the window shows for each state. Pure functions, so tests check them directly.
 
-import type { HostUpdateStatus } from "./bridge";
+import type { HostUpdateProgress, HostUpdateStatus } from "./bridge";
 
 export const MIN_PASSPHRASE = 8;
 export const MAX_PASSPHRASE = 256;
@@ -85,4 +85,22 @@ export function countdown(expiresAt: string, now: number): string {
 /** "123456" as "123 456". */
 export function formatPin(pin: string): string {
   return pin.length === 6 ? `${pin.slice(0, 3)} ${pin.slice(3)}` : pin;
+}
+
+const MB = 1024 * 1024;
+
+/** What preparing a version is doing, and how far it is (a fraction, or null when it cannot tell). */
+export function progressText(progress: HostUpdateProgress): { text: string; fraction: number | null } {
+  switch (progress.step) {
+    case "verifying":
+      return { text: "Checking the downloaded package…", fraction: null };
+    case "testing":
+      return { text: "Testing the new version on a copy of this host's data…", fraction: null };
+    default: {
+      const fraction = progress.bytesTotal > 0 ? Math.min(1, progress.bytesDone / progress.bytesTotal) : null;
+      const done = (progress.bytesDone / MB).toFixed(0);
+      const total = (progress.bytesTotal / MB).toFixed(0);
+      return { text: `Downloading: ${done} of ${total} MB (${Math.floor((fraction ?? 0) * 100)}%)`, fraction };
+    }
+  }
 }

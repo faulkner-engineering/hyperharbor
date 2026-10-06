@@ -16,6 +16,19 @@ public sealed class UpdateDownloaderTests : IDisposable
         new("host", "x64", Releases.PackageUrl, size ?? Releases.Package.Length, sha256 ?? Releases.Sha256(Releases.Package));
 
     [Fact]
+    public async Task Download_ReportsProgress_FromNothingToEveryByte()
+    {
+        _server.Serve(Releases.PackageUrl, Releases.Package);
+        var reports = new List<long>();
+
+        await Releases.Downloader(_server).DownloadAsync(Package(), Destination, new SyncProgress<long>(reports.Add), CancellationToken.None);
+
+        Assert.Equal(0, reports[0]);
+        Assert.Equal(Releases.Package.Length, reports[^1]);
+        Assert.True(reports.SequenceEqual(reports.Order()), "Progress never goes back.");
+    }
+
+    [Fact]
     public async Task Download_FollowsGitHubsRedirectToItsAssetHost_AndChecksTheHash()
     {
         _server.Redirect(Releases.PackageUrl, Releases.AssetUrl);
@@ -95,5 +108,10 @@ public sealed class UpdateDownloaderTests : IDisposable
             Releases.Downloader(_server).GetManifestAsync(new Uri("https://example.com/latest.json"), CancellationToken.None));
 
         Assert.Empty(_server.Requested);
+    }
+
+    private sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 }

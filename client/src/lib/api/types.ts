@@ -1327,6 +1327,21 @@ export interface components {
          */
         HostUpdateMode: "auto" | "notify" | "off";
         /**
+         * @description The step of preparing a version; testing is the new version's self-test on a copy of the data.
+         * @enum {string}
+         */
+        HostUpdateStep: "downloading" | "verifying" | "testing";
+        HostUpdateProgress: {
+            step: components["schemas"]["HostUpdateStep"];
+            /**
+             * Format: int64
+             * @description Bytes of the package received; all of them once downloading is done.
+             */
+            bytesDone: number;
+            /** Format: int64 */
+            bytesTotal: number;
+        };
+        /**
          * @description preparing means downloading, verifying, and testing a new version; ready means it waits to
          *     be installed; installing means the host is about to restart on it.
          * @enum {string}
@@ -1375,6 +1390,8 @@ export interface components {
             lastResult: string | null;
             /** @description Versions that did not start here and were rolled back; they are not offered again. */
             rolledBack: string[];
+            /** @description While preparing a version (API 1.15.0), its step and the bytes received; left out otherwise. */
+            progress?: components["schemas"]["HostUpdateProgress"] | null;
         };
         HostUpdateSettings: {
             /** @description One of the status's channels. */

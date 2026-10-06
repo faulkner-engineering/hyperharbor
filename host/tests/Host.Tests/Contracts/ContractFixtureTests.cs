@@ -140,6 +140,7 @@ public class ContractFixtureTests
         ["HostUpdateStatus"] = new HostUpdateStatus(
             true, HostUpdateMode.Auto, "stable", ["beta", "stable"], null, "0.1.0", "0.2.0", null,
             HostUpdateActivity.Ready, Time, "Version 0.2.0 is ready to install.", null, ["0.1.5"]),
+        ["HostUpdateProgress"] = new HostUpdateProgress(HostUpdateStep.Downloading, 52_428_800, 196_083_712),
         ["HostUpdateSettings"] = new HostUpdateSettings("stable", HostUpdateMode.Notify, "03:00"),
         ["RenameIsoRequest"] = new RenameIsoRequest("Windows 11 24H2.iso"),
         ["SetupProfile"] = SetupProfileSample,

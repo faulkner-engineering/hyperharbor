@@ -13,6 +13,7 @@ export type VmDeletePreview = components["schemas"]["VmDeletePreview"];
 export type DeleteBlocker = components["schemas"]["DeleteBlocker"];
 export type HostResources = components["schemas"]["HostResources"];
 export type HostUpdateStatus = components["schemas"]["HostUpdateStatus"];
+export type HostUpdateProgress = components["schemas"]["HostUpdateProgress"];
 export type HostUpdateSettings = components["schemas"]["HostUpdateSettings"];
 export type HostUpdateMode = components["schemas"]["HostUpdateMode"];
 export type HostRemoteDesktop = components["schemas"]["HostRemoteDesktop"];

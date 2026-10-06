@@ -1,10 +1,11 @@
 <script lang="ts">
   import { fade, slide } from "svelte/transition";
   import Icon from "../components/Icon.svelte";
+  import ProgressBar from "../components/ProgressBar.svelte";
   import UpdateSteps from "../components/UpdateSteps.svelte";
   import type { TrayViewState } from "../bridge";
   import { tray } from "../store.svelte";
-  import { updateModeText, updateSteps, updateSummary } from "../text";
+  import { progressText, updateModeText, updateSteps, updateSummary } from "../text";
 
   interface Props {
     view: TrayViewState;
@@ -51,6 +52,14 @@
 
     {#if update.supported && (moving || update.activity === "ready")}
       <div transition:slide={{ duration: 220 }}><UpdateSteps steps={updateSteps(update, checking)} /></div>
+    {/if}
+
+    {#if update.activity === "preparing" && update.progress}
+      {@const progress = progressText(update.progress)}
+      <div class="progress" transition:slide={{ duration: 220 }}>
+        <ProgressBar fraction={progress.fraction} label="Preparing version {update.availableVersion}" />
+        <p class="muted small">{progress.text}</p>
+      </div>
     {/if}
 
     {#if update.notesUrl && update.availableVersion}
@@ -126,6 +135,11 @@
 
   .summary.failed {
     color: var(--danger);
+  }
+
+  .progress {
+    display: grid;
+    gap: 0.4rem;
   }
 
   .notes {

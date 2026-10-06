@@ -1,9 +1,17 @@
 // The page talks to the tray (TrayApplicationContext) through WebView2's message channel. These types mirror
 // Host.Tray/Window/BridgeMessages.cs and TrayCommands.cs; bridge.fixtures.json, written by the .NET tests, keeps
-// them in step (see fixtures.check.ts).
+// them in step (see bridge.test.ts).
 
 export type HostUpdateMode = "auto" | "notify" | "off";
 export type HostUpdateActivity = "idle" | "checking" | "preparing" | "ready" | "installing";
+export type HostUpdateStep = "downloading" | "verifying" | "testing";
+
+/** api.yaml HostUpdateProgress (API 1.15.0). */
+export interface HostUpdateProgress {
+  step: HostUpdateStep;
+  bytesDone: number;
+  bytesTotal: number;
+}
 
 /** GET /host/update (api.yaml HostUpdateStatus). */
 export interface HostUpdateStatus {
@@ -20,6 +28,8 @@ export interface HostUpdateStatus {
   message: string | null;
   lastResult: string | null;
   rolledBack: string[];
+  /** While preparing a version (API 1.15.0); left out otherwise. */
+  progress?: HostUpdateProgress | null;
 }
 
 export interface TrayViewDevice {

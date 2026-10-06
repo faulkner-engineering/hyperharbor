@@ -45,9 +45,17 @@ public sealed class UpdateDownloader(HttpClient http, UpdateOptions options)
         return buffer.ToArray();
     }
 
+    /// <summary>How often the download reports progress at most.</summary>
+    internal static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(250);
+
     /// <summary>Downloads <paramref name="package"/> to <paramref name="destination"/> and checks its size and SHA-256.</summary>
     /// <exception cref="UpdateRejectedException">The download broke a rule or did not match; nothing is left behind.</exception>
-    public async Task DownloadAsync(UpdatePackage package, string destination, CancellationToken cancellationToken)
+    public Task DownloadAsync(UpdatePackage package, string destination, CancellationToken cancellationToken) =>
+        DownloadAsync(package, destination, progress: null, cancellationToken);
+
+    /// <param name="progress">Told the bytes received so far, at most every <see cref="ProgressInterval"/> and at the end.</param>
+    /// <exception cref="UpdateRejectedException">The download broke a rule or did not match; nothing is left behind.</exception>
+    public async Task DownloadAsync(UpdatePackage package, string destination, IProgress<long>? progress, CancellationToken cancellationToken)
     {
         var partial = destination + ".partial";
         try
@@ -64,6 +72,8 @@ public sealed class UpdateDownloader(HttpClient http, UpdateOptions options)
                 using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                 var chunk = new byte[BufferBytes];
                 long total = 0;
+                var reported = System.Diagnostics.Stopwatch.StartNew();
+                progress?.Report(0);
                 int read;
                 while ((read = await body.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
                 {
@@ -75,7 +85,14 @@ public sealed class UpdateDownloader(HttpClient http, UpdateOptions options)
 
                     hash.AppendData(chunk, 0, read);
                     await file.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    if (progress is not null && reported.Elapsed >= ProgressInterval)
+                    {
+                        progress.Report(total);
+                        reported.Restart();
+                    }
                 }
+
+                progress?.Report(total);
 
                 if (total != package.Size)
                 {

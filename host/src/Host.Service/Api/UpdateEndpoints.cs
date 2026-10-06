@@ -60,7 +60,18 @@ public static class UpdateEndpoints
             status.LastCheck,
             status.Message,
             status.LastResult,
-            status.RolledBack);
+            status.RolledBack,
+            status.Progress is { } progress
+                ? new HostUpdateProgress(
+                    progress.Step switch
+                    {
+                        UpdateStep.Verifying => HostUpdateStep.Verifying,
+                        UpdateStep.Testing => HostUpdateStep.Testing,
+                        _ => HostUpdateStep.Downloading,
+                    },
+                    progress.BytesDone,
+                    progress.BytesTotal)
+                : null);
     }
 
     private static Ok<HostUpdateStatus> GetStatus(IServiceProvider services, UpdateSettings settings) =>

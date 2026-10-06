@@ -142,6 +142,24 @@ describe("host window", () => {
     expect(sent).toContainEqual({ type: "installUpdate" });
   });
 
+  it("shows how far the download has come while a version is prepared", async () => {
+    render(HostWindow);
+    push(
+      state({
+        update: update({
+          activity: "preparing",
+          availableVersion: "0.1.5",
+          progress: { step: "downloading", bytesDone: 50 * 1024 * 1024, bytesTotal: 200 * 1024 * 1024 },
+        }),
+      }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: /Updates/ }));
+
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("25");
+    expect(screen.getByText("Downloading: 50 of 200 MB (25%)")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Check now" }).hasAttribute("disabled")).toBe(true);
+  });
+
   it("shows the tray's toasts", () => {
     render(HostWindow);
     push(state());

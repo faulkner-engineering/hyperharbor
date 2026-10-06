@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HostUpdateStatus } from "./bridge";
-import { countdown, deviceCount, formatPin, passphraseProblem, shortFingerprint, updateSteps, updateSummary } from "./text";
+import { countdown, deviceCount, formatPin, passphraseProblem, progressText, shortFingerprint, updateSteps, updateSummary } from "./text";
 
 const update = (overrides: Partial<HostUpdateStatus> = {}): HostUpdateStatus => ({
   supported: true,
@@ -66,5 +66,15 @@ describe("updates", () => {
     expect(states(update({ activity: "preparing" }))).toEqual(["done", "active", "waiting", "waiting"]);
     expect(states(update({ activity: "ready" }))).toEqual(["done", "done", "active", "waiting"]);
     expect(states(update({ activity: "installing" }))).toEqual(["done", "done", "done", "active"]);
+  });
+
+  it("says how far preparing a version has come", () => {
+    const MB = 1024 * 1024;
+    expect(progressText({ step: "downloading", bytesDone: 50 * MB, bytesTotal: 200 * MB })).toEqual({
+      text: "Downloading: 50 of 200 MB (25%)",
+      fraction: 0.25,
+    });
+    expect(progressText({ step: "verifying", bytesDone: 1, bytesTotal: 1 }).fraction).toBeNull();
+    expect(progressText({ step: "testing", bytesDone: 1, bytesTotal: 1 }).text).toMatch(/Testing the new version/);
   });
 });
