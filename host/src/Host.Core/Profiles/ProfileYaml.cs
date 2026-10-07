@@ -50,6 +50,11 @@ public static partial class ProfileYamlWriter
             lines.Add($"description: {Scalar(profile.Description)}");
         }
 
+        if (profile.Target == ProfileTarget.Host)
+        {
+            lines.Add("target: host");
+        }
+
         if (profile.Install is { Count: > 0 } install)
         {
             lines.Add("install:");
@@ -57,12 +62,44 @@ public static partial class ProfileYamlWriter
         }
 
         var remove = profile.Remove;
-        if (remove is not null && (remove.Appx?.Count > 0 || remove.Capabilities?.Count > 0 || remove.Features?.Count > 0))
+        if (remove is not null && (remove.Appx?.Count > 0 || remove.Capabilities?.Count > 0 || remove.Features?.Count > 0 || remove.Programs?.Count > 0))
         {
             lines.Add("remove:");
             AddSection(lines, "appx", remove.Appx);
             AddSection(lines, "capabilities", remove.Capabilities);
             AddSection(lines, "features", remove.Features);
+            AddSection(lines, "programs", remove.Programs);
+        }
+
+        if (profile.Services is { Count: > 0 } services)
+        {
+            lines.Add("services:");
+            var block = services.Select(service => ($"  {Scalar(service.Id)}: {Scalar(service.Startup)}", service.Name)).ToList();
+            Flush(lines, block);
+        }
+
+        if (profile.Startup is { } startup && (startup.Disable?.Count > 0 || startup.Enable?.Count > 0 || startup.Keep?.Count > 0))
+        {
+            lines.Add("startup:");
+            AddSection(lines, "disable", startup.Disable);
+            AddSection(lines, "enable", startup.Enable);
+            AddSection(lines, "keep", startup.Keep);
+        }
+
+        if (profile.Power is { } power && (power.Plan is not null || power.Wake is not null || power.ArmWake?.Count > 0))
+        {
+            lines.Add("power:");
+            if (power.Plan is not null)
+            {
+                lines.Add($"  plan: {Scalar(power.Plan)}");
+            }
+
+            if (power.Wake is not null)
+            {
+                lines.Add($"  wake: {Scalar(power.Wake)}");
+            }
+
+            AddSection(lines, "armWake", power.ArmWake);
         }
 
         if (profile.Tweaks is { Count: > 0 } tweaks)
@@ -78,7 +115,10 @@ public static partial class ProfileYamlWriter
                     lines.Add($"      key: {Scalar(registry.Key)}");
                     lines.Add($"      name: {Scalar(registry.Name)}");
                     lines.Add($"      type: {registry.Type.ToString().ToLowerInvariant()}");
-                    lines.Add($"      value: {(registry.Type == RegistryValueType.String ? Scalar(registry.Value) : registry.Value)}");
+                    if (registry.Type != RegistryValueType.Absent)
+                    {
+                        lines.Add($"      value: {(registry.Type == RegistryValueType.String ? Scalar(registry.Value) : registry.Value)}");
+                    }
                 }
                 else
                 {
@@ -202,7 +242,7 @@ public static class ProfileYamlReader
 {
     public const int SchemaVersion = 1;
 
-    private static readonly string[] TopLevel = ["schemaVersion", "name", "description", "install", "remove", "tweaks", "browser"];
+    private static readonly string[] TopLevel = ["schemaVersion", "name", "description", "target", "install", "remove", "tweaks", "browser", "services", "startup", "power"];
 
     /// <exception cref="ProfileFormatException">Not YAML, or not a profile.</exception>
     public static SetupProfile Read(string yaml)
@@ -237,7 +277,70 @@ public static class ProfileYamlReader
             Items(root, "install", comments),
             Remove(root, comments),
             Tweaks(root, comments),
-            Browser(root, comments));
+            Browser(root, comments),
+            Target(root),
+            Services(root, comments),
+            Startup(root, comments),
+            Power(root, comments));
+    }
+
+    private static ProfileTarget? Target(YamlMappingNode root) => OptionalScalar(root, "target") switch
+    {
+        null => null,
+        "vm" => ProfileTarget.Vm,
+        "host" => ProfileTarget.Host,
+        var other => throw new ProfileFormatException($"target must be vm or host, not \"{other}\"."),
+    };
+
+    private static IReadOnlyList<ProfileService>? Services(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
+    {
+        if (Child(root, "services") is not { } node)
+        {
+            return null;
+        }
+
+        if (node is YamlScalarNode { Value: null or "" })
+        {
+            return [];
+        }
+
+        var mapping = node as YamlMappingNode ?? throw new ProfileFormatException($"Line {node.Start.Line}: services must be a mapping of service names to startup types.");
+        var services = new List<ProfileService>();
+        foreach (var (key, value) in mapping.Children)
+        {
+            if (key is not YamlScalarNode { Value: { } id } || value is not YamlScalarNode { Value: { } startup })
+            {
+                throw new ProfileFormatException($"Line {key.Start.Line}: each service is name: startup type.");
+            }
+
+            services.Add(new ProfileService(id, startup, comments.GetValueOrDefault(key.Start.Line)));
+        }
+
+        return services;
+    }
+
+    private static ProfileStartup? Startup(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
+    {
+        if (Child(root, "startup") is not { } node)
+        {
+            return null;
+        }
+
+        var startup = node as YamlMappingNode ?? throw new ProfileFormatException($"Line {node.Start.Line}: startup must be a mapping.");
+        CheckKeys(startup, ["disable", "enable", "keep"], "startup");
+        return new ProfileStartup(Items(startup, "disable", comments), Items(startup, "enable", comments), Items(startup, "keep", comments));
+    }
+
+    private static ProfilePower? Power(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
+    {
+        if (Child(root, "power") is not { } node)
+        {
+            return null;
+        }
+
+        var power = node as YamlMappingNode ?? throw new ProfileFormatException($"Line {node.Start.Line}: power must be a mapping.");
+        CheckKeys(power, ["plan", "wake", "armWake"], "power");
+        return new ProfilePower(OptionalScalar(power, "plan"), OptionalScalar(power, "wake"), Items(power, "armWake", comments));
     }
 
     private static ProfileRemove? Remove(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
@@ -248,8 +351,8 @@ public static class ProfileYamlReader
         }
 
         var remove = node as YamlMappingNode ?? throw new ProfileFormatException($"Line {node.Start.Line}: remove must be a mapping.");
-        CheckKeys(remove, ["appx", "capabilities", "features"], "remove");
-        return new ProfileRemove(Items(remove, "appx", comments), Items(remove, "capabilities", comments), Items(remove, "features", comments));
+        CheckKeys(remove, ["appx", "capabilities", "features", "programs"], "remove");
+        return new ProfileRemove(Items(remove, "appx", comments), Items(remove, "capabilities", comments), Items(remove, "features", comments), Items(remove, "programs", comments));
     }
 
     private static IReadOnlyList<ProfileTweak>? Tweaks(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
@@ -278,7 +381,8 @@ public static class ProfileYamlReader
                         "dword" => RegistryValueType.Dword,
                         "qword" => RegistryValueType.Qword,
                         "string" => RegistryValueType.String,
-                        var other => throw new ProfileFormatException($"Line {registry.Start.Line}: type must be dword, qword, or string, not \"{other}\"."),
+                        "absent" => RegistryValueType.Absent,
+                        var other => throw new ProfileFormatException($"Line {registry.Start.Line}: type must be dword, qword, string, or absent, not \"{other}\"."),
                     };
                     var keyLine = mapping.Children.Keys.First().Start.Line;
                     tweaks.Add(new ProfileTweak(

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using HyperHarbor.Shared.Contracts.Ipc;
 
 namespace HyperHarbor.Host.Tray.Window;
 
@@ -29,6 +30,14 @@ public interface ITrayActions
     void InstallUpdate();
 
     void SetUpdateChannel(string channel);
+
+    /// <param name="source">lean or undo (<see cref="HostLeanSources"/>).</param>
+    void HostLeanDryRun(string source);
+
+    /// <param name="source">lean or undo (<see cref="HostLeanSources"/>).</param>
+    void HostLeanApply(string source);
+
+    void SetHostLeanSchedule(bool enabled);
 
     /// <param name="target">logs or audit.</param>
     void Open(string target);
@@ -82,6 +91,15 @@ public static class TrayCommands
             case "setChannel" when Text(message, "channel") is { Length: > 0 } channel:
                 actions.SetUpdateChannel(channel);
                 return true;
+            case "hostLeanDryRun" when Text(message, "source") is { } dryRunSource && HostLeanSources.IsKnown(dryRunSource):
+                actions.HostLeanDryRun(dryRunSource);
+                return true;
+            case "hostLeanApply" when Text(message, "source") is { } applySource && HostLeanSources.IsKnown(applySource):
+                actions.HostLeanApply(applySource);
+                return true;
+            case "setHostLeanSchedule" when Flag(message, "enabled") is { } enabled:
+                actions.SetHostLeanSchedule(enabled);
+                return true;
             case "open" when Text(message, "target") is "logs" or "audit":
                 actions.Open(Text(message, "target")!);
                 return true;
@@ -101,6 +119,9 @@ public static class TrayCommands
 
     private static string? Text(JsonElement message, string name) =>
         message.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static bool? Flag(JsonElement message, string name) =>
+        message.TryGetProperty(name, out var value) && (value.ValueKind == JsonValueKind.True || value.ValueKind == JsonValueKind.False) ? value.GetBoolean() : null;
 
     private static Guid? Id(JsonElement message, string name) =>
         Text(message, name) is { } text && Guid.TryParse(text, out var id) ? id : null;

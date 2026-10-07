@@ -1,0 +1,77 @@
+# Startup entries a host profile never disables, whatever its disable patterns say. Names are matched against the
+# entry's name in the Run key or the Startup folder, with * and ? wildcards, ignoring case.
+# Fields: pattern, reason.
+- pattern: SecurityHealth*
+  reason: The Windows Security tray icon.
+- pattern: "*Defender*"
+  reason: Antivirus.
+- pattern: Malwarebytes*
+  reason: Antivirus.
+- pattern: Bitdefender*
+  reason: Antivirus.
+- pattern: Kaspersky*
+  reason: Antivirus.
+- pattern: ESET*
+  reason: Antivirus.
+- pattern: Norton*
+  reason: Antivirus.
+- pattern: McAfee*
+  reason: Antivirus.
+- pattern: Avast*
+  reason: Antivirus.
+- pattern: AVG*
+  reason: Antivirus.
+- pattern: RtkAudUService*
+  reason: Realtek audio.
+- pattern: Realtek*
+  reason: Realtek audio.
+- pattern: RTHDVCPL*
+  reason: Realtek audio.
+- pattern: Waves*
+  reason: Audio drivers.
+- pattern: NVIDIA*
+  reason: GPU driver control panel.
+- pattern: NvBackend*
+  reason: GPU driver.
+- pattern: RadeonSoftware*
+  reason: GPU driver control panel.
+- pattern: AMD*
+  reason: GPU driver.
+- pattern: IgfxTray*
+  reason: Intel graphics.
+- pattern: Intel*Graphics*
+  reason: Intel graphics.
+- pattern: Intel*Driver*
+  reason: Intel drivers.
+- pattern: SynTPEnh*
+  reason: Touchpad driver.
+- pattern: ETDCtrl*
+  reason: Touchpad driver.
+- pattern: Elan*
+  reason: Touchpad driver.
+- pattern: Bluetooth*
+  reason: Bluetooth.
+- pattern: Wacom*
+  reason: Pen tablet driver.
+- pattern: Steam*
+  reason: The game launcher this host is set up for.
+- pattern: Tailscale*
+  reason: VPN or remote access.
+- pattern: ZeroTier*
+  reason: VPN or remote access.
+- pattern: NordVPN*
+  reason: VPN.
+- pattern: ProtonVPN*
+  reason: VPN.
+- pattern: WireGuard*
+  reason: VPN.
+- pattern: 1Password*
+  reason: Password manager.
+- pattern: Bitwarden*
+  reason: Password manager.
+- pattern: HyperHarbor*
+  reason: HyperHarbor itself.
+- pattern: Sunshine*
+  reason: Game streaming host.
+- pattern: Parsec*
+  reason: Game streaming host.

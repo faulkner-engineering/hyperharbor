@@ -155,3 +155,56 @@
       type: dword
       value: "0"
       default: "1"
+- id: system.disableCopilotMachine
+  name: Turn off Copilot for every account
+  category: system
+  note: The machine-wide policy; "Turn off Copilot" sets it for one account.
+  values:
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot
+      name: TurnOffWindowsCopilot
+      type: dword
+      value: "1"
+      default: null
+- id: start.disableSearchHighlights
+  name: Turn off search highlights
+  category: start
+  values:
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings
+      name: IsDynamicSearchBoxEnabled
+      type: dword
+      value: "0"
+      default: "1"
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search
+      name: EnableDynamicContentInWSB
+      type: dword
+      value: "0"
+      default: null
+- id: system.disableGameDvr
+  name: Turn off Game DVR and background recording
+  category: system
+  note: Game Bar stays installed, but it records nothing and stays out of the way.
+  values:
+    - key: HKCU\System\GameConfigStore
+      name: GameDVR_Enabled
+      type: dword
+      value: "0"
+      default: null
+    - key: HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR
+      name: AppCaptureEnabled
+      type: dword
+      value: "0"
+      default: "1"
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR
+      name: AllowGameDVR
+      type: dword
+      value: "0"
+      default: null
+- id: system.quietGameBar
+  name: Stop Game Bar from showing its startup panel
+  category: system
+  values:
+    - key: HKCU\Software\Microsoft\GameBar
+      name: ShowStartupPanel
+      type: dword
+      value: "0"
+      default: null

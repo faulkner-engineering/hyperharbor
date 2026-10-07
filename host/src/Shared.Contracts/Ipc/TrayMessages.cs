@@ -33,6 +33,11 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(CheckForUpdateMessage), "checkForUpdate")]
 [JsonDerivedType(typeof(InstallUpdateMessage), "installUpdate")]
 [JsonDerivedType(typeof(SetUpdateChannelMessage), "setUpdateChannel")]
+[JsonDerivedType(typeof(HostLeanStatusMessage), "hostLeanStatus")]
+[JsonDerivedType(typeof(HostLeanQueryMessage), "hostLeanQuery")]
+[JsonDerivedType(typeof(HostLeanDryRunMessage), "hostLeanDryRun")]
+[JsonDerivedType(typeof(HostLeanApplyMessage), "hostLeanApply")]
+[JsonDerivedType(typeof(SetHostLeanScheduleMessage), "setHostLeanSchedule")]
 public abstract record TrayMessage;
 
 // Service to tray.

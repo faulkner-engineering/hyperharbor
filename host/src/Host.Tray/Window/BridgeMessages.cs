@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using HyperHarbor.Shared.Contracts.Hosts;
+using HyperHarbor.Shared.Contracts.Ipc;
 
 namespace HyperHarbor.Host.Tray.Window;
 
@@ -13,6 +14,7 @@ namespace HyperHarbor.Host.Tray.Window;
 /// Work this tray started that has not finished: "passphrase", "console", "packageSearch", "folder:vm", "folder:iso",
 /// "folder:backup", "device:&lt;id&gt;", "update". The page shows each as in progress.
 /// </param>
+/// <param name="HostLean">The Lean host action's status from the service; null while the service is not connected.</param>
 /// <param name="Pairing">The pairing request waiting for its PIN, if any.</param>
 public sealed record TrayViewState(
     bool Connected,
@@ -24,6 +26,7 @@ public sealed record TrayViewState(
     bool ConsoleReady,
     bool PackageSearchReady,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] HostUpdateStatus? Update,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] HostLeanStatus? HostLean,
     IReadOnlyList<string> Busy,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] TrayViewPairing? Pairing,
     string DataDirectory);
@@ -48,7 +51,7 @@ public static class HostToPage
         public string Type => "toast";
     }
 
-    /// <param name="Page">overview, devices, storage, updates, logs, or passphrase (the passphrase dialog).</param>
+    /// <param name="Page">overview, devices, storage, lean, updates, logs, or passphrase (the passphrase dialog).</param>
     public sealed record Navigate(string Page)
     {
         public string Type => "navigate";

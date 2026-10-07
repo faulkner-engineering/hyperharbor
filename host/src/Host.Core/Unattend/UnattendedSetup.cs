@@ -193,7 +193,14 @@ public sealed partial class UnattendedSetup
 
         try
         {
-            return _setupProfiles.Get(userId, setupProfileId).Profile;
+            var chosen = _setupProfiles.Get(userId, setupProfileId).Profile;
+            if (chosen.Target == Shared.Contracts.Profiles.ProfileTarget.Host)
+            {
+                errors.Add(new(field, "That is a host profile. Choose a profile for VMs."));
+                return null;
+            }
+
+            return chosen;
         }
         catch (Profiles.SetupProfileNotFoundException)
         {

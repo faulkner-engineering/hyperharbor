@@ -10,6 +10,44 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.1.7-beta.1] - 2026-10-07 (API 1.17.0)
+
+### Added
+- Lean host action in the tray (HyperHarbor Host window, Lean host page): applies the shipped "Host gaming" profile to
+  the host PC itself. It removes consumer apps (Clipchamp, News, Weather, Copilot, Xbox app, Phone Link, Teams, and
+  similar), disables unneeded services and startup entries, turns off Widgets, Copilot, search highlights, Game Bar's
+  startup panel, and Game DVR, uninstalls OneDrive and known RGB vendor suites (iCUE, Razer Synapse, Armoury Crate, MSI
+  Center, Gigabyte Control Center, SignalRGB, NZXT CAM, and others), sets the High performance power plan, lets only the
+  wired network adapter, keyboards, and mice wake the PC (Wake-on-LAN keeps working), and sets Edge policies (no background mode, startup
+  boost, shopping, or sidebar). It needs the installed service (LocalSystem) or an administrator.
+- Safety rules for the Lean host action:
+  - A dry run is required. It reads the PC and lists every change; an apply is refused unless a dry run of the same
+    profile was done in the last 24 hours and the PC still gives the same result.
+  - The first apply makes a system restore point and exports the registry keys it touches (under
+    `%ProgramData%\HyperHarbor\host-lean\backup`). If either fails, nothing is changed. System Protection must be on
+    for the system drive.
+  - Guards: Gaming Services and the Xbox Identity Provider stay while a game from a curated list is found in a Steam
+    library; the print spooler stays while a physical printer exists; Photos stays while no other image viewer is
+    installed. Hyper-V, Remote Desktop, HyperHarbor, and core Windows services are never changed, framework apps are
+    never removed, and a startup entry on the built-in allowlist (security, audio, GPU, touchpad, VPN, Steam) is never
+    disabled. Startup entries are disabled through StartupApproved (as Task Manager does), so nothing is deleted.
+  - Every change is made only if the PC differs, so applying again changes nothing. After an apply, a second look
+    checks that the changes stayed.
+  - The changes become an undo profile (`host-lean\undo.yaml`) that puts back service startup types, startup entries,
+    registry values, the power plan, and wake devices; the Undo button runs it (dry run first). Removed apps and
+    uninstalled programs cannot be undone this way.
+  - Idle memory in use and process count are recorded before and after each apply and shown on the page.
+  - Monthly re-apply (on after the first apply, can be turned off on the page): keeps the profile in place after
+    Windows updates. It runs only while the shipped profile is the one a person applied, and is audited. Each apply,
+    undo, and scheduled run is recorded in the audit log.
+- Setup profiles can target the host (`target: host`) with new sections: `services` (startup types), `startup`
+  (disable, enable, keep), `power` (plan, wake rule nicOnly, nicAndInput, or unchanged, wake devices), and `remove.programs`. Registry tweaks accept `type: absent` to
+  delete a value. The profile schema, the YAML reader and writer, and the validator know them. API 1.17.0 adds them to
+  SetupProfile (all optional); host profiles are refused when applied to a VM.
+- New curated tweaks: Turn off Copilot for every account, Turn off search highlights, Turn off Game DVR and background
+  recording, Stop Game Bar from showing its startup panel. New browser policy: keep running in the background after
+  the browser closes.
+
 ## [0.1.6] - 2026-10-07 (API 1.16.0)
 
 ### Added

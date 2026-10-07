@@ -5,6 +5,7 @@ using System.Security.Principal;
 using System.Text;
 using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Elevation;
+using HyperHarbor.Host.Core.HostProfiles;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Performance;
@@ -66,6 +67,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (_services.GetService<HostLeanService>() is { } lean)
+        {
+            lean.Changed += (_, _) => Broadcast(new HostLeanStatusMessage(lean.Status()));
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             NamedPipeServerStream pipe;
@@ -151,6 +157,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             }
 
             await SendUpdateStatusAsync(connection);
+            await SendHostLeanStatusAsync(connection);
 
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
             var lines = new BoundedLineReader(reader, MaxMessageLength);
@@ -255,6 +262,53 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 SetUpdateChannel(channel);
                 await SendUpdateStatusAsync(connection);
                 break;
+            case HostLeanQueryMessage:
+                await SendHostLeanStatusAsync(connection);
+                break;
+            case HostLeanDryRunMessage dryRun when HostLeanSources.IsKnown(dryRun.Source):
+                // A dry run reads the whole PC and an apply takes minutes; keep reading the pipe meanwhile.
+                _ = RunHostLeanAsync(lean => lean.DryRunAsync(dryRun.Source, CancellationToken.None));
+                break;
+            case HostLeanApplyMessage apply when HostLeanSources.IsKnown(apply.Source):
+                _ = RunHostLeanAsync(lean => lean.ApplyAsync(apply.Source, CancellationToken.None));
+                break;
+            case SetHostLeanScheduleMessage schedule:
+                _services.GetService<HostLeanService>()?.SetSchedule(schedule.Enabled);
+                break;
+        }
+    }
+
+    private async Task SendHostLeanStatusAsync(Connection connection)
+    {
+        if (_services.GetService<HostLeanService>() is { } lean)
+        {
+            await connection.SendAsync(new HostLeanStatusMessage(lean.Status()));
+        }
+    }
+
+    /// <summary>Runs one Lean host action. The service reports progress and results through its status, so a failure here only needs logging.</summary>
+    private async Task RunHostLeanAsync(Func<HostLeanService, Task> action)
+    {
+        if (_services.GetService<HostLeanService>() is not { } lean)
+        {
+            return;
+        }
+
+        try
+        {
+            await action(lean);
+        }
+        catch (HostLeanException ex)
+        {
+            _logger.LogWarning("A Lean host action was refused: {Message}", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "A Lean host action failed unexpectedly.");
+        }
+        finally
+        {
+            Broadcast(new HostLeanStatusMessage(lean.Status()));
         }
     }
 

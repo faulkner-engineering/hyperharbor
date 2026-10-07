@@ -1,0 +1,78 @@
+# Programs a host profile can uninstall (remove.programs), by id. The host finds each program in the Uninstall
+# registry keys by its display name and runs the quiet uninstall command; a program with no quiet command is reported
+# and left alone, never uninstalled through a window. Removing a program cannot be undone from the undo profile.
+# Fields: id, name, match (display name patterns with * and ?), processes (stopped first), uninstall
+# (standard | oneDrive), note (optional).
+- id: onedrive
+  name: Microsoft OneDrive
+  match: ["Microsoft OneDrive"]
+  processes: [OneDrive]
+  uninstall: oneDrive
+  note: Files already synced stay in the OneDrive folder. Windows may offer it again after a feature update.
+- id: icue
+  name: Corsair iCUE
+  match: ["iCUE*", "CORSAIR iCUE*", "Corsair iCUE*"]
+  processes: [iCUE, iCUEDevicePluginHost, Corsair.Service]
+  uninstall: standard
+  note: Lighting profiles stored in the suite are lost; hardware keeps its last saved mode.
+- id: razer-synapse
+  name: Razer Synapse and Razer Central
+  match: ["Razer Synapse*", "Razer Central*"]
+  processes: ["Razer Synapse 3", RazerCentral, "Razer Central"]
+  uninstall: standard
+- id: armoury-crate
+  name: ASUS Armoury Crate
+  match: ["Armoury Crate*", "ArmouryCrate*"]
+  processes: [ArmouryCrate.UserSessionHelper, ArmourySocketServer]
+  uninstall: standard
+  note: Often has no quiet uninstaller; then it is reported and left in place. ASUS offers an uninstall tool for it.
+- id: msi-center
+  name: MSI Center
+  match: ["MSI Center*"]
+  processes: ["MSI Center"]
+  uninstall: standard
+- id: mystic-light
+  name: MSI Mystic Light
+  match: ["Mystic Light*"]
+  processes: [MysticLight]
+  uninstall: standard
+- id: dragon-center
+  name: MSI Dragon Center
+  match: ["Dragon Center*"]
+  processes: [DragonCenter]
+  uninstall: standard
+- id: gigabyte-control-center
+  name: Gigabyte Control Center and RGB Fusion
+  match: ["Gigabyte Control Center*", "GIGABYTE Control Center*", "RGB Fusion*"]
+  processes: [GCC, RGBFusion]
+  uninstall: standard
+- id: signalrgb
+  name: SignalRGB
+  match: ["SignalRgb*", "SignalRGB*"]
+  processes: [SignalRgbLauncher, SignalRgbEngine]
+  uninstall: standard
+- id: nzxt-cam
+  name: NZXT CAM
+  match: ["NZXT CAM*"]
+  processes: ["NZXT CAM"]
+  uninstall: standard
+- id: hyperx-ngenuity
+  name: HyperX NGENUITY
+  match: ["HyperX NGENUITY*"]
+  processes: ["HyperX NGENUITY"]
+  uninstall: standard
+- id: lian-li-l-connect
+  name: Lian Li L-Connect
+  match: ["L-Connect*"]
+  processes: [L-Connect]
+  uninstall: standard
+- id: cooler-master-masterplus
+  name: Cooler Master MasterPlus
+  match: ["MasterPlus*"]
+  processes: [MasterPlus]
+  uninstall: standard
+- id: asrock-polychrome
+  name: ASRock Polychrome RGB
+  match: ["Polychrome*", "ASRock Polychrome*"]
+  processes: [Polychrome]
+  uninstall: standard

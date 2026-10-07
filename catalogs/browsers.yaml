@@ -94,6 +94,12 @@ policies:
     policy: MetricsReportingEnabled
     type: boolean
     appliesTo: [chrome, brave]
+  - key: backgroundMode
+    name: Keep running in the background after the browser closes
+    description: Off frees memory and a process while no window is open.
+    policy: BackgroundModeEnabled
+    type: boolean
+    appliesTo: [chrome, edge, brave]
   - key: edgeShopping
     name: Shopping in Microsoft Edge
     policy: EdgeShoppingAssistantEnabled

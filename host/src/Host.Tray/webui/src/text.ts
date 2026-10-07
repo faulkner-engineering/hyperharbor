@@ -1,6 +1,6 @@
 // Words the window shows for each state. Pure functions, so tests check them directly.
 
-import type { HostUpdateProgress, HostUpdateStatus } from "./bridge";
+import type { HostLeanMetrics, HostLeanPlanSummary, HostLeanRunSummary, HostLeanStatus, HostUpdateProgress, HostUpdateStatus } from "./bridge";
 
 export const MIN_PASSPHRASE = 8;
 export const MAX_PASSPHRASE = 256;
@@ -103,4 +103,70 @@ export function progressText(progress: HostUpdateProgress): { text: string; frac
       return { text: `Downloading: ${done} of ${total} MB (${Math.floor((fraction ?? 0) * 100)}%)`, fraction };
     }
   }
+}
+
+const HANDLER_LABELS: Record<string, string> = {
+  services: "Services",
+  startup: "Startup entries",
+  registry: "Settings",
+  power: "Power",
+  appx: "Apps",
+  programs: "Programs",
+};
+
+export function handlerLabel(handler: string): string {
+  return HANDLER_LABELS[handler] ?? handler;
+}
+
+/** The dry run's changes grouped by handler, in a fixed order. */
+export function groupChanges(plan: HostLeanPlanSummary): { handler: string; label: string; lines: HostLeanPlanSummary["changes"] }[] {
+  const order = Object.keys(HANDLER_LABELS);
+  const handlers = [...new Set(plan.changes.map((line) => line.handler))].sort((a, b) => {
+    const left = order.indexOf(a);
+    const right = order.indexOf(b);
+    return (left < 0 ? order.length : left) - (right < 0 ? order.length : right) || a.localeCompare(b);
+  });
+  return handlers.map((handler) => ({ handler, label: handlerLabel(handler), lines: plan.changes.filter((line) => line.handler === handler) }));
+}
+
+/** One line about where the Lean host action stands. */
+export function leanSummary(status: HostLeanStatus): string {
+  if (!status.supported) return status.unsupportedReason ?? "The Lean host action needs the installed HyperHarbor service.";
+  switch (status.busy) {
+    case "dryRun":
+      return "Reading this PC. Nothing is changed.";
+    case "apply":
+      return "Applying the profile. This can take a few minutes.";
+    case "undo":
+      return "Undoing the earlier changes.";
+  }
+  const plan = status.dryRun;
+  if (plan) {
+    const count = plan.changes.length;
+    const what = plan.source === "undo" ? "undo" : "profile";
+    if (count === 0) return `Dry run done: this PC already matches the ${what}. Nothing to change.`;
+    return plan.canApply
+      ? `Dry run done: ${count === 1 ? "1 change" : `${count} changes`} to make. Review them, then apply.`
+      : "The dry run is out of date. Run it again before applying.";
+  }
+  return status.applied ? "Applied. Run a dry run to see what has drifted." : "Not applied yet. Start with a dry run.";
+}
+
+/** "+12" or "-340", or "0" when nothing changed. */
+export function signed(value: number): string {
+  return value > 0 ? `+${value}` : value < 0 ? `-${Math.abs(value)}` : "0";
+}
+
+export function metricsText(metrics: HostLeanMetrics): string {
+  const memory = metrics.usedMemoryMb >= 1024 ? `${(metrics.usedMemoryMb / 1024).toFixed(1)} GB` : `${metrics.usedMemoryMb} MB`;
+  return `${memory} in use, ${metrics.processCount} processes${metrics.idle ? "" : " (CPU was busy)"}`;
+}
+
+/** Before and after of the last run, with the change. Null when either was not recorded. */
+export function runDelta(run: HostLeanRunSummary): { memory: string; processes: string } | null {
+  if (!run.before || !run.after) return null;
+  return {
+    memory: `${signed(run.after.usedMemoryMb - run.before.usedMemoryMb)} MB`,
+    processes: signed(run.after.processCount - run.before.processCount),
+  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { HostUpdateStatus } from "./bridge";
-import { countdown, deviceCount, formatPin, passphraseProblem, progressText, shortFingerprint, updateSteps, updateSummary } from "./text";
+import type { HostLeanRunSummary, HostLeanStatus, HostUpdateStatus } from "./bridge";
+import { countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
 
 const update = (overrides: Partial<HostUpdateStatus> = {}): HostUpdateStatus => ({
   supported: true,
@@ -76,5 +76,82 @@ describe("updates", () => {
     });
     expect(progressText({ step: "verifying", bytesDone: 1, bytesTotal: 1 }).fraction).toBeNull();
     expect(progressText({ step: "testing", bytesDone: 1, bytesTotal: 1 }).text).toMatch(/Testing the new version/);
+  });
+});
+
+const leanStatus = (overrides: Partial<HostLeanStatus> = {}): HostLeanStatus => ({
+  supported: true,
+  busy: null,
+  profileName: "Host gaming",
+  applied: false,
+  undoAvailable: false,
+  scheduleEnabled: false,
+  ...overrides,
+});
+
+const planOf = (changes: { handler: string; item: string; text: string }[], canApply = true) => ({
+  source: "lean" as const,
+  at: "2026-10-05T12:00:00Z",
+  canApply,
+  changes,
+  kept: [],
+  problems: [],
+  alreadyInPlace: 0,
+});
+
+describe("leanSummary", () => {
+  it("covers each state", () => {
+    expect(leanSummary(leanStatus({ supported: false, unsupportedReason: "Needs the service." }))).toBe("Needs the service.");
+    expect(leanSummary(leanStatus({ busy: "dryRun" }))).toMatch(/Nothing is changed/);
+    expect(leanSummary(leanStatus({ busy: "apply" }))).toMatch(/Applying/);
+    expect(leanSummary(leanStatus({ busy: "undo" }))).toMatch(/Undoing/);
+    expect(leanSummary(leanStatus())).toMatch(/Start with a dry run/);
+    expect(leanSummary(leanStatus({ applied: true }))).toMatch(/Applied/);
+  });
+
+  it("describes a dry run by its changes and whether it is still current", () => {
+    const one = [{ handler: "services", item: "DiagTrack", text: "x" }];
+    expect(leanSummary(leanStatus({ dryRun: planOf([]) }))).toMatch(/Nothing to change/);
+    expect(leanSummary(leanStatus({ dryRun: planOf(one) }))).toMatch(/1 change to make/);
+    expect(leanSummary(leanStatus({ dryRun: planOf([...one, ...one]) }))).toMatch(/2 changes/);
+    expect(leanSummary(leanStatus({ dryRun: planOf(one, false) }))).toMatch(/out of date/);
+  });
+});
+
+describe("groupChanges", () => {
+  it("orders handlers in a fixed order and keeps unknown ones last", () => {
+    const groups = groupChanges(
+      planOf([
+        { handler: "other", item: "a", text: "" },
+        { handler: "appx", item: "b", text: "" },
+        { handler: "services", item: "c", text: "" },
+        { handler: "services", item: "d", text: "" },
+      ]),
+    );
+    expect(groups.map((group) => group.label)).toEqual(["Services", "Apps", "other"]);
+    expect(groups[0].lines).toHaveLength(2);
+  });
+});
+
+describe("lean numbers", () => {
+  it("signs deltas and describes metrics", () => {
+    expect(signed(5)).toBe("+5");
+    expect(signed(-5)).toBe("-5");
+    expect(signed(0)).toBe("0");
+    expect(metricsText({ at: "", usedMemoryMb: 512, processCount: 90, idle: true })).toBe("512 MB in use, 90 processes");
+    expect(metricsText({ at: "", usedMemoryMb: 6144, processCount: 90, idle: false })).toBe("6.0 GB in use, 90 processes (CPU was busy)");
+  });
+
+  it("gives a delta only when both samples exist", () => {
+    const run: HostLeanRunSummary = {
+      source: "lean",
+      at: "",
+      scheduled: false,
+      changed: 1,
+      problems: [],
+      before: { at: "", usedMemoryMb: 100, processCount: 10, idle: true },
+    };
+    expect(runDelta(run)).toBeNull();
+    expect(runDelta({ ...run, after: { at: "", usedMemoryMb: 80, processCount: 12, idle: true } })).toEqual({ memory: "-20 MB", processes: "+2" });
   });
 });

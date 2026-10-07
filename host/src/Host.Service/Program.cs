@@ -5,6 +5,7 @@ using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Diagnostics;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
+using HyperHarbor.Host.Core.HostProfiles;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Lifecycle;
@@ -325,6 +326,29 @@ if (isWindowsService)
             services.GetRequiredService<ILogger<UpdateCoordinator>>());
     });
     builder.Services.AddHostedService<UpdateService>();
+}
+
+// Lean host action: applies the shipped host profile to this PC (dry run first, restore point, undo, monthly re-apply).
+builder.Services.AddSingleton(HostCatalogs.Default);
+builder.Services.AddSingleton<IHostSystem, PowerShellHostSystem>();
+builder.Services.AddSingleton<ISteamLibrary>(new SteamLibrary(SteamLibrary.FolderFromRegistry));
+builder.Services.AddSingleton<IHostMetrics, WindowsHostMetrics>();
+builder.Services.AddSingleton(new HostLeanStore(dataDirectory));
+builder.Services.AddSingleton(services => new HostDiffer(services.GetRequiredService<Catalogs>(), services.GetRequiredService<HostCatalogs>()));
+builder.Services.AddSingleton(services => new HostLeanService(
+    services.GetRequiredService<IHostSystem>(),
+    services.GetRequiredService<ISteamLibrary>(),
+    services.GetRequiredService<HostLeanStore>(),
+    services.GetRequiredService<SetupProfilePlanner>(),
+    new ProfileValidator(services.GetRequiredService<Catalogs>(), services.GetRequiredService<HostCatalogs>()),
+    services.GetRequiredService<HostDiffer>(),
+    services.GetRequiredService<IHostMetrics>(),
+    services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<HostLeanService>>(),
+    services.GetRequiredService<IAuditLog>()));
+if (isWindowsService && selfTest is null)
+{
+    builder.Services.AddHostedService<HostLeanSchedulerService>();
 }
 
 builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<VmCreationService>(services, services.GetRequiredService<VmStorageLocation>()));

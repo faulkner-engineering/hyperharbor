@@ -32,6 +32,55 @@ export interface HostUpdateStatus {
   progress?: HostUpdateProgress | null;
 }
 
+export interface HostLeanChangeLine {
+  handler: string;
+  item: string;
+  text: string;
+}
+
+export interface HostLeanMetrics {
+  at: string;
+  usedMemoryMb: number;
+  processCount: number;
+  idle: boolean;
+}
+
+/** Mirrors Shared.Contracts/Ipc/HostLeanMessages.cs. Null properties are left out by the JSON options, so they are optional here. */
+export interface HostLeanPlanSummary {
+  source: "lean" | "undo";
+  at: string;
+  canApply: boolean;
+  changes: HostLeanChangeLine[];
+  kept: string[];
+  problems: string[];
+  alreadyInPlace: number;
+}
+
+export interface HostLeanRunSummary {
+  source: "lean" | "undo";
+  at: string;
+  scheduled: boolean;
+  changed: number;
+  problems: string[];
+  before?: HostLeanMetrics | null;
+  after?: HostLeanMetrics | null;
+  restorePoint?: string | null;
+}
+
+export interface HostLeanStatus {
+  supported: boolean;
+  unsupportedReason?: string | null;
+  /** dryRun, apply, or undo; null when idle. */
+  busy?: "dryRun" | "apply" | "undo" | null;
+  profileName: string;
+  applied: boolean;
+  undoAvailable: boolean;
+  scheduleEnabled: boolean;
+  nextScheduled?: string | null;
+  dryRun?: HostLeanPlanSummary | null;
+  lastRun?: HostLeanRunSummary | null;
+}
+
 export interface TrayViewDevice {
   id: string;
   name: string;
@@ -50,6 +99,8 @@ export interface TrayViewState {
   consoleReady: boolean;
   packageSearchReady: boolean;
   update: HostUpdateStatus | null;
+  /** Null while the service is not connected. */
+  hostLean: HostLeanStatus | null;
   /** Work in progress: passphrase, console, packageSearch, folder:vm|iso|backup, device:<id>, update. */
   busy: string[];
   pairing: { pairingId: string; deviceName: string; pin: string; expiresAt: string } | null;
@@ -74,6 +125,9 @@ export type PageMessage =
   | { type: "setUpPackageSearch" }
   | { type: "checkUpdate" }
   | { type: "installUpdate" }
+  | { type: "hostLeanDryRun"; source: "lean" | "undo" }
+  | { type: "hostLeanApply"; source: "lean" | "undo" }
+  | { type: "setHostLeanSchedule"; enabled: boolean }
   | { type: "setChannel"; channel: string }
   | { type: "open"; target: "logs" | "audit" }
   | { type: "openUrl"; url: string }

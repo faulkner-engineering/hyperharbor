@@ -75,6 +75,13 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    watcher); the job's setupResult carries restartPending. Client: VM menu Apply setup profile… (ApplySetupProfileDialog). Verified live 2026-10-05 (HH_PROFILE_EXISTING_LIVE): 7 items, the account hive written. No
    removal in the live runs needed a restart (MathRecognizer, SmbDirect), so the restart path is unit tested only.
 
+13. Lean host, added at the user's request (2026-10-07; API 1.17.0; code complete and unit tested, handlers
+   partly verified on this PC, never applied to it): the setup profile engine targets the host itself (profile
+   `target: host`; sections services, startup, power, remove.programs, registry type absent) and the tray's Lean host
+   page applies the shipped profiles/host-gaming.yaml: dry run required, restore point and registry export before
+   the first apply, guards and a startup allowlist, an undo profile from the diff, idle memory and process count
+   before and after, a monthly re-apply. See "Lean host" under Gotchas.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
 
@@ -151,6 +158,13 @@ per-device VM accounts and a user management UI.
   skips rolled-back versions, minimumUpdateFrom), UpdateDownloader (https and allowed hosts on every redirect
   hop, size and SHA-256 while streaming), PackageSignatures (UnsignedPackageVerifier holds the marked SIGNING
   HOOK), UpdatePreparer (manifest, decision, then download, hash, signatures, self-test; a failure deletes it).
+- host/src/Host.Core/HostProfiles: the Lean host action. HostCatalogs (catalogs/host-startup.yaml allowlist,
+  host-programs.yaml, host-guards.yaml), HostDiffer (pure: plan + HostSnapshot + Steam games to HostDiff, with the
+  guards), HostDiff (changes, kept notes, fingerprint), UndoProfileBuilder, SteamLibrary, HostLeanService (dry run gate,
+  backups, apply, undo, schedule tick), HostLeanStore (host-leanstate.json, undo.yaml, backup), IHostSystem with
+  PowerShellHostSystem (scripts in HostScripts, run by HostPowerShell), WindowsHostMetrics. Host.Service:
+  HostLeanSchedulerService (hourly check, installed service only), TrayPipeServer (Lean messages). Tray IPC types are
+  in Shared.Contracts/Ipc/HostLeanMessages.cs. The shipped profile is profiles/host-gaming.yaml (embedded).
 - host/src/Host.Tray: the tray (a library; TrayApp.Run is single-instance per session). The notification icon, its
   menu, the pipe client, and ShutdownGuard are WinForms; the windows are HTML in WebView2 (since 2026-10-05, the
   user's choice). TrayApplicationContext owns both windows (the host window, double-click the icon; the pairing PIN
@@ -396,6 +410,30 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     sign-out; it stands aside while the installed service runs. Not yet tried by hand.
   - GpuEventReader reads the System log (nvlddmkm, amdkmdag, amdwddmg, igfx*, and Display 4101) for the last
     7 days, cached 5 minutes, into HostGpu.warnings.
+- Lean host (2026-10-07):
+  - Verified here, unelevated: the Inspect script (services, startup entries, power plans and wake devices, programs,
+    printers, registry reads), the registry and startup writes on throwaway HKCU keys (round trip through Inspect),
+    the Programs script's exit code handling and its run-as-user scheduled task. NOT yet run, because they need an
+    elevated shell or change the PC: restore point (Checkpoint-Computer as SYSTEM), Appx removal, service changes
+    with sc.exe, powercfg plan creation (`/duplicatescheme <guid> <guid>` into the same GUID, so the plan stays
+    idempotent) and wake changes, the Default user hive load, HKLM writes, a real uninstall, the monthly tick in the
+    service. HH_HOSTLEAN_LIVE=1 (elevated) prints a read-only dry run of this PC.
+  - Never run a command line a non-administrator could have written as SYSTEM: HKCU Uninstall keys are user-writable,
+    so a per-user program is uninstalled by a scheduled task that runs as that user (HostScripts.Programs).
+  - PowerShell 5.1 gotchas found by running the scripts: `@($request.missing)` is a one-element array holding $null
+    (filter with Where-Object { $null -ne $_ }); a function returning one item gives a scalar, not an array (wrap the
+    call in @()); Get-ChildItem on HKEY_USERS fails without admin (use Registry.Users.GetSubKeyNames()); `2>&1` in a
+    pipeline makes ErrorRecords (stringify with ForEach-Object { "$_" }).
+  - The dry run fingerprint is the hash of the change lines; an apply recomputes it and refuses on a mismatch, then
+    stores the new dry run. Startup entries and services decide "in place" by startup type only. Wake: with
+    `wake: nicOnly` or `nicAndInput` (NICs plus keyboards and mice) and no wired adapter that powercfg can program, nothing is disarmed (Wake-on-LAN would break).
+  - Undo covers services, startup entries, registry values, plan, and disarmed wake devices (the NIC armed by the
+    apply is not disarmed again). Registry "before" comes from the first hive (a signed-in user's, else Default).
+    Removed apps and uninstalled programs are not restored. The undo keeps the earliest value across applies.
+  - Not covered: install on host profiles (winget as SYSTEM fails, see Applying setup profiles), unloaded user
+    profiles (only signed-in hives and the Default user hive change), restart advice after uninstalls.
+  - The guard for Gaming Services and the Xbox Identity Provider is keyed on Steam appids (catalogs/host-guards.yaml
+    games); the list is curated, not exhaustive, and the appids were written from memory: check them when editing.
 - Host log download (API 1.16.0, added at the user's request 2026-10-07): POST /host/logs/bundle (elevated, audited) returns
   a zip from Host.Core/Diagnostics/LogBundle (logs\*.log newest first, 100 MB cap, summary.txt; not the audit log). It is a
   POST because EndpointSecurityTests require elevated routes to be audited and forbid auditing GETs. The Rust client

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using HyperHarbor.Host.Core.HostProfiles;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Profiles;
@@ -10,8 +11,25 @@ namespace HyperHarbor.Host.Core.Profiles;
 /// Checks a setup profile against the rules in schemas/profile.v1.schema.json and the catalogs, and returns it
 /// tidied: values trimmed, duplicates dropped, and missing friendly names filled from the catalogs.
 /// </summary>
-public sealed partial class ProfileValidator(Catalogs catalogs)
+public sealed partial class ProfileValidator(Catalogs catalogs, HostCatalogs? hostCatalogs = null)
 {
+    public const int MaxServices = 200;
+    public const int MaxStartupPatterns = 200;
+    public static readonly string[] ServiceStartupTypes = ["disabled", "manual", "automatic", "automaticDelayed"];
+    public static readonly string[] PowerPlans = ["highPerformance", "ultimate", "balanced", "powerSaver"];
+    public static readonly string[] WakeRules = ["nicOnly", "nicAndInput", "unchanged"];
+
+    private readonly HostCatalogs _hostCatalogs = hostCatalogs ?? HostCatalogs.Default;
+
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$")]
+    private static partial Regex ServiceName();
+
+    [GeneratedRegex(@"^[^\\/\r\n]{1,200}$")]
+    private static partial Regex StartupPattern();
+
+    [GeneratedRegex(@"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    private static partial Regex PlanGuid();
+
     public const int MaxName = 60;
     public const int MaxDescription = 500;
     public const int MaxInstall = 200;
@@ -47,6 +65,34 @@ public sealed partial class ProfileValidator(Catalogs catalogs)
             issues.Add(new("description", $"Keep the description under {MaxDescription} characters."));
         }
 
+        var isHost = profile.Target == ProfileTarget.Host;
+        if (!isHost)
+        {
+            if (profile.Services is not null)
+            {
+                issues.Add(new("services", "Services belong to host profiles. Set target: host."));
+            }
+
+            if (profile.Startup is not null)
+            {
+                issues.Add(new("startup", "Startup entries belong to host profiles. Set target: host."));
+            }
+
+            if (profile.Power is not null)
+            {
+                issues.Add(new("power", "Power settings belong to host profiles. Set target: host."));
+            }
+
+            if (profile.Remove?.Programs is not null)
+            {
+                issues.Add(new("remove.programs", "Uninstalling programs belongs to host profiles. Set target: host."));
+            }
+        }
+        else if (profile.Install is { Count: > 0 })
+        {
+            issues.Add(new("install", "Host profiles do not install packages yet."));
+        }
+
         var install = Items(profile.Install, "install", MaxInstall, issues, entry =>
             PackageAliasResolver.Classify(entry) switch
             {
@@ -61,18 +107,107 @@ public sealed partial class ProfileValidator(Catalogs catalogs)
             remove = new ProfileRemove(
                 Items(removing.Appx, "remove.appx", MaxRemove, issues, entry => AppxOrFeature().IsMatch(entry) ? null : "is not a package name.", entry => catalogs.AppxIndex.GetValueOrDefault(entry)?.FriendlyName),
                 Items(removing.Capabilities, "remove.capabilities", MaxCapabilities, issues, entry => Capability().IsMatch(entry) ? null : "is not a capability name.", _ => null),
-                Items(removing.Features, "remove.features", MaxCapabilities, issues, entry => AppxOrFeature().IsMatch(entry) ? null : "is not an optional feature name.", _ => null));
+                Items(removing.Features, "remove.features", MaxCapabilities, issues, entry => AppxOrFeature().IsMatch(entry) ? null : "is not an optional feature name.", _ => null),
+                isHost
+                    ? Items(removing.Programs, "remove.programs", MaxRemove, issues, entry => _hostCatalogs.ProgramIndex.ContainsKey(entry) ? null : "is not a program HyperHarbor knows how to uninstall.", entry => _hostCatalogs.ProgramIndex.GetValueOrDefault(entry)?.Name)
+                    : null);
         }
 
         var tweaks = Tweaks(profile.Tweaks, issues);
         var browser = Browser(profile.Browser, issues);
+        var services = isHost ? Services(profile.Services, issues) : null;
+        var startup = isHost ? Startup(profile.Startup, issues) : null;
+        var power = isHost ? Power(profile.Power, issues) : null;
 
         if (issues.Count > 0)
         {
             throw new LifecycleValidationException("The profile has problems. Fix the fields listed.", issues);
         }
 
-        return new SetupProfile(name, description, install, remove, tweaks, browser);
+        return new SetupProfile(name, description, install, remove, tweaks, browser, isHost ? ProfileTarget.Host : null, services, startup, power);
+    }
+
+    private List<ProfileService>? Services(IReadOnlyList<ProfileService>? services, List<ValidationIssue> issues)
+    {
+        if (services is null)
+        {
+            return null;
+        }
+
+        if (services.Count > MaxServices)
+        {
+            issues.Add(new("services", $"Keep the list to {MaxServices} services."));
+        }
+
+        var result = new List<ProfileService>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < services.Count; i++)
+        {
+            var id = services[i].Id?.Trim() ?? "";
+            var startup = services[i].Startup?.Trim() ?? "";
+            if (!ServiceName().IsMatch(id))
+            {
+                issues.Add(new($"services[{i}]", $"\"{id}\" is not a service name."));
+                continue;
+            }
+
+            if (!ServiceStartupTypes.Contains(startup, StringComparer.Ordinal))
+            {
+                issues.Add(new($"services[{i}]", $"The startup type of {id} must be one of {string.Join(", ", ServiceStartupTypes)}."));
+                continue;
+            }
+
+            if (seen.Add(id))
+            {
+                result.Add(new ProfileService(id, startup, Clean(services[i].Name)));
+            }
+        }
+
+        return result;
+    }
+
+    private ProfileStartup? Startup(ProfileStartup? startup, List<ValidationIssue> issues)
+    {
+        if (startup is null)
+        {
+            return null;
+        }
+
+        List<ProfileItem>? Patterns(IReadOnlyList<ProfileItem>? items, string field) =>
+            Items(items, field, MaxStartupPatterns, issues, entry => StartupPattern().IsMatch(entry) ? null : "is not an entry name (no slashes; * and ? are wildcards).", _ => null);
+
+        var disable = Patterns(startup.Disable, "startup.disable");
+        var enable = Patterns(startup.Enable, "startup.enable");
+        var keep = Patterns(startup.Keep, "startup.keep");
+        foreach (var overlap in (disable ?? []).Select(item => item.Id).Intersect((enable ?? []).Select(item => item.Id), StringComparer.OrdinalIgnoreCase))
+        {
+            issues.Add(new("startup", $"\"{overlap}\" is in both disable and enable."));
+        }
+
+        return new ProfileStartup(disable, enable, keep);
+    }
+
+    private ProfilePower? Power(ProfilePower? power, List<ValidationIssue> issues)
+    {
+        if (power is null)
+        {
+            return null;
+        }
+
+        var plan = string.IsNullOrWhiteSpace(power.Plan) ? null : power.Plan.Trim();
+        if (plan is not null && !PowerPlans.Contains(plan, StringComparer.Ordinal) && !PlanGuid().IsMatch(plan))
+        {
+            issues.Add(new("power.plan", $"Use {string.Join(", ", PowerPlans)}, or a plan GUID."));
+        }
+
+        var wake = string.IsNullOrWhiteSpace(power.Wake) ? null : power.Wake.Trim();
+        if (wake is not null && !WakeRules.Contains(wake, StringComparer.Ordinal))
+        {
+            issues.Add(new("power.wake", $"Use {string.Join(" or ", WakeRules)}."));
+        }
+
+        var armWake = Items(power.ArmWake, "power.armWake", 50, issues, entry => entry.Length is > 0 and <= 200 ? null : "is not a device name.", _ => null);
+        return new ProfilePower(plan, wake, armWake);
     }
 
     private List<ProfileItem>? Items(
@@ -165,13 +300,16 @@ public sealed partial class ProfileValidator(Catalogs catalogs)
 
             var valid = registry.Type switch
             {
+                RegistryValueType.Absent => registry.Value.Length == 0,
                 RegistryValueType.Dword => uint.TryParse(registry.Value, NumberStyles.None, CultureInfo.InvariantCulture, out _),
                 RegistryValueType.Qword => ulong.TryParse(registry.Value, NumberStyles.None, CultureInfo.InvariantCulture, out _),
                 _ => registry.Value.Length <= 4096 && !registry.Value.Contains('\0', StringComparison.Ordinal),
             };
             if (!valid)
             {
-                issues.Add(new($"{field}.registry.value", registry.Type == RegistryValueType.String
+                issues.Add(new($"{field}.registry.value", registry.Type == RegistryValueType.Absent
+                    ? "Leave the value empty: the value is deleted."
+                    : registry.Type == RegistryValueType.String
                     ? "Keep the text under 4096 characters."
                     : $"Use a whole number from 0 to {(registry.Type == RegistryValueType.Dword ? "4294967295" : "18446744073709551615")}."));
             }

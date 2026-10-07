@@ -3,7 +3,7 @@ using HyperHarbor.Shared.Contracts.Profiles;
 
 namespace HyperHarbor.Host.Core.Profiles;
 
-/// <summary>Where a registry write goes in the guest.</summary>
+/// <summary>Where a registry write goes in the guest (or on the host, for host profiles).</summary>
 public enum RegistryTarget
 {
     /// <summary>HKEY_LOCAL_MACHINE.</summary>
@@ -11,14 +11,15 @@ public enum RegistryTarget
 
     /// <summary>
     /// The Default user profile's hive (C:\Users\Default\NTUSER.DAT). Profiles created afterwards start from it, so
-    /// the User's account, which has not signed in yet on a new VM, gets the value at its first sign-in.
+    /// the User's account, which has not signed in yet on a new VM, gets the value at its first sign-in. On the host
+    /// it also means every signed-in user's hive.
     /// </summary>
     DefaultUser,
 }
 
 /// <summary>A registry value to write, and the item it belongs to (for the results).</summary>
 /// <param name="Key">The path below the hive, for example SOFTWARE\Policies\Microsoft\Edge.</param>
-/// <param name="Type">dword, qword, or string.</param>
+/// <param name="Type">dword, qword, string, or absent (delete the value).</param>
 public sealed record RegistryWrite(string Item, RegistryTarget Target, string Key, string Name, string Type, string Value);
 
 /// <summary>A package to install, with the name the results use.</summary>
@@ -31,9 +32,15 @@ public sealed record ApplyPlan(
     IReadOnlyList<ProfileItem> Capabilities,
     IReadOnlyList<ProfileItem> Features,
     IReadOnlyList<RegistryWrite> Registry,
-    IReadOnlyList<string> Problems)
+    IReadOnlyList<string> Problems,
+    IReadOnlyList<ProfileService>? Services = null,
+    ProfileStartup? Startup = null,
+    ProfilePower? Power = null,
+    IReadOnlyList<ProfileItem>? Programs = null)
 {
-    public int ItemCount => Packages.Count + Appx.Count + Capabilities.Count + Features.Count + Registry.Select(write => write.Item).Distinct().Count();
+    public int ItemCount =>
+        Packages.Count + Appx.Count + Capabilities.Count + Features.Count + Registry.Select(write => write.Item).Distinct().Count()
+        + (Services?.Count ?? 0) + (Programs?.Count ?? 0);
 }
 
 /// <summary>
@@ -55,6 +62,7 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
             AddPackage(packages, problems, item);
         }
 
+        var isHost = profile.Target == ProfileTarget.Host;
         var browser = profile.Browser is { } chosen ? catalogs.FindBrowser(chosen.App.Id) : null;
         if (profile.Browser is { } wanted)
         {
@@ -62,7 +70,7 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
             {
                 problems.Add($"{wanted.App.Name ?? wanted.App.Id} is not a browser HyperHarbor can configure.");
             }
-            else if (!packages.Any(package => string.Equals(package.Id, browser.WingetId, StringComparison.OrdinalIgnoreCase)))
+            else if (!isHost && !packages.Any(package => string.Equals(package.Id, browser.WingetId, StringComparison.OrdinalIgnoreCase)))
             {
                 packages.Add(new PackageInstall(browser.Name, browser.WingetId, PackageSource.Winget));
             }
@@ -84,7 +92,7 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
             }
             else if (tweak.Registry is { } custom)
             {
-                registry.Add(Write(tweak.Name ?? $@"{custom.Key}\{custom.Name}", custom.Key, custom.Name, custom.Type.ToString().ToLowerInvariant(), custom.Value));
+                registry.Add(Write(tweak.Name ?? $@"{custom.Key}\{custom.Name}", custom.Key, custom.Name, custom.Type.ToString().ToLowerInvariant(), custom.Type == RegistryValueType.Absent ? "" : custom.Value));
             }
         }
 
@@ -103,7 +111,11 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
             profile.Remove?.Capabilities ?? [],
             profile.Remove?.Features ?? [],
             registry,
-            problems);
+            problems,
+            profile.Services,
+            profile.Startup,
+            profile.Power,
+            profile.Remove?.Programs);
     }
 
     private void AddPackage(List<PackageInstall> packages, List<string> problems, ProfileItem item)

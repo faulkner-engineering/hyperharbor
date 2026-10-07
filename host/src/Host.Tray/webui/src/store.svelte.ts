@@ -1,6 +1,6 @@
 import { listen, send, type HostMessage, type PageMessage, type ToastKind, type TrayViewState } from "./bridge";
 
-export type Page = "overview" | "devices" | "storage" | "updates" | "logs";
+export type Page = "overview" | "devices" | "storage" | "lean" | "updates" | "logs";
 
 export interface Toast {
   id: number;

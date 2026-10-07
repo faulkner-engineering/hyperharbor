@@ -47,6 +47,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private string? _backupFolder;
     private IReadOnlyList<string> _gpuVms = [];
     private HostUpdateStatus? _update;
+    private HostLeanStatus? _hostLean;
     private PairingStartedMessage? _pairing;
     private (DateTimeOffset? LastCheck, DateTimeOffset StartedAt)? _pendingCheck;
     private int _pollTicks;
@@ -155,6 +156,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             {
                 _ = _pipe.SendAsync(new ListDevicesMessage());
                 _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+                _ = _pipe.SendAsync(new HostLeanQueryMessage());
             }
         }
 
@@ -205,6 +207,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             ConsoleAccessSetup.IsSetUp(DataDirectory),
             PackageSearchSetupHelper.IsSetUp,
             _connected ? _update : null,
+            _connected ? _hostLean : null,
             _busy.Order(StringComparer.Ordinal).ToList(),
             _pairing is null ? null : new TrayViewPairing(_pairing.PairingId, _pairing.DeviceName, _pairing.Pin, _pairing.ExpiresAt),
             DataDirectory));
@@ -248,6 +251,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             {
                 _ = _pipe.SendAsync(new ListDevicesMessage());
                 _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+                _ = _pipe.SendAsync(new HostLeanQueryMessage());
             }
         }
         else
@@ -258,6 +262,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             _backupFolder = null;
             _gpuVms = [];
             _update = null;
+            _hostLean = null;
             _pendingCheck = null;
             _busy.Clear();
             EndPairing();
@@ -307,6 +312,9 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 break;
             case UpdateStatusMessage update:
                 OnUpdateStatus(update.Status);
+                break;
+            case HostLeanStatusMessage lean:
+                OnHostLeanStatus(lean.Status);
                 break;
         }
     }
@@ -374,6 +382,17 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         PushState();
     }
 
+    private void OnHostLeanStatus(HostLeanStatus status)
+    {
+        var finished = _hostLean?.Busy is not null && status.Busy is null;
+        _hostLean = status;
+        PushState();
+        if (finished && status.LastRun is { } run)
+        {
+            Notify(run.Problems.Count == 0 ? "success" : "info", "Lean host", $"{run.Changed} changes made, {run.Problems.Count} problems.");
+        }
+    }
+
     private void PollUpdate()
     {
         if (!_connected || !HostWindowOpen)
@@ -383,9 +402,15 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
 
         // Every second while something moves; every five seconds otherwise.
         var moving = _pendingCheck is not null || _update?.Activity is HostUpdateActivity.Checking or HostUpdateActivity.Preparing or HostUpdateActivity.Installing;
-        if (moving || ++_pollTicks % 5 == 0)
+        var due = ++_pollTicks % 5 == 0;
+        if (moving || due)
         {
             _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+        }
+
+        if (_hostLean?.Busy is not null || due)
+        {
+            _ = _pipe.SendAsync(new HostLeanQueryMessage());
         }
     }
 
@@ -608,6 +633,12 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         SetBusy("update", true);
         _ = _pipe.SendAsync(new CheckForUpdateMessage());
     }
+
+    public void HostLeanDryRun(string source) => _ = _pipe.SendAsync(new HostLeanDryRunMessage(source));
+
+    public void HostLeanApply(string source) => _ = _pipe.SendAsync(new HostLeanApplyMessage(source));
+
+    public void SetHostLeanSchedule(bool enabled) => _ = _pipe.SendAsync(new SetHostLeanScheduleMessage(enabled));
 
     public void InstallUpdate() => _ = _pipe.SendAsync(new InstallUpdateMessage());
 

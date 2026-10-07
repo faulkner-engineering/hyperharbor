@@ -45,6 +45,11 @@ public sealed class SetupProfileJobs(
     {
         var vm = await inventory.GetAsync(vmId, cancellationToken).ConfigureAwait(false) ?? throw new VmNotFoundException(vmId);
         var profile = profiles.Get(userId, request.ProfileId).Profile;
+        if (profile.Target == ProfileTarget.Host)
+        {
+            throw new LifecycleConflictException($"{profile.Name} is a host profile. It applies to the host through the tray's Lean host action, not to a VM.");
+        }
+
         if (vm.State != VmState.Running || vm.GuestOs?.Family != GuestOsFamily.Windows)
         {
             throw new LifecycleConflictException($"{vm.Name} must be a running Windows guest that has finished starting.");

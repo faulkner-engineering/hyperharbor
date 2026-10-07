@@ -301,6 +301,11 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
                 }
 
                 function WriteValue($root, $path, $write) {
+                    if ($write.type -eq 'absent') {
+                        $existing = $root.OpenSubKey($path, $true)
+                        if ($null -ne $existing) { try { $existing.DeleteValue([string]$write.name, $false) } finally { $existing.Close() } }
+                        return
+                    }
                     $text = [string]$write.value
                     $hex = $text -match '^0x[0-9a-fA-F]+$'
                     $key = $root.CreateSubKey($path)

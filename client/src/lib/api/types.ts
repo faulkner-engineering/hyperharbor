@@ -1978,6 +1978,42 @@ export interface components {
             remove?: components["schemas"]["ProfileRemove"];
             tweaks?: components["schemas"]["ProfileTweak"][];
             browser?: components["schemas"]["ProfileBrowser"];
+            target?: components["schemas"]["ProfileTarget"];
+            /** @description Host profiles only (API 1.17.0). Service startup types. */
+            services?: components["schemas"]["ProfileService"][];
+            startup?: components["schemas"]["ProfileStartup"];
+            power?: components["schemas"]["ProfilePower"];
+        };
+        /**
+         * @description Where a profile applies. A profile without a target is a VM profile. Host profiles belong to the Lean host action in the tray.
+         * @enum {string}
+         */
+        ProfileTarget: "vm" | "host";
+        ProfileService: {
+            /** @description The service name, for example DiagTrack. */
+            id: string;
+            /** @enum {string} */
+            startup: "disabled" | "manual" | "automatic" | "automaticDelayed";
+            /** @description The friendly name; written as a comment after the id in YAML. */
+            name?: string;
+        };
+        /** @description Startup entries matched by name with * and ? wildcards. Disabling writes StartupApproved and removes nothing. */
+        ProfileStartup: {
+            disable?: components["schemas"]["ProfileItem"][];
+            enable?: components["schemas"]["ProfileItem"][];
+            /** @description Entries that are never disabled, in addition to the built-in allowlist. */
+            keep?: components["schemas"]["ProfileItem"][];
+        };
+        ProfilePower: {
+            /** @description highPerformance, ultimate, balanced, powerSaver, or a plan GUID. */
+            plan?: string;
+            /**
+             * @description nicOnly lets only network adapters wake the PC. nicAndInput also keeps keyboards and mice that may wake it now.
+             * @enum {string}
+             */
+            wake?: "nicOnly" | "nicAndInput" | "unchanged";
+            /** @description Device names, as powercfg lists them, that may wake the PC. */
+            armWake?: components["schemas"]["ProfileItem"][];
         };
         ProfileItem: {
             id: string;
@@ -1989,6 +2025,8 @@ export interface components {
             appx?: components["schemas"]["ProfileItem"][];
             capabilities?: components["schemas"]["ProfileItem"][];
             features?: components["schemas"]["ProfileItem"][];
+            /** @description Host profiles only (API 1.17.0). Ids from the host's program catalog, for example onedrive. */
+            programs?: components["schemas"]["ProfileItem"][];
         };
         /** @description A curated tweak (`id`) or a custom registry value (`registry`), never both. */
         ProfileTweak: {
@@ -1997,14 +2035,14 @@ export interface components {
             registry?: components["schemas"]["RegistryTweak"];
         };
         /** @enum {string} */
-        RegistryValueType: "dword" | "qword" | "string";
+        RegistryValueType: "dword" | "qword" | "string" | "absent";
         RegistryTweak: {
             /** @description Starts with HKLM\ or HKCU\ (HKCU applies to the User's account in the VM). */
             key: string;
             /** @description The value name; empty for the key's default value. */
             name: string;
             type: components["schemas"]["RegistryValueType"];
-            /** @description Decimal for dword and qword. */
+            /** @description Decimal for dword and qword; empty for absent, which deletes the value. */
             value: string;
         };
         ProfileBrowser: {

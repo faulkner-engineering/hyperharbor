@@ -37,6 +37,12 @@
           "type": "array",
           "maxItems": 100,
           "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" }
+        },
+        "programs": {
+          "description": "Host profiles only: ids from the host's program catalog (catalogs/host-programs.yaml), for example onedrive.",
+          "type": "array",
+          "maxItems": 100,
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,39}$" }
         }
       }
     },
@@ -77,9 +83,54 @@
           "additionalProperties": { "type": ["string", "boolean", "integer"] }
         }
       }
+    },
+    "target": {
+      "description": "Where the profile applies. Without a target it is a VM profile; host profiles belong to the Lean host action.",
+      "enum": ["vm", "host"]
+    },
+    "services": {
+      "description": "Host profiles only: service names with their startup type.",
+      "type": "object",
+      "maxProperties": 200,
+      "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$" },
+      "additionalProperties": { "enum": ["disabled", "manual", "automatic", "automaticDelayed"] }
+    },
+    "startup": {
+      "description": "Host profiles only: startup entries (Run keys and Startup folders) by name, with * and ? wildcards. Disabling writes StartupApproved and removes nothing. The built-in allowlist and keep are never disabled.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disable": { "$ref": "#/$defs/namePatterns" },
+        "enable": { "$ref": "#/$defs/namePatterns" },
+        "keep": { "$ref": "#/$defs/namePatterns" }
+      }
+    },
+    "power": {
+      "description": "Host profiles only: the power plan and which devices may wake the PC.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plan": {
+          "description": "highPerformance, ultimate, balanced, powerSaver, or a plan GUID.",
+          "type": "string",
+          "pattern": "^(highPerformance|ultimate|balanced|powerSaver|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+        },
+        "wake": { "description": "nicOnly lets only network adapters wake the PC; nicAndInput also keeps keyboards and mice that may wake it now.", "enum": ["nicOnly", "nicAndInput", "unchanged"] },
+        "armWake": {
+          "description": "Device names, as powercfg lists them, that may wake the PC.",
+          "type": "array",
+          "maxItems": 50,
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+        }
+      }
     }
   },
   "$defs": {
+    "namePatterns": {
+      "type": "array",
+      "maxItems": 200,
+      "items": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\/\r\n]+$" }
+    },
     "installEntry": {
       "type": "string",
       "anyOf": [
@@ -91,12 +142,12 @@
     "registryValue": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "name", "type", "value"],
+      "required": ["key", "name", "type"],
       "properties": {
         "key": { "type": "string", "pattern": "^(HKLM|HKCU)\\\\[^\\r\\n]{1,255}$" },
         "name": { "type": "string", "maxLength": 255 },
-        "type": { "enum": ["dword", "qword", "string"] },
-        "value": { "type": ["string", "integer"] }
+        "type": { "enum": ["dword", "qword", "string", "absent"] },
+        "value": { "description": "Not needed for absent, which deletes the value.", "type": ["string", "integer"] }
       }
     }
   }

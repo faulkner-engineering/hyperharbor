@@ -42,6 +42,57 @@
           "bytesTotal": 196083712
         }
       },
+      "hostLean": {
+        "supported": true,
+        "unsupportedReason": "Run the installed service to apply changes.",
+        "busy": "dryRun",
+        "profileName": "Host gaming",
+        "applied": true,
+        "undoAvailable": true,
+        "scheduleEnabled": true,
+        "nextScheduled": "2026-11-04T12:00:00\u002B00:00",
+        "dryRun": {
+          "source": "lean",
+          "at": "2026-10-05T12:00:00\u002B00:00",
+          "canApply": true,
+          "changes": [
+            {
+              "handler": "services",
+              "item": "DiagTrack",
+              "text": "Startup type Automatic to Disabled"
+            }
+          ],
+          "kept": [
+            "Spooler: a printer is installed"
+          ],
+          "problems": [
+            "Unknown service: Foo"
+          ],
+          "alreadyInPlace": 12
+        },
+        "lastRun": {
+          "source": "lean",
+          "at": "2026-10-05T12:00:00\u002B00:00",
+          "scheduled": false,
+          "changed": 7,
+          "problems": [
+            "Widgets: access denied"
+          ],
+          "before": {
+            "at": "2026-10-05T12:00:00\u002B00:00",
+            "usedMemoryMb": 6144,
+            "processCount": 210,
+            "idle": true
+          },
+          "after": {
+            "at": "2026-10-05T12:01:00\u002B00:00",
+            "usedMemoryMb": 5120,
+            "processCount": 180,
+            "idle": false
+          },
+          "restorePoint": "Restore point 12 and registry export"
+        }
+      },
       "busy": [
         "folder:iso"
       ],
@@ -66,6 +117,7 @@
       "consoleReady": false,
       "packageSearchReady": false,
       "update": null,
+      "hostLean": null,
       "busy": [],
       "pairing": null,
       "dataDirectory": "C:\\ProgramData\\HyperHarbor"

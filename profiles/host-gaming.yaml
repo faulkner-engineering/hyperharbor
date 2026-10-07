@@ -1,0 +1,122 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/faulkner-engineering/hyperharbor/main/schemas/profile.v1.schema.json
+# The Lean host profile: what the tray's Lean host action applies to this PC. Edit this file in the repository and
+# rebuild the host to change it. Nothing here is applied without a dry run, a restore point, and a registry export.
+schemaVersion: 1
+name: Host gaming
+description: A lean gaming host. Removes consumer apps, trims services and startup entries, turns off Widgets, Copilot, search highlights, Game Bar, and Game DVR, uses the High performance power plan, and lets only the network adapter, keyboards, and mice wake the PC.
+target: host
+remove:
+  appx:
+    - Clipchamp.Clipchamp                 # Clipchamp
+    - Microsoft.549981C3F5F10             # Cortana
+    - Microsoft.BingNews                  # Microsoft News
+    - Microsoft.BingWeather               # Weather
+    - Microsoft.Copilot                   # Copilot
+    - Microsoft.GamingApp                 # Xbox
+    - Microsoft.GamingServices            # Gaming Services (kept while games that need it are installed)
+    - Microsoft.GetHelp                   # Get Help
+    - Microsoft.Getstarted                # Tips
+    - Microsoft.MicrosoftOfficeHub        # Microsoft 365 Copilot
+    - Microsoft.MicrosoftSolitaireCollection # Solitaire Collection
+    - Microsoft.OutlookForWindows         # Outlook (new)
+    - Microsoft.People                    # People
+    - Microsoft.PowerAutomateDesktop      # Power Automate
+    - Microsoft.Todos                     # Microsoft To Do
+    - Microsoft.Windows.DevHome           # Dev Home
+    - Microsoft.Windows.Photos            # Photos (kept while no other image viewer is installed)
+    - Microsoft.WindowsFeedbackHub        # Feedback Hub
+    - Microsoft.WindowsMaps               # Maps
+    - Microsoft.Xbox.TCUI                 # Xbox TCUI
+    - Microsoft.XboxIdentityProvider      # Xbox Identity Provider (kept while games that need it are installed)
+    - Microsoft.XboxSpeechToTextOverlay   # Xbox Speech to Text
+    - Microsoft.YourPhone                 # Phone Link
+    - Microsoft.ZuneVideo                 # Movies & TV
+    - MicrosoftCorporationII.MicrosoftFamily # Family
+    - MicrosoftTeams                      # Microsoft Teams
+    - MSTeams                             # Microsoft Teams
+  programs:
+    - onedrive                            # Microsoft OneDrive
+    - icue                                # Corsair iCUE
+    - razer-synapse                       # Razer Synapse and Razer Central
+    - armoury-crate                       # ASUS Armoury Crate
+    - msi-center                          # MSI Center
+    - mystic-light                        # MSI Mystic Light
+    - dragon-center                       # MSI Dragon Center
+    - gigabyte-control-center             # Gigabyte Control Center and RGB Fusion
+    - signalrgb                           # SignalRGB
+    - nzxt-cam                            # NZXT CAM
+    - hyperx-ngenuity                     # HyperX NGENUITY
+    - lian-li-l-connect                   # Lian Li L-Connect
+    - cooler-master-masterplus            # Cooler Master MasterPlus
+    - asrock-polychrome                   # ASRock Polychrome RGB
+services:
+  AJRouter: disabled                      # AllJoyn Router Service
+  CscService: disabled                    # Offline Files
+  diagnosticshub.standardcollector.service: disabled # Diagnostics Hub collector
+  DiagTrack: disabled                     # Connected User Experiences and Telemetry
+  dmwappushservice: disabled              # WAP Push Message Routing
+  Fax: disabled                           # Fax
+  GamingServices: disabled                # Gaming Services (kept while games that need it are installed)
+  GamingServicesNet: disabled             # Gaming Services network (kept while games that need it are installed)
+  icssvc: disabled                        # Windows Mobile Hotspot Service
+  lfsvc: disabled                         # Geolocation Service
+  MapsBroker: disabled                    # Downloaded Maps Manager
+  PhoneSvc: disabled                      # Phone Service
+  PrintNotify: disabled                   # Printer Extensions and Notifications (kept with a physical printer)
+  RemoteRegistry: disabled                # Remote Registry
+  RetailDemo: disabled                    # Retail Demo Service
+  SEMgrSvc: disabled                      # Payments and NFC/SE Manager
+  Spooler: disabled                       # Print Spooler (kept with a physical printer)
+  WerSvc: disabled                        # Windows Error Reporting
+  wisvc: disabled                         # Windows Insider Service
+  WMPNetworkSvc: disabled                 # Windows Media Player Network Sharing
+  WpcMonSvc: disabled                     # Parental Controls
+  XblAuthManager: disabled                # Xbox Live Auth Manager (kept while games that need it are installed)
+  XblGameSave: disabled                   # Xbox Live Game Save (kept while games that need it are installed)
+  XboxNetApiSvc: disabled                 # Xbox Live Networking (kept while games that need it are installed)
+startup:
+  disable:
+    - OneDrive*
+    - Microsoft Teams*
+    - com.squirrel.Teams.Teams
+    - MicrosoftEdgeAutoLaunch*
+    - Skype*
+    - Spotify*
+    - Cortana*
+    - YourPhone*
+    - Zoom*
+    - CCleaner*
+    - Adobe*
+    - SunJavaUpdateSched
+    - iTunesHelper
+    - iCUE*
+    - Razer*
+    - Armoury*
+    - Mystic*
+    - RGBFusion*
+    - SignalRgb*
+    - NZXT*
+    - Corsair*
+    - Gigabyte*
+    - MSI Center*
+    - Dragon Center*
+power:
+  plan: highPerformance
+  wake: nicAndInput
+tweaks:
+  - taskbar.disableWidgets                # Turn off Widgets
+  - system.disableCopilot                 # Turn off Copilot
+  - system.disableCopilotMachine          # Turn off Copilot for every account
+  - start.disableSearchHighlights         # Turn off search highlights
+  - system.disableGameDvr                 # Turn off Game DVR and background recording
+  - system.quietGameBar                   # Stop Game Bar from showing its startup panel
+  - system.disableConsumerFeatures        # Turn off suggested apps and consumer features
+  - privacy.requiredDiagnosticsOnly       # Send only required diagnostic data
+  - privacy.disableAdvertisingId          # Turn off the advertising ID
+browser:
+  app: Microsoft.Edge                     # Microsoft Edge
+  policies:
+    backgroundMode: false
+    edgeShopping: false
+    edgeSidebar: false
+    edgeStartupBoost: false

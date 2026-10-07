@@ -8,13 +8,51 @@ namespace HyperHarbor.Shared.Contracts.Profiles;
 /// </summary>
 /// <param name="Install">winget ids (they contain a dot), Microsoft Store ids (12 capitals and digits), or aliases from the package catalog.</param>
 /// <param name="Tweaks">Curated tweaks by id, or custom registry values.</param>
+/// <param name="Target">Where the profile applies; null means a VM. Host profiles run on the host itself (the Lean host action).</param>
+/// <param name="Services">Host profiles only: service startup types.</param>
+/// <param name="Startup">Host profiles only: startup entries to disable or enable.</param>
+/// <param name="Power">Host profiles only: power plan and which devices may wake the PC.</param>
 public sealed record SetupProfile(
     [property: JsonRequired] string Name,
     string? Description,
     IReadOnlyList<ProfileItem>? Install,
     ProfileRemove? Remove,
     IReadOnlyList<ProfileTweak>? Tweaks,
-    ProfileBrowser? Browser);
+    ProfileBrowser? Browser,
+    ProfileTarget? Target = null,
+    IReadOnlyList<ProfileService>? Services = null,
+    ProfileStartup? Startup = null,
+    ProfilePower? Power = null);
+
+/// <summary>Where a setup profile applies. Schema: ProfileTarget.</summary>
+public enum ProfileTarget
+{
+    /// <summary>A Windows VM, through PowerShell Direct. The default.</summary>
+    Vm,
+
+    /// <summary>The host PC itself.</summary>
+    Host,
+}
+
+/// <summary>A Windows service and the startup type it should have. Schema: ProfileService.</summary>
+/// <param name="Id">The service name (not the display name), for example DiagTrack.</param>
+/// <param name="Startup">disabled, manual, automatic, or automaticDelayed.</param>
+public sealed record ProfileService([property: JsonRequired] string Id, [property: JsonRequired] string Startup, string? Name = null);
+
+/// <summary>
+/// Startup entries (Run keys and Startup folders), matched by entry name with * and ? wildcards. Disabling writes
+/// StartupApproved and removes nothing. Entries on the built-in allowlist and the Keep list are never disabled. Schema: ProfileStartup.
+/// </summary>
+public sealed record ProfileStartup(
+    IReadOnlyList<ProfileItem>? Disable,
+    IReadOnlyList<ProfileItem>? Enable,
+    IReadOnlyList<ProfileItem>? Keep);
+
+/// <summary>Power plan and wake devices of the host. Schema: ProfilePower.</summary>
+/// <param name="Plan">highPerformance, ultimate, balanced, powerSaver, or a plan GUID.</param>
+/// <param name="Wake">nicOnly (only network adapters may wake the PC), nicAndInput (network adapters, and keyboards and mice that may wake it now), or unchanged.</param>
+/// <param name="ArmWake">Device names (as powercfg lists them) that may wake the PC, in addition to the Wake rule.</param>
+public sealed record ProfilePower(string? Plan, string? Wake, IReadOnlyList<ProfileItem>? ArmWake);
 
 /// <summary>An id with its friendly name; the name is written as a trailing comment in YAML. Schema: ProfileItem.</summary>
 public sealed record ProfileItem([property: JsonRequired] string Id, string? Name = null);
@@ -23,10 +61,12 @@ public sealed record ProfileItem([property: JsonRequired] string Id, string? Nam
 /// <param name="Appx">Provisioned package names without the version, for example Microsoft.BingNews.</param>
 /// <param name="Capabilities">Full capability names, for example Browser.InternetExplorer~~~~0.0.11.0.</param>
 /// <param name="Features">Optional feature names, for example MicrosoftWindowsPowerShellV2Root.</param>
+/// <param name="Programs">Host profiles only: ids from HyperHarbor's program catalog (onedrive, icue, and so on) to uninstall.</param>
 public sealed record ProfileRemove(
     IReadOnlyList<ProfileItem>? Appx,
     IReadOnlyList<ProfileItem>? Capabilities,
-    IReadOnlyList<ProfileItem>? Features);
+    IReadOnlyList<ProfileItem>? Features,
+    IReadOnlyList<ProfileItem>? Programs = null);
 
 /// <summary>A curated tweak (Id) or a custom registry value (Registry), never both. Schema: ProfileTweak.</summary>
 public sealed record ProfileTweak(string? Id = null, string? Name = null, RegistryTweak? Registry = null);
@@ -36,6 +76,9 @@ public enum RegistryValueType
     Dword,
     Qword,
     String,
+
+    /// <summary>The value is deleted, or must not exist. Value is empty. Undo profiles use it for values that were not there.</summary>
+    Absent,
 }
 
 /// <summary>
@@ -43,7 +86,7 @@ public enum RegistryValueType
 /// </summary>
 /// <param name="Key">Starts with HKLM\ or HKCU\.</param>
 /// <param name="Name">The value name; empty for the key's default value.</param>
-/// <param name="Value">Decimal for dword and qword, the text for string.</param>
+/// <param name="Value">Decimal for dword and qword, the text for string, empty for absent.</param>
 public sealed record RegistryTweak(
     [property: JsonRequired] string Key,
     [property: JsonRequired] string Name,

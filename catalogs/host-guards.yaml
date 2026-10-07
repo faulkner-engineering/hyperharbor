@@ -1,0 +1,102 @@
+# Rules that keep a host profile from breaking this PC. Read by the Lean host action.
+#
+# protectedServices: never changed, whatever a profile says (Hyper-V, HyperHarbor, and what Windows needs to run).
+# games: titles found in Steam library folders (steamapps\appmanifest_<appId>.acf) that need Gaming Services and the
+#   Xbox Identity Provider to start or to sign in, including one that runs an anti-cheat tied to them.
+# gamingServices / spooler / photos: what each guard keeps when its condition holds.
+protectedServices:
+  - { pattern: "vm*", reason: Hyper-V }
+  - { pattern: HvHost, reason: Hyper-V }
+  - { pattern: hns, reason: Hyper-V networking }
+  - { pattern: SharedAccess, reason: Internet Connection Sharing behind the Default Switch }
+  - { pattern: WinNat, reason: Hyper-V networking }
+  - { pattern: "HyperHarbor*", reason: HyperHarbor itself }
+  - { pattern: TermService, reason: Remote Desktop to the host }
+  - { pattern: UmRdpService, reason: Remote Desktop to the host }
+  - { pattern: SessionEnv, reason: Remote Desktop to the host }
+  - { pattern: Schedule, reason: "Task Scheduler, which runs the HyperHarbor update helper" }
+  - { pattern: RpcSs, reason: Windows core }
+  - { pattern: RpcEptMapper, reason: Windows core }
+  - { pattern: DcomLaunch, reason: Windows core }
+  - { pattern: LSM, reason: Windows core }
+  - { pattern: BrokerInfrastructure, reason: Windows core }
+  - { pattern: EventLog, reason: Windows core }
+  - { pattern: Winmgmt, reason: Windows core }
+  - { pattern: PlugPlay, reason: Windows core }
+  - { pattern: Power, reason: Windows core }
+  - { pattern: ProfSvc, reason: Windows core }
+  - { pattern: UserManager, reason: Windows core }
+  - { pattern: StateRepository, reason: Windows core }
+  - { pattern: CryptSvc, reason: Windows core }
+  - { pattern: gpsvc, reason: Windows core }
+  - { pattern: TrustedInstaller, reason: Windows servicing }
+  - { pattern: wuauserv, reason: Windows Update }
+  - { pattern: UsoSvc, reason: Windows Update }
+  - { pattern: BITS, reason: Windows Update }
+  - { pattern: mpssvc, reason: Windows Firewall }
+  - { pattern: BFE, reason: Windows Firewall }
+  - { pattern: WinDefend, reason: Antivirus }
+  - { pattern: wscsvc, reason: Security Center }
+  - { pattern: SecurityHealthService, reason: Windows Security }
+  - { pattern: Dhcp, reason: Networking }
+  - { pattern: Dnscache, reason: Networking }
+  - { pattern: nsi, reason: Networking }
+  - { pattern: NlaSvc, reason: Networking }
+  - { pattern: netprofm, reason: Networking }
+  - { pattern: Netman, reason: Networking }
+  - { pattern: LanmanWorkstation, reason: Networking }
+  - { pattern: LanmanServer, reason: File sharing }
+  - { pattern: Audiosrv, reason: Audio }
+  - { pattern: AudioEndpointBuilder, reason: Audio }
+  - { pattern: W32Time, reason: "The clock, which certificates depend on" }
+  - { pattern: "NVDisplay.ContainerLocalSystem", reason: GPU driver }
+games:
+  - { appId: 976730, name: "Halo: The Master Chief Collection", reason: Signs in with Xbox services }
+  - { appId: 1240440, name: Halo Infinite, reason: Signs in with Xbox services }
+  - { appId: 1551360, name: Forza Horizon 5, reason: Signs in with Xbox services }
+  - { appId: 1293830, name: Forza Horizon 4, reason: Signs in with Xbox services }
+  - { appId: 1250410, name: Microsoft Flight Simulator, reason: Needs Gaming Services }
+  - { appId: 1172620, name: Sea of Thieves, reason: Signs in with Xbox services }
+  - { appId: 1716740, name: Starfield, reason: Needs Gaming Services }
+  - { appId: 1097840, name: Gears 5, reason: Signs in with Xbox services }
+  - { appId: 1466860, name: Age of Empires IV, reason: Needs Gaming Services }
+  - { appId: 813780, name: "Age of Empires II: Definitive Edition", reason: Needs Gaming Services }
+  - { appId: 962130, name: Grounded, reason: Signs in with Xbox services }
+  - { appId: 1938090, name: Call of Duty, reason: Signs in with Xbox services and runs an anti-cheat }
+gamingServices:
+  keepAppx: [Microsoft.GamingServices, Microsoft.XboxIdentityProvider]
+  keepServices: [GamingServices, GamingServicesNet, XblAuthManager, XblGameSave, XboxNetApiSvc, XboxGipSvc]
+spooler:
+  keepServices: [Spooler, PrintNotify]
+photos:
+  keepAppx: [Microsoft.Windows.Photos]
+imageViewers:
+  - "IrfanView*"
+  - "XnView*"
+  - "ImageGlass*"
+  - "FastStone*"
+  - "Honeyview*"
+  - "nomacs*"
+  - "Paint.NET*"
+  - "GIMP*"
+  - "Adobe Photoshop*"
+  - "ACDSee*"
+  - "JPEGView*"
+  - "qimgv*"
+  - "Krita*"
+virtualPrinterNames:
+  - "Microsoft Print to PDF"
+  - "Microsoft XPS Document Writer"
+  - "OneNote*"
+  - "Send to OneNote*"
+  - "Fax"
+  - "Root Print Queue"
+  - "*PDF*"
+  - "Snagit*"
+virtualPrinterPorts:
+  - "PORTPROMPT:"
+  - "nul:"
+  - "FILE:"
+  - "SHRFAX:"
+  - "XPSPort:"
+  - "Microsoft.*"

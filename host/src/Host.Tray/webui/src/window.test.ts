@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/sve
 import { flushSync } from "svelte";
 import HostWindow from "./HostWindow.svelte";
 import PinWindow from "./PinWindow.svelte";
-import type { HostMessage, HostUpdateStatus, PageMessage, TrayViewState } from "./bridge";
+import type { HostLeanPlanSummary, HostLeanStatus, HostMessage, HostUpdateStatus, PageMessage, TrayViewState } from "./bridge";
 import { tray } from "./store.svelte";
 
 const sent: PageMessage[] = [];
@@ -26,6 +26,27 @@ const update = (overrides: Partial<HostUpdateStatus> = {}): HostUpdateStatus => 
   ...overrides,
 });
 
+const lean = (overrides: Partial<HostLeanStatus> = {}): HostLeanStatus => ({
+  supported: true,
+  busy: null,
+  profileName: "Host gaming",
+  applied: false,
+  undoAvailable: false,
+  scheduleEnabled: false,
+  ...overrides,
+});
+
+const plan = (overrides: Partial<HostLeanPlanSummary> = {}): HostLeanPlanSummary => ({
+  source: "lean",
+  at: "2026-10-05T12:00:00Z",
+  canApply: true,
+  changes: [{ handler: "services", item: "DiagTrack", text: "Startup type Automatic to Disabled" }],
+  kept: ["Spooler: a printer is installed"],
+  problems: [],
+  alreadyInPlace: 3,
+  ...overrides,
+});
+
 const state = (overrides: Partial<TrayViewState> = {}): TrayViewState => ({
   connected: true,
   passphraseConfigured: true,
@@ -36,6 +57,7 @@ const state = (overrides: Partial<TrayViewState> = {}): TrayViewState => ({
   consoleReady: false,
   packageSearchReady: true,
   update: update(),
+  hostLean: lean(),
   busy: [],
   pairing: null,
   dataDirectory: "C:\\ProgramData\\HyperHarbor",
@@ -158,6 +180,67 @@ describe("host window", () => {
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("25");
     expect(screen.getByText("Downloading: 50 of 200 MB (25%)")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Check now" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("applies only after a dry run, and undoes through its own dry run", async () => {
+    render(HostWindow);
+    push(state());
+    await fireEvent.click(screen.getByRole("button", { name: /Lean host/ }));
+    expect(screen.getByRole("button", { name: "Apply" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("button", { name: /Undo last apply/ })).toBeNull();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Dry run" }));
+    expect(sent).toContainEqual({ type: "hostLeanDryRun", source: "lean" });
+
+    push(state({ hostLean: lean({ dryRun: plan(), undoAvailable: true, applied: true }) }));
+    await fireEvent.click(screen.getByText(/Services/));
+    expect(screen.getByText("DiagTrack")).toBeTruthy();
+    expect(screen.getByText(/Spooler: a printer is installed/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(sent).toContainEqual({ type: "hostLeanApply", source: "lean" });
+
+    await fireEvent.click(screen.getByRole("button", { name: /Undo last apply/ }));
+    expect(sent).toContainEqual({ type: "hostLeanDryRun", source: "undo" });
+    push(state({ hostLean: lean({ dryRun: plan({ source: "undo" }), undoAvailable: true, applied: true }) }));
+    await fireEvent.click(screen.getByRole("button", { name: "Apply undo" }));
+    expect(sent).toContainEqual({ type: "hostLeanApply", source: "undo" });
+  });
+
+  it("will not apply a stale dry run, and says why Lean host is unavailable", async () => {
+    render(HostWindow);
+    push(state({ hostLean: lean({ dryRun: plan({ canApply: false }) }) }));
+    await fireEvent.click(screen.getByRole("button", { name: /Lean host/ }));
+    expect(screen.getByRole("button", { name: "Apply" }).hasAttribute("disabled")).toBe(true);
+
+    push(state({ hostLean: lean({ supported: false, unsupportedReason: "Run the installed service." }) }));
+    expect(screen.getByText("Run the installed service.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Dry run" })).toBeNull();
+  });
+
+  it("shows the last run's before and after, and sets the schedule", async () => {
+    render(HostWindow);
+    push(
+      state({
+        hostLean: lean({
+          applied: true,
+          scheduleEnabled: true,
+          lastRun: {
+            source: "lean",
+            at: "2026-10-05T12:00:00Z",
+            scheduled: false,
+            changed: 7,
+            problems: [],
+            before: { at: "2026-10-05T12:00:00Z", usedMemoryMb: 6144, processCount: 210, idle: true },
+            after: { at: "2026-10-05T12:01:00Z", usedMemoryMb: 5120, processCount: 180, idle: true },
+          },
+        }),
+      }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: /Lean host/ }));
+    expect(screen.getByText("-1024 MB memory, -30 processes")).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Re-apply every month" }));
+    expect(sent).toContainEqual({ type: "setHostLeanSchedule", enabled: false });
   });
 
   it("shows the tray's toasts", () => {

@@ -30,6 +30,8 @@
     <!-- Setup profile catalogs and schema, kept at the repository root so people can read and edit them. -->
     <EmbeddedResource Include="..\..\..\catalogs\*.yaml" LogicalName="HyperHarbor.Catalogs.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\..\schemas\profile.v1.schema.json" LogicalName="HyperHarbor.Schemas.profile.v1.schema.json" />
+    <!-- Profiles the host ships and applies itself (the Lean host action's host-gaming profile). -->
+    <EmbeddedResource Include="..\..\..\profiles\*.yaml" LogicalName="HyperHarbor.Profiles.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

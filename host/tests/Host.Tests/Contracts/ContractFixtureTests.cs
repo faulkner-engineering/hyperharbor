@@ -45,6 +45,18 @@ public class ContractFixtureTests
             [new ProfileItem("cjpalhdlnbpafiamejdnhcphjbkeiagm", "uBlock Origin")],
             new Dictionary<string, string> { ["passwordManager"] = "false" }));
 
+    private static readonly SetupProfile HostProfileSample = new(
+        "Host gaming",
+        null,
+        null,
+        new ProfileRemove(null, null, null, [new ProfileItem("onedrive", "Microsoft OneDrive")]),
+        null,
+        null,
+        ProfileTarget.Host,
+        [new ProfileService("DiagTrack", "disabled", "Connected User Experiences and Telemetry")],
+        new ProfileStartup([new ProfileItem("OneDrive*")], [new ProfileItem("Spotify")], [new ProfileItem("Steam*")]),
+        new ProfilePower("highPerformance", "nicOnly", [new ProfileItem("HID Keyboard Device")]));
+
     private static readonly AppxBaselineInfo AppxBaselineSample = new(
         "10.0.26100/Professional", "10.0.26100.2033", "Professional", Time, AppxBaselineSource.UnattendedInstall, "TESTWINDOWSINSTALL", false);
 
@@ -187,7 +199,10 @@ public class ContractFixtureTests
             [new AppxPackage("Microsoft.BingNews", "Microsoft News", "4.55.62231.0", "Microsoft", AppxRating.Safe, null, true)],
             [new AppxPackage("Clipchamp.Clipchamp", "Clipchamp", "", "Clipchamp", AppxRating.Safe, null, true)]),
         ["ProfileItem"] = new ProfileItem("Git.Git", "Git"),
-        ["ProfileRemove"] = SetupProfileSample.Remove!,
+        ["ProfileRemove"] = HostProfileSample.Remove!,
+        ["ProfileService"] = HostProfileSample.Services![0],
+        ["ProfileStartup"] = HostProfileSample.Startup!,
+        ["ProfilePower"] = HostProfileSample.Power!,
         ["ProfileTweak"] = SetupProfileSample.Tweaks![1],
         ["RegistryTweak"] = SetupProfileSample.Tweaks![1].Registry!,
         ["ProfileBrowser"] = SetupProfileSample.Browser!,

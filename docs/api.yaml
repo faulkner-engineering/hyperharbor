@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.16.0
+  version: 1.17.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -3327,6 +3327,70 @@ components:
             $ref: "#/components/schemas/ProfileTweak"
         browser:
           $ref: "#/components/schemas/ProfileBrowser"
+        target:
+          $ref: "#/components/schemas/ProfileTarget"
+        services:
+          type: array
+          description: Host profiles only (API 1.17.0). Service startup types.
+          items:
+            $ref: "#/components/schemas/ProfileService"
+        startup:
+          $ref: "#/components/schemas/ProfileStartup"
+        power:
+          $ref: "#/components/schemas/ProfilePower"
+
+    ProfileTarget:
+      type: string
+      enum: [vm, host]
+      description: Where a profile applies. A profile without a target is a VM profile. Host profiles belong to the Lean host action in the tray.
+
+    ProfileService:
+      type: object
+      required: [id, startup]
+      properties:
+        id:
+          type: string
+          description: The service name, for example DiagTrack.
+        startup:
+          type: string
+          enum: [disabled, manual, automatic, automaticDelayed]
+        name:
+          type: string
+          description: The friendly name; written as a comment after the id in YAML.
+
+    ProfileStartup:
+      type: object
+      description: Startup entries matched by name with * and ? wildcards. Disabling writes StartupApproved and removes nothing.
+      properties:
+        disable:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileItem"
+        enable:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileItem"
+        keep:
+          type: array
+          description: Entries that are never disabled, in addition to the built-in allowlist.
+          items:
+            $ref: "#/components/schemas/ProfileItem"
+
+    ProfilePower:
+      type: object
+      properties:
+        plan:
+          type: string
+          description: highPerformance, ultimate, balanced, powerSaver, or a plan GUID.
+        wake:
+          type: string
+          enum: [nicOnly, nicAndInput, unchanged]
+          description: nicOnly lets only network adapters wake the PC. nicAndInput also keeps keyboards and mice that may wake it now.
+        armWake:
+          type: array
+          description: Device names, as powercfg lists them, that may wake the PC.
+          items:
+            $ref: "#/components/schemas/ProfileItem"
 
     ProfileItem:
       type: object
@@ -3354,6 +3418,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProfileItem"
+        programs:
+          type: array
+          description: Host profiles only (API 1.17.0). Ids from the host's program catalog, for example onedrive.
+          items:
+            $ref: "#/components/schemas/ProfileItem"
 
     ProfileTweak:
       type: object
@@ -3368,7 +3437,7 @@ components:
 
     RegistryValueType:
       type: string
-      enum: [dword, qword, string]
+      enum: [dword, qword, string, absent]
 
     RegistryTweak:
       type: object
@@ -3384,7 +3453,7 @@ components:
           $ref: "#/components/schemas/RegistryValueType"
         value:
           type: string
-          description: Decimal for dword and qword.
+          description: Decimal for dword and qword; empty for absent, which deletes the value.
 
     ProfileBrowser:
       type: object
