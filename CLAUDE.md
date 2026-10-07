@@ -396,6 +396,10 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     sign-out; it stands aside while the installed service runs. Not yet tried by hand.
   - GpuEventReader reads the System log (nvlddmkm, amdkmdag, amdwddmg, igfx*, and Display 4101) for the last
     7 days, cached 5 minutes, into HostGpu.warnings.
+- Host log download (API 1.16.0, added at the user's request 2026-10-07): POST /host/logs/bundle (elevated, audited) returns
+  a zip from Host.Core/Diagnostics/LogBundle (logs\*.log newest first, 100 MB cap, summary.txt; not the audit log). It is a
+  POST because EndpointSecurityTests require elevated routes to be audited and forbid auditing GETs. The Rust client
+  (download_host_logs) saves it through a file dialog; Host menu > Download host logs…, gated on hostSupports 1.16.0.
 - Host Remote Desktop (maintenance sessions on the host itself; API 1.10.0, added at the user's request 2026-10-05):
   - GET /host/remote-desktop reads fDenyTSConnections, RDP-Tcp PortNumber, EditionID (Home editions start with
     "Core" and are unsupported), and the firewall group "@FirewallAPI.dll,-28752" through HNetCfg.FwPolicy2.

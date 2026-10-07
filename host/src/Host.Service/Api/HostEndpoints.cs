@@ -1,4 +1,5 @@
 using System.Reflection;
+using HyperHarbor.Host.Core.Diagnostics;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.RemoteDesktop;
@@ -22,6 +23,9 @@ public static class HostEndpoints
         endpoints.MapGet(ContractInfo.BasePath + "/host/resources", GetResourcesAsync).WithName("getHostResources");
         endpoints.MapGet(ContractInfo.BasePath + "/host/remote-desktop", GetRemoteDesktop).WithName("getHostRemoteDesktop");
         endpoints.MapPost(ContractInfo.BasePath + "/host/remote-desktop/enable", EnableRemoteDesktop).WithName("enableHostRemoteDesktop")
+            .Audited()
+            .RequireElevation();
+        endpoints.MapPost(ContractInfo.BasePath + "/host/logs/bundle", DownloadLogs).WithName("downloadHostLogs")
             .Audited()
             .RequireElevation();
         endpoints.MapGet(ContractInfo.BasePath + "/isos", ListIsosAsync).WithName("listIsos");
@@ -76,6 +80,24 @@ public static class HostEndpoints
 
     private static Ok<HostRemoteDesktop> EnableRemoteDesktop(HostRemoteDesktopService remoteDesktop) =>
         TypedResults.Ok(remoteDesktop.Enable());
+
+    /// <summary>The newest log files and a summary as a zip. Built in memory: logs are capped and compress well.</summary>
+    private static FileContentHttpResult DownloadLogs(LogBundle bundle, TimeProvider time)
+    {
+        using var zip = new MemoryStream();
+        bundle.Write(zip,
+        [
+            $"Host: {Environment.MachineName}",
+            $"Host version: {HostVersion}",
+            $"API version: {ContractInfo.ApiVersion}",
+            $"Windows: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}",
+            $"System uptime: {TimeSpan.FromMilliseconds(Environment.TickCount64):d\\.hh\\:mm\\:ss}",
+            $"Process started: {System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime():u}",
+        ]);
+
+        var fileName = $"hyperharbor-logs-{Environment.MachineName}-{time.GetUtcNow():yyyyMMdd-HHmmss}.zip";
+        return TypedResults.File(zip.ToArray(), "application/zip", fileName);
+    }
 
     private static async Task<Ok<IReadOnlyList<IsoImage>>> ListIsosAsync(IsoLibraryService isos, CancellationToken cancellationToken) =>
         TypedResults.Ok(await isos.ListAsync(cancellationToken));

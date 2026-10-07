@@ -177,6 +177,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/logs/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download the host's log files as a zip, for diagnosis.
+         * @description Returns the host's daily log files (`logs/host-yyyyMMdd.log`, newest first, at most 100 MB
+         *     uncompressed) and `summary.txt` (host and API versions, Windows version, uptime, the files
+         *     included, and anything left out or unreadable). The audit log is not included. Log entries hold
+         *     no secrets. A POST because the request is audited, and so needs the admin passphrase.
+         */
+        post: operations["downloadHostLogs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/host/gpu": {
         parameters: {
             query?: never;
@@ -2688,6 +2711,28 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["ElevationRequired"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    downloadHostLogs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The zip file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
         };
     };
     getHostGpu: {

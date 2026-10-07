@@ -308,6 +308,38 @@ async fn enable_host_remote_desktop(
     state.api.enable_host_remote_desktop(&host, &paired).await
 }
 
+/// Downloads the host's log files as a zip (needs elevation) and saves it where the user chooses.
+/// Returns the path, or None when the user cancels the save dialog.
+#[tauri::command]
+async fn download_host_logs(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<Option<String>, ClientError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (host, paired) = state.paired_host(&key)?;
+    let (file_name, zip) = state.api.download_host_logs(&host, &paired).await?;
+    let dialog = app.clone();
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        dialog
+            .dialog()
+            .file()
+            .set_title("Save the host logs")
+            .set_file_name(&file_name)
+            .add_filter("Zip files", &["zip"])
+            .blocking_save_file()
+    })
+    .await
+    .map_err(|e| ClientError::InvalidRequest(e.to_string()))?;
+
+    let Some(path) = chosen.and_then(|file| file.into_path().ok()) else {
+        return Ok(None);
+    };
+    std::fs::write(&path, zip).map_err(|e| ClientError::Storage(e.to_string()))?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
 /// This device's monitors, in the order mstsc numbers them.
 #[tauri::command]
 fn list_monitors() -> Vec<Monitor> {
@@ -1194,6 +1226,7 @@ pub fn run() {
             connect_vm,
             connect_host,
             enable_host_remote_desktop,
+            download_host_logs,
             open_console,
             list_monitors,
             get_monitor_choice,

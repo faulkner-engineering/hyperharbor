@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.15.0
+  version: 1.16.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -274,6 +274,32 @@ paths:
           $ref: "#/components/responses/ElevationRequired"
         "409":
           $ref: "#/components/responses/Conflict"
+
+  /host/logs/bundle:
+    post:
+      tags: [Host]
+      operationId: downloadHostLogs
+      summary: Download the host's log files as a zip, for diagnosis.
+      description: |
+        Returns the host's daily log files (`logs/host-yyyyMMdd.log`, newest first, at most 100 MB
+        uncompressed) and `summary.txt` (host and API versions, Windows version, uptime, the files
+        included, and anything left out or unreadable). The audit log is not included. Log entries hold
+        no secrets. A POST because the request is audited, and so needs the admin passphrase.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "200":
+          description: The zip file.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
 
   /host/gpu:
     get:

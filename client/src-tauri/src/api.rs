@@ -775,6 +775,36 @@ impl ApiClient {
         parse(response).await
     }
 
+    /// POST /host/logs/bundle (needs elevation): a zip of the host's log files. Returns the file name the
+    /// host suggests and the zip.
+    pub async fn download_host_logs(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<(String, Vec<u8>), ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/host/logs/bundle",
+                None,
+                Some(Duration::from_secs(120)),
+            )
+            .await?;
+        let name = suggested_log_file_name(
+            response
+                .headers()
+                .get(reqwest::header::CONTENT_DISPOSITION)
+                .and_then(|value| value.to_str().ok()),
+        );
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| ClientError::InvalidResponse(e.without_url().to_string()))?;
+        Ok((name, bytes.to_vec()))
+    }
+
     /// POST /host/update/install (needs elevation). Returns the HostUpdateStatus; the host installs
     /// the ready version once this request has ended, and restarts.
     pub async fn install_host_update(
@@ -1480,6 +1510,32 @@ pub fn candidate_base_urls(host: &HostEntry) -> Vec<String> {
 /// the host checks the name again.
 /// "/unattend-profiles/{id}". Profile IDs are slugs or GUIDs; anything else never reaches the host.
 /// "/setup-profiles/{id}": lowercase letters, digits, and hyphens, as the host names them.
+/// The save dialog's default name for the host's log bundle: the host's `filename=` when it is a plain
+/// .zip name, otherwise a fixed name. The host is trusted, but the name goes to a file dialog, so only
+/// letters, digits, dots, and hyphens are kept.
+fn suggested_log_file_name(content_disposition: Option<&str>) -> String {
+    const FALLBACK: &str = "hyperharbor-logs.zip";
+    let Some(header) = content_disposition else {
+        return FALLBACK.into();
+    };
+    let name = header
+        .split(';')
+        .filter_map(|part| part.trim().strip_prefix("filename="))
+        .next()
+        .map(|value| value.trim_matches('"'));
+    match name {
+        Some(name)
+            if name.ends_with(".zip")
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') =>
+        {
+            name.to_string()
+        }
+        _ => FALLBACK.into(),
+    }
+}
+
 fn setup_profile_path(id: &str) -> Result<String, ClientError> {
     let valid = !id.is_empty()
         && id.len() <= 48
@@ -1663,6 +1719,32 @@ fn encode_base64(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::hosts::ManualHost;
+
+    #[test]
+    fn the_log_bundle_name_comes_from_the_host_when_it_is_plain() {
+        let header = "attachment; filename=hyperharbor-logs-TC-PC-20261007-101500.zip; filename*=UTF-8''x.zip";
+        assert_eq!(
+            suggested_log_file_name(Some(header)),
+            "hyperharbor-logs-TC-PC-20261007-101500.zip"
+        );
+        assert_eq!(
+            suggested_log_file_name(Some("attachment; filename=\"logs.zip\"")),
+            "logs.zip"
+        );
+    }
+
+    #[test]
+    fn the_log_bundle_name_falls_back_when_the_host_name_is_odd() {
+        for header in [
+            None,
+            Some("attachment"),
+            Some("attachment; filename=..\\..\\evil.zip"),
+            Some("attachment; filename=notes.txt"),
+            Some("attachment; filename=a b.zip"),
+        ] {
+            assert_eq!(suggested_log_file_name(header), "hyperharbor-logs.zip");
+        }
+    }
 
     #[test]
     fn update_settings_always_send_the_maintenance_time() {

@@ -19,6 +19,8 @@
     type HostRemoteDesktop,
     hostSupports,
     RemoteDesktopApiVersion,
+    HostLogsApiVersion,
+    downloadHostLogs,
     SetupProfilesApiVersion,
     ApplySetupProfileApiVersion,
     type StoredSetupProfile,
@@ -75,6 +77,7 @@
   let choosingMonitors = $state<Vm | null>(null);
   let creating = $state(false);
   let connectingHost = $state(false);
+  let downloadingLogs = $state(false);
   /** The host's Remote Desktop state while asking whether to turn it on, and the answer's resolver. */
   let enablingRemoteDesktop = $state<{ state: HostRemoteDesktop; answer: (confirmed: boolean) => void } | null>(null);
   let view = $state<"vms" | "isos" | "profiles" | "setup">("vms");
@@ -86,6 +89,7 @@
   // VMs are only fetched from paired hosts; others show the pairing panel instead.
   const pairedKey = $derived(selectedHost?.paired ? selectedHost.key : null);
   const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
+  const hostHasLogs = $derived(selectedHost ? hostSupports(selectedHost, HostLogsApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
   const hostAppliesProfiles = $derived(selectedHost ? hostSupports(selectedHost, ApplySetupProfileApiVersion) : false);
   // Setup profiles read provisioned packages from running Windows VMs.
@@ -204,6 +208,20 @@
       if (!(error instanceof ElevationCancelled)) toasts.error(errorMessage(error));
     } finally {
       connectingHost = false;
+    }
+  }
+
+  async function saveHostLogs() {
+    const key = selectedKey;
+    if (key === null) return;
+    downloadingLogs = true;
+    try {
+      const path = await withElevation(key, () => downloadHostLogs(key));
+      if (path) toasts.show(`Saved the host logs to ${path}.`);
+    } catch (error) {
+      if (!(error instanceof ElevationCancelled)) toasts.error(errorMessage(error));
+    } finally {
+      downloadingLogs = false;
     }
   }
 
@@ -403,6 +421,21 @@
                   disabled
                   title="{selectedHost.displayName} runs an older HyperHarbor version. Update the host to use this."
                   >Remote Desktop to host (update host)</button
+                >
+              {/if}
+              {#if hostHasLogs}
+                <button
+                  type="button"
+                  disabled={offline || downloadingLogs}
+                  title="Save the host's log files as a zip, to find out why the host is misbehaving."
+                  onclick={saveHostLogs}>{downloadingLogs ? "Downloading logs…" : "Download host logs…"}</button
+                >
+              {:else}
+                <button
+                  type="button"
+                  disabled
+                  title="{selectedHost.displayName} runs an older HyperHarbor version. Update the host to use this."
+                  >Download host logs (update host)</button
                 >
               {/if}
               <button type="button" onclick={() => (showWake = !showWake)}>

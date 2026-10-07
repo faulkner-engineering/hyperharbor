@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Authentication;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Audit;
+using HyperHarbor.Host.Core.Diagnostics;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.Identity;
@@ -145,6 +146,7 @@ DataFormat.EnsureCurrent(dataDirectory);
 // The console and the daily log file under <data>\logs get the same entries.
 // Registered through DI so the container disposes it, which closes the file when the service stops.
 builder.Services.AddSingleton<ILoggerProvider>(_ => new FileLoggerProvider(dataDirectory, readers: logReaders));
+builder.Services.AddSingleton(new LogBundle(dataDirectory));
 builder.Services.AddSingleton(new HostIdentityStore(dataDirectory));
 builder.Services.AddSingleton(new HostCertificateStore(dataDirectory, Environment.MachineName));
 var users = new UserStore(dataDirectory);

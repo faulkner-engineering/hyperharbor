@@ -359,6 +359,15 @@ export const getHostRemoteDesktop = (key: string) =>
 export const enableHostRemoteDesktop = (key: string) =>
   invoke<HostRemoteDesktop>("enable_host_remote_desktop", { key });
 
+/** The API version that added the host log download. */
+export const HostLogsApiVersion = "1.16.0";
+
+/**
+ * Downloads the host's log files as a zip and asks where to save it. Resolves with the saved path, or null
+ * when the user cancels the save dialog. Needs elevation: run it inside withElevation.
+ */
+export const downloadHostLogs = (key: string) => invoke<string | null>("download_host_logs", { key });
+
 /** Opens Remote Desktop to the host. Resolves once mstsc has been launched. */
 export const connectHost = (key: string) => invoke<void>("connect_host", { key });
 

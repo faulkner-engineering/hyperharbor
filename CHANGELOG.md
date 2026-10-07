@@ -8,7 +8,14 @@ is noted where it changes.
 Sections: Added, Changed, Fixed, Removed, Security. Write entries for the people who use HyperHarbor, and
 note anything that needs action, such as updating the host, a new elevation requirement, or a data migration.
 
-## [Unreleased]
+## [Unreleased] (API 1.16.0)
+
+### Added
+- Download the host's logs from the client: Host menu > Download host logs…. After the admin passphrase, the host
+  sends a zip of its log files (up to 100 MB, newest first) and a summary.txt (host and API versions, Windows
+  version, uptime), and the client asks where to save it. The audit log is not included, and log entries hold no
+  secrets. The download is recorded in the audit log. API: POST /host/logs/bundle (elevated, audited); update the
+  host to use it (the menu entry says so for older hosts).
 
 ### Changed
 - The client now explains how to install software that needs administrator approval in a VM: add it to a setup

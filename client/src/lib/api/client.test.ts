@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import { connectVm, errorMessage, isClientError, isOffline, openConsole, provisionVm } from "./client";
+import { connectVm, downloadHostLogs, errorMessage, isClientError, isOffline, openConsole, provisionVm } from "./client";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -61,5 +61,22 @@ describe("commands", () => {
     await openConsole("mdns:host", "vm-1");
 
     expect(invoke).toHaveBeenCalledWith("open_console", { key: "mdns:host", vmId: "vm-1" });
+  });
+});
+
+describe("downloadHostLogs", () => {
+  it("asks the Tauri side to download and save the host logs, and returns the saved path", async () => {
+    invoke.mockResolvedValue("C:\Users\me\hyperharbor-logs.zip");
+
+    const path = await downloadHostLogs("mdns:host");
+
+    expect(path).toBe("C:\Users\me\hyperharbor-logs.zip");
+    expect(invoke).toHaveBeenCalledWith("download_host_logs", { key: "mdns:host" });
+  });
+
+  it("returns null when the save dialog is cancelled", async () => {
+    invoke.mockResolvedValue(null);
+
+    expect(await downloadHostLogs("mdns:host")).toBeNull();
   });
 });
