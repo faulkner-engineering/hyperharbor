@@ -10,6 +10,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.1.7-beta.2] - 2026-10-09 (API 1.17.0)
+
 ### Added
 - The client updates itself (installed copies). It checks the stable or beta channel at start and once a day, and the
   sidebar shows "Version X is available" with what is new. Nothing installs until you choose Install and restart, which
