@@ -17,6 +17,8 @@
     onsettings?: (vm: Vm) => void;
     onperformance?: (vm: Vm) => void;
     onmonitors?: (vm: Vm) => void;
+    /** Camera sharing settings for a Windows VM; leave unset to hide the entry. */
+    oncamera?: (vm: Vm) => void;
     /** Capture a setup profile from a running Windows VM; leave unset for hosts without setup profiles. */
     oncapture?: (vm: Vm) => void;
     /** Apply a setup profile to a running Windows VM; leave unset for hosts that cannot. */
@@ -36,6 +38,7 @@
     onsettings,
     onperformance,
     onmonitors,
+    oncamera,
     oncapture,
     onapplyprofile,
     ondelete,
@@ -224,6 +227,9 @@
                 <button type="button" onclick={() => onperformance?.(vm)}>Performance mode…</button>
               {/if}
               <button type="button" onclick={() => onmonitors?.(vm)}>Monitors…</button>
+              {#if oncamera && vm.guestOs.family !== "linux"}
+                <button type="button" onclick={() => oncamera(vm)}>Camera…</button>
+              {/if}
               {#if oncapture && vm.state === "running" && vm.guestOs.family === "windows"}
                 <button type="button" onclick={() => oncapture(vm)}>Capture setup profile…</button>
               {/if}

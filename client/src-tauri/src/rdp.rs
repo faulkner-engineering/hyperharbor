@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use zeroize::Zeroize;
 
+use crate::camera::CameraRedirect;
 use crate::error::ClientError;
 use crate::monitors::MonitorLayout;
 
@@ -107,6 +108,9 @@ impl Drop for VmConnection {
 /// mstsc does not lower quality while it measures the link.
 ///
 /// `monitors` chooses one monitor (mstsc's default), all of them, or the ones picked in the client.
+///
+/// `camera` chooses what camera redirection asks for: every physical camera, or one device by its
+/// symbolic link (a session's own virtual camera). Linux guests (xrdp) get none either way.
 pub fn rdp_file(
     address: &str,
     port: u16,
@@ -114,6 +118,7 @@ pub fn rdp_file(
     guest_os: GuestOs,
     performance_mode: bool,
     monitors: &MonitorLayout,
+    camera: &CameraRedirect,
 ) -> String {
     let linux = guest_os == GuestOs::Linux;
     let mut lines = vec![
@@ -133,7 +138,7 @@ pub fn rdp_file(
     ];
     if !linux {
         lines.push("redirectwebauthn:i:1".to_string());
-        lines.push("camerastoredirect:s:*".to_string());
+        lines.extend(camera.rdp_line());
     }
     if performance_mode {
         lines.push("connection type:i:6".to_string());
@@ -219,6 +224,7 @@ pub fn launch_host(
         file_directory,
         on_exit,
     )
+    .map(|_| ())
 }
 
 /// A temporary credential for `TERMSRV/{host}`, removed once the session opens.
@@ -239,12 +245,14 @@ pub struct Launch<'a> {
 
 /// Writes the credential, launches mstsc, and removes the credential and file in the background once
 /// the session has opened (or mstsc exits, or the wait times out). `on_exit` runs after mstsc exits.
+/// `camera` is the camera redirection the .rdp file asks for. Returns the mstsc process id.
 pub fn launch(
     connection: &VmConnection,
     monitors: &MonitorLayout,
+    camera: &CameraRedirect,
     file_directory: &Path,
     on_exit: Option<Box<dyn FnOnce() + Send>>,
-) -> Result<(), ClientError> {
+) -> Result<u32, ClientError> {
     connection.validate()?;
     start(
         Launch {
@@ -264,6 +272,7 @@ pub fn launch(
                 connection.guest_os,
                 connection.performance_mode,
                 monitors,
+                camera,
             ),
             window_title_key: connection.address.clone(),
         },
@@ -272,13 +281,13 @@ pub fn launch(
     )
 }
 
-/// Starts mstsc for `launch`. The credential and file are removed once the session has opened;
-/// `on_exit`, if given, runs after mstsc exits.
+/// Starts mstsc for `launch` and returns its process id. The credential and file are removed once
+/// the session has opened; `on_exit`, if given, runs after mstsc exits.
 pub fn start(
     launch: Launch<'_>,
     file_directory: &Path,
     on_exit: Option<Box<dyn FnOnce() + Send>>,
-) -> Result<(), ClientError> {
+) -> Result<u32, ClientError> {
     let target = match &launch.credential {
         Some(credential) => {
             let target = format!("TERMSRV/{}", credential.host);
@@ -305,6 +314,7 @@ pub fn start(
 
     match started {
         Ok(mut child) => {
+            let pid = child.id();
             let key = launch.window_title_key;
             std::thread::spawn(move || {
                 wait_for_session(&mut child, &key);
@@ -315,7 +325,7 @@ pub fn start(
                     on_exit();
                 }
             });
-            Ok(())
+            Ok(pid)
         }
         Err(error) => {
             remove_credential();
@@ -536,6 +546,7 @@ mod tests {
             GuestOs::Windows,
             false,
             &MonitorLayout::Single,
+            &CameraRedirect::AllPhysical,
         );
         let lines: Vec<&str> = file.lines().collect();
 
@@ -567,6 +578,7 @@ mod tests {
             GuestOs::Windows,
             false,
             &MonitorLayout::Selected(vec![2, 0]),
+            &CameraRedirect::AllPhysical,
         );
         let lines: Vec<&str> = file.lines().collect();
 
@@ -630,6 +642,7 @@ mod tests {
             GuestOs::Windows,
             true,
             &MonitorLayout::Single,
+            &CameraRedirect::AllPhysical,
         );
         let lines: Vec<&str> = file.lines().collect();
 
@@ -651,6 +664,7 @@ mod tests {
             GuestOs::Linux,
             false,
             &MonitorLayout::Single,
+            &CameraRedirect::AllPhysical,
         );
         let lines: Vec<&str> = file.lines().collect();
 
@@ -660,6 +674,60 @@ mod tests {
         assert!(lines.contains(&"dynamic resolution:i:1"));
         assert!(!file.contains("redirectwebauthn"));
         assert!(!file.contains("camerastoredirect"));
+    }
+
+    const VIRTUAL_LINK: &str = r"\\?\swd#vcamdevapi#aaaa#{e5323777-f976-4f5b-9b55-b94699c46e44}\{11111111-1111-1111-1111-111111111111}";
+
+    fn file_with_camera(guest_os: GuestOs, camera: &CameraRedirect) -> String {
+        rdp_file(
+            "192.168.0.50",
+            3389,
+            "hh-owner",
+            guest_os,
+            false,
+            &MonitorLayout::Single,
+            camera,
+        )
+    }
+
+    #[test]
+    fn a_virtual_camera_is_redirected_by_its_link_and_nothing_else() {
+        let camera = CameraRedirect::link(VIRTUAL_LINK).unwrap();
+        let file = file_with_camera(GuestOs::Windows, &camera);
+        let lines: Vec<&str> = file.lines().collect();
+
+        let expected = format!("camerastoredirect:s:{VIRTUAL_LINK}");
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|l| l.starts_with("camerastoredirect"))
+                .count(),
+            1
+        );
+        assert!(lines.contains(&expected.as_str()));
+        assert!(!lines.contains(&"camerastoredirect:s:*"));
+    }
+
+    #[test]
+    fn camera_redirection_can_be_left_out() {
+        let file = file_with_camera(GuestOs::Windows, &CameraRedirect::None);
+        assert!(!file.contains("camerastoredirect"));
+        // Microphone redirection is unchanged by the camera choice.
+        assert!(file.lines().any(|l| l == "audiocapturemode:i:1"));
+    }
+
+    #[test]
+    fn linux_guests_get_no_camera_line_whatever_was_asked() {
+        let camera = CameraRedirect::link(VIRTUAL_LINK).unwrap();
+        assert!(!file_with_camera(GuestOs::Linux, &camera).contains("camerastoredirect"));
+    }
+
+    #[test]
+    fn a_link_that_could_add_rdp_lines_cannot_be_built() {
+        let injected = format!("{VIRTUAL_LINK}\r\ndrivestoredirect:s:*");
+        assert!(CameraRedirect::link(injected).is_err());
+        assert!(CameraRedirect::link("*").is_err());
+        assert!(CameraRedirect::link("").is_err());
     }
 
     #[test]
@@ -775,6 +843,7 @@ mod tests {
         let result = launch(
             &connection(address, "hh-owner"),
             &MonitorLayout::Single,
+            &CameraRedirect::AllPhysical,
             &directory,
             None,
         );

@@ -159,7 +159,9 @@ export interface ClientError {
     | "cancelled"
     | "invalidRequest"
     | "invalidResponse"
-    | "storage";
+    | "storage"
+    | "updateFailed"
+    | "sessionsActive";
   message: string;
   /** HTTP status when code is "api". */
   status: number | null;
@@ -245,9 +247,89 @@ export const provisionVm = (
     options,
   });
 
-/** Opens Remote Desktop to a provisioned VM. Resolves once mstsc has been launched. */
-export const connectVm = (key: string, vmId: string, address: string) =>
-  invoke<void>("connect_vm", { key, vmId, address });
+/**
+ * Opens Remote Desktop to a provisioned VM. Resolves once mstsc has been launched, with something to
+ * tell the user (for example that camera sharing is unavailable), or null. `vmName` names the VM's
+ * virtual camera.
+ */
+export const connectVm = (key: string, vmId: string, address: string, vmName?: string) =>
+  invoke<string | null>("connect_vm", { key, vmId, address, vmName });
+
+/** What a VM's Remote Desktop session sees while its window is not in front. */
+export type UnfocusedBehavior = "freeze" | "blur" | "keepLive";
+
+/** A VM's camera settings, kept on this device. Mirrors CameraPrefs in src-tauri/src/camera/service.rs. */
+export interface CameraPrefs {
+  /** Share this device's camera with the VM at all. */
+  share: boolean;
+  unfocused: UnfocusedBehavior;
+}
+
+export type CameraMode = "live" | "frozen" | "blurred" | "shuttered";
+
+/** One open Remote Desktop session's camera. */
+export interface CameraSessionStatus {
+  vmKey: string;
+  vmName: string;
+  /** True for a virtual camera of its own; false when the physical camera is redirected directly. */
+  shared: boolean;
+  /** What the VM sees now; null when the camera is not shared through a virtual camera. */
+  mode: CameraMode | null;
+  shutter: boolean;
+  focused: boolean;
+}
+
+/** Camera sharing on this device. Mirrors CameraStatus in src-tauri/src/camera/service.rs. */
+export interface CameraStatus {
+  /** False on Windows 10 and where the camera source is not installed. */
+  sharingAvailable: boolean;
+  sharingMessage: string | null;
+  /** False until "Set up camera sharing" has installed the camera source on this device. */
+  sourceInstalled: boolean;
+  /** "busy" means another application is using the camera. */
+  camera: "idle" | "active" | "busy" | "unavailable";
+  cameraMessage: string | null;
+  device: string | null;
+  /**
+   * The camera this PC's own applications can use while a VM is connected ("HyperHarbor Camera (This PC)"),
+   * or null when none exists. It always shows live video.
+   */
+  localCamera: string | null;
+  sessions: CameraSessionStatus[];
+}
+
+/**
+ * Installs the camera source (one UAC prompt) so virtual cameras can be created. Resolves when it is
+ * registered; rejects when the prompt is declined or setup fails.
+ */
+export const setupCameraSharing = () => invoke<void>("setup_camera_sharing");
+
+/**
+ * True when the camera component installed on this device is not the one that ships with this
+ * version of HyperHarbor (after an update). Running setupCameraSharing again replaces it.
+ */
+export const isCameraSourceOutdated = () => invoke<boolean>("camera_source_outdated");
+
+/**
+ * Removes the camera source from this device (one UAC prompt). VMs with an open session lose their
+ * camera until sharing is set up again.
+ */
+export const removeCameraSharing = () => invoke<void>("remove_camera_sharing");
+
+export const getCameraStatus = () => invoke<CameraStatus>("get_camera_status");
+
+export const getCameraPrefs = (key: string, vmId: string) => invoke<CameraPrefs>("get_camera_prefs", { key, vmId });
+
+export const setCameraPrefs = (key: string, vmId: string, prefs: CameraPrefs) =>
+  invoke<void>("set_camera_prefs", { key, vmId, prefs });
+
+/** Whether a VM's privacy shutter is closed. */
+export const getCameraShutter = (key: string, vmId: string) =>
+  invoke<boolean>("get_camera_shutter", { key, vmId });
+
+/** Closes (true) or opens (false) a VM's privacy shutter. A closed shutter shows the VM black. */
+export const setCameraShutter = (key: string, vmId: string, closed: boolean) =>
+  invoke<void>("set_camera_shutter", { key, vmId, closed });
 
 /**
  * Opens the VM's console (its screen, also before an OS is installed) in mstsc through the host.
@@ -507,3 +589,47 @@ export const exportVmDisks = (key: string, vmId: string, destinationFolder: stri
 
 export const onHostsChanged = (handler: () => void): Promise<UnlistenFn> =>
   listen("hosts-changed", handler);
+
+// Updates of this program (the host's own updates are above). Mirrors update/service.rs.
+
+export type ClientUpdateChannel = "stable" | "beta";
+
+export type ClientUpdatePhase =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "upToDate" }
+  | { state: "available"; version: string; notes: string | null }
+  | { state: "downloading"; downloaded: number; total: number | null }
+  | { state: "failed"; message: string };
+
+export interface ClientUpdateStatus {
+  currentVersion: string;
+  /** A portable copy cannot replace itself; it links to the releases page instead. */
+  installKind: "installed" | "portable";
+  releasesUrl: string;
+  phase: ClientUpdatePhase;
+}
+
+export interface ClientUpdateSettings {
+  channel: ClientUpdateChannel;
+  checkAutomatically: boolean;
+}
+
+export const getClientUpdate = () => invoke<ClientUpdateStatus>("get_client_update");
+
+/** A failed check is part of the returned status, not an error. */
+export const checkClientUpdate = () => invoke<ClientUpdateStatus>("check_client_update");
+
+/**
+ * Downloads and installs the version the last check found; the program closes and the new version
+ * starts. Open sessions end with it, so without `confirmed` it fails with code "sessionsActive".
+ */
+export const installClientUpdate = (confirmed: boolean) => invoke<void>("install_client_update", { confirmed });
+
+export const getClientUpdateSettings = () => invoke<ClientUpdateSettings>("get_update_settings");
+
+export const setClientUpdateSettings = (settings: ClientUpdateSettings) =>
+  invoke<ClientUpdateStatus>("set_update_settings", { settings });
+
+export const onClientUpdateChanged = (handler: (status: ClientUpdateStatus) => void): Promise<UnlistenFn> =>
+  listen<ClientUpdateStatus>("client-update-changed", (event) => handler(event.payload));

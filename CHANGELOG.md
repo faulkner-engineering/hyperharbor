@@ -10,6 +10,54 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- The client updates itself (installed copies). It checks the stable or beta channel at start and once a day, and the
+  sidebar shows "Version X is available" with what is new. Nothing installs until you choose Install and restart, which
+  downloads the update, checks its signature against the key built into the client, and runs the installer; if Remote
+  Desktop or console windows are open, it asks first, because the restart closes them. A portable copy cannot replace
+  itself and shows the releases page instead. The sidebar's Settings picks the channel (a beta build follows beta by
+  default) and turns the automatic check off. This client cannot update itself yet: install the first build that has
+  this by hand, and later versions arrive through the update. For maintainers: releases are signed by the workflow with
+  the repository secrets TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD, and publish
+  client-latest.json beside the host's latest.json (the beta channel copies both).
+- After an update, the Camera… dialog offers "Update camera component" when the camera component installed under
+  Program Files differs from the one the new version ships with (one administrator prompt; open sessions lose their
+  camera until they reconnect). It is never replaced without asking.
+- Camera sharing for several VMs at once (client, Windows 11). Remote Desktop gives the physical camera to the first
+  session that asks for it, so a second VM never got video. The client now opens the camera once and gives each Windows
+  VM session a virtual camera of its own, named "HyperHarbor Camera (VM name)", so every VM shows live video at the
+  same time. Each session's connection file redirects only its own virtual camera, never the physical one. The
+  microphone is unchanged.
+- The virtual cameras offer one size, 1280x720 at 30 fps. Offering 640x480 as well made a camera start in 640x480 after
+  another application had probed it, and stay there until the app asked again; an app that wants a smaller picture
+  scales the 1280x720 one itself.
+- A camera for this PC's own applications: while a VM with a virtual camera is connected, apps on the client PC (Teams,
+  Zoom, the browser) can also use a camera named "HyperHarbor Camera (This PC)". It always shows live video, with no
+  shutter, blur, or freezing, and it goes away when the last VM disconnects. Windows has no system default camera, so
+  each app has to be pointed at it once; apps that remember their last camera then use it while it exists and fall back
+  to the physical camera when it is gone.
+- VM menu, Camera…: choose what a VM sees while its window is not in front (a frozen picture, which is the default and
+  the cheapest, a blurred picture, or live video), turn camera sharing off for that VM, and close a privacy shutter that
+  shows the VM black at once, even in front. The choices are saved on this device. The dialog also says what each VM sees
+  right now.
+- The client says when another application is using the physical camera (the VMs keep their last picture meanwhile and
+  the camera is taken back when it is free), and when Windows' camera privacy setting blocks it.
+- One-time setup: Camera… offers "Set up camera sharing", which installs a small Windows component under
+  `C:\Program Files\HyperHarbor Camera` and asks for administrator permission once. Windows loads the component into its
+  camera service, which runs as a different account, so it cannot live in the per-user install folder. The installer
+  ships the component; the portable client needs `hyperharbor_vcam.dll` beside it. Until setup is done the first VM
+  gets the camera directly, as before. "Remove camera sharing from this device…" in the same dialog takes the component
+  off again (administrator permission once more); uninstalling HyperHarbor does not, because its uninstaller cannot
+  ask for administrator permission.
+- Cleanup: virtual cameras are removed when their session ends, when the client closes, and at the next start if a
+  previous run was cut short (only cameras this client created are touched).
+
+### Changed
+- On Windows 10, which has no virtual cameras, the first VM you connect to gets the physical camera as before and a
+  second VM is told the camera is already in use, instead of silently getting none.
+- The client's Rust build is now a workspace (client, the camera component, and the shared frame format). CI and
+  `scripts/test-all.ps1` check all three, and `scripts/package.ps1` builds the component for the installer.
+
 ## [0.1.7-beta.1] - 2026-10-07 (API 1.17.0)
 
 ### Added

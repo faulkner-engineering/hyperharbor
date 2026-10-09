@@ -82,6 +82,27 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    the first apply, guards and a startup allowlist, an undo profile from the diff, idle memory and process count
    before and after, a monthly re-apply. See "Lean host" under Gotchas.
 
+14. Camera sharing for concurrent Remote Desktop sessions, added at the user's request (2026-10-08; client only, no
+   API change; code complete, verified live with two VMs on this PC, not yet committed or released): mstsc gives the
+   physical camera to the first session only, so the client opens it once and gives each Windows VM session a virtual
+   camera (Windows 11, MFCreateVirtualCamera) named "HyperHarbor Camera (VM name)"; the .rdp file redirects only that
+   camera (camerastoredirect:s:<symbolic link>). Per-VM policy (frozen, blurred, or live while unfocused; share off;
+   privacy shutter), physical-camera-in-use detection, one-time elevated "Set up camera sharing", orphan cleanup.
+   Windows 10 keeps the physical camera for one VM. See "Camera sharing" under Gotchas.
+
+15. A camera for the client PC's own applications, added at the user's request (2026-10-08; client only): while any VM
+   session has a virtual camera, "HyperHarbor Camera (This PC)" also exists, always live (no policy, shutter, or effect),
+   and it is removed with the last VM camera. Windows has no default camera (apps pick their own), so the "make it the
+   default while connected, then restore" idea cannot be done; presence only while connected is the approximation.
+
+16. Client auto-update, added at the user's request (2026-10-09; client and release pipeline, no API change; code written,
+   unit tested, not yet run against a real release): tauri-plugin-updater with minisign-signed NSIS artifacts. The
+   client checks 15 s after start and daily (update-settings.json: channel stable or beta, check automatically) and the
+   sidebar's ClientUpdate.svelte offers "Install and restart", which always waits for the user and asks again when
+   Remote Desktop or console windows are open. Portable copies only show the releases link. A stale camera DLL under
+   Program Files is detected by SHA-256 against the bundled one and fixed through the existing elevated setup.
+   Remaining: 16.x live test (two builds, a loopback https manifest or a real prerelease), then the first release.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
 
@@ -180,8 +201,29 @@ per-device VM accounts and a user management UI.
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
   identity.rs (key in Credential Manager), paired.rs, rdp.rs (mstsc launch), console.rs (loopback listener and
-  tunnels for the VM console); client/src: SvelteKit SPA. Lifecycle UI:
+  tunnels for the VM console), camera/ (see below); client/src: SvelteKit SPA. Lifecycle UI:
   lib/lifecycle.svelte.ts (elevation prompt, job polling) and lib/components/*Dialog.svelte on a shared Dialog
+- Camera sharing (Rust workspace rooted at client/src-tauri, which lists ../vcam-protocol and ../vcam):
+  - client/vcam-protocol: no dependencies; the pipe frame format (FrameHeader, 32 bytes then NV12), pipe_name,
+    SOURCE_CLSID, and NV12 black and scale. Used by both sides.
+  - client/vcam: cdylib hyperharbor_vcam.dll, the media source the Windows Frame Server loads (activator, source,
+    pipe reader, DllRegisterServer). Release build is staged by package.ps1 into client/src-tauri/resources (git-ignored)
+    and added to the installer only through tauri.camera.conf.json.
+  - client/src-tauri/src/camera: naming, resolve (symbolic link lookup), policy (Live, Frozen, Blurred, Shuttered),
+    fanout (policy per session, one blur for all), frame, failure (HRESULT classes), ledger and reconcile (orphans),
+    support (Windows 11 check), mfapi (Media Foundation functions looked up at run time), winmf (virtual cameras,
+    listing), capture (physical camera thread), pipe (PipeSink, the pipe server), backend (the Windows Backend),
+    service (CameraService: prepare, attach_process, end, shutter, prefs, status; tested through a fake Backend),
+    setup and setup_windows (elevated install and removal), live (ignored live tests). UI: CameraDialog.svelte.
+- Client updates (client/src-tauri/src/update): settings (UpdateSettingsStore), install_kind (uninstall.exe beside the
+  exe means installed, else portable), service (UpdateService over a Backend trait; phases idle, checking, upToDate,
+  available, downloading, failed; sessions guard), plugin (PluginBackend wraps tauri-plugin-updater). Channel manifests:
+  releases/latest/download/client-latest.json (stable) and releases/download/channel-beta/client-latest.json (beta), in
+  Tauri's format, written by package.ps1 when TAURI_SIGNING_PRIVATE_KEY is set (it adds tauri.updater.conf.json, which
+  turns on createUpdaterArtifacts, and copies the installer's .sig). The public key is plugins.updater.pubkey in
+  tauri.conf.json; the private key and its password are the repository secrets TAURI_SIGNING_PRIVATE_KEY and
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD (losing the key means installed clients cannot update; back it up). UI:
+  ClientUpdate.svelte in the sidebar.
 - docs/pairing.md: the SPAKE2 pairing protocol; both implementations must match it and Spake2Vectors.json
 
 ## Commands
@@ -198,7 +240,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Print VM inventory JSON: dotnet run --project host/src/Host.Service -- --list-vms
 - Lint contract: npx @redocly/cli lint docs/api.yaml
 - Client (from client/): npm run check | npm test (Vitest) | npm run gen:api | npm run tauri dev
-- Rust (from client/src-tauri, in PowerShell): cargo fmt; cargo clippy --all-targets -- -D warnings; cargo test
+- Rust (from client/src-tauri, in PowerShell): cargo fmt --all; cargo clippy --workspace --all-targets -- -D warnings;
+  cargo test --workspace (the workspace includes the camera DLL and the shared frame format)
 - Live mDNS browse (host service running): cargo test live_browse -- --ignored --nocapture
 - Live pairing over LAN (service running, something writing the PIN to the file):
   HH_LIVE_HOST=<lan ip> HH_PIN_FILE=pin.txt cargo test live_pairing -- --ignored --nocapture
@@ -579,6 +622,60 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
 - Jobs live in host memory: a service restart forgets them, and a VM whose creation was interrupted keeps its
   "creation in progress" note. Elevation tokens also end when the host service or the client restarts.
 
+- Camera sharing (2026-10-08; every point below was found by running it on Windows 11 build 26200):
+  - A virtual camera source is a COM DLL the Frame Server (svchost as LocalService) loads, not code in the client. The
+    class must be in HKLM and the DLL readable by LocalService: %ProgramData%\HyperHarbor is locked to Administrators,
+    SYSTEM, and the host's service account, so a DLL there gives "Access is denied" from MFCreateVirtualCamera.
+    Per-user folders fail the same way. The client therefore runs a copy of itself elevated (ShellExecuteEx runas;
+    "hyperharbor-client.exe --setup-camera <dll> <result file>" and "--remove-camera <result file>", dispatched in main.rs)
+    that copies the DLL to %ProgramFiles%\HyperHarbor Camera and runs regsvr32. The elevated copy installs only a DLL named
+    hyperharbor_vcam.dll beside its own exe (is_trusted_source), because it registers a class the Frame Server loads.
+  - The Frame Server never unloads the DLL (DllCanUnloadNow is S_FALSE), so replacing it needs the FrameServer service
+    stopped (setup does that; it starts again on demand).
+  - The Frame Server activates the source's class as an IMFActivate and sets attributes on it: the friendly name
+    (MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME) and the creating process id (attribute 5F8D322E-0FE4-43E4-9E50-D83ECD9FC2B8).
+    One CLSID serves every camera: the pipe is pipe_name(creator pid, friendly name), and the source checks
+    GetNamedPipeServerProcessId against the creator pid. AddRegistryEntry on the virtual camera is denied; not needed.
+  - Frames cross by named pipe (client serves, source connects), not shared memory: a named mapping in the Global
+    namespace needs a privilege a user process lacks. The pipe's SDDL is D:P(A;;GA;;;SY)(A;;GA;;;OW)(A;;GR;;;LS).
+  - The virtual camera offers ONE size (1280x720). With 640x480 also offered, an application that probed the formats and
+    picked 640x480 left the next application starting in 640x480 until it asked again. The Frame Server calls
+    CreatePresentationDescriptor once per activation, keeps that descriptor, reuses it for every application, and updates
+    its current type whenever any application picks one; Start then arrives with the cached type and Stop is not called
+    between applications (found with a temporary log inside the source, then removed). The source cannot reset the cache,
+    so nothing that could stick is offered. Regression test: camera::live::every_consumer_gets_720p_whatever_an_earlier_one_tried.
+  - Samples need timestamps from MFGetSystemTime plus MFSampleExtension_DeviceTimestamp; frame numbers counted from zero
+    made the Frame Server's readers block forever. Pace the stream at 30 fps inside RequestSample.
+  - Windows lists a virtual camera as "<name> (Windows Virtual Camera)" (names_match handles the suffix); its symbolic
+    link starts with \\?\swd#vcamdevapi#. It is listed within milliseconds of Start.
+  - mstsc accepts camerastoredirect:s:<one symbolic link>; each guest then lists exactly that camera as a Remote Desktop
+    camera (Get-PnpDevice -Class RDCamera, "(redirected)") and neither physical camera. Two sessions at once each see
+    only their own (tested with two VMs; concurrent sessions to one VM were not tried, and Windows client editions are
+    believed to allow one interactive session).
+  - GetVersionExW lies without a compatibility manifest (reports build 9200); use RtlGetVersion (winmf::windows_build).
+  - windows-rs imports every function it calls by name at load time (raw-dylib). Calling MFStartup and the like directly
+    made the client import mfplat.dll, mf.dll, mfreadwrite.dll, and mfsensorgroup.dll, which would stop it starting on
+    Windows 10 (no MFCreateVirtualCamera) and Windows N editions. All free Media Foundation functions go through
+    camera/mfapi.rs; mfapi's test parses the test exe's import table and fails on any mf*.dll. COM interfaces need no
+    import. dumpbin /imports on the real exe shows only ordinary DLLs.
+  - COM interface types are not Send in windows-rs; VirtualCamera has a documented unsafe impl Send (multithreaded apartment).
+  - Media Foundation error codes for a busy camera (checked against the windows crate): MF_E_VIDEO_RECORDING_DEVICE_PREEMPTED
+    0xC00D3EA3, MF_E_HW_MFT_FAILED_START_STREAMING 0xC00D3704, invalidated 0xC00D3EA2, E_ACCESSDENIED for the privacy
+    setting. A busy camera could not be reproduced here (Frame Server cameras are shared), so the mapping is from the
+    documented codes only.
+  - The camera for this PC (CameraService::ensure_local and remove_local) is one more fan-out entry with a fixed KeepLive
+    policy that nothing focuses or shuts. It is made after the first VM camera, removed when no session has a virtual
+    camera, and a failure making it is ignored. Tests that count cameras use Log::vm_created and friends to leave it out.
+  - Windows 11 has no system default camera (unlike the default microphone): each app picks one, some remembering the
+    last used and some taking the first listed. The Settings > Cameras page holds per-camera image settings only. The
+    virtual cameras are listed after the physical ones, and disabling the physical device would stop the capture too.
+  - The Rust crate-wide unsafe_code = "deny" stays; the camera files that call Win32 carry a file-level allow.
+  - connect_vm takes the VM's name (for the camera's name) and returns an optional notice for the toast.
+  - Tauri's bundle.resources fails every build when the file is missing, so the DLL is added by a separate config
+    (tauri.camera.conf.json, passed by package.ps1) after package.ps1 builds it.
+  - Tests that cannot run live: "camera in use" by another application, a real Windows 10 start, and focus changes by
+    clicking between windows (the foreground poll is unit tested with a fake).
+
 ## Live testing
 - Live tests skip themselves when Hyper-V is unreachable ([HyperVFact]); the account must be in Hyper-V Administrators.
   [EnvironmentFact("VAR", ...)] skips unless the variables are set; [LocalHardwareFact] skips when CI is set.
@@ -605,5 +702,20 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     HH_SPIKE_ISO=<image>: creates HyperHarbor-Test, applies a profile through the API with a restart, checks the
     account's hive, and deletes the VM. Throwaway VMs created for tests may be deleted without asking (the user's
     decision, 2026-10-05); ask before changing any other VM.
+- Camera tests (2026-10-08): HH_VCAM_LIVE=1 cargo test --lib camera::live -- --ignored --nocapture --test-threads=1 (from
+  client/src-tauri; needs the camera source registered, which opens the physical camera for a moment). Two throwaway
+  VMs for redirection tests: HH_CAMTEST_LIVE=1 HH_SPIKE_ISO=<image> with HH_HARNESS_ISO_FOLDER and HH_HARNESS_VM_FOLDER
+  runs CameraTestVmsLiveTests, which installs HyperHarbor-Cam1 and -Cam2 one after the other (about 25 minutes each).
+  Windows 11 setup refuses less than 4 GB even with the LabConfig bypass in the autounattend, so they install at 4096 MB
+  and are cut to 2048 MB afterwards (not yet fixed in the create flow: a VM created below 4 GB sits on the "requirements"
+  screen with no error). CameraConnectionLiveTests (HH_CAMCONN_LIVE=1, HH_CAMCONN_OUT=<file>) writes the VMs' Remote
+  Desktop credentials to that file (delete it afterwards) and then runs guest queries: write the VM name on the first
+  line and PowerShell below it to <file>.query, read <file>.result, and create <file>.done to stop it. The product's
+  own end to end check is camera::live::the_client_gives_two_vm_sessions_their_own_cameras with HH_CAMCONN_FILE=<that file>.
+  Run the harness from a shell whose PSModulePath is the Windows PowerShell default: the host runs powershell.exe 5.1,
+  which inherits PowerShell 7's module path from a pwsh shell and then cannot load Microsoft.PowerShell.Security
+  ("could not connect to the guest", "ConvertTo-SecureString ... module could not be loaded").
+  PowerShellDirectRunner scripts must answer {ok, result} or {ok:false, error, stage}; any other keys read as null or
+  "Unknown error.".
 - VM console automation: Msvm_Keyboard.TypeText can drop characters, so send TypeKey one key at a time.
   Read the screen with GetVirtualSystemThumbnailImage (RGB565) and confirm a prompt is gone before moving on.

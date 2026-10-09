@@ -1,4 +1,5 @@
 mod api;
+mod camera;
 mod console;
 mod discovery;
 mod error;
@@ -12,6 +13,7 @@ mod spake2;
 #[cfg(test)]
 mod test_server;
 mod tls;
+mod update;
 mod wake;
 
 use std::collections::HashMap;
@@ -43,6 +45,10 @@ struct AppState {
     monitors: MonitorChoiceStore,
     /// Remote Desktop and console windows still open, by host; those hosts get a check-in each minute.
     sessions: sessions::ActiveSessions,
+    /// One physical camera shared with every open session through a virtual camera each.
+    camera: Arc<camera::service::CameraService>,
+    /// Updates of this program (the host updates itself through its own API).
+    updates: update::service::UpdateService,
     // Kept alive so mDNS browsing continues for the lifetime of the app.
     _mdns: Option<mdns_sd::ServiceDaemon>,
 }
@@ -198,13 +204,18 @@ async fn provision_vm(
 /// Opens Remote Desktop to a provisioned VM: checks reachability first (so no password is rotated
 /// for a VM this device cannot reach), requests credentials, and launches mstsc. The credential is
 /// removed from the OS store once the session opens.
+///
+/// Windows guests also get the camera: on Windows 11 a virtual camera of their own (so several VMs
+/// can show video at once), otherwise the physical camera for one VM at a time. `vm_name` names the
+/// virtual camera. The result is something to tell the user (camera sharing unavailable, say), if any.
 #[tauri::command]
 async fn connect_vm(
     state: State<'_, AppState>,
     key: String,
     vm_id: String,
     address: String,
-) -> Result<(), ClientError> {
+    vm_name: Option<String>,
+) -> Result<Option<String>, ClientError> {
     let (host, paired) = state.paired_host(&key)?;
 
     let probe_address = address.clone();
@@ -235,13 +246,230 @@ async fn connect_vm(
         .monitors
         .get(&paired.host_id, &vm_id)
         .resolve(&monitors::list());
+    // Linux guests (xrdp) have no camera redirection, so no virtual camera is made for them.
+    let camera_key = format!("{}/{}", paired.host_id, vm_id);
+    let prepared = if connection.guest_os == rdp::GuestOs::Linux {
+        camera::service::Prepared {
+            redirect: camera::CameraRedirect::None,
+            notice: None,
+        }
+    } else {
+        let service = state.camera.clone();
+        let (prepare_key, name) = (camera_key.clone(), vm_name.unwrap_or_else(|| "VM".into()));
+        // Creating a virtual camera takes a moment and talks to Windows, so not on the async runtime.
+        tauri::async_runtime::spawn_blocking(move || service.prepare(&prepare_key, &name))
+            .await
+            .map_err(|e| ClientError::RdpFailed(e.to_string()))?
+    };
     let session = state.sessions.begin(&key);
-    rdp::launch(
+    let service = state.camera.clone();
+    let end_key = camera_key.clone();
+    let launched = rdp::launch(
         &connection,
         &layout,
+        &prepared.redirect,
         &rdp::file_directory(),
-        Some(Box::new(move || drop(session))),
-    )
+        Some(Box::new(move || {
+            service.end(&end_key);
+            drop(session);
+        })),
+    );
+    match launched {
+        Ok(pid) => {
+            state.camera.attach_process(&camera_key, pid);
+            Ok(prepared.notice)
+        }
+        Err(error) => {
+            state.camera.end(&camera_key);
+            Err(error)
+        }
+    }
+}
+
+fn vm_camera_key(state: &AppState, key: &str, vm_id: &str) -> Result<String, ClientError> {
+    let (_, paired) = state.paired_host(key)?;
+    Ok(format!("{}/{}", paired.host_id, vm_id))
+}
+
+/// Runs the elevated camera setup when this process was started for it (see `camera::setup`);
+/// returns the exit code, or None for a normal start.
+pub fn run_camera_setup_helper() -> Option<i32> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    camera::setup::parse_args(&args).map(|command| camera::setup_windows::run_helper(&command))
+}
+
+/// Installs the camera source so virtual cameras can be created: copies the DLL that ships with the
+/// program under Program Files and registers it, in an elevated copy of this program (the user
+/// answers one UAC prompt). Needed once per device.
+#[tauri::command]
+async fn setup_camera_sharing(app: tauri::AppHandle) -> Result<(), ClientError> {
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| ClientError::RdpFailed(e.to_string()))?;
+    let dll = camera::setup_windows::bundled_dll(&resource_dir);
+    if !dll.is_file() {
+        return Err(ClientError::RdpFailed(
+            "This copy of HyperHarbor does not include the camera source. Install it with the installer.".into(),
+        ));
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = std::env::temp_dir().join(format!(
+            "hyperharbor-camera-setup-{}.txt",
+            std::process::id()
+        ));
+        let outcome = camera::setup_windows::run_elevated(
+            &camera::setup_windows::install_args(&dll, &result),
+            &result,
+        );
+        let _ = std::fs::remove_file(&result);
+        outcome
+    })
+    .await
+    .map_err(|e| ClientError::RdpFailed(e.to_string()))?
+    .map_err(ClientError::RdpFailed)
+}
+
+/// True when the camera source installed under Program Files differs from the one that ships with
+/// this program, as after a client update. Setting sharing up again (one UAC prompt) replaces it.
+/// False when either copy cannot be found: there is nothing to update then.
+#[tauri::command]
+fn camera_source_outdated(app: tauri::AppHandle) -> bool {
+    let Ok(resource_dir) = app.path().resource_dir() else {
+        return false;
+    };
+    let Some(installed) = camera::setup_windows::registered_server_path() else {
+        return false;
+    };
+    camera::setup::source_is_current(
+        &installed,
+        &camera::setup_windows::bundled_dll(&resource_dir),
+    ) == Some(false)
+}
+
+/// Removes the camera source again (one UAC prompt): unregisters it and deletes its folder under
+/// Program Files. Uninstalling HyperHarbor cannot do this itself, because that uninstaller is not
+/// elevated. Open sessions lose their virtual camera, since the Windows camera service is stopped.
+#[tauri::command]
+async fn remove_camera_sharing() -> Result<(), ClientError> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let result = std::env::temp_dir().join(format!(
+            "hyperharbor-camera-remove-{}.txt",
+            std::process::id()
+        ));
+        let args = vec!["--remove-camera".to_string(), result.display().to_string()];
+        let outcome = camera::setup_windows::run_elevated(&args, &result);
+        let _ = std::fs::remove_file(&result);
+        outcome
+    })
+    .await
+    .map_err(|e| ClientError::RdpFailed(e.to_string()))?
+    .map_err(ClientError::RdpFailed)
+}
+
+/// The event the page listens to for changes in the update status.
+const CLIENT_UPDATE_EVENT: &str = "client-update-changed";
+
+/// A new version of this program is checked at start and then once a day.
+const UPDATE_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Waits before the first automatic check, so it does not compete with start-up work.
+const UPDATE_FIRST_CHECK_DELAY: std::time::Duration = std::time::Duration::from_secs(15);
+
+#[tauri::command]
+fn get_client_update(state: State<'_, AppState>) -> update::service::UpdateStatus {
+    state.updates.status()
+}
+
+/// Looks for a newer version of this program on the chosen channel. A failure is part of the status.
+#[tauri::command]
+async fn check_client_update(
+    state: State<'_, AppState>,
+) -> Result<update::service::UpdateStatus, ClientError> {
+    Ok(state.updates.check().await)
+}
+
+/// Downloads and installs the version the last check found. The installer closes the program and
+/// starts the new version. Open Remote Desktop and console windows end with it, so the page asks
+/// first and sends `confirmed`.
+#[tauri::command]
+async fn install_client_update(
+    state: State<'_, AppState>,
+    confirmed: bool,
+) -> Result<(), ClientError> {
+    state
+        .updates
+        .install(state.sessions.keys().len(), confirmed)
+        .await
+}
+
+#[tauri::command]
+fn get_update_settings(state: State<'_, AppState>) -> update::settings::UpdateSettings {
+    state.updates.settings()
+}
+
+#[tauri::command]
+fn set_update_settings(
+    state: State<'_, AppState>,
+    settings: update::settings::UpdateSettings,
+) -> Result<update::service::UpdateStatus, ClientError> {
+    state.updates.set_settings(settings)
+}
+
+/// Whether camera sharing works on this device, the physical camera's state, and each session.
+#[tauri::command]
+fn get_camera_status(state: State<'_, AppState>) -> camera::service::CameraStatus {
+    state.camera.status()
+}
+
+/// A VM's camera settings: whether the camera is shared with it, and what it sees while its window
+/// is not in front.
+#[tauri::command]
+fn get_camera_prefs(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<camera::service::CameraPrefs, ClientError> {
+    Ok(state.camera.prefs(&vm_camera_key(&state, &key, &vm_id)?))
+}
+
+#[tauri::command]
+fn set_camera_prefs(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    prefs: camera::service::CameraPrefs,
+) -> Result<(), ClientError> {
+    state
+        .camera
+        .set_prefs(&vm_camera_key(&state, &key, &vm_id)?, prefs)
+        .map_err(|e| ClientError::RdpFailed(e.to_string()))
+}
+
+/// Whether a VM's privacy shutter is closed.
+#[tauri::command]
+fn get_camera_shutter(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<bool, ClientError> {
+    Ok(state
+        .camera
+        .shutter_closed(&vm_camera_key(&state, &key, &vm_id)?))
+}
+
+/// Closes (true) or opens (false) a VM's privacy shutter: a closed shutter shows the VM black.
+#[tauri::command]
+fn set_camera_shutter(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    closed: bool,
+) -> Result<(), ClientError> {
+    state
+        .camera
+        .set_shutter(&vm_camera_key(&state, &key, &vm_id)?, closed);
+    Ok(())
 }
 
 /// The fixed ID under which the host's own Remote Desktop session keeps its monitor choice.
@@ -1132,6 +1360,7 @@ async fn unpair(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Remove any temporary Remote Desktop credential left by a previous run.
             rdp::remove_stale_credentials();
@@ -1168,7 +1397,43 @@ pub fn run() {
                 uploads: std::sync::Mutex::new(HashMap::new()),
                 monitors: MonitorChoiceStore::new(Some(config_dir.join("client-settings.json"))),
                 sessions: sessions::ActiveSessions::default(),
+                camera: camera::service::CameraService::new(
+                    Arc::new(camera::backend::WindowsBackend),
+                    Some(config_dir.join("camera-settings.json")),
+                    config_dir.join("camera-ledger.json"),
+                ),
+                updates: {
+                    let version = app.package_info().version.to_string();
+                    let handle = app.handle().clone();
+                    update::service::UpdateService::new(
+                        Arc::new(update::plugin::PluginBackend::new(app.handle().clone())),
+                        update::settings::UpdateSettingsStore::new(
+                            Some(config_dir.join("update-settings.json")),
+                            &version,
+                        ),
+                        &version,
+                        update::install_kind::detect(),
+                        Arc::new(move |status| {
+                            let _ = handle.emit(CLIENT_UPDATE_EVENT, status);
+                        }),
+                    )
+                },
                 _mdns: mdns,
+            });
+
+            // Look for a new version of this program shortly after start and then once a day, unless
+            // the user turned that off. Installing always waits for the user.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(UPDATE_FIRST_CHECK_DELAY).await;
+                let mut ticks = tokio::time::interval(UPDATE_CHECK_INTERVAL);
+                loop {
+                    ticks.tick().await;
+                    let state = handle.state::<AppState>();
+                    if state.updates.settings().check_automatically {
+                        state.updates.check().await;
+                    }
+                }
             });
 
             // While a Remote Desktop or console window is open, tell its host it is still in use, so a
@@ -1206,6 +1471,19 @@ pub fn run() {
             elevate,
             drop_elevation,
             perform_vm_action,
+            get_client_update,
+            check_client_update,
+            install_client_update,
+            get_update_settings,
+            set_update_settings,
+            get_camera_status,
+            camera_source_outdated,
+            setup_camera_sharing,
+            remove_camera_sharing,
+            get_camera_prefs,
+            set_camera_prefs,
+            set_camera_shutter,
+            get_camera_shutter,
             get_delete_preview,
             delete_vm,
             create_vm,
@@ -1250,6 +1528,12 @@ pub fn run() {
             set_up_performance_guest,
             export_vm_disks
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running HyperHarbor client");
+        .build(tauri::generate_context!())
+        .expect("error while building HyperHarbor client")
+        .run(|app, event| {
+            // Release the physical camera and remove the virtual cameras before the process ends.
+            if let tauri::RunEvent::Exit = event {
+                app.state::<AppState>().camera.shutdown();
+            }
+        });
 }

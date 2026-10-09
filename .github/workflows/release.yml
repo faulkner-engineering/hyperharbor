@@ -41,8 +41,11 @@ jobs:
           $tag = '${{ github.ref_name }}'.TrimStart('v')
           $hostVersion = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
           $clientVersion = (Get-Content client/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          if ($tag -ne $hostVersion -or $tag -ne $clientVersion) {
-            throw "Tag $tag does not match the host version $hostVersion and the client version $clientVersion."
+          $cargoVersion = [regex]::Match((Get-Content client/src-tauri/Cargo.toml -Raw), '(?m)^version = "([^"]+)"').Groups[1].Value
+          $packageVersion = (Get-Content client/package.json -Raw | ConvertFrom-Json).version
+          $versions = @($hostVersion, $clientVersion, $cargoVersion, $packageVersion)
+          if (@($versions | Where-Object { $_ -ne $tag }).Count -gt 0) {
+            throw "Tag $tag does not match the host ($hostVersion), tauri.conf.json ($clientVersion), Cargo.toml ($cargoVersion), and package.json ($packageVersion) versions."
           }
 
       - name: Install client dependencies
@@ -51,7 +54,19 @@ jobs:
 
       - name: Test and package (full build)
         shell: pwsh
+        env:
+          # Signs the client installer for the client's updater (the public key is in tauri.conf.json).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: ./scripts/package.ps1
+
+      - name: The client update files exist
+        shell: pwsh
+        run: |
+          foreach ($file in 'dist/client-latest.json') {
+            if (-not (Test-Path $file)) { throw "$file is missing: check the TAURI_SIGNING_PRIVATE_KEY secrets." }
+          }
+          if (-not (Get-ChildItem dist/*-setup.exe.sig)) { throw 'The installer signature is missing.' }
 
       - name: Create the draft release
         shell: pwsh
@@ -59,7 +74,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
-          $assets = @("dist/HyperHarbor-Host-$version.exe", 'dist/latest.json') + (Get-ChildItem dist/*-setup.exe).FullName
+          $assets = @("dist/HyperHarbor-Host-$version.exe", 'dist/latest.json', 'dist/client-latest.json') + (Get-ChildItem dist/*-setup.exe).FullName + (Get-ChildItem dist/*-setup.exe.sig).FullName
           $arguments = @('release', 'create', '${{ github.ref_name }}') + $assets + @('--draft', '--title', "HyperHarbor $version", '--generate-notes')
           if ($version.Contains('-')) { $arguments += '--prerelease' }
           gh @arguments
@@ -75,9 +90,9 @@ jobs:
           REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh release download "$TAG" --repo "$REPO" --pattern latest.json --dir manifest
+          gh release download "$TAG" --repo "$REPO" --pattern latest.json --pattern client-latest.json --dir manifest
           if ! gh release view channel-beta --repo "$REPO" > /dev/null 2>&1; then
             gh release create channel-beta --repo "$REPO" --prerelease --title "Beta channel" \
-              --notes "Holds the beta channel's update manifest (latest.json). Do not delete."
+              --notes "Holds the beta channel's update manifests (latest.json for hosts, client-latest.json for clients). Do not delete."
           fi
-          gh release upload channel-beta manifest/latest.json --repo "$REPO" --clobber
+          gh release upload channel-beta manifest/latest.json manifest/client-latest.json --repo "$REPO" --clobber

@@ -33,6 +33,7 @@
   import VmList from "$lib/components/VmList.svelte";
   import WakePanel from "$lib/components/WakePanel.svelte";
   import HostUpdatePanel from "$lib/components/HostUpdatePanel.svelte";
+  import ClientUpdate from "$lib/components/ClientUpdate.svelte";
   import ProvisionDialog from "$lib/components/ProvisionDialog.svelte";
   import ElevationDialog from "$lib/components/ElevationDialog.svelte";
   import DeleteVmDialog from "$lib/components/DeleteVmDialog.svelte";
@@ -48,6 +49,7 @@
   import CaptureReview from "$lib/components/CaptureReview.svelte";
   import ApplySetupProfileDialog from "$lib/components/ApplySetupProfileDialog.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
+  import CameraDialog from "$lib/components/CameraDialog.svelte";
   import MonitorsDialog from "$lib/components/MonitorsDialog.svelte";
   import Menu from "$lib/components/Menu.svelte";
   import { openHostRemoteDesktop } from "$lib/hostRemoteDesktop";
@@ -75,6 +77,7 @@
   let editing = $state<Vm | null>(null);
   let tuning = $state<Vm | null>(null);
   let choosingMonitors = $state<Vm | null>(null);
+  let configuringCamera = $state<Vm | null>(null);
   let creating = $state(false);
   let connectingHost = $state(false);
   let downloadingLogs = $state(false);
@@ -110,6 +113,7 @@
     editing = null;
     tuning = null;
     choosingMonitors = null;
+    configuringCamera = null;
     capturing = null;
     applyingProfile = null;
     creating = false;
@@ -182,8 +186,10 @@
     if (selectedKey === null || !vm.remoteDesktop.address) return;
     connectingVmId = vm.id;
     try {
-      await connectVm(selectedKey, vm.id, vm.remoteDesktop.address);
+      const notice = await connectVm(selectedKey, vm.id, vm.remoteDesktop.address, vm.name);
       toasts.show(`Opening Remote Desktop to ${vm.name}…`);
+      // For example: camera sharing needs Windows 11, so only one VM at a time gets the camera.
+      if (notice) toasts.show(notice);
     } catch (error) {
       toasts.error(errorMessage(error));
     } finally {
@@ -382,6 +388,7 @@
   <aside>
     <h1><BrandMark size="1.4em" decorative />HyperHarbor</h1>
     <HostList {hosts} {selectedKey} onselect={selectHost} />
+    <ClientUpdate />
   </aside>
 
   <main>
@@ -522,6 +529,7 @@
             onsettings={(vm) => (editing = vm)}
             onperformance={(vm) => (tuning = vm)}
             onmonitors={(vm) => (choosingMonitors = vm)}
+            oncamera={(vm) => (configuringCamera = vm)}
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
             onapplyprofile={hostAppliesProfiles ? (vm) => (applyingProfile = vm) : undefined}
             ondelete={(vm) => (deleting = vm)}
@@ -556,6 +564,9 @@
         {/if}
         {#if choosingMonitors}
           <MonitorsDialog host={selectedHost} vm={choosingMonitors} onclose={() => (choosingMonitors = null)} />
+        {/if}
+        {#if configuringCamera}
+          <CameraDialog host={selectedHost} vm={configuringCamera} onclose={() => (configuringCamera = null)} />
         {/if}
         {#if creating}
           <CreateVmDialog

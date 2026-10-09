@@ -20,3 +20,6 @@ client/src-tauri/gen/schemas/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Camera source DLL staged by scripts/package.ps1 for the installer
+client/src-tauri/resources/

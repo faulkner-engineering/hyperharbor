@@ -1,0 +1,15 @@
+[package]
+name = "hyperharbor-vcam-protocol"
+version = "0.1.7-beta.1"
+description = "Frame messages between the HyperHarbor client and its virtual camera source"
+authors = ["HyperHarbor"]
+edition = "2021"
+publish = false
+workspace = "../src-tauri"
+
+# No dependencies: the client and the camera source DLL (loaded by the Windows Frame Server)
+# both use this, so it stays small and safe.
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"

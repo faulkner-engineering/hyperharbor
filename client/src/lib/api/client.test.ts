@@ -4,7 +4,19 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import { connectVm, downloadHostLogs, errorMessage, isClientError, isOffline, openConsole, provisionVm } from "./client";
+import {
+  connectVm,
+  downloadHostLogs,
+  errorMessage,
+  getCameraPrefs,
+  getCameraStatus,
+  isClientError,
+  isOffline,
+  openConsole,
+  provisionVm,
+  setCameraPrefs,
+  setCameraShutter,
+} from "./client";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -51,10 +63,39 @@ describe("commands", () => {
     });
   });
 
-  it("connectVm passes the address to probe", async () => {
-    await connectVm("mdns:host", "vm-1", "192.168.0.50");
+  it("connectVm passes the address to probe and the VM's name for its camera", async () => {
+    await connectVm("mdns:host", "vm-1", "192.168.0.50", "Work");
 
-    expect(invoke).toHaveBeenCalledWith("connect_vm", { key: "mdns:host", vmId: "vm-1", address: "192.168.0.50" });
+    expect(invoke).toHaveBeenCalledWith("connect_vm", {
+      key: "mdns:host",
+      vmId: "vm-1",
+      address: "192.168.0.50",
+      vmName: "Work",
+    });
+  });
+
+  it("connectVm returns the notice the client has for the user", async () => {
+    invoke.mockResolvedValue("Camera sharing requires Windows 11 on this device.");
+
+    expect(await connectVm("mdns:host", "vm-1", "192.168.0.50", "Work")).toBe(
+      "Camera sharing requires Windows 11 on this device.",
+    );
+  });
+
+  it("camera calls name the host key and VM", async () => {
+    await getCameraPrefs("mdns:host", "vm-1");
+    await setCameraPrefs("mdns:host", "vm-1", { share: true, unfocused: "blur" });
+    await setCameraShutter("mdns:host", "vm-1", true);
+    await getCameraStatus();
+
+    expect(invoke).toHaveBeenCalledWith("get_camera_prefs", { key: "mdns:host", vmId: "vm-1" });
+    expect(invoke).toHaveBeenCalledWith("set_camera_prefs", {
+      key: "mdns:host",
+      vmId: "vm-1",
+      prefs: { share: true, unfocused: "blur" },
+    });
+    expect(invoke).toHaveBeenCalledWith("set_camera_shutter", { key: "mdns:host", vmId: "vm-1", closed: true });
+    expect(invoke).toHaveBeenCalledWith("get_camera_status");
   });
 
   it("openConsole passes the host key and VM", async () => {

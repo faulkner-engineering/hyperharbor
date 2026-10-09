@@ -86,7 +86,7 @@ if (-not $SkipTests) {
             Invoke-Step 'Frontend tests' { npm test }
             Push-Location 'src-tauri'
             try {
-                Invoke-Step 'Client tests' { cargo test }
+                Invoke-Step 'Client tests' { cargo test --workspace }
             }
             finally {
                 Pop-Location
@@ -150,7 +150,23 @@ if (-not $HostOnly) {
     Push-Location (Join-Path $repo 'client')
     try {
         $mode = if ($Fast) { 'fast' } else { 'full release' }
-        Invoke-Step "Build client ($mode)" { npm run tauri build -- --bundles nsis }
+        # The camera source DLL the Windows Frame Server loads. The installer ships it as a resource
+        # (tauri.camera.conf.json adds it only here, so ordinary builds and tests do not need it); the
+        # client's "Set up camera sharing" copies it under Program Files and registers it.
+        Invoke-Step 'Build camera source DLL' {
+            Push-Location 'src-tauri'
+            try { cargo build -p hyperharbor-vcam --release } finally { Pop-Location }
+        }
+        $resources = Join-Path $repo 'client\src-tauri\resources'
+        New-Item -ItemType Directory -Force $resources | Out-Null
+        Copy-Item (Join-Path $repo 'client\src-tauri\target\release\hyperharbor_vcam.dll') $resources -Force
+        # Updater artifacts (the installer's .sig) are made only when the signing key is available:
+        # the release workflow passes it from the repository secrets; a test build needs none.
+        $signing = [bool]$env:TAURI_SIGNING_PRIVATE_KEY
+        $configs = @('--config', 'src-tauri/tauri.camera.conf.json')
+        if ($signing) { $configs += @('--config', 'src-tauri/tauri.updater.conf.json') }
+        else { Write-Host 'TAURI_SIGNING_PRIVATE_KEY is not set: building without updater artifacts.' -ForegroundColor Yellow }
+        Invoke-Step "Build client ($mode)" { npm run tauri build -- --bundles nsis @configs }
     }
     finally {
         Pop-Location
@@ -160,7 +176,33 @@ if (-not $HostOnly) {
     $release = Join-Path $repo 'client\src-tauri\target\release'
     $installer = Get-ChildItem (Join-Path $release 'bundle\nsis\*.exe') | Sort-Object LastWriteTime | Select-Object -Last 1
     Copy-Item $installer.FullName $dist -Force
+    Remove-Item (Join-Path $dist 'client-latest.json') -ErrorAction SilentlyContinue
+    $signature = "$($installer.FullName).sig"
+    if ($signing -and (Test-Path $signature)) {
+        Copy-Item $signature $dist -Force
+        # The manifest the client's updater reads (Tauri format). The notes are this version's CHANGELOG
+        # section when it has one, otherwise a pointer to the release page.
+        $changelog = Get-Content (Join-Path $repo 'CHANGELOG.md') -Raw
+        $section = [regex]::Match($changelog, "(?ms)^## \[$([regex]::Escape($version))\][^\r\n]*\r?\n(.*?)(?=^## \[|\z)")
+        $notes = if ($section.Success) { $section.Groups[1].Value.Trim() } else { "See https://github.com/faulkner-engineering/hyperharbor/releases/tag/v$version" }
+        $clientManifest = [ordered]@{
+            version  = $version
+            notes    = $notes
+            pub_date = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+            platforms = [ordered]@{
+                'windows-x86_64' = [ordered]@{
+                    signature = (Get-Content $signature -Raw).Trim()
+                    url       = "https://github.com/faulkner-engineering/hyperharbor/releases/download/v$version/$($installer.Name)"
+                }
+            }
+        }
+        # Windows PowerShell 5.1 has no utf8NoBOM encoding, and the updater rejects a byte order mark.
+        [System.IO.File]::WriteAllText((Join-Path $dist 'client-latest.json'), ($clientManifest | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "Client update manifest: $(Join-Path $dist 'client-latest.json')" -ForegroundColor Green
+    }
     Copy-Item (Join-Path $release 'hyperharbor-client.exe') (Join-Path $dist "HyperHarbor-Client-$version-portable.exe") -Force
+    # The portable client looks for the camera source next to itself.
+    Copy-Item (Join-Path $resources 'hyperharbor_vcam.dll') $dist -Force
     Write-Host "Client installer: $(Join-Path $dist $installer.Name)" -ForegroundColor Green
     Write-Host "Client portable:  $(Join-Path $dist "HyperHarbor-Client-$version-portable.exe")" -ForegroundColor Green
 }

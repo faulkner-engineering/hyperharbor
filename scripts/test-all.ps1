@@ -94,9 +94,9 @@ if (-not $HostOnly) {
     }
     Invoke-Check 'Frontend type check' $client { npm run check }
     Invoke-Check 'Frontend tests' $client { npm test }
-    Invoke-Check 'cargo fmt' $tauri { cargo fmt --check }
-    Invoke-Check 'cargo clippy' $tauri { cargo clippy --all-targets -- -D warnings }
-    Invoke-Check 'cargo test' $tauri { cargo test }
+    Invoke-Check 'cargo fmt' $tauri { cargo fmt --all --check }
+    Invoke-Check 'cargo clippy' $tauri { cargo clippy --workspace --all-targets -- -D warnings }
+    Invoke-Check 'cargo test' $tauri { cargo test --workspace }
 
     if (-not $SkipAudit) {
         Invoke-Check 'npm audit' $client { npm audit --audit-level=high }

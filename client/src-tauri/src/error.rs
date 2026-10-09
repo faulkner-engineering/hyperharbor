@@ -65,6 +65,14 @@ pub enum ClientError {
 
     #[error("Could not save data: {0}")]
     Storage(String),
+
+    #[error("The update failed: {0}")]
+    UpdateFailed(String),
+
+    #[error(
+        "{0} Remote Desktop or console window(s) are open. Installing the update closes them."
+    )]
+    SessionsActive(usize),
 }
 
 impl ClientError {
@@ -86,6 +94,8 @@ impl ClientError {
             ClientError::InvalidRequest(_) => "invalidRequest",
             ClientError::InvalidResponse(_) => "invalidResponse",
             ClientError::Storage(_) => "storage",
+            ClientError::UpdateFailed(_) => "updateFailed",
+            ClientError::SessionsActive(_) => "sessionsActive",
         }
     }
 
@@ -151,6 +161,8 @@ mod tests {
             ClientError::InvalidRequest(String::new()),
             ClientError::InvalidResponse(String::new()),
             ClientError::Storage(String::new()),
+            ClientError::UpdateFailed(String::new()),
+            ClientError::SessionsActive(0),
         ];
         for error in &all {
             match error {
@@ -169,7 +181,9 @@ mod tests {
                 | ClientError::Cancelled
                 | ClientError::InvalidRequest(_)
                 | ClientError::InvalidResponse(_)
-                | ClientError::Storage(_) => {}
+                | ClientError::Storage(_)
+                | ClientError::UpdateFailed(_)
+                | ClientError::SessionsActive(_) => {}
             }
         }
         all

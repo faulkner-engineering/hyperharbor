@@ -150,6 +150,7 @@ pub async fn open(
             drop(in_use);
         })),
     )
+    .map(|_| ())
 }
 
 /// Accepts mstsc's connections until `stopped` fires (or its sender is dropped), tunneling each one.

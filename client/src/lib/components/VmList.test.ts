@@ -224,3 +224,33 @@ describe("VmList Performance mode", () => {
     expect(screen.getAllByText("GPU")).toHaveLength(1);
   });
 });
+
+describe("VmList camera", () => {
+  it("offers Camera settings for a Windows VM and reports which VM", async () => {
+    const oncamera = vi.fn();
+    const machine = provisioned("running");
+    render(VmList, { vms: [machine], oncamera });
+
+    const menu = await openMenu();
+    await fireEvent.click(menu.getByRole("button", { name: "Camera…" }));
+
+    expect(oncamera).toHaveBeenCalledWith(machine);
+  });
+
+  it("leaves Camera settings out for Linux guests, which have no camera redirection", async () => {
+    render(VmList, {
+      vms: [provisioned("running")].map((machine) => ({ ...machine, guestOs: { family: "linux" as const, name: "Ubuntu" } })),
+      oncamera: vi.fn(),
+    });
+
+    const menu = await openMenu();
+    expect(menu.queryByRole("button", { name: "Camera…" })).toBeNull();
+  });
+
+  it("leaves the entry out when the page does not handle it", async () => {
+    render(VmList, { vms: [provisioned("running")] });
+
+    const menu = await openMenu();
+    expect(menu.queryByRole("button", { name: "Camera…" })).toBeNull();
+  });
+});

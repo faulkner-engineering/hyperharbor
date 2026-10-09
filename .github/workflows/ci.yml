@@ -70,13 +70,13 @@ jobs:
       - run: npm audit --audit-level=high
       - name: cargo fmt
         working-directory: client/src-tauri
-        run: cargo fmt --check
+        run: cargo fmt --all --check
       - name: cargo clippy
         working-directory: client/src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: cargo test
         working-directory: client/src-tauri
-        run: cargo test
+        run: cargo test --workspace
       - name: cargo audit
         working-directory: client/src-tauri
         run: |
