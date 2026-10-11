@@ -4,6 +4,7 @@
   import PassphraseDialog from "./components/PassphraseDialog.svelte";
   import Toasts from "./components/Toasts.svelte";
   import Devices from "./pages/Devices.svelte";
+  import GameReady from "./pages/GameReady.svelte";
   import Lean from "./pages/Lean.svelte";
   import Logs from "./pages/Logs.svelte";
   import Overview from "./pages/Overview.svelte";
@@ -15,6 +16,7 @@
     { id: "overview", label: "Overview", icon: "overview", heading: "Overview" },
     { id: "devices", label: "Devices", icon: "devices", heading: "Paired devices" },
     { id: "storage", label: "Storage", icon: "storage", heading: "Storage" },
+    { id: "gameReady", label: "Game ready", icon: "gamepad", heading: "Game ready" },
     { id: "lean", label: "Lean host", icon: "lean", heading: "Lean host" },
     { id: "updates", label: "Updates", icon: "updates", heading: "Updates" },
     { id: "logs", label: "Logs", icon: "logs", heading: "Logs" },
@@ -81,6 +83,8 @@
               <Devices view={state} />
             {:else if tray.page === "storage"}
               <Storage view={state} />
+            {:else if tray.page === "gameReady"}
+              <GameReady view={state} />
             {:else if tray.page === "lean"}
               <Lean view={state} />
             {:else if tray.page === "updates"}

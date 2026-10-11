@@ -1,6 +1,18 @@
 // Words the window shows for each state. Pure functions, so tests check them directly.
 
-import type { HostLeanMetrics, HostLeanPlanSummary, HostLeanRunSummary, HostLeanStatus, HostUpdateProgress, HostUpdateStatus } from "./bridge";
+import type {
+  ControllerWakeState,
+  GameReadyCard,
+  GameReadyController,
+  GameReadyStatus,
+  GameReadyWakeTest,
+  HostLeanMetrics,
+  HostLeanPlanSummary,
+  HostLeanRunSummary,
+  HostLeanStatus,
+  HostUpdateProgress,
+  HostUpdateStatus,
+} from "./bridge";
 
 export const MIN_PASSPHRASE = 8;
 export const MAX_PASSPHRASE = 256;
@@ -169,4 +181,82 @@ export function runDelta(run: HostLeanRunSummary): { memory: string; processes: 
     memory: `${signed(run.after.usedMemoryMb - run.before.usedMemoryMb)} MB`,
     processes: signed(run.after.processCount - run.before.processCount),
   };
+}
+
+export type CardTone = "ok" | "warn" | "busy" | "neutral";
+
+/** What the card on the Game ready page is doing now: a fix running, or the first read of the PC. */
+export function cardBusy(status: GameReadyStatus, card: GameReadyCard): boolean {
+  return status.busy === `fix:${card.id}`;
+}
+
+export function cardTone(status: GameReadyStatus, card: GameReadyCard): CardTone {
+  if (cardBusy(status, card)) return "busy";
+  switch (card.state) {
+    case "ready":
+      return "ok";
+    case "attention":
+      return "warn";
+    default:
+      return "neutral";
+  }
+}
+
+/** The card's status line; a card still being fixed says so, and a coming-soon card says that first. */
+export function cardStatus(status: GameReadyStatus, card: GameReadyCard): string {
+  if (cardBusy(status, card)) return "Fixing…";
+  if (card.state === "comingSoon") return "Coming soon";
+  if (card.state === "manual") return "Check by hand";
+  return card.summary;
+}
+
+/** How many of the cards that can be evaluated are ready, for the page's headline. */
+export function gameReadySummary(status: GameReadyStatus): string {
+  if (!status.readAt) return "Reading this PC…";
+  const evaluated = status.cards.filter((card) => card.state === "ready" || card.state === "attention");
+  const ready = evaluated.filter((card) => card.state === "ready").length;
+  if (evaluated.length === 0) return "Nothing to check yet.";
+  return ready === evaluated.length ? "Everything checked is ready for games." : `${ready} of ${evaluated.length} checks are ready.`;
+}
+
+export function wakeLabel(wake: ControllerWakeState): string {
+  switch (wake) {
+    case "armed":
+      return "Armed";
+    case "canArm":
+      return "Can arm";
+    default:
+      return "Cannot wake";
+  }
+}
+
+export function connectionLabel(controller: GameReadyController): string {
+  const what = controller.kind === "receiver" ? "Receiver" : "Controller";
+  switch (controller.connection) {
+    case "usb":
+      return controller.kind === "receiver" ? "Receiver on USB" : "Wired or 2.4 GHz dongle";
+    case "receiver":
+      return "Through a wireless receiver";
+    case "bluetooth":
+      return "Bluetooth";
+    default:
+      return what;
+  }
+}
+
+/** The wake test line shown on the controller card; null when no test has run. */
+export function wakeTestText(test: GameReadyWakeTest, now: number = Date.now()): string | null {
+  switch (test.state) {
+    case "countdown": {
+      const seconds = test.sleepAt ? Math.max(0, Math.ceil((Date.parse(test.sleepAt) - now) / 1000)) : 0;
+      return `The PC goes to sleep in ${seconds} ${seconds === 1 ? "second" : "seconds"}. Press a controller button to wake it.`;
+    }
+    case "sleeping":
+      return "Going to sleep. Press a controller button to wake the PC.";
+    case "done":
+    case "failed":
+      return test.message ?? null;
+    default:
+      return null;
+  }
 }

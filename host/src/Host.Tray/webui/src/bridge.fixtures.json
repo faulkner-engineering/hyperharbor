@@ -93,6 +93,60 @@
           "restorePoint": "Restore point 12 and registry export"
         }
       },
+      "gameReady": {
+        "readAt": "2026-10-05T12:00:00\u002B00:00",
+        "busy": "fix:controllerWake",
+        "error": "Approve the administrator prompt on this PC, then check again.",
+        "cards": [
+          {
+            "id": "controllerWake",
+            "title": "Wake from controller",
+            "state": "attention",
+            "summary": "1 device can wake the PC once it is armed.",
+            "checks": [
+              {
+                "id": "wiredAdapter",
+                "title": "Wired network connection",
+                "status": "pass",
+                "detail": "Connected through Ethernet.",
+                "canFix": false
+              }
+            ],
+            "controllers": [
+              {
+                "id": "receiver:wired:045e:02fe",
+                "name": "Xbox Wireless Adapter for Windows",
+                "kind": "receiver",
+                "connection": "usb",
+                "wake": "canArm"
+              }
+            ],
+            "hints": [
+              "Test wake puts this PC to sleep."
+            ],
+            "canFix": true,
+            "canTestWake": false
+          },
+          {
+            "id": "sleepPolicy",
+            "title": "Sleep policy",
+            "state": "comingSoon",
+            "summary": "Soon.",
+            "checks": [],
+            "controllers": [],
+            "hints": [],
+            "canFix": false,
+            "canTestWake": false
+          }
+        ],
+        "wakeTest": {
+          "state": "done",
+          "resumedAt": "2026-10-05T12:00:00\u002B00:00",
+          "outcome": "controller",
+          "source": "Xbox Wireless Adapter for Windows",
+          "message": "Xbox Wireless Adapter for Windows woke the PC."
+        }
+      },
       "busy": [
         "folder:iso"
       ],
@@ -118,6 +172,7 @@
       "packageSearchReady": false,
       "update": null,
       "hostLean": null,
+      "gameReady": null,
       "busy": [],
       "pairing": null,
       "dataDirectory": "C:\\ProgramData\\HyperHarbor"

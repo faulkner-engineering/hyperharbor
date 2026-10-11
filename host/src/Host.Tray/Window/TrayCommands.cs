@@ -39,6 +39,15 @@ public interface ITrayActions
 
     void SetHostLeanSchedule(bool enabled);
 
+    /// <summary>Reads the PC again for the Game ready section.</summary>
+    void GameReadyRefresh();
+
+    /// <param name="cardId">One of <see cref="GameReadyCardIds.Fixable"/>.</param>
+    void GameReadyFix(string cardId);
+
+    /// <param name="delaySeconds">5 to 300.</param>
+    void GameReadyTestWake(int delaySeconds);
+
     /// <param name="target">logs or audit.</param>
     void Open(string target);
 
@@ -100,6 +109,15 @@ public static class TrayCommands
             case "setHostLeanSchedule" when Flag(message, "enabled") is { } enabled:
                 actions.SetHostLeanSchedule(enabled);
                 return true;
+            case "gameReadyRefresh":
+                actions.GameReadyRefresh();
+                return true;
+            case "gameReadyFix" when Text(message, "cardId") is { } cardId && GameReadyCardIds.Fixable.Contains(cardId):
+                actions.GameReadyFix(cardId);
+                return true;
+            case "gameReadyTestWake" when Number(message, "delaySeconds") is >= 5 and <= 300 and var delay:
+                actions.GameReadyTestWake(delay);
+                return true;
             case "open" when Text(message, "target") is "logs" or "audit":
                 actions.Open(Text(message, "target")!);
                 return true;
@@ -122,6 +140,9 @@ public static class TrayCommands
 
     private static bool? Flag(JsonElement message, string name) =>
         message.TryGetProperty(name, out var value) && (value.ValueKind == JsonValueKind.True || value.ValueKind == JsonValueKind.False) ? value.GetBoolean() : null;
+
+    private static int? Number(JsonElement message, string name) =>
+        message.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : null;
 
     private static Guid? Id(JsonElement message, string name) =>
         Text(message, name) is { } text && Guid.TryParse(text, out var id) ? id : null;

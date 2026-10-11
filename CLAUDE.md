@@ -103,6 +103,12 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    Program Files is detected by SHA-256 against the bundled one and fixed through the existing elevated setup.
    Remaining: 16.x live test (two builds, a loopback https manifest or a real prerelease), then the first release.
 
+17. Game ready section in the host window, added at the user's request (2026-10-11; tray only, no API change; code
+   complete and unit tested, not yet run against real controllers): cards for Wake-on-LAN (moved from the tray-less
+   readiness report), Wake from controller (Host.Core/GameReady: ControllerClassifier, ControllerWakeEvaluator,
+   LastWakeParser/WakeAttributor, GameReadyCards; Host.Service/GameReady/GameReadyService with the Test wake action),
+   Fast startup, USB selective suspend, and a manual BIOS card; five Coming soon stubs. Tray IPC: GameReadyMessages.cs.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
 

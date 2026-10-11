@@ -37,6 +37,12 @@ public sealed partial class TrayWindowTests
 
         public void SetHostLeanSchedule(bool enabled) => Calls.Add("leanSchedule:" + enabled);
 
+        public void GameReadyRefresh() => Calls.Add("gameRefresh");
+
+        public void GameReadyFix(string cardId) => Calls.Add("gameFix:" + cardId);
+
+        public void GameReadyTestWake(int delaySeconds) => Calls.Add("gameTest:" + delaySeconds);
+
         public void Open(string target) => Calls.Add("open:" + target);
 
         public void OpenUrl(string url) => Calls.Add("url:" + url);
@@ -68,6 +74,9 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"hostLeanApply","source":"undo"}""", "leanApply:undo")]
     [InlineData("""{"type":"setHostLeanSchedule","enabled":true}""", "leanSchedule:True")]
     [InlineData("""{"type":"setHostLeanSchedule","enabled":false}""", "leanSchedule:False")]
+    [InlineData("""{"type":"gameReadyRefresh"}""", "gameRefresh")]
+    [InlineData("""{"type":"gameReadyFix","cardId":"controllerWake"}""", "gameFix:controllerWake")]
+    [InlineData("""{"type":"gameReadyTestWake","delaySeconds":10}""", "gameTest:10")]
     [InlineData("""{"type":"open","target":"audit"}""", "open:audit")]
     [InlineData("""{"type":"openUrl","url":"https://github.com/faulkner-engineering/hyperharbor/releases"}""", "url:https://github.com/faulkner-engineering/hyperharbor/releases")]
     [InlineData("""{"type":"cancelPairing","pairingId":"0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"}""", "cancel:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b")]
@@ -93,6 +102,13 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"hostLeanApply","source":7}""", false)]
     [InlineData("""{"type":"setHostLeanSchedule"}""", false)]
     [InlineData("""{"type":"setHostLeanSchedule","enabled":"yes"}""", false)]
+    [InlineData("""{"type":"gameReadyFix"}""", false)]
+    [InlineData("""{"type":"gameReadyFix","cardId":"leanHost"}""", false)]
+    [InlineData("""{"type":"gameReadyFix","cardId":"format"}""", false)]
+    [InlineData("""{"type":"gameReadyTestWake"}""", false)]
+    [InlineData("""{"type":"gameReadyTestWake","delaySeconds":4}""", false)]
+    [InlineData("""{"type":"gameReadyTestWake","delaySeconds":301}""", false)]
+    [InlineData("""{"type":"gameReadyTestWake","delaySeconds":"10"}""", false)]
     [InlineData("""{"type":"format the disk"}""", false)]
     [InlineData("""{"kind":"close"}""", false)]
     [InlineData("""["close"]""", false)]
@@ -186,6 +202,25 @@ public sealed partial class TrayWindowTests
                 new HostLeanMetrics(time, 6144, 210, true),
                 new HostLeanMetrics(time.AddMinutes(1), 5120, 180, false),
                 "Restore point 12 and registry export"));
+        var gameReady = new GameReadyStatus(
+            time,
+            "fix:controllerWake",
+            "Approve the administrator prompt on this PC, then check again.",
+            [
+                new GameReadyCard(
+                    GameReadyCardIds.ControllerWake,
+                    "Wake from controller",
+                    GameReadyStates.Attention,
+                    "1 device can wake the PC once it is armed.",
+                    [new GameReadyCheck("wiredAdapter", "Wired network connection", GameReadyCheckStatuses.Pass, "Connected through Ethernet.", false)],
+                    [new GameReadyController("receiver:wired:045e:02fe", "Xbox Wireless Adapter for Windows", ControllerKinds.Receiver, ControllerConnections.Usb, ControllerWakeStates.CanArm, null)],
+                    ["Test wake puts this PC to sleep."],
+                    true,
+                    null,
+                    false),
+                new GameReadyCard(GameReadyCardIds.SleepPolicy, "Sleep policy", GameReadyStates.ComingSoon, "Soon.", [], [], [], false, null, false),
+            ],
+            new GameReadyWakeTest(WakeTestStates.Done, null, time, WakeTestOutcomes.Controller, "Xbox Wireless Adapter for Windows", "Xbox Wireless Adapter for Windows woke the PC."));
         object[] messages =
         [
             new HostToPage.State(new TrayViewState(
@@ -199,10 +234,11 @@ public sealed partial class TrayWindowTests
                 false,
                 update,
                 lean,
+                gameReady,
                 ["folder:iso"],
                 new TrayViewPairing(Id, "Laptop", "440141", time.AddMinutes(2)),
                 @"C:\ProgramData\HyperHarbor")),
-            new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
+            new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
             new HostToPage.Toast("success", "Admin passphrase saved", "Paired devices now need it to change VMs."),
             new HostToPage.Navigate("devices"),
         ];

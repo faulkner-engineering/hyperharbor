@@ -5,6 +5,7 @@ using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Diagnostics;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
+using HyperHarbor.Host.Core.GameReady;
 using HyperHarbor.Host.Core.HostProfiles;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Installation;
@@ -24,6 +25,7 @@ using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
 using HyperHarbor.Host.Service.Discovery;
+using HyperHarbor.Host.Service.GameReady;
 using HyperHarbor.Host.Service.Installation;
 using HyperHarbor.Host.Service.Logging;
 using HyperHarbor.Host.Service.Security;
@@ -186,6 +188,12 @@ builder.Services.AddSingleton<ISleepController, WindowsSleepController>();
 builder.Services.AddSingleton<WakeTestScheduler>();
 builder.Services.AddSingleton<IWakeFixApprover>(services => services.GetRequiredService<TrayPipeServer>());
 builder.Services.AddSingleton<WakeFixCoordinator>();
+
+// The tray's Game ready section: Wake-on-LAN, wake from a controller, and the settings that go with them.
+builder.Services.AddSingleton<IPnpDeviceReader, CimPnpDeviceReader>();
+builder.Services.AddSingleton<IPowerConfig, WindowsPowerConfig>();
+builder.Services.AddSingleton<INetworkWakeFixes, WakeFixCoordinatorFixes>();
+builder.Services.AddSingleton<GameReadyService>();
 
 builder.Services.AddSingleton(new VmCredentialStore(dataDirectory));
 builder.Services.AddSingleton(new ProvisioningStore(dataDirectory));

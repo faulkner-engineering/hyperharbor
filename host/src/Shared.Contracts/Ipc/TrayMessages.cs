@@ -38,6 +38,10 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(HostLeanDryRunMessage), "hostLeanDryRun")]
 [JsonDerivedType(typeof(HostLeanApplyMessage), "hostLeanApply")]
 [JsonDerivedType(typeof(SetHostLeanScheduleMessage), "setHostLeanSchedule")]
+[JsonDerivedType(typeof(GameReadyStatusMessage), "gameReadyStatus")]
+[JsonDerivedType(typeof(GameReadyQueryMessage), "gameReadyQuery")]
+[JsonDerivedType(typeof(GameReadyFixMessage), "gameReadyFix")]
+[JsonDerivedType(typeof(GameReadyTestWakeMessage), "gameReadyTestWake")]
 public abstract record TrayMessage;
 
 // Service to tray.

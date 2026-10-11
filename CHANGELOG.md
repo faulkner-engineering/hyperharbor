@@ -10,6 +10,26 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.1.7-beta.3] - 2026-10-11 (API 1.17.0)
+
+### Added
+- The host window has a Game ready section: a checklist of cards, each with its status, a short explanation, and a Fix
+  button where the host can change the setting itself. Wake-on-LAN readiness is
+  the first card (the clients' Wake panel still shows the same checks). Fast startup has its own card, shared by
+  Wake-on-LAN and controller wake.
+- Wake from controller: lists the connected game controllers and wireless receivers (Xbox, Xbox Wireless Adapter,
+  GameSir, 8BitDo, Sony, and others recognized by name) with how they connect and whether Windows lets them wake the PC:
+  Armed, Can arm (Fix arms the device with powercfg /deviceenablewake), or Cannot wake. Bluetooth controllers are
+  reported as unable to wake the PC, with the advice to use a cable or a receiver; receivers that do not report wake
+  support get a firmware update and XInput mode hint. Arming needs the installed service (administrator rights).
+- Test wake puts the host to sleep after 10 seconds, and when the PC resumes reports whether Windows (powercfg /lastwake)
+  blamed a controller, another device, or a power button or timer. It works with English Windows output; on other
+  languages it reports that Windows did not say.
+- Companion cards: USB selective suspend (Fix turns it off on AC power) and a manual card for the BIOS or UEFI USB power
+  in sleep setting, which Windows cannot read.
+- Sleep policy, Boot to launcher, Steam desktop layout, Lean host, and Game-aware mode appear as Coming soon cards, so the
+  section has its final shape. The Lean host page is unchanged.
+
 ## [0.1.7-beta.2] - 2026-10-09 (API 1.17.0)
 
 ### Added

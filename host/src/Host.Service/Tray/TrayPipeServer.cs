@@ -72,6 +72,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             lean.Changed += (_, _) => Broadcast(new HostLeanStatusMessage(lean.Status()));
         }
 
+        if (_services.GetService<GameReady.GameReadyService>() is { } gameReady)
+        {
+            gameReady.Changed += (_, _) => Broadcast(new GameReadyStatusMessage(gameReady.Status()));
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             NamedPipeServerStream pipe;
@@ -158,6 +163,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
 
             await SendUpdateStatusAsync(connection);
             await SendHostLeanStatusAsync(connection);
+            await SendGameReadyStatusAsync(connection, force: false);
 
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
             var lines = new BoundedLineReader(reader, MaxMessageLength);
@@ -225,6 +231,9 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                     $"requestId={completed.RequestId}, outcome={completed.Outcome}",
                     completed.Outcome == "applied" ? AuditOutcome.Succeeded : AuditOutcome.Failed);
                 _services.GetRequiredService<Wake.WakeFixCoordinator>().OnCompleted(completed);
+
+                // The Game ready cards show the result of an approved fix.
+                _ = RunGameReadyAsync(gameReady => gameReady.RefreshAsync(force: true, CancellationToken.None));
                 break;
             case SetVmFolderMessage vmFolder:
                 await SetVmFolderAsync(vmFolder);
@@ -275,6 +284,70 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             case SetHostLeanScheduleMessage schedule:
                 _services.GetService<HostLeanService>()?.SetSchedule(schedule.Enabled);
                 break;
+            case GameReadyQueryMessage query:
+                await SendGameReadyStatusAsync(connection, query.Force);
+                break;
+            case GameReadyFixMessage fix when GameReadyCardIds.Fixable.Contains(fix.CardId):
+                AuditTrayAction("trayGameReadyFix", null, null, null, $"card={fix.CardId}");
+                _ = RunGameReadyAsync(gameReady => gameReady.FixAsync(fix.CardId, CancellationToken.None));
+                break;
+            case GameReadyTestWakeMessage testWake:
+                AuditTrayAction("trayGameReadyTestWake", null, null, null, $"delaySeconds={testWake.DelaySeconds}");
+                StartGameReadyWakeTest(testWake.DelaySeconds);
+                break;
+        }
+    }
+
+    private async Task SendGameReadyStatusAsync(Connection connection, bool force)
+    {
+        if (_services.GetService<GameReady.GameReadyService>() is not { } gameReady)
+        {
+            return;
+        }
+
+        await connection.SendAsync(new GameReadyStatusMessage(gameReady.Status()));
+
+        // Reading takes a second or two; it raises Changed, which reaches every tray.
+        _ = RunGameReadyAsync(service => service.RefreshAsync(force, CancellationToken.None));
+    }
+
+    private void StartGameReadyWakeTest(int delaySeconds)
+    {
+        if (_services.GetService<GameReady.GameReadyService>() is not { } gameReady)
+        {
+            return;
+        }
+
+        try
+        {
+            gameReady.StartWakeTest(TimeSpan.FromSeconds(delaySeconds));
+        }
+        catch (GameReady.GameReadyException ex)
+        {
+            _logger.LogWarning("A wake test was refused: {Message}", ex.Message);
+            gameReady.ReportError(ex.Message);
+        }
+    }
+
+    /// <summary>Runs one Game ready action. The service keeps its progress and errors in its status, so a failure here only needs logging.</summary>
+    private async Task RunGameReadyAsync(Func<GameReady.GameReadyService, Task> action)
+    {
+        if (_services.GetService<GameReady.GameReadyService>() is not { } gameReady)
+        {
+            return;
+        }
+
+        try
+        {
+            await action(gameReady);
+        }
+        catch (GameReady.GameReadyException ex)
+        {
+            gameReady.ReportError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "A Game ready action failed unexpectedly.");
         }
     }
 

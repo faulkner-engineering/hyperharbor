@@ -81,6 +81,59 @@ export interface HostLeanStatus {
   lastRun?: HostLeanRunSummary | null;
 }
 
+/** Mirrors Shared.Contracts/Ipc/GameReadyMessages.cs. Null properties are left out by the JSON options, so they are optional here. */
+export type GameReadyState = "ready" | "attention" | "manual" | "unavailable" | "comingSoon";
+
+export interface GameReadyCheck {
+  id: string;
+  title: string;
+  status: "pass" | "warn" | "fail";
+  detail?: string | null;
+  canFix: boolean;
+}
+
+export type ControllerWakeState = "armed" | "canArm" | "cannotWake";
+
+export interface GameReadyController {
+  id: string;
+  name: string;
+  kind: "controller" | "receiver";
+  connection: "usb" | "receiver" | "bluetooth" | "unknown";
+  wake: ControllerWakeState;
+  note?: string | null;
+}
+
+export interface GameReadyCard {
+  id: string;
+  title: string;
+  state: GameReadyState;
+  summary: string;
+  checks: GameReadyCheck[];
+  controllers: GameReadyController[];
+  hints: string[];
+  canFix: boolean;
+  fixBlockedReason?: string | null;
+  canTestWake: boolean;
+}
+
+export interface GameReadyWakeTest {
+  state: "idle" | "countdown" | "sleeping" | "done" | "failed";
+  sleepAt?: string | null;
+  resumedAt?: string | null;
+  outcome?: "controller" | "otherDevice" | "otherSource" | "noSource" | null;
+  source?: string | null;
+  message?: string | null;
+}
+
+export interface GameReadyStatus {
+  readAt?: string | null;
+  /** "reading", "fix:<card id>", or null when idle. */
+  busy?: string | null;
+  error?: string | null;
+  cards: GameReadyCard[];
+  wakeTest: GameReadyWakeTest;
+}
+
 export interface TrayViewDevice {
   id: string;
   name: string;
@@ -101,6 +154,8 @@ export interface TrayViewState {
   update: HostUpdateStatus | null;
   /** Null while the service is not connected. */
   hostLean: HostLeanStatus | null;
+  /** Null while the service is not connected. */
+  gameReady: GameReadyStatus | null;
   /** Work in progress: passphrase, console, packageSearch, folder:vm|iso|backup, device:<id>, update. */
   busy: string[];
   pairing: { pairingId: string; deviceName: string; pin: string; expiresAt: string } | null;
@@ -128,6 +183,9 @@ export type PageMessage =
   | { type: "hostLeanDryRun"; source: "lean" | "undo" }
   | { type: "hostLeanApply"; source: "lean" | "undo" }
   | { type: "setHostLeanSchedule"; enabled: boolean }
+  | { type: "gameReadyRefresh" }
+  | { type: "gameReadyFix"; cardId: string }
+  | { type: "gameReadyTestWake"; delaySeconds: number }
   | { type: "setChannel"; channel: string }
   | { type: "open"; target: "logs" | "audit" }
   | { type: "openUrl"; url: string }

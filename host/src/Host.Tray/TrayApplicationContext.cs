@@ -48,6 +48,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private IReadOnlyList<string> _gpuVms = [];
     private HostUpdateStatus? _update;
     private HostLeanStatus? _hostLean;
+    private GameReadyStatus? _gameReady;
     private PairingStartedMessage? _pairing;
     private (DateTimeOffset? LastCheck, DateTimeOffset StartedAt)? _pendingCheck;
     private int _pollTicks;
@@ -157,6 +158,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 _ = _pipe.SendAsync(new ListDevicesMessage());
                 _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
                 _ = _pipe.SendAsync(new HostLeanQueryMessage());
+                _ = _pipe.SendAsync(new GameReadyQueryMessage());
             }
         }
 
@@ -208,6 +210,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             PackageSearchSetupHelper.IsSetUp,
             _connected ? _update : null,
             _connected ? _hostLean : null,
+            _connected ? _gameReady : null,
             _busy.Order(StringComparer.Ordinal).ToList(),
             _pairing is null ? null : new TrayViewPairing(_pairing.PairingId, _pairing.DeviceName, _pairing.Pin, _pairing.ExpiresAt),
             DataDirectory));
@@ -252,6 +255,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 _ = _pipe.SendAsync(new ListDevicesMessage());
                 _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
                 _ = _pipe.SendAsync(new HostLeanQueryMessage());
+                _ = _pipe.SendAsync(new GameReadyQueryMessage());
             }
         }
         else
@@ -263,6 +267,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             _gpuVms = [];
             _update = null;
             _hostLean = null;
+            _gameReady = null;
             _pendingCheck = null;
             _busy.Clear();
             EndPairing();
@@ -315,6 +320,9 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 break;
             case HostLeanStatusMessage lean:
                 OnHostLeanStatus(lean.Status);
+                break;
+            case GameReadyStatusMessage gameReady:
+                OnGameReadyStatus(gameReady.Status);
                 break;
         }
     }
@@ -393,6 +401,22 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         }
     }
 
+    private void OnGameReadyStatus(GameReadyStatus status)
+    {
+        // The wake test ends after the PC has slept, so say so even when the window is closed.
+        var testFinished = _gameReady?.WakeTest.State is WakeTestStates.Countdown or WakeTestStates.Sleeping
+            && status.WakeTest.State is WakeTestStates.Done or WakeTestStates.Failed;
+        _gameReady = status;
+        PushState();
+        if (testFinished)
+        {
+            Notify(
+                status.WakeTest.Outcome == WakeTestOutcomes.Controller ? "success" : "info",
+                "Wake test",
+                status.WakeTest.Message ?? "The wake test finished.");
+        }
+    }
+
     private void PollUpdate()
     {
         if (!_connected || !HostWindowOpen)
@@ -411,6 +435,12 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         if (_hostLean?.Busy is not null || due)
         {
             _ = _pipe.SendAsync(new HostLeanQueryMessage());
+        }
+
+        // The service reads the PC again only when its last read is old, so this is cheap.
+        if (due)
+        {
+            _ = _pipe.SendAsync(new GameReadyQueryMessage());
         }
     }
 
@@ -639,6 +669,12 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     public void HostLeanApply(string source) => _ = _pipe.SendAsync(new HostLeanApplyMessage(source));
 
     public void SetHostLeanSchedule(bool enabled) => _ = _pipe.SendAsync(new SetHostLeanScheduleMessage(enabled));
+
+    public void GameReadyRefresh() => _ = _pipe.SendAsync(new GameReadyQueryMessage(Force: true));
+
+    public void GameReadyFix(string cardId) => _ = _pipe.SendAsync(new GameReadyFixMessage(cardId));
+
+    public void GameReadyTestWake(int delaySeconds) => _ = _pipe.SendAsync(new GameReadyTestWakeMessage(delaySeconds));
 
     public void InstallUpdate() => _ = _pipe.SendAsync(new InstallUpdateMessage());
 

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/sve
 import { flushSync } from "svelte";
 import HostWindow from "./HostWindow.svelte";
 import PinWindow from "./PinWindow.svelte";
-import type { HostLeanPlanSummary, HostLeanStatus, HostMessage, HostUpdateStatus, PageMessage, TrayViewState } from "./bridge";
+import type { GameReadyStatus, HostLeanPlanSummary, HostLeanStatus, HostMessage, HostUpdateStatus, PageMessage, TrayViewState } from "./bridge";
 import { tray } from "./store.svelte";
 
 const sent: PageMessage[] = [];
@@ -47,6 +47,31 @@ const plan = (overrides: Partial<HostLeanPlanSummary> = {}): HostLeanPlanSummary
   ...overrides,
 });
 
+const gameReady = (overrides: Partial<GameReadyStatus> = {}): GameReadyStatus => ({
+  readAt: "2026-10-05T12:00:00Z",
+  busy: null,
+  cards: [
+    { id: "wakeOnLan", title: "Wake-on-LAN", state: "ready", summary: "Ready: a magic packet can wake this PC.", checks: [], controllers: [], hints: [], canFix: false, canTestWake: false },
+    {
+      id: "controllerWake",
+      title: "Wake from controller",
+      state: "attention",
+      summary: "1 device can wake the PC once it is armed.",
+      checks: [],
+      controllers: [
+        { id: "a", name: "Xbox Wireless Adapter for Windows", kind: "receiver", connection: "usb", wake: "canArm" },
+        { id: "b", name: "DualSense Wireless Controller", kind: "controller", connection: "bluetooth", wake: "cannotWake", note: "Bluetooth cannot wake this PC from sleep." },
+      ],
+      hints: [],
+      canFix: true,
+      canTestWake: false,
+    },
+    { id: "sleepPolicy", title: "Sleep policy", state: "comingSoon", summary: "Sleep timeouts.", checks: [], controllers: [], hints: [], canFix: false, canTestWake: false },
+  ],
+  wakeTest: { state: "idle" },
+  ...overrides,
+});
+
 const state = (overrides: Partial<TrayViewState> = {}): TrayViewState => ({
   connected: true,
   passphraseConfigured: true,
@@ -58,6 +83,7 @@ const state = (overrides: Partial<TrayViewState> = {}): TrayViewState => ({
   packageSearchReady: true,
   update: update(),
   hostLean: lean(),
+  gameReady: gameReady(),
   busy: [],
   pairing: null,
   dataDirectory: "C:\\ProgramData\\HyperHarbor",
@@ -251,6 +277,55 @@ describe("host window", () => {
     flushSync();
 
     expect(screen.getByRole("alert").textContent).toMatch(/Access is denied/);
+  });
+});
+
+describe("Game ready", () => {
+  it("lists the cards with the three wake states, and sends Fix and Check again", async () => {
+    render(HostWindow);
+    push(state());
+    await fireEvent.click(screen.getByRole("button", { name: /Game ready/ }));
+
+    expect(screen.getByText("Wake-on-LAN")).toBeTruthy();
+    expect(screen.getByText("Can arm")).toBeTruthy();
+    expect(screen.getByText("Cannot wake")).toBeTruthy();
+    expect(screen.getByText(/Bluetooth cannot wake this PC/)).toBeTruthy();
+    // Unbuilt cards keep their place.
+    expect(screen.getByText("Coming soon")).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Fix" }));
+    expect(sent).toContainEqual({ type: "gameReadyFix", cardId: "controllerWake" });
+    expect(screen.getByRole("button", { name: /Fixing/ })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    expect(sent).toContainEqual({ type: "gameReadyRefresh" });
+  });
+
+  it("asks before putting the PC to sleep for a wake test, and shows the result", async () => {
+    render(HostWindow);
+    push(state({ gameReady: gameReady({ cards: gameReady().cards.map((card) => ({ ...card, canTestWake: card.id === "controllerWake" })) }) }));
+    await fireEvent.click(screen.getByRole("button", { name: /Game ready/ }));
+
+    await fireEvent.click(screen.getByRole("button", { name: "Test wake…" }));
+    await fireEvent.click(within(screen.getByRole("dialog", { name: "Put this PC to sleep?" })).getByRole("button", { name: "Sleep in 10 seconds" }));
+    expect(sent).toContainEqual({ type: "gameReadyTestWake", delaySeconds: 10 });
+
+    push(
+      state({
+        gameReady: gameReady({
+          wakeTest: { state: "done", outcome: "controller", message: "Xbox Wireless Adapter for Windows woke the PC. Waking from the controller works." },
+        }),
+      }),
+    );
+    expect(screen.getByText(/Waking from the controller works/)).toBeTruthy();
+  });
+
+  it("disables Test wake until a device is armed", async () => {
+    render(HostWindow);
+    push(state());
+    await fireEvent.click(screen.getByRole("button", { name: /Game ready/ }));
+
+    expect((screen.getByRole("button", { name: "Test wake…" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

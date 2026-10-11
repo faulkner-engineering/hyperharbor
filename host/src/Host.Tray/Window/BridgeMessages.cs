@@ -15,6 +15,7 @@ namespace HyperHarbor.Host.Tray.Window;
 /// "folder:backup", "device:&lt;id&gt;", "update". The page shows each as in progress.
 /// </param>
 /// <param name="HostLean">The Lean host action's status from the service; null while the service is not connected.</param>
+/// <param name="GameReady">The Game ready section's status from the service; null while the service is not connected.</param>
 /// <param name="Pairing">The pairing request waiting for its PIN, if any.</param>
 public sealed record TrayViewState(
     bool Connected,
@@ -27,6 +28,7 @@ public sealed record TrayViewState(
     bool PackageSearchReady,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] HostUpdateStatus? Update,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] HostLeanStatus? HostLean,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] GameReadyStatus? GameReady,
     IReadOnlyList<string> Busy,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] TrayViewPairing? Pairing,
     string DataDirectory);
@@ -51,7 +53,7 @@ public static class HostToPage
         public string Type => "toast";
     }
 
-    /// <param name="Page">overview, devices, storage, lean, updates, logs, or passphrase (the passphrase dialog).</param>
+    /// <param name="Page">overview, devices, storage, gameReady, lean, updates, logs, or passphrase (the passphrase dialog).</param>
     public sealed record Navigate(string Page)
     {
         public string Type => "navigate";
