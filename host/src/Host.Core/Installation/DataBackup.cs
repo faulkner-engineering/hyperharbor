@@ -17,6 +17,9 @@ public static class DataBackup
     public static readonly IReadOnlySet<string> Excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "logs", "audit.log", "audit.1.log", UpdateFolderName,
+
+        // Kopia configuration and caches: large, and rebuilt by connecting to the repository again.
+        "backup",
     };
 
     /// <summary>Copies the data directory to <paramref name="destination"/>, which must not exist yet.</summary>

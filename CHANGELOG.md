@@ -10,6 +10,16 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- Backup foundations (work in progress toward backup and restore with Kopia): backup targets (local folder, S3,
+  Azure Blob) and per-VM policies are stored in `backup-config.json`; repository passphrases and cloud keys are kept
+  only in a DPAPI-protected vault. A repository is created only after you confirm that you saved its recovery key by
+  typing back its last four groups.
+
+### Changed
+- Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with
+  any newer data format. The `backup` folder in the data directory (Kopia caches) is not copied into update backups.
+
 ## [0.1.7-beta.4] - 2026-10-12 (API 1.17.0)
 
 ### Fixed

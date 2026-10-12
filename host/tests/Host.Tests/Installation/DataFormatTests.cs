@@ -92,7 +92,7 @@ public sealed class DataFormatTests : IDisposable
 
         DataFormat.EnsureCurrent(_directory);
 
-        Assert.Equal(2, DataFormat.Read(_directory));
+        Assert.Equal(DataFormat.Current, DataFormat.Read(_directory));
         var install = Assert.Single(new UnattendedInstallStore(_directory).List());
         Assert.Equal(UnattendedInstallState.Ready, install.State);
         Assert.Null(install.SetupProfile);

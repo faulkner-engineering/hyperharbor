@@ -23,7 +23,7 @@ public static class DataFormat
     public const string FileName = "data-format.json";
 
     /// <summary>Raise this, and add the step to <see cref="Migrations"/>, when a release changes how data is written.</summary>
-    public const int Current = 2;
+    public const int Current = 3;
 
     /// <summary>Steps from format N to N + 1, keyed by N, run in order on the data directory.</summary>
     private static readonly IReadOnlyDictionary<int, Action<string>> Migrations = new Dictionary<int, Action<string>>
@@ -31,6 +31,9 @@ public static class DataFormat
         // Format 2: unattended installs can carry a setup profile and be in the ApplyingProfile state, which a
         // format 1 host cannot read. Format 1 data needs no change.
         [1] = _ => { },
+
+        // Format 3: backup configuration, history, and secrets are new files. Format 2 data needs no change.
+        [2] = _ => { },
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
