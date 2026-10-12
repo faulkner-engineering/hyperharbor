@@ -1,0 +1,10 @@
+{
+  "kopia": {
+    "version": "0.23.1",
+    "url": "https://github.com/kopia/kopia/releases/download/v0.23.1/kopia-0.23.1-windows-x64.zip",
+    "zipSha256": "f0369d9657dbe47a1b8b6ff4e308c5958a4813b405d4e32ae9d81b3f2b3d8251",
+    "exeSha256": "96c0946314b50dcc7c5ae9d3ec7e3763e742fcebf7d5cbebdaac3ceee5fb3bd7",
+    "license": "Apache-2.0",
+    "licenseUrl": "https://github.com/kopia/kopia/blob/master/LICENSE"
+  }
+}

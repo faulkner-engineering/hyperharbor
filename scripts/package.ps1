@@ -106,7 +106,12 @@ if (-not $ClientOnly) {
         Get-ChildItem -Force $staging | Remove-Item -Recurse -Force
     }
 
+    # Kopia is embedded in the single executable (hash pinned in tools\tools.json) and extracted beside the
+    # version's executable by the installer.
+    $kopiaExe = & (Join-Path $PSScriptRoot 'fetch-tools.ps1') | Select-Object -Last 1
+
     $publishArgs = @(
+        "-p:KopiaExe=$kopiaExe",
         '-c', 'Release',
         '-r', 'win-x64',
         '--self-contained', 'true',

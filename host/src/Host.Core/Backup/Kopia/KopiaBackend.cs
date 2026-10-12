@@ -1,9 +1,9 @@
 namespace HyperHarbor.Host.Core.Backup.Kopia;
 
 /// <summary>Where one repository lives: the kopia storage subcommand with its flags.</summary>
-public sealed record KopiaBackend(string Kind, IReadOnlyList<string> Arguments, IReadOnlyList<string> SecretArguments)
+public sealed record KopiaBackend(string Kind, IReadOnlyList<string> Arguments, IReadOnlyDictionary<string, string> SecretEnvironment)
 {
-    /// <summary>Hides the keys that <see cref="SecretArguments"/> carries.</summary>
+    /// <summary>Hides the keys in <see cref="SecretEnvironment"/>, which kopia reads from the environment instead of the command line.</summary>
     public override string ToString() => $"KopiaBackend {{ {Kind} }}";
 }
 
@@ -30,7 +30,7 @@ public static class KopiaBackendFactory
         {
             case BackupTargetKind.Local:
                 return new KopiaRepository(repoId, role,
-                    new KopiaBackend("filesystem", ["filesystem", "--path", Path.Combine(target.Local!.Path, folder)], []), state);
+                    new KopiaBackend("filesystem", ["filesystem", "--path", Path.Combine(target.Local!.Path, folder)], new Dictionary<string, string>()), state);
 
             case BackupTargetKind.S3:
             {
@@ -49,7 +49,7 @@ public static class KopiaBackendFactory
                 }
 
                 return new KopiaRepository(repoId, role,
-                    new KopiaBackend("s3", arguments, ["--access-key", access, "--secret-access-key", secret]), state);
+                    new KopiaBackend("s3", arguments, new Dictionary<string, string> { ["AWS_ACCESS_KEY_ID"] = access, ["AWS_SECRET_ACCESS_KEY"] = secret }), state);
             }
 
             case BackupTargetKind.Azure:
@@ -59,7 +59,7 @@ public static class KopiaBackendFactory
                 return new KopiaRepository(repoId, role,
                     new KopiaBackend("azure",
                         ["azure", "--container", azure.Container, "--storage-account", azure.Account, "--prefix", Prefix(azure.Prefix, folder)],
-                        ["--storage-key", key]),
+                        new Dictionary<string, string> { ["AZURE_STORAGE_KEY"] = key }),
                     state);
             }
 

@@ -16,6 +16,13 @@ note anything that needs action, such as updating the host, a new elevation requ
   only in a DPAPI-protected vault. A repository is created only after you confirm that you saved its recovery key by
   typing back its last four groups.
 
+- The host now carries Kopia 0.23.1 (the backup engine, Apache-2.0, see THIRD-PARTY-NOTICES.md). It is checked
+  against a pinned SHA-256 before every use. This adds about 50 MB to the host executable. Storage keys and
+  passphrases reach Kopia only through environment variables, never on a command line.
+- Each local backup folder gets a RESTORE.md with the plain Kopia commands (it never contains the passphrase).
+- A connection test for backup targets: a local folder is written to and read back; S3 and Azure are checked by
+  connecting, with plain-language results for wrong keys or an unreachable host.
+
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with
   any newer data format. The `backup` folder in the data directory (Kopia caches) is not copied into update backups.

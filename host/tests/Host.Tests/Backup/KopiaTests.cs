@@ -82,6 +82,8 @@ public sealed class KopiaTests : IDisposable
         var environment = KopiaCli.Environment(repository, "the-passphrase");
 
         Assert.Equal("the-passphrase", environment["KOPIA_PASSWORD"]);
+        Assert.Equal("AKIAEXAMPLEKEY", environment["AWS_ACCESS_KEY_ID"]);
+        Assert.DoesNotContain("AKIAEXAMPLEKEY", arguments);
         Assert.DoesNotContain("the-passphrase", arguments);
         Assert.Contains("--readonly", arguments);
         Assert.StartsWith(Path.Combine(_directory, "backup", "r1"), environment["KOPIA_CONFIG_PATH"]);
@@ -105,7 +107,10 @@ public sealed class KopiaTests : IDisposable
         Assert.Contains("hh/vm/", s3.Backend.Arguments);
         Assert.Contains("--region", s3.Backend.Arguments);
         Assert.Contains("host/", blob.Backend.Arguments);
-        Assert.Equal(["--storage-key", "azure-key-value"], blob.Backend.SecretArguments);
+        Assert.Equal("azure-key-value", blob.Backend.SecretEnvironment["AZURE_STORAGE_KEY"]);
+        Assert.Equal("super-secret-value", s3.Backend.SecretEnvironment["AWS_SECRET_ACCESS_KEY"]);
+        Assert.DoesNotContain("azure-key-value", blob.Backend.Arguments);
+        Assert.DoesNotContain("super-secret-value", s3.Backend.Arguments);
         Assert.DoesNotContain("super-secret-value", s3.Backend.ToString());
     }
 

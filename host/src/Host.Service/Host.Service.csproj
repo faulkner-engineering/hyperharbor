@@ -37,6 +37,12 @@
     <EmbeddedResource Include="appsettings.json" LogicalName="HyperHarbor.Host.appsettings.json" />
     <Content Update="appsettings.json;appsettings.Development.json" CopyToPublishDirectory="Never" />
     <EmbeddedResource Include="Wake\Diagnose-Wake.ps1" LogicalName="HyperHarbor.Host.Diagnose-Wake.ps1" />
+    <!--
+      Kopia, the backup engine. package.ps1 downloads the pinned release (scripts/fetch-tools.ps1) and passes its path
+      as KopiaExe; development builds have no payload and use HH_KOPIA_EXE instead. tools.json holds the pinned hashes.
+    -->
+    <EmbeddedResource Include="$(KopiaExe)" LogicalName="HyperHarbor.Host.tools.kopia.exe" Condition="'$(KopiaExe)' != '' And Exists('$(KopiaExe)')" />
+    <EmbeddedResource Include="..\..\..\tools\tools.json" LogicalName="HyperHarbor.Host.tools.json" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,8 +2,8 @@ namespace HyperHarbor.Host.Core.Backup.Kopia;
 
 /// <summary>
 /// Typed kopia commands. The repository passphrase goes through KOPIA_PASSWORD, and kopia's configuration, cache, and
-/// log folders through environment variables, so nothing sensitive is on a command line except the storage keys that
-/// kopia accepts only as flags (they are visible only to administrators, since the host runs as SYSTEM).
+/// log folders through environment variables, so nothing sensitive is on a command line: the storage keys go
+/// through the AWS_* and AZURE_STORAGE_KEY variables kopia reads.
 /// </summary>
 public sealed class KopiaCli(IKopiaRunner runner)
 {
@@ -11,7 +11,7 @@ public sealed class KopiaCli(IKopiaRunner runner)
     public static readonly TimeSpan TransferTimeout = TimeSpan.FromHours(12);
 
     public static IReadOnlyDictionary<string, string> Environment(KopiaRepository repository, string passphrase) =>
-        new Dictionary<string, string>
+        new Dictionary<string, string>(repository.Backend.SecretEnvironment)
         {
             ["KOPIA_PASSWORD"] = passphrase,
             ["KOPIA_CONFIG_PATH"] = repository.ConfigFile,
@@ -24,7 +24,6 @@ public sealed class KopiaCli(IKopiaRunner runner)
     {
         var arguments = new List<string> { "repository", verb };
         arguments.AddRange(repository.Backend.Arguments);
-        arguments.AddRange(repository.Backend.SecretArguments);
         if (verb == "create")
         {
             arguments.AddRange(["--block-hash=BLAKE2B-256-128", "--encryption=AES256-GCM-HMAC-SHA256"]);
@@ -94,7 +93,7 @@ public sealed class KopiaCli(IKopiaRunner runner)
             return result;
         }
 
-        var secrets = repository.Backend.SecretArguments.Where(a => !a.StartsWith("--", StringComparison.Ordinal)).Append(passphrase);
+        var secrets = repository.Backend.SecretEnvironment.Values.Append(passphrase);
         var detail = KopiaOutput.Sanitize(result.StandardError, secrets);
         throw new KopiaException($"kopia failed (exit code {result.ExitCode}): {detail}", KopiaOutput.Classify(result.StandardError));
     }
