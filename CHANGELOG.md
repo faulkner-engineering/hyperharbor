@@ -23,6 +23,17 @@ note anything that needs action, such as updating the host, a new elevation requ
 - A connection test for backup targets: a local folder is written to and read back; S3 and Azure are checked by
   connecting, with plain-language results for wrong keys or an unreachable host.
 
+- VM backup engine (not yet reachable from the API or the apps): a running VM is backed up from a production
+  checkpoint (a standard one if the guest cannot take it, with a warning), the frozen parent disk is hard-linked and
+  uploaded with Kopia together with a manifest of the VM (generation, processors, memory, Secure Boot template, TPM,
+  switch, GPU partition, Performance mode), and the checkpoint is always removed again, even when the upload fails or is
+  cancelled. VMs that already have checkpoints of their own are skipped with a warning; VMs with a GPU partition are
+  backed up only while off unless you allow a live (crash-consistent) copy. Retention (7 daily, 4 weekly, 6 monthly)
+  keeps one snapshot per day, so several backups on one day leave the newest.
+- Host state backup (pairings, certificate, settings, profiles, provisioning records) to a separate repository. Secrets
+  sealed to this PC (VM credentials, console accounts, the backup vault) are never included.
+- Backup job kinds backupVm and backupHostState in the job list (API enum only; the endpoints come later).
+
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with
   any newer data format. The `backup` folder in the data directory (Kopia caches) is not copied into update backups.

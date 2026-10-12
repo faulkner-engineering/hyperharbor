@@ -12,6 +12,8 @@ public enum VmJobKind
     PerformanceGuestSetup,
     ExportDisks,
     ApplySetupProfile,
+    BackupVm,
+    BackupHostState,
 }
 
 /// <summary>Schema: VmJobState.</summary>

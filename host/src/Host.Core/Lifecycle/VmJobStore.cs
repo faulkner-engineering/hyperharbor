@@ -173,6 +173,8 @@ public sealed class VmJobStore : IDisposable
         VmJobKind.PerformanceGuestSetup => "setting up the guest for Performance mode",
         VmJobKind.ExportDisks => "exporting the disks",
         VmJobKind.ApplySetupProfile => "applying a setup profile",
+        VmJobKind.BackupVm => "backing up the virtual machine",
+        VmJobKind.BackupHostState => "backing up the host state",
         _ => kind.ToString(),
     };
 

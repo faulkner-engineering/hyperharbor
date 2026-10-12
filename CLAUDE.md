@@ -138,6 +138,17 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    Steam Big Picture is open, ES_DISPLAY_REQUIRED on an already-off display, the saver under a standard Console user (the tray
    pipe admits only administrators, so the tray and the screen's data need the administrator session).
 
+21. Backup and restore with Kopia, added at the user's request (2026-10-12; in progress; plan in
+   ~/.claude/plans/pasted-content-id-0eb5-plan-and-nifty-blum.md). Kopia 0.23.1 is pinned in tools/tools.json (hashes),
+   downloaded by scripts/fetch-tools.ps1 into .tools, embedded in the host exe, and extracted beside the version's exe
+   (KopiaToolLocator verifies the SHA-256 on every use). Done: 21.1 models, DPAPI vault (BackupSecretStore), config store,
+   recovery key confirmation, data format 3; 21.2 Kopia wrapper (Host.Core/Backup/Kopia: runner seam, KopiaCli, KopiaOutput),
+   RESTORE.md, target tester; 21.3 VM backup (VmBackupService: consistency planner, production checkpoint with a sweep that
+   removes every new checkpoint, hard-linked staging, manifest), host state backup, history store, verified live on a
+   throwaway VM (VmBackupLiveTests, HH_BACKUP_VM_LIVE=1 with HH_KOPIA_EXE). Todo: 21.4 scheduler, shutdown trigger with
+   debounce, run conditions, power hold; 21.5 restore (importer, state machine, TPM re-key); 21.6 API 1.18.0, tray, client,
+   ambient; 21.7 monthly restore test. rclone targets are deferred.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
 
