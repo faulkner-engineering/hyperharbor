@@ -10,6 +10,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.1.7-beta.4] - 2026-10-12 (API 1.17.0)
+
 ### Fixed
 - After a host update the tray now restarts itself. It used to keep running the old version, so the host window
   showed the old screens until the tray was closed and opened again. The tray compares its version with the one the
