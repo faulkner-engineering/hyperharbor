@@ -48,6 +48,20 @@ public interface ITrayActions
     /// <param name="delaySeconds">5 to 300.</param>
     void GameReadyTestWake(int delaySeconds);
 
+    /// <summary>Sets up the Console sign-in (a standard user signed in automatically, with a launcher).</summary>
+    void GameReadyConsoleSignInEnable(string userName, string launcher);
+
+    void GameReadyConsoleSignInDisable(bool deleteUser);
+
+    /// <summary>Applies a power mode: consoleIdle, balanced, or sleepWhenIdle, with its display timeout, schedule, and cost inputs.</summary>
+    void GameReadyPowerModeApply(string mode, int displayMinutes, bool scheduleEnabled, string sleepTime, string wakeTime, double watts, double ratePerKwh);
+
+    /// <summary>Saves the Ambient screen choices (idle minutes, widgets, soft lock and its chord).</summary>
+    void GameReadyAmbientApply(bool enabled, int idleMinutes, bool showHostStatus, bool showRunningVms, bool showDevices, bool softLock, string chord);
+
+    /// <summary>Puts this PC to sleep (after the page's confirmation).</summary>
+    void GameReadySleepNow();
+
     /// <param name="target">logs or audit.</param>
     void Open(string target);
 
@@ -118,6 +132,35 @@ public static class TrayCommands
             case "gameReadyTestWake" when Number(message, "delaySeconds") is >= 5 and <= 300 and var delay:
                 actions.GameReadyTestWake(delay);
                 return true;
+            case "gameReadyConsoleSignInEnable" when Text(message, "userName") is { Length: > 0 and <= 64 } signInUser && Text(message, "launcher") is { Length: > 0 and <= 32 } signInLauncher:
+                actions.GameReadyConsoleSignInEnable(signInUser, signInLauncher);
+                return true;
+            case "gameReadyConsoleSignInDisable" when Flag(message, "deleteUser") is { } deleteUser:
+                actions.GameReadyConsoleSignInDisable(deleteUser);
+                return true;
+            case "gameReadyPowerModeApply"
+                when Text(message, "mode") is { Length: > 0 and <= 20 } powerMode
+                    && Number(message, "displayMinutes") is { } displayMinutes
+                    && Flag(message, "scheduleEnabled") is { } scheduleEnabled
+                    && Text(message, "sleepTime") is { Length: 5 } sleepTime
+                    && Text(message, "wakeTime") is { Length: 5 } wakeTime
+                    && Decimal(message, "watts") is { } watts
+                    && Decimal(message, "ratePerKwh") is { } rate:
+                actions.GameReadyPowerModeApply(powerMode, displayMinutes, scheduleEnabled, sleepTime, wakeTime, watts, rate);
+                return true;
+            case "gameReadyAmbientApply"
+                when Flag(message, "enabled") is { } ambientEnabled
+                    && Number(message, "idleMinutes") is { } ambientMinutes
+                    && Flag(message, "showHostStatus") is { } showHostStatus
+                    && Flag(message, "showRunningVms") is { } showRunningVms
+                    && Flag(message, "showDevices") is { } showDevices
+                    && Flag(message, "softLock") is { } softLock
+                    && Text(message, "chord") is { Length: > 0 and <= 40 } chord:
+                actions.GameReadyAmbientApply(ambientEnabled, ambientMinutes, showHostStatus, showRunningVms, showDevices, softLock, chord);
+                return true;
+            case "gameReadySleepNow":
+                actions.GameReadySleepNow();
+                return true;
             case "open" when Text(message, "target") is "logs" or "audit":
                 actions.Open(Text(message, "target")!);
                 return true;
@@ -143,6 +186,9 @@ public static class TrayCommands
 
     private static int? Number(JsonElement message, string name) =>
         message.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : null;
+
+    private static double? Decimal(JsonElement message, string name) =>
+        message.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number) && double.IsFinite(number) ? number : null;
 
     private static Guid? Id(JsonElement message, string name) =>
         Text(message, name) is { } text && Guid.TryParse(text, out var id) ? id : null;

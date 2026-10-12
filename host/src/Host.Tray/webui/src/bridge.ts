@@ -125,6 +125,85 @@ export interface GameReadyWakeTest {
   message?: string | null;
 }
 
+export interface ConsoleSignInLauncher {
+  id: string;
+  name: string;
+  available: boolean;
+  reason?: string | null;
+}
+
+/** What the Console sign-in form proposes. The password is never sent to the page. */
+export interface ConsoleSignInInfo {
+  userName: string;
+  launcher: string;
+  configured: boolean;
+  launchers: ConsoleSignInLauncher[];
+}
+
+export type PowerModeId = "consoleIdle" | "balanced" | "sleepWhenIdle";
+
+export interface PowerModeEstimate {
+  watts: number;
+  alwaysReadyKwh: number;
+  alwaysReadyMonthlyCost: number;
+  scheduledKwh: number;
+  scheduledMonthlyCost: number;
+  sleepWatts: number;
+}
+
+export interface PowerModeInfo {
+  mode: PowerModeId;
+  displayMinutes: number;
+  scheduleEnabled: boolean;
+  /** Local time, HH:mm. */
+  sleepTime: string;
+  wakeTime: string;
+  watts: number;
+  ratePerKwh: number;
+  applied: boolean;
+  estimate: PowerModeEstimate;
+  /** Measured while in Console idle; null when not measured or not reported by Windows. */
+  cpuPercent?: number | null;
+  gpuPercent?: number | null;
+}
+
+/** The Windows screensaver as the tray found it on the desktop. */
+export interface AmbientScreensaverState {
+  active: boolean;
+  path?: string | null;
+  timeoutSeconds: number;
+  policyLocked: boolean;
+}
+
+/** Mirrors Shared.Contracts/Ipc/AmbientMessages.cs (AmbientInfo). Null properties are left out by the JSON options. */
+export interface AmbientInfo {
+  enabled: boolean;
+  idleMinutes: number;
+  showHostStatus: boolean;
+  showRunningVms: boolean;
+  showDevices: boolean;
+  softLock: boolean;
+  /** Buttons joined by "+", for example "lb+rb+start". */
+  chord: string;
+  supported: boolean;
+  unsupportedReason?: string | null;
+  screensaverPath?: string | null;
+  screensaver?: AmbientScreensaverState | null;
+  /** Measured while the screen ran; null before it has run for a minute. */
+  cpuPercent?: number | null;
+  gpuPercent?: number | null;
+  measuredSeconds?: number | null;
+  cecDevice?: string | null;
+}
+
+/** What the tray writes for the ambient screensaver's page (AmbientScreenData). */
+export interface AmbientData {
+  hostStatus?: string | null;
+  runningVms?: string[] | null;
+  devices?: string | null;
+  chordHint?: string | null;
+}
+
 export interface GameReadyStatus {
   readAt?: string | null;
   /** "reading", "fix:<card id>", or null when idle. */
@@ -132,6 +211,9 @@ export interface GameReadyStatus {
   error?: string | null;
   cards: GameReadyCard[];
   wakeTest: GameReadyWakeTest;
+  consoleSignIn?: ConsoleSignInInfo | null;
+  powerMode?: PowerModeInfo | null;
+  ambient?: AmbientInfo | null;
 }
 
 export interface TrayViewDevice {
@@ -167,7 +249,10 @@ export type ToastKind = "info" | "success" | "error";
 export type HostMessage =
   | { type: "state"; value: TrayViewState }
   | { type: "toast"; kind: ToastKind; title: string; text: string }
-  | { type: "navigate"; page: string };
+  | { type: "navigate"; page: string }
+  // Sent to the ambient screen only: its data (the tray writes it) and the unlock chord hint.
+  | ({ type: "data" } & AmbientData)
+  | { type: "hint"; seconds: number };
 
 export type FolderKind = "vm" | "iso" | "backup";
 
@@ -186,6 +271,29 @@ export type PageMessage =
   | { type: "gameReadyRefresh" }
   | { type: "gameReadyFix"; cardId: string }
   | { type: "gameReadyTestWake"; delaySeconds: number }
+  | { type: "gameReadyConsoleSignInEnable"; userName: string; launcher: string }
+  | { type: "gameReadyConsoleSignInDisable"; deleteUser: boolean }
+  | {
+      type: "gameReadyPowerModeApply";
+      mode: PowerModeId;
+      displayMinutes: number;
+      scheduleEnabled: boolean;
+      sleepTime: string;
+      wakeTime: string;
+      watts: number;
+      ratePerKwh: number;
+    }
+  | {
+      type: "gameReadyAmbientApply";
+      enabled: boolean;
+      idleMinutes: number;
+      showHostStatus: boolean;
+      showRunningVms: boolean;
+      showDevices: boolean;
+      softLock: boolean;
+      chord: string;
+    }
+  | { type: "gameReadySleepNow" }
   | { type: "setChannel"; channel: string }
   | { type: "open"; target: "logs" | "audit" }
   | { type: "openUrl"; url: string }

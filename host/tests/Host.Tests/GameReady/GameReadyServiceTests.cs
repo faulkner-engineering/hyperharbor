@@ -1,4 +1,7 @@
 using HyperHarbor.Host.Core.GameReady;
+using HyperHarbor.Host.Core.GameReady.Ambient;
+using HyperHarbor.Host.Core.GameReady.ConsoleSignIn;
+using HyperHarbor.Host.Core.GameReady.PowerMode;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.GameReady;
 using HyperHarbor.Shared.Contracts.Ipc;
@@ -59,12 +62,15 @@ public sealed class GameReadyServiceTests
     private readonly FakePnp _pnp = new();
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 10, 11, 12, 0, 0, TimeSpan.Zero));
     private readonly FakeFixes _fixes = new();
+    private readonly FakeConsoleSignInSystem _consoleSystem = new();
     private FakePower? _power;
 
     private GameReadyService Create(bool elevated = true, ISleepController? sleep = null)
     {
         _power = new FakePower(_environment);
-        return new GameReadyService(_environment, _pnp, _power, _fixes, sleep ?? new FakeSleepController(), _time, NullLogger<GameReadyService>.Instance, elevated, TimeSpan.Zero, TimeSpan.Zero);
+        var consoleSignIn = new ConsoleSignInService(_consoleSystem, new MemoryConsoleSignInStore(), NullLogger<ConsoleSignInService>.Instance);
+        var powerMode = new PowerModeService(new FakePowerPlans(), new FakePowerSchedule(), new MemoryPowerModeStore(), NullLogger<PowerModeService>.Instance);
+        return new GameReadyService(_environment, _pnp, _power, _fixes, sleep ?? new FakeSleepController(), consoleSignIn, powerMode, new FakeIdleLoad(), new AmbientService(new MemoryAmbientStore(), new FakeScreensaverFile(), NullLogger<AmbientService>.Instance), _time, NullLogger<GameReadyService>.Instance, elevated, TimeSpan.Zero, TimeSpan.Zero);
     }
 
     private void SetWake(bool armed, bool programmable)
@@ -87,10 +93,10 @@ public sealed class GameReadyServiceTests
 
         var cards = service.Status().Cards;
         Assert.Equal(
-            ["wakeOnLan", "controllerWake", "fastStartup", "usbSelectiveSuspend", "usbPowerInSleep", "sleepPolicy", "bootToLauncher", "steamDesktopLayout", "leanHost", "gameAwareMode"],
+            ["wakeOnLan", "controllerWake", "fastStartup", "usbSelectiveSuspend", "usbPowerInSleep", "consoleSignIn", "powerMode", "ambientScreen", "bootToLauncher", "steamDesktopLayout", "leanHost", "gameAwareMode"],
             cards.Select(card => card.Id));
-        Assert.All(cards.Skip(5), card => Assert.Equal(GameReadyStates.ComingSoon, card.State));
-        Assert.All(cards.Skip(5), card => Assert.False(card.CanFix));
+        Assert.All(cards.Skip(8), card => Assert.Equal(GameReadyStates.ComingSoon, card.State));
+        Assert.All(cards.Skip(8), card => Assert.False(card.CanFix));
         Assert.Equal(GameReadyStates.Manual, Card(service, "usbPowerInSleep").State);
         Assert.DoesNotContain(Card(service, "wakeOnLan").Checks, check => check.Id == WakeCheckIds.FastStartupDisabled);
     }

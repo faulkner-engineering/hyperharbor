@@ -128,8 +128,8 @@
             "canTestWake": false
           },
           {
-            "id": "sleepPolicy",
-            "title": "Sleep policy",
+            "id": "bootToLauncher",
+            "title": "Boot to launcher",
             "state": "comingSoon",
             "summary": "Soon.",
             "checks": [],
@@ -145,6 +145,27 @@
           "outcome": "controller",
           "source": "Xbox Wireless Adapter for Windows",
           "message": "Xbox Wireless Adapter for Windows woke the PC."
+        },
+        "ambient": {
+          "enabled": true,
+          "idleMinutes": 5,
+          "showHostStatus": true,
+          "showRunningVms": true,
+          "showDevices": false,
+          "softLock": true,
+          "chord": "lb\u002Brb\u002Bstart",
+          "supported": true,
+          "screensaverPath": "C:/Program Files/HyperHarbor/HyperHarbor Ambient.scr",
+          "screensaver": {
+            "active": true,
+            "path": "C:/Program Files/HyperHarbor/HyperHarbor Ambient.scr",
+            "timeoutSeconds": 300,
+            "policyLocked": false
+          },
+          "cpuPercent": 0.4,
+          "gpuPercent": 0,
+          "measuredSeconds": 60,
+          "cecDevice": "Pulse-Eight USB-CEC Adapter"
         }
       },
       "busy": [

@@ -187,7 +187,7 @@ export type CardTone = "ok" | "warn" | "busy" | "neutral";
 
 /** What the card on the Game ready page is doing now: a fix running, or the first read of the PC. */
 export function cardBusy(status: GameReadyStatus, card: GameReadyCard): boolean {
-  return status.busy === `fix:${card.id}`;
+  return status.busy === `fix:${card.id}` || (card.id === "consoleSignIn" && status.busy === "consoleSignIn") || (card.id === "powerMode" && status.busy === "powerMode") || (card.id === "ambientScreen" && status.busy === "ambient");
 }
 
 export function cardTone(status: GameReadyStatus, card: GameReadyCard): CardTone {
@@ -204,7 +204,7 @@ export function cardTone(status: GameReadyStatus, card: GameReadyCard): CardTone
 
 /** The card's status line; a card still being fixed says so, and a coming-soon card says that first. */
 export function cardStatus(status: GameReadyStatus, card: GameReadyCard): string {
-  if (cardBusy(status, card)) return "Fixing…";
+  if (cardBusy(status, card)) return card.id === "consoleSignIn" || card.id === "powerMode" || card.id === "ambientScreen" ? "Working…" : "Fixing…";
   if (card.state === "comingSoon") return "Coming soon";
   if (card.state === "manual") return "Check by hand";
   return card.summary;

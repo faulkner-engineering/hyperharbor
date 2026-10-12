@@ -89,7 +89,7 @@ public sealed class WindowsPowerConfig : IPowerConfig
         RunChecked("/setactive", "SCHEME_CURRENT");
     }
 
-    private static void RunChecked(params string[] arguments)
+    internal static void RunChecked(params string[] arguments)
     {
         using var process = Start(arguments);
         var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();

@@ -1,4 +1,7 @@
 using System.Text.Json;
+using HyperHarbor.Host.Core.GameReady.Ambient;
+using HyperHarbor.Host.Core.GameReady.ConsoleSignIn;
+using HyperHarbor.Host.Core.GameReady.PowerMode;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Shared.Contracts.Ipc;
 using HyperHarbor.Shared.Contracts.Wake;
@@ -174,10 +177,251 @@ public static class GameReadyCards
         null,
         false);
 
+    public const string AutoSignInRisk =
+        "Automatic sign-in means anyone with physical access to this PC reaches the Console desktop. The Console user is a standard account: it cannot open the host's settings, the stored VM passwords, or the HyperHarbor data folder.";
+
+    public const string SteamSignInHint =
+        "Sign in to Steam once as the Console user (or have it remember the login) so the launcher opens ready to play.";
+
+    public const string SleepRequirementHint =
+        "Setup also turns off \"require sign-in after sleep\". Windows keeps that setting per power plan, not per user, so it applies to every account while this plan is active. It is restored when the Console sign-in is turned off.";
+
+    public const string ChordUnlockHint =
+        "Coming later: an option to require a controller button chord before the Console desktop unlocks.";
+
+    /// <summary>The Console sign-in card: a dedicated standard user, signed in automatically, with a launcher.</summary>
+    /// <param name="elevated">Whether the service may create accounts and change Winlogon itself.</param>
+    public static GameReadyCard ConsoleSignIn(ConsoleSignInReading reading, bool elevated)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+
+        var hints = new List<string> { AutoSignInRisk };
+        if (reading.Admins.BlocksAdminAutoSignIn)
+        {
+            var who = string.Join(", ", reading.Admins.MicrosoftAccountAdministrators);
+            hints.Add($"The administrator account {who} is a Microsoft account and this PC requires Windows Hello for it. That blocks automatic sign-in for that account, but not for the local Console user.");
+        }
+
+        if (reading.PlaintextPasswordPresent)
+        {
+            hints.Add("A password is stored in plain text in the Winlogon registry key (DefaultPassword). Remove it: HyperHarbor keeps the Console password in the Windows LSA secret store instead.");
+        }
+
+        hints.Add(SleepRequirementHint);
+        hints.Add(SteamSignInHint);
+        hints.Add(ChordUnlockHint);
+
+        var checks = new List<GameReadyCheck>
+        {
+            Check("userExists", $"Console user \"{reading.UserName}\" exists", reading.UserExists, reading.UserExists ? null : "Created when you set this up."),
+            Check("standardUser", "Standard user", reading.UserIsStandard, reading.UserExists && !reading.UserIsStandard ? "The user belongs to a privileged group." : null),
+            Check("autoSignIn", "Automatic sign-in set", reading.AutoSignInSet, null),
+            Check("launcher", $"{ConsoleSignInLauncherName(reading)} starts at sign-in", reading.LauncherSet, null),
+        };
+
+        string state;
+        string summary;
+        if (!reading.Configured)
+        {
+            state = elevated ? GameReadyStates.Manual : GameReadyStates.Unavailable;
+            summary = "Not set up.";
+        }
+        else if (reading.Healthy)
+        {
+            state = GameReadyStates.Ready;
+            summary = $"Ready: this PC signs in as {reading.UserName} and opens the launcher.";
+        }
+        else
+        {
+            state = GameReadyStates.Attention;
+            summary = "Set up, but something changed. Set it up again to repair it.";
+        }
+
+        return new GameReadyCard(
+            GameReadyCardIds.ConsoleSignIn,
+            "Console sign-in",
+            state,
+            summary,
+            reading.Configured ? checks : NoChecks,
+            NoControllers,
+            hints,
+            false,
+            elevated ? null : NotElevatedReason,
+            false);
+    }
+
+    public const string PowerPlanHint =
+        "Power modes change the settings of the active Windows power plan in place, so GPU vendor and launcher tweaks in that plan stay. Balanced puts back the values the plan had before.";
+
+    public const string ScheduleHint =
+        "The schedule is two Windows scheduled tasks: one puts the host to sleep at the sleep time when no remote session, job, or game is in use (and tries again every 15 minutes until the wake time), the other wakes it at the wake time. Outside the sleep hours, or with the schedule off, the host never sleeps on its own. Wake timers must stay allowed in the plan, and the wake works only on AC power.";
+
+    /// <summary>The Power mode card: Console idle, Balanced, or Sleep when idle.</summary>
+    /// <param name="elevated">Whether the service may change the power plan and register tasks itself.</param>
+    public static GameReadyCard PowerMode(PowerModeReading reading, bool elevated)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+
+        var settings = reading.Settings;
+        var hints = new List<string> { PowerPlanHint };
+        var checks = new List<GameReadyCheck>();
+        if (settings.Mode == PowerModes.ConsoleIdle)
+        {
+            var expected = reading.Expected;
+            var current = reading.Current;
+            checks.Add(Check("sleepNever", "Sleep on AC power: never", current?.SleepSeconds == 0, current is null ? null : Describe(current.SleepSeconds)));
+            checks.Add(Check("hibernateNever", "Hibernate on AC power: never", current?.HibernateSeconds == 0, current is null ? null : Describe(current.HibernateSeconds)));
+            checks.Add(Check("unattendedSleep", "No sleep after an unattended wake", current?.UnattendedSleepSeconds == 0, current is null ? null : Describe(current.UnattendedSleepSeconds)));
+            checks.Add(Check("display", $"Display turns off after {settings.DisplayMinutes} minutes", current is not null && expected is not null && current.DisplaySeconds == expected.DisplaySeconds, current is null ? null : Describe(current.DisplaySeconds)));
+            if (settings.ScheduleEnabled)
+            {
+                checks.Add(Check("wakeTimers", "Wake timers allowed in the plan", current?.WakeTimers == 1, null));
+                checks.Add(Check("scheduleTasks", $"Sleep at {settings.SleepTime}, wake at {settings.WakeTime}", reading.ScheduleRegistered, "The scheduled tasks are missing."));
+            }
+
+            hints.Add(ScheduleHint);
+            hints.Add("A controller press should turn the display back on. If it does not, the tray wakes the display itself when it sees controller input while the display is off.");
+        }
+
+        string state;
+        string summary;
+        if (reading.Current is null)
+        {
+            state = GameReadyStates.Unavailable;
+            summary = "Windows did not report the power plan's settings.";
+        }
+        else if (settings.Mode == PowerModes.Balanced)
+        {
+            state = reading.Applied ? GameReadyStates.Ready : GameReadyStates.Attention;
+            summary = reading.Applied ? "Balanced: this PC follows its own power plan." : "Balanced, but the earlier plan values are still changed. Apply Balanced again.";
+        }
+        else if (!reading.Applied || !reading.ScheduleInPlace)
+        {
+            state = GameReadyStates.Attention;
+            summary = "The power plan no longer matches this mode. Apply it again.";
+        }
+        else if (settings.Mode == PowerModes.ConsoleIdle)
+        {
+            state = GameReadyStates.Ready;
+            summary = settings.ScheduleEnabled
+                ? $"Console idle: always ready, display off after {settings.DisplayMinutes} minutes, asleep {settings.SleepTime} to {settings.WakeTime}."
+                : $"Console idle: always ready, display off after {settings.DisplayMinutes} minutes.";
+        }
+        else
+        {
+            state = GameReadyStates.Ready;
+            summary = "Sleep when idle: display off after 5 minutes, sleep after 15.";
+        }
+
+        return new GameReadyCard(
+            GameReadyCardIds.PowerMode,
+            "Power mode",
+            state,
+            summary,
+            checks,
+            NoControllers,
+            hints,
+            false,
+            elevated ? null : NotElevatedReason,
+            false);
+    }
+
+    public const string AmbientHint =
+        "The ambient screen is a Windows screensaver: Windows starts it after the idle time and ends it on keyboard or mouse input. The tray also ends it when a controller changes. Windows does not start a screensaver while a full-screen game or a presentation runs.";
+
+    public const string SoftLockHint =
+        "The soft lock only asks for the chord on a controller. It is not a security boundary: keyboard and mouse input (including what Steam Input sends for a desktop layout) still ends the screen, and Windows itself is not locked.";
+
+    public const string CecHint =
+        "HDMI-CEC standby on display off is not built yet; HyperHarbor only reports whether an adapter is present.";
+
+    /// <summary>The Ambient screen card: a black clock screen between activity and the display turning off.</summary>
+    /// <param name="power">The saved power mode; the screen belongs to Console idle.</param>
+    /// <param name="reported">The screensaver as the tray found it on the desktop; null until the tray reports.</param>
+    public static GameReadyCard AmbientScreen(AmbientReading reading, PowerModeSettings power, AmbientScreensaverState? reported, bool elevated)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+        ArgumentNullException.ThrowIfNull(power);
+
+        var settings = reading.Settings;
+        var hints = new List<string> { AmbientHint };
+        var checks = new List<GameReadyCheck>();
+        string state;
+        string summary;
+        if (!reading.Supported)
+        {
+            state = GameReadyStates.Unavailable;
+            summary = reading.UnsupportedReason ?? "The ambient screen is not available here.";
+        }
+        else if (!settings.Enabled)
+        {
+            state = GameReadyStates.Ready;
+            summary = "Off: the display turns off at the power plan's timeout.";
+        }
+        else
+        {
+            var displaySeconds = power.DisplayMinutes * 60;
+            var modeOk = power.Mode == PowerModes.ConsoleIdle;
+            checks.Add(new GameReadyCheck("ambientMode", "Console idle power mode", modeOk ? GameReadyCheckStatuses.Pass : GameReadyCheckStatuses.Fail, modeOk ? null : "Apply Console idle first.", false));
+            checks.Add(Check("ambientFile", "Screensaver file installed", reading.ScreensaverPath is not null, "It is installed when you apply."));
+
+            var applied = reported is { Active: true } && reading.ScreensaverPath is not null
+                && string.Equals(reported.Path, reading.ScreensaverPath, StringComparison.OrdinalIgnoreCase)
+                && reported.TimeoutSeconds == settings.IdleMinutes * 60;
+            checks.Add(Check(
+                "ambientSet",
+                $"Windows starts it after {settings.IdleMinutes} minutes",
+                applied,
+                reported is null ? "The tray has not reported yet." : reported.PolicyLocked ? "Group Policy sets the screensaver." : "The screensaver setting differs; the tray sets it again shortly."));
+
+            // The check reads the timeout Windows actually has, not only what was saved.
+            var actual = reported is { Active: true } ? reported.TimeoutSeconds : 0;
+            var order = AmbientTimeouts.OrderProblem(actual > 0 ? actual : settings.IdleMinutes * 60, displaySeconds);
+            checks.Add(Check("ambientOrder", $"Screen starts before the display turns off ({power.DisplayMinutes} min)", order is null, order));
+
+            state = modeOk && applied && order is null && reading.ScreensaverPath is not null ? GameReadyStates.Ready : GameReadyStates.Attention;
+            summary = state == GameReadyStates.Ready
+                ? $"On: a clock screen after {settings.IdleMinutes} minutes, display off after {power.DisplayMinutes}."
+                : "The ambient screen is not fully in place yet.";
+            if (settings.SoftLock)
+            {
+                hints.Add($"Soft lock is on: hold {AmbientChord.Describe(settings.Chord)} on a controller to dismiss.");
+                hints.Add(SoftLockHint);
+            }
+        }
+
+        checks.Add(new GameReadyCheck(
+            "ambientCec",
+            "HDMI-CEC adapter",
+            GameReadyCheckStatuses.Pass,
+            reading.CecDevice is { } cec ? $"{cec} found. Standby over CEC is not built yet." : "None found. Standby over CEC is not built yet.",
+            false));
+        hints.Add(CecHint);
+
+        return new GameReadyCard(
+            GameReadyCardIds.AmbientScreen,
+            "Ambient screen",
+            state,
+            summary,
+            checks,
+            NoControllers,
+            hints,
+            false,
+            elevated ? null : NotElevatedReason,
+            false);
+    }
+
+    private static string Describe(int seconds) => seconds == 0 ? "Never." : $"{seconds / 60} minutes.";
+
+    private static string ConsoleSignInLauncherName(ConsoleSignInReading reading) =>
+        reading.Launchers.FirstOrDefault(launcher => launcher.Id == reading.Launcher)?.Name ?? "The launcher";
+
+    private static GameReadyCheck Check(string id, string title, bool pass, string? detail) =>
+        new(id, title, pass ? GameReadyCheckStatuses.Pass : GameReadyCheckStatuses.Fail, pass ? null : detail, false);
+
     /// <summary>The cards that are in place but not built yet, so the section keeps its final shape.</summary>
     public static IReadOnlyList<GameReadyCard> ComingSoon() =>
     [
-        Soon(GameReadyCardIds.SleepPolicy, "Sleep policy", "Sleep and display timeouts that suit a PC people connect to remotely."),
         Soon(GameReadyCardIds.BootToLauncher, "Boot to launcher", "Start the game launcher straight after sign-in, without the desktop."),
         Soon(GameReadyCardIds.SteamDesktopLayout, "Steam desktop layout", "A Steam controller layout for using the desktop with a gamepad."),
         Soon(GameReadyCardIds.LeanHost, "Lean host", "Trim the PC for gaming. This card will summarize the Lean host page."),

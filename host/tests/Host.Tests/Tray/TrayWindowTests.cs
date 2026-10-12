@@ -43,6 +43,18 @@ public sealed partial class TrayWindowTests
 
         public void GameReadyTestWake(int delaySeconds) => Calls.Add("gameTest:" + delaySeconds);
 
+        public void GameReadyConsoleSignInEnable(string userName, string launcher) => Calls.Add($"signIn:{userName}:{launcher}");
+
+        public void GameReadyConsoleSignInDisable(bool deleteUser) => Calls.Add("signInOff:" + deleteUser);
+
+        public void GameReadyPowerModeApply(string mode, int displayMinutes, bool scheduleEnabled, string sleepTime, string wakeTime, double watts, double ratePerKwh) =>
+            Calls.Add($"power:{mode}:{displayMinutes}:{scheduleEnabled}:{sleepTime}:{wakeTime}:{watts}:{ratePerKwh}");
+
+        public void GameReadyAmbientApply(bool enabled, int idleMinutes, bool showHostStatus, bool showRunningVms, bool showDevices, bool softLock, string chord) =>
+            Calls.Add($"ambient:{enabled}:{idleMinutes}:{showHostStatus}:{showRunningVms}:{showDevices}:{softLock}:{chord}");
+
+        public void GameReadySleepNow() => Calls.Add("sleepNow");
+
         public void Open(string target) => Calls.Add("open:" + target);
 
         public void OpenUrl(string url) => Calls.Add("url:" + url);
@@ -77,6 +89,11 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"gameReadyRefresh"}""", "gameRefresh")]
     [InlineData("""{"type":"gameReadyFix","cardId":"controllerWake"}""", "gameFix:controllerWake")]
     [InlineData("""{"type":"gameReadyTestWake","delaySeconds":10}""", "gameTest:10")]
+    [InlineData("""{"type":"gameReadyConsoleSignInEnable","userName":"Console","launcher":"steamBigPicture"}""", "signIn:Console:steamBigPicture")]
+    [InlineData("""{"type":"gameReadyConsoleSignInDisable","deleteUser":true}""", "signInOff:True")]
+    [InlineData("""{"type":"gameReadyPowerModeApply","mode":"consoleIdle","displayMinutes":10,"scheduleEnabled":true,"sleepTime":"01:00","wakeTime":"17:00","watts":60,"ratePerKwh":0.15}""", "power:consoleIdle:10:True:01:00:17:00:60:0.15")]
+    [InlineData("""{"type":"gameReadyAmbientApply","enabled":true,"idleMinutes":5,"showHostStatus":true,"showRunningVms":true,"showDevices":false,"softLock":true,"chord":"lb+rb+start"}""", "ambient:True:5:True:True:False:True:lb+rb+start")]
+    [InlineData("""{"type":"gameReadySleepNow"}""", "sleepNow")]
     [InlineData("""{"type":"open","target":"audit"}""", "open:audit")]
     [InlineData("""{"type":"openUrl","url":"https://github.com/faulkner-engineering/hyperharbor/releases"}""", "url:https://github.com/faulkner-engineering/hyperharbor/releases")]
     [InlineData("""{"type":"cancelPairing","pairingId":"0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"}""", "cancel:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b")]
@@ -106,6 +123,10 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"gameReadyFix","cardId":"leanHost"}""", false)]
     [InlineData("""{"type":"gameReadyFix","cardId":"format"}""", false)]
     [InlineData("""{"type":"gameReadyTestWake"}""", false)]
+    [InlineData("""{"type":"gameReadyConsoleSignInEnable","launcher":"playnite"}""", false)]
+    [InlineData("""{"type":"gameReadyConsoleSignInDisable"}""", false)]
+    [InlineData("""{"type":"gameReadyPowerModeApply","mode":"consoleIdle"}""", false)]
+    [InlineData("""{"type":"gameReadyAmbientApply","enabled":true,"idleMinutes":5}""", false)]
     [InlineData("""{"type":"gameReadyTestWake","delaySeconds":4}""", false)]
     [InlineData("""{"type":"gameReadyTestWake","delaySeconds":301}""", false)]
     [InlineData("""{"type":"gameReadyTestWake","delaySeconds":"10"}""", false)]
@@ -218,9 +239,25 @@ public sealed partial class TrayWindowTests
                     true,
                     null,
                     false),
-                new GameReadyCard(GameReadyCardIds.SleepPolicy, "Sleep policy", GameReadyStates.ComingSoon, "Soon.", [], [], [], false, null, false),
+                new GameReadyCard(GameReadyCardIds.BootToLauncher, "Boot to launcher", GameReadyStates.ComingSoon, "Soon.", [], [], [], false, null, false),
             ],
-            new GameReadyWakeTest(WakeTestStates.Done, null, time, WakeTestOutcomes.Controller, "Xbox Wireless Adapter for Windows", "Xbox Wireless Adapter for Windows woke the PC."));
+            new GameReadyWakeTest(WakeTestStates.Done, null, time, WakeTestOutcomes.Controller, "Xbox Wireless Adapter for Windows", "Xbox Wireless Adapter for Windows woke the PC."),
+            Ambient: new AmbientInfo(
+                true,
+                5,
+                true,
+                true,
+                false,
+                true,
+                "lb+rb+start",
+                true,
+                null,
+                @"C:/Program Files/HyperHarbor/HyperHarbor Ambient.scr",
+                new AmbientScreensaverState(true, @"C:/Program Files/HyperHarbor/HyperHarbor Ambient.scr", 300, false),
+                0.4,
+                0.0,
+                60,
+                "Pulse-Eight USB-CEC Adapter"));
         object[] messages =
         [
             new HostToPage.State(new TrayViewState(

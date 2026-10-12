@@ -6,6 +6,9 @@ using HyperHarbor.Host.Core.Diagnostics;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.GameReady;
+using HyperHarbor.Host.Core.GameReady.Ambient;
+using HyperHarbor.Host.Core.GameReady.ConsoleSignIn;
+using HyperHarbor.Host.Core.GameReady.PowerMode;
 using HyperHarbor.Host.Core.HostProfiles;
 using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Installation;
@@ -33,6 +36,7 @@ using HyperHarbor.Host.Service.Tray;
 using HyperHarbor.Host.Service.VmConsole;
 using HyperHarbor.Host.Service.Wake;
 using HyperHarbor.Host.Tray;
+using HyperHarbor.Host.Tray.Ambient;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Ipc;
 using Microsoft.AspNetCore.Authentication;
@@ -49,7 +53,7 @@ if (!isWindowsService)
     // A Windows executable has no console: commands that print attach to the terminal that started them.
     var redirected = ConsoleAttachment.HasStandardOutput;
     var attached = !redirected && ConsoleAttachment.AttachToParent();
-    (var mode, args) = HostCommandLine.Parse(args, startedFromConsole: redirected || attached);
+    (var mode, args) = HostCommandLine.Parse(args, startedFromConsole: redirected || attached, Environment.ProcessPath);
     if (attached && !HostCommandLine.WritesToConsole(mode))
     {
         ConsoleAttachment.Detach();
@@ -58,7 +62,9 @@ if (!isWindowsService)
     switch (mode)
     {
         case HostMode.Tray:
-            return TrayApp.Run();
+            return TrayApp.Run(args);
+        case HostMode.Screensaver:
+            return AmbientScreensaverApp.Run(args, AmbientGpuLoad.Of);
         case HostMode.Launcher:
             return await Launcher.RunAsync();
         case HostMode.Install:
@@ -81,6 +87,8 @@ if (!isWindowsService)
             return await PackageSearchSetupCommand.RunAsync(args);
         case HostMode.WriteUpdateManifest:
             return WriteManifestCommand.Run(args);
+        case HostMode.ScheduledSleep:
+            return await ScheduledSleepCommand.RunAsync();
         case HostMode.UpdateRun:
             return await UpdateRunCommand.RunAsync();
         case HostMode.SelfTest:
@@ -193,6 +201,19 @@ builder.Services.AddSingleton<WakeFixCoordinator>();
 builder.Services.AddSingleton<IPnpDeviceReader, CimPnpDeviceReader>();
 builder.Services.AddSingleton<IPowerConfig, WindowsPowerConfig>();
 builder.Services.AddSingleton<INetworkWakeFixes, WakeFixCoordinatorFixes>();
+builder.Services.AddSingleton<IConsoleSignInSystem, WindowsConsoleSignInSystem>();
+builder.Services.AddSingleton<IConsoleSignInStore>(new ConsoleSignInStore(dataDirectory));
+builder.Services.AddSingleton<ConsoleSignInService>();
+builder.Services.AddSingleton<IPowerPlans, WindowsPowerPlans>();
+builder.Services.AddSingleton<IPowerSchedule>(new PowerScheduleTasks(new InstallLayout(InstallLayout.DefaultRoot)));
+builder.Services.AddSingleton<IPowerModeStore>(new PowerModeStore(dataDirectory));
+builder.Services.AddSingleton<PowerModeService>();
+builder.Services.AddSingleton<IIdleLoadReader, WindowsIdleLoadReader>();
+builder.Services.AddSingleton<ForegroundGameTracker>();
+builder.Services.AddSingleton<ScheduledSleepService>();
+builder.Services.AddSingleton<IAmbientStore>(new AmbientStore(dataDirectory));
+builder.Services.AddSingleton<IAmbientScreensaverFile>(new AmbientScreensaverFile(new InstallLayout(InstallLayout.DefaultRoot)));
+builder.Services.AddSingleton<AmbientService>();
 builder.Services.AddSingleton<GameReadyService>();
 
 builder.Services.AddSingleton(new VmCredentialStore(dataDirectory));
@@ -452,6 +473,9 @@ if (selfTest is not null)
 {
     return await selfTest.RunAsync(app);
 }
+
+// After an update the screensaver file is a copy of the old version until this refreshes it.
+app.Services.GetRequiredService<AmbientService>().Refresh();
 
 await app.RunAsync();
 return 0;

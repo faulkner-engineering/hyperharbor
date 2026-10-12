@@ -8,7 +8,9 @@ public static class GameReadyCardIds
     public const string FastStartup = "fastStartup";
     public const string UsbSelectiveSuspend = "usbSelectiveSuspend";
     public const string UsbPowerInSleep = "usbPowerInSleep";
-    public const string SleepPolicy = "sleepPolicy";
+    public const string ConsoleSignIn = "consoleSignIn";
+    public const string PowerMode = "powerMode";
+    public const string AmbientScreen = "ambientScreen";
     public const string BootToLauncher = "bootToLauncher";
     public const string SteamDesktopLayout = "steamDesktopLayout";
     public const string LeanHost = "leanHost";
@@ -46,6 +48,15 @@ public static class GameReadyBusy
 {
     public const string Reading = "reading";
     public const string FixPrefix = "fix:";
+
+    /// <summary>The Console sign-in is being set up or turned off.</summary>
+    public const string ConsoleSignIn = "consoleSignIn";
+
+    /// <summary>A power mode is being applied.</summary>
+    public const string PowerMode = "powerMode";
+
+    /// <summary>The Ambient screen choices are being saved.</summary>
+    public const string Ambient = "ambient";
 }
 
 /// <summary>Whether a game controller or receiver can wake the PC. Armed, Can arm, and Cannot wake on the page.</summary>
@@ -128,6 +139,45 @@ public sealed record GameReadyWakeTest(
     string? Source,
     string? Message);
 
+/// <summary>A launcher the Console user can start at sign-in. Unavailable launchers say why.</summary>
+public sealed record ConsoleSignInLauncher(string Id, string Name, bool Available, string? Reason);
+
+/// <summary>
+/// What the Console sign-in card needs to offer its setup form: the user name and launcher to propose, whether the
+/// sign-in is set up, and the launchers that can be chosen. The password is never part of it.
+/// </summary>
+public sealed record ConsoleSignInInfo(
+    string UserName,
+    string Launcher,
+    bool Configured,
+    IReadOnlyList<ConsoleSignInLauncher> Launchers);
+
+/// <summary>The cost model of the Power mode card. The estimate is a model, not a measurement.</summary>
+public sealed record PowerModeEstimate(
+    double Watts,
+    double AlwaysReadyKwh,
+    double AlwaysReadyMonthlyCost,
+    double ScheduledKwh,
+    double ScheduledMonthlyCost,
+    double SleepWatts);
+
+/// <summary>
+/// What the Power mode card needs: the saved choice, whether the active plan holds it, the cost model, and the host's
+/// measured load. The load is null until measured or when Windows does not report it (no GPU counters).
+/// </summary>
+public sealed record PowerModeInfo(
+    string Mode,
+    int DisplayMinutes,
+    bool ScheduleEnabled,
+    string SleepTime,
+    string WakeTime,
+    double Watts,
+    double RatePerKwh,
+    bool Applied,
+    PowerModeEstimate Estimate,
+    double? CpuPercent,
+    double? GpuPercent);
+
 /// <summary>Everything the tray shows in the Game ready section. Sent whole on every change.</summary>
 /// <param name="ReadAt">When the PC was last read; null before the first read finishes.</param>
 /// <param name="Busy">A <see cref="GameReadyBusy"/> value, or null when idle.</param>
@@ -137,7 +187,10 @@ public sealed record GameReadyStatus(
     string? Busy,
     string? Error,
     IReadOnlyList<GameReadyCard> Cards,
-    GameReadyWakeTest WakeTest);
+    GameReadyWakeTest WakeTest,
+    ConsoleSignInInfo? ConsoleSignIn = null,
+    PowerModeInfo? PowerMode = null,
+    AmbientInfo? Ambient = null);
 
 /// <summary>The Game ready status, sent on connect and after every change.</summary>
 public sealed record GameReadyStatusMessage(GameReadyStatus Status) : TrayMessage;
@@ -150,3 +203,34 @@ public sealed record GameReadyFixMessage(string CardId) : TrayMessage;
 
 /// <summary>Puts the PC to sleep after the delay (5 to 300 seconds) and reports what woke it.</summary>
 public sealed record GameReadyTestWakeMessage(int DelaySeconds) : TrayMessage;
+
+/// <summary>
+/// Sets up the Console sign-in: a standard local user that Windows signs in automatically, with a launcher. Needs the
+/// installed service (administrator rights). The password is generated on the host and never sent anywhere.
+/// </summary>
+public sealed record GameReadyConsoleSignInEnableMessage(string UserName, string Launcher) : TrayMessage;
+
+/// <summary>Turns the Console sign-in off. DeleteUser also deletes the account it created, with its profile.</summary>
+public sealed record GameReadyConsoleSignInDisableMessage(bool DeleteUser) : TrayMessage;
+
+/// <summary>Applies a power mode (consoleIdle, balanced, or sleepWhenIdle) and the choices that go with it.</summary>
+public sealed record GameReadyPowerModeApplyMessage(
+    string Mode,
+    int DisplayMinutes,
+    bool ScheduleEnabled,
+    string SleepTime,
+    string WakeTime,
+    double Watts,
+    double RatePerKwh) : TrayMessage;
+
+/// <summary>Puts the host to sleep after a short delay. Asked for by a person at the host, so nothing gates it.</summary>
+public sealed record GameReadySleepNowMessage : TrayMessage;
+
+/// <summary>From the tray: whether a game runs in the foreground on this desktop. The scheduled sleep does not interrupt a game.</summary>
+public sealed record GameForegroundMessage(bool Active) : TrayMessage;
+
+/// <summary>From the scheduled sleep task: sleep now if nothing is in use.</summary>
+public sealed record ScheduledSleepRequestMessage : TrayMessage;
+
+/// <summary>The answer: Accepted when the host is going to sleep, else why not. Final means the task need not try again.</summary>
+public sealed record ScheduledSleepResultMessage(bool Accepted, bool Final, string? Reason) : TrayMessage;

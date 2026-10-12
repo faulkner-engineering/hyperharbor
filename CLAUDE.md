@@ -109,6 +109,35 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    LastWakeParser/WakeAttributor, GameReadyCards; Host.Service/GameReady/GameReadyService with the Test wake action),
    Fast startup, USB selective suspend, and a manual BIOS card; five Coming soon stubs. Tray IPC: GameReadyMessages.cs.
 
+18. Console sign-in card in Game ready, added at the user's request (2026-10-11; tray only; unit tested with fakes, never
+   run against Windows): Host.Core/GameReady/ConsoleSignIn (ConsoleSignInService with undo on failure, ConsoleSignInStore
+   DPAPI vault, WindowsLsaSecrets, WindowsConsoleSignInSystem). Not built: display scaling, the Steam desktop controller
+   layout, and Host.Tray with a controller chord layer for the Console user (none of them exist yet, and the tray pipe admits
+   only administrators); "Require controller chord to unlock" is a hint only.
+
+19. Power mode card in Game ready, added at the user's request (2026-10-11; tray only; unit tested with fakes, never run
+   against Windows): Host.Core/GameReady/PowerMode (PowerModeService: in-place plan values with a recorded Previous,
+   ScheduledSleepGate, ScheduledSleepService, PowerCostModel, idle load), Host.Service PowerScheduleTasks (the tasks
+   "HyperHarbor\Console sleep" and "HyperHarbor\Console wake"; the sleep task runs hh-update.exe scheduled-sleep, which asks
+   the service over the tray pipe), tray DisplayWake (XInput while the display is off, then one
+   SetThreadExecutionState(ES_DISPLAY_REQUIRED)) and ForegroundGameReporter. Not built: Sleep now in the client (needs an
+   API route) and the 10-foot screen (does not exist).
+
+20. Ambient screen card in Game ready, added at the user's request (2026-10-12; tray only; unit tested with fakes, never run
+   against Windows): a Windows screensaver ("HyperHarbor Ambient.scr", a copy of the host exe in the install root, made by
+   the service: InstallLayout.AmbientScreensaver, AmbientScreensaverFile) that Windows starts after IdleMinutes (default 5)
+   and that shows webui route #/ambient (Ambient.svelte: black, clock once a minute, position jump every 5 minutes, optional
+   host/VM/device widgets) in WebView2 with --disable-gpu. HostCommandLine runs it for a .scr process path or the "ambient"
+   verb (Host.Tray/Ambient/AmbientScreensaverApp). The tray (AmbientCoordinator) sets HKCU SCRNSAVE.EXE and the timeout
+   (AmbientScreensaverApplier, user's own settings backed up and restored, Group Policy respected), ends the screen on XInput
+   change (AmbientDismissal: ignored while the display is off, 3 s grace after it comes on, soft lock chord gate), writes
+   %LOCALAPPDATA%HyperHarborambientscreen.json for the page, and relays the screensaver state and the screen's measured
+   CPU/GPU (job object accounting, GPU counters by pid; metrics.json) to the service (AmbientReportMessage). Timeout order
+   (screensaver < display) is enforced in AmbientSettings.Validate, in the Power mode apply, and by a card check on the timeout
+   Windows actually has. CEC: detection only (Pulse-Eight USB adapter). Not verified: whether Windows starts the saver while
+   Steam Big Picture is open, ES_DISPLAY_REQUIRED on an already-off display, the saver under a standard Console user (the tray
+   pipe admits only administrators, so the tray and the screen's data need the administrator session).
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
 

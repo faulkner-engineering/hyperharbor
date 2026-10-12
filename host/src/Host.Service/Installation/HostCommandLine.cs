@@ -32,6 +32,12 @@ internal enum HostMode
     /// <summary>update-run: the update helper, started as SYSTEM by the "HyperHarbor\Update" task.</summary>
     UpdateRun,
 
+    /// <summary>scheduled-sleep: run by the "HyperHarbor\Console sleep" task as SYSTEM; asks the service to sleep the host if nothing is in use.</summary>
+    ScheduledSleep,
+
+    /// <summary>HyperHarbor Ambient.scr (this executable under a screensaver name), or the ambient verb: the ambient screen, with Windows' /s, /c, or /p.</summary>
+    Screensaver,
+
     /// <summary>write-update-manifest: latest.json for a release of this executable (release tooling).</summary>
     WriteUpdateManifest,
     Help,
@@ -46,7 +52,10 @@ internal static class HostCommandLine
     public const string UninstallVerb = "uninstall";
     public const string SaveWakeDiagnosticsVerb = "save-wake-diagnostics";
     public const string UpdateRunVerb = "update-run";
+    public const string ScheduledSleepVerb = "scheduled-sleep";
     public const string WriteUpdateManifestVerb = "write-update-manifest";
+    public const string AmbientVerb = "ambient";
+    public const string ScreensaverExtension = ".scr";
 
     public const string Usage =
         """
@@ -70,8 +79,14 @@ internal static class HostCommandLine
     /// started from Explorer. Without arguments, a terminal runs the host and Explorer opens the launcher.
     /// </param>
     /// <returns>The mode, and the arguments that remain for it.</returns>
-    public static (HostMode Mode, string[] Arguments) Parse(string[] args, bool startedFromConsole)
+    /// <param name="processPath">The running executable. A file with the .scr extension is the screensaver, whatever it is given as arguments.</param>
+    public static (HostMode Mode, string[] Arguments) Parse(string[] args, bool startedFromConsole, string? processPath = null)
     {
+        if (processPath is not null && string.Equals(Path.GetExtension(processPath), ScreensaverExtension, StringComparison.OrdinalIgnoreCase))
+        {
+            return (HostMode.Screensaver, args);
+        }
+
         if (args.Length == 0)
         {
             return (startedFromConsole ? HostMode.Host : HostMode.Launcher, args);
@@ -86,7 +101,9 @@ internal static class HostCommandLine
             UninstallVerb => (HostMode.Uninstall, rest),
             SaveWakeDiagnosticsVerb => (HostMode.SaveWakeDiagnostics, rest),
             UpdateRunVerb => (HostMode.UpdateRun, rest),
+            ScheduledSleepVerb => (HostMode.ScheduledSleep, rest),
             WriteUpdateManifestVerb => (HostMode.WriteUpdateManifest, rest),
+            AmbientVerb => (HostMode.Screensaver, rest),
             "help" or "--help" or "-h" or "/?" => (HostMode.Help, rest),
             WakeFixHelper.Switch when args.Length is 2 or 3 => (HostMode.ApplyWakeFixes, args),
             SelfTestGate.Switch when args.Length == 3 => (HostMode.SelfTest, args),

@@ -42,6 +42,17 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(GameReadyQueryMessage), "gameReadyQuery")]
 [JsonDerivedType(typeof(GameReadyFixMessage), "gameReadyFix")]
 [JsonDerivedType(typeof(GameReadyTestWakeMessage), "gameReadyTestWake")]
+[JsonDerivedType(typeof(GameReadyConsoleSignInEnableMessage), "gameReadyConsoleSignInEnable")]
+[JsonDerivedType(typeof(GameReadyConsoleSignInDisableMessage), "gameReadyConsoleSignInDisable")]
+[JsonDerivedType(typeof(GameReadyPowerModeApplyMessage), "gameReadyPowerModeApply")]
+[JsonDerivedType(typeof(GameReadySleepNowMessage), "gameReadySleepNow")]
+[JsonDerivedType(typeof(GameForegroundMessage), "gameForeground")]
+[JsonDerivedType(typeof(ScheduledSleepRequestMessage), "scheduledSleepRequest")]
+[JsonDerivedType(typeof(ScheduledSleepResultMessage), "scheduledSleepResult")]
+[JsonDerivedType(typeof(GameReadyAmbientApplyMessage), "gameReadyAmbientApply")]
+[JsonDerivedType(typeof(AmbientReportMessage), "ambientReport")]
+[JsonDerivedType(typeof(AmbientSnapshotQueryMessage), "ambientSnapshotQuery")]
+[JsonDerivedType(typeof(AmbientSnapshotMessage), "ambientSnapshot")]
 public abstract record TrayMessage;
 
 // Service to tray.

@@ -196,7 +196,7 @@ internal sealed class WebWindow : Form
         MessageReceived?.Invoke(message);
     }
 
-    private static void Serve(CoreWebView2Environment environment, CoreWebView2WebResourceRequestedEventArgs e)
+    internal static void Serve(CoreWebView2Environment environment, CoreWebView2WebResourceRequestedEventArgs e)
     {
         var path = new Uri(e.Request.Uri).AbsolutePath;
         if (TrayUiResources.Open(path) is not { } file)

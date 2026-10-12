@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using HyperHarbor.Host.Tray.Ambient;
 using HyperHarbor.Host.Tray.Window;
 using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Ipc;
@@ -33,6 +34,12 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private readonly ShutdownGuard _shutdownGuard;
     private readonly System.Windows.Forms.Timer _gpuVmPoll;
     private readonly System.Windows.Forms.Timer _updatePoll;
+    private readonly System.Windows.Forms.Timer _inputPoll;
+    private readonly System.Windows.Forms.Timer _gamePoll;
+    private readonly DisplayWake _displayWake;
+    private readonly DisplayStateWatcher _displayWatcher;
+    private readonly AmbientCoordinator _ambient;
+    private readonly ForegroundGameReporter _gameReporter;
     private readonly System.Windows.Forms.Timer _releaseHostWindow;
     private readonly HashSet<string> _busy = [];
     private readonly bool _webViewAvailable = TrayWebView.RuntimeVersion is not null;
@@ -47,6 +54,8 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private string? _backupFolder;
     private IReadOnlyList<string> _gpuVms = [];
     private HostUpdateStatus? _update;
+    private bool _restarting;
+    private const string ConsoleIdleMode = "consoleIdle";
     private HostLeanStatus? _hostLean;
     private GameReadyStatus? _gameReady;
     private PairingStartedMessage? _pairing;
@@ -71,6 +80,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         }
 
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Sleep now…", null, (_, _) => ConfirmSleepNow());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
         // Asleep until the service answers on the pipe.
@@ -100,6 +110,51 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         _updatePoll.Tick += (_, _) => PollUpdate();
         _updatePoll.Start();
 
+        // Console idle turns the display off; a controller press must bring it back even when Windows does not count it.
+        var controllers = new XInputControllers();
+        _displayWake = new DisplayWake(controllers, new ExecutionStateDisplay(), TimeProvider.System);
+
+        // The ambient screen is a screensaver process; the tray sets it up, ends it on controller input, and feeds its page.
+        var signals = new AmbientSignals();
+        _ambient = new AmbientCoordinator(
+            new AmbientScreensaverApplier(new WindowsScreensaverSettings(), new FileScreensaverBackup(AmbientNames.PreviousScreensaverFile)),
+            new AmbientDismissal(controllers, signals, TimeProvider.System),
+            signals,
+            message =>
+            {
+                if (_connected)
+                {
+                    _ = _pipe.SendAsync(message);
+                }
+            },
+            AmbientFiles.Read<AmbientMetrics>,
+            data => AmbientFiles.Write(AmbientNames.ScreenDataFile, data),
+            AmbientNames.MetricsFile);
+        _displayWatcher = new DisplayStateWatcher(off =>
+        {
+            _displayWake.DisplayOff = off;
+            _ambient.SetDisplayOff(off);
+        });
+        _inputPoll = new System.Windows.Forms.Timer { Interval = 250 };
+        _inputPoll.Tick += (_, _) =>
+        {
+            _displayWake.Tick();
+            _ambient.Tick();
+        };
+        _inputPoll.Start();
+
+        // The scheduled sleep leaves a running game alone, and only this desktop can tell.
+        _gameReporter = new ForegroundGameReporter(ForegroundGameReporter.QueryWindowsState, active =>
+        {
+            if (_connected)
+            {
+                _ = _pipe.SendAsync(new GameForegroundMessage(active));
+            }
+        });
+        _gamePoll = new System.Windows.Forms.Timer { Interval = 15_000 };
+        _gamePoll.Tick += (_, _) => _gameReporter.Tick();
+        _gamePoll.Start();
+
         _releaseHostWindow = new System.Windows.Forms.Timer { Interval = (int)KeepHiddenWindow.TotalMilliseconds };
         _releaseHostWindow.Tick += (_, _) =>
         {
@@ -120,6 +175,9 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         {
             _gpuVmPoll.Dispose();
             _updatePoll.Dispose();
+            _inputPoll.Dispose();
+            _gamePoll.Dispose();
+            _displayWatcher.Dispose();
             _releaseHostWindow.Dispose();
             _shutdownGuard.Dispose();
             _pipe.Dispose();
@@ -244,6 +302,11 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         _notifyIcon.Text = connected ? "HyperHarbor" : "HyperHarbor (service not running)";
         _passphraseItem.Enabled = connected;
         _connected = connected;
+        _ambient.SetHostStatus(connected ? "Host is running" : "Host service offline");
+        if (connected)
+        {
+            _ambient.Reconnected();
+        }
 
         // The service does not report sessions to the tray yet, so the icon shows only awake or asleep.
         _iconProvider.State = connected ? TrayIconState.Awake : TrayIconState.Asleep;
@@ -324,6 +387,9 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             case GameReadyStatusMessage gameReady:
                 OnGameReadyStatus(gameReady.Status);
                 break;
+            case AmbientSnapshotMessage snapshot:
+                _ambient.OnSnapshot(snapshot);
+                break;
         }
     }
 
@@ -358,6 +424,17 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
 
     private void OnUpdateStatus(HostUpdateStatus status)
     {
+        // The service was updated while this tray kept running the old version: hand over to the current copy.
+        if (!_restarting && TrayRestart.IsStale(status, TrayRestart.OwnVersion))
+        {
+            _restarting = true;
+            if (TrayRestart.TryStartCurrent())
+            {
+                ExitThread();
+                return;
+            }
+        }
+
         // In notify mode nothing installs by itself, so say once when a version is ready.
         if (status is { Activity: HostUpdateActivity.Ready, Mode: HostUpdateMode.Notify } && _update?.Activity != HostUpdateActivity.Ready)
         {
@@ -407,6 +484,8 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         var testFinished = _gameReady?.WakeTest.State is WakeTestStates.Countdown or WakeTestStates.Sleeping
             && status.WakeTest.State is WakeTestStates.Done or WakeTestStates.Failed;
         _gameReady = status;
+        _displayWake.Enabled = status.PowerMode?.Mode == ConsoleIdleMode;
+        _ambient.OnStatus(status);
         PushState();
         if (testFinished)
         {
@@ -674,7 +753,34 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
 
     public void GameReadyFix(string cardId) => _ = _pipe.SendAsync(new GameReadyFixMessage(cardId));
 
+    public void GameReadyPowerModeApply(string mode, int displayMinutes, bool scheduleEnabled, string sleepTime, string wakeTime, double watts, double ratePerKwh) =>
+        _ = _pipe.SendAsync(new GameReadyPowerModeApplyMessage(mode, displayMinutes, scheduleEnabled, sleepTime, wakeTime, watts, ratePerKwh));
+
+    public void GameReadyAmbientApply(bool enabled, int idleMinutes, bool showHostStatus, bool showRunningVms, bool showDevices, bool softLock, string chord) =>
+        _ = _pipe.SendAsync(new GameReadyAmbientApplyMessage(enabled, idleMinutes, showHostStatus, showRunningVms, showDevices, softLock, chord));
+
+    public void GameReadySleepNow() => _ = _pipe.SendAsync(new GameReadySleepNowMessage());
+
+    private void ConfirmSleepNow()
+    {
+        var answer = MessageBox.Show(
+            "Put this PC to sleep? Remote sessions end, and a controller press or the network wakes it again if that is set up.",
+            "Sleep now",
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Question);
+        if (answer == DialogResult.OK)
+        {
+            GameReadySleepNow();
+        }
+    }
+
     public void GameReadyTestWake(int delaySeconds) => _ = _pipe.SendAsync(new GameReadyTestWakeMessage(delaySeconds));
+
+    public void GameReadyConsoleSignInEnable(string userName, string launcher) =>
+        _ = _pipe.SendAsync(new GameReadyConsoleSignInEnableMessage(userName, launcher));
+
+    public void GameReadyConsoleSignInDisable(bool deleteUser) =>
+        _ = _pipe.SendAsync(new GameReadyConsoleSignInDisableMessage(deleteUser));
 
     public void InstallUpdate() => _ = _pipe.SendAsync(new InstallUpdateMessage());
 

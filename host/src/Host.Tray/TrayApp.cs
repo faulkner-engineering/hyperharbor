@@ -9,11 +9,17 @@ public static class TrayApp
 {
     private const string InstanceMutexName = @"Local\HyperHarbor.Tray";
     private const string ShowWindowEventName = @"Local\HyperHarbor.Tray.ShowWindow";
+    private static readonly TimeSpan PreviousTrayTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>Runs the tray on its own STA thread and returns when the user exits it.</summary>
-    public static int Run()
+    public static int Run(string[] args)
     {
         using var instance = new Mutex(initiallyOwned: true, InstanceMutexName, out var first);
+        if (!first && args.Contains(TrayRestart.Switch, StringComparer.Ordinal))
+        {
+            first = WaitForPreviousTray(instance);
+        }
+
         if (!first)
         {
             if (EventWaitHandle.TryOpenExisting(ShowWindowEventName, out var show))
@@ -34,6 +40,20 @@ public static class TrayApp
         thread.Join();
         instance.ReleaseMutex();
         return 0;
+    }
+
+    /// <summary>A restarted tray waits briefly for the tray that started it to exit and release the mutex.</summary>
+    private static bool WaitForPreviousTray(Mutex instance)
+    {
+        try
+        {
+            return instance.WaitOne(PreviousTrayTimeout);
+        }
+        catch (AbandonedMutexException)
+        {
+            // The previous tray ended without releasing it; this one owns it now.
+            return true;
+        }
     }
 
     private static void RunMessageLoop(EventWaitHandle showWindow)

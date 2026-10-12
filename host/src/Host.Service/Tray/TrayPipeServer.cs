@@ -295,8 +295,105 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 AuditTrayAction("trayGameReadyTestWake", null, null, null, $"delaySeconds={testWake.DelaySeconds}");
                 StartGameReadyWakeTest(testWake.DelaySeconds);
                 break;
+            case GameReadyConsoleSignInEnableMessage enable:
+                // The password is generated in the service and is not part of any message or audit entry.
+                AuditTrayAction("trayConsoleSignInEnable", null, null, null, $"user={Truncate(enable.UserName)}, launcher={Truncate(enable.Launcher)}");
+                _ = RunGameReadyAsync(gameReady => gameReady.EnableConsoleSignInAsync(enable.UserName, enable.Launcher, CancellationToken.None));
+                break;
+            case GameReadyPowerModeApplyMessage powerMode:
+                AuditTrayAction(
+                    "trayPowerMode",
+                    null,
+                    null,
+                    null,
+                    $"mode={Truncate(powerMode.Mode)}, displayMinutes={powerMode.DisplayMinutes}, schedule={powerMode.ScheduleEnabled}, sleep={Truncate(powerMode.SleepTime)}, wake={Truncate(powerMode.WakeTime)}");
+                _ = RunGameReadyAsync(gameReady => gameReady.ApplyPowerModeAsync(
+                    new Core.GameReady.PowerMode.PowerModeSettings(
+                        powerMode.Mode,
+                        powerMode.DisplayMinutes,
+                        powerMode.ScheduleEnabled,
+                        powerMode.SleepTime,
+                        powerMode.WakeTime,
+                        powerMode.Watts,
+                        powerMode.RatePerKwh),
+                    CancellationToken.None));
+                break;
+            case GameReadyAmbientApplyMessage ambient:
+                AuditTrayAction(
+                    "trayAmbient",
+                    null,
+                    null,
+                    null,
+                    $"enabled={ambient.Enabled}, idleMinutes={ambient.IdleMinutes}, softLock={ambient.SoftLock}, chord={Truncate(ambient.Chord)}");
+                _ = RunGameReadyAsync(gameReady => gameReady.ApplyAmbientAsync(
+                    new Core.GameReady.Ambient.AmbientSettings(
+                        ambient.Enabled,
+                        ambient.IdleMinutes,
+                        ambient.ShowHostStatus,
+                        ambient.ShowRunningVms,
+                        ambient.ShowDevices,
+                        ambient.SoftLock,
+                        ambient.Chord),
+                    CancellationToken.None));
+                break;
+            case AmbientReportMessage report:
+                _services.GetService<GameReady.GameReadyService>()?.ReportAmbient(report);
+                break;
+            case AmbientSnapshotQueryMessage:
+                await connection.SendAsync(await AmbientSnapshotAsync());
+                break;
+            case GameReadySleepNowMessage:
+                AuditTrayAction("traySleepNow", null, null, null);
+                _services.GetService<GameReady.GameReadyService>()?.SleepNow();
+                break;
+            case GameForegroundMessage foreground:
+                _services.GetService<Core.GameReady.PowerMode.ForegroundGameTracker>()?.Report(foreground.Active);
+                break;
+            case ScheduledSleepRequestMessage:
+                if (_services.GetService<Core.GameReady.PowerMode.ScheduledSleepService>() is { } scheduled)
+                {
+                    var (slept, final, reason) = scheduled.Request();
+                    AuditTrayAction("scheduledSleep", null, null, null, slept ? "The host was put to sleep." : reason, slept ? AuditOutcome.Succeeded : AuditOutcome.Failed);
+                    await connection.SendAsync(new ScheduledSleepResultMessage(slept, final, reason));
+                }
+
+                break;
+            case GameReadyConsoleSignInDisableMessage disable:
+                AuditTrayAction("trayConsoleSignInDisable", null, null, null, $"deleteUser={disable.DeleteUser}");
+                _ = RunGameReadyAsync(gameReady => gameReady.DisableConsoleSignInAsync(disable.DeleteUser, CancellationToken.None));
+                break;
         }
     }
+
+    /// <summary>A paired device counts as using the host for this long after its last request.</summary>
+    private static readonly TimeSpan RecentUse = TimeSpan.FromMinutes(10);
+
+    /// <summary>The names and counts the ambient screen's widgets show. An unreadable inventory leaves the VM list empty.</summary>
+    private async Task<AmbientSnapshotMessage> AmbientSnapshotAsync()
+    {
+        var running = new List<string>();
+        if (_services.GetService<Core.IVmInventory>() is { } inventory)
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                running.AddRange((await inventory.ListAsync(timeout.Token))
+                    .Where(vm => vm.State == Shared.Contracts.Vms.VmState.Running)
+                    .Select(vm => vm.Name)
+                    .Take(8));
+            }
+            catch (Exception ex) when (ex is Core.HyperV.HyperVUnavailableException or OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "The VM list for the ambient screen could not be read.");
+            }
+        }
+
+        var lastUsed = _services.GetService<Core.Power.RemoteUseTracker>()?.LastUsed;
+        var inUse = lastUsed is { } at && (_services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow() - at < RecentUse;
+        return new AmbientSnapshotMessage(running, _devices.List().Count, inUse);
+    }
+
+    private static string Truncate(string? text) => text is { Length: > 40 } ? text[..40] : text ?? string.Empty;
 
     private async Task SendGameReadyStatusAsync(Connection connection, bool force)
     {

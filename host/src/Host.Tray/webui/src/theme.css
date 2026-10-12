@@ -180,6 +180,9 @@ button:disabled {
 }
 
 input[type="password"],
+input[type="text"],
+input[type="number"],
+input[type="time"],
 select {
   width: 100%;
   min-height: 36px;
@@ -194,6 +197,9 @@ select {
 }
 
 input[type="password"]:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="time"]:focus,
 select:focus {
   border-color: var(--accent);
   outline: none;

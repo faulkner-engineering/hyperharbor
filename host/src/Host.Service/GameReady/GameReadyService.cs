@@ -1,4 +1,7 @@
 using HyperHarbor.Host.Core.GameReady;
+using HyperHarbor.Host.Core.GameReady.ConsoleSignIn;
+using HyperHarbor.Host.Core.GameReady.Ambient;
+using HyperHarbor.Host.Core.GameReady.PowerMode;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Shared.Contracts.Ipc;
 using HyperHarbor.Shared.Contracts.Wake;
@@ -48,6 +51,10 @@ public sealed class GameReadyService
     private readonly IPowerConfig _power;
     private readonly INetworkWakeFixes _networkFixes;
     private readonly ISleepController _sleep;
+    private readonly ConsoleSignInService _consoleSignIn;
+    private readonly PowerModeService _powerMode;
+    private readonly IIdleLoadReader _idleLoad;
+    private readonly AmbientService _ambient;
     private readonly TimeProvider _time;
     private readonly ILogger<GameReadyService> _logger;
     private readonly bool _elevated;
@@ -61,6 +68,11 @@ public sealed class GameReadyService
     private DateTimeOffset? _readAt;
     private string? _busy;
     private string? _error;
+    private ConsoleSignInInfo? _consoleSignInInfo;
+    private PowerModeInfo? _powerModeInfo;
+    private AmbientInfo? _ambientInfo;
+    private AmbientReportMessage? _ambientReport;
+    private CecDevice? _cec;
     private GameReadyWakeTest _wakeTest = new(WakeTestStates.Idle, null, null, null, null, null);
     private ITimer? _testTimer;
 
@@ -70,9 +82,13 @@ public sealed class GameReadyService
         IPowerConfig power,
         INetworkWakeFixes networkFixes,
         ISleepController sleep,
+        ConsoleSignInService consoleSignIn,
+        PowerModeService powerMode,
+        IIdleLoadReader idleLoad,
+        AmbientService ambient,
         TimeProvider time,
         ILogger<GameReadyService> logger)
-        : this(environment, devices, power, networkFixes, sleep, time, logger, Environment.IsPrivilegedProcess, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5))
+        : this(environment, devices, power, networkFixes, sleep, consoleSignIn, powerMode, idleLoad, ambient, time, logger, Environment.IsPrivilegedProcess, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5))
     {
     }
 
@@ -82,6 +98,10 @@ public sealed class GameReadyService
         IPowerConfig power,
         INetworkWakeFixes networkFixes,
         ISleepController sleep,
+        ConsoleSignInService consoleSignIn,
+        PowerModeService powerMode,
+        IIdleLoadReader idleLoad,
+        AmbientService ambient,
         TimeProvider time,
         ILogger<GameReadyService> logger,
         bool elevated,
@@ -94,6 +114,10 @@ public sealed class GameReadyService
         _power = power;
         _networkFixes = networkFixes;
         _sleep = sleep;
+        _consoleSignIn = consoleSignIn;
+        _powerMode = powerMode;
+        _idleLoad = idleLoad;
+        _ambient = ambient;
         _time = time;
         _logger = logger;
         _elevated = elevated;
@@ -107,7 +131,7 @@ public sealed class GameReadyService
     {
         lock (_gate)
         {
-            return new GameReadyStatus(_readAt, _busy, _error, _cards, _wakeTest);
+            return new GameReadyStatus(_readAt, _busy, _error, _cards, _wakeTest, _consoleSignInInfo, _powerModeInfo, _ambientInfo);
         }
     }
 
@@ -293,6 +317,15 @@ public sealed class GameReadyService
         var nodes = await _devices.ReadAsync(cancellationToken);
         var controllers = ControllerWakeEvaluator.Build(nodes, environment.WakeArmedDevices, environment.WakeProgrammableDevices);
 
+        var consoleSignIn = ReadConsoleSignIn();
+        var powerMode = await ReadPowerModeAsync(cancellationToken);
+        var cec = CecDetector.Find(nodes);
+        var ambient = _ambient.Read(cec);
+        AmbientReportMessage? report;
+        lock (_gate)
+        {
+            report = _ambientReport;
+        }
         var cards = new List<GameReadyCard>
         {
             GameReadyCards.WakeOnLan(WakeReadinessEvaluator.Evaluate(environment)),
@@ -300,6 +333,9 @@ public sealed class GameReadyService
             GameReadyCards.FastStartup(environment.Power),
             GameReadyCards.UsbSelectiveSuspend(_power.UsbSelectiveSuspendOnAc(), _elevated),
             GameReadyCards.UsbPowerInSleep(),
+            GameReadyCards.ConsoleSignIn(consoleSignIn, _elevated),
+            GameReadyCards.PowerMode(powerMode.Reading, _elevated),
+            GameReadyCards.AmbientScreen(ambient, powerMode.Reading.Settings, report?.Screensaver, _elevated),
         };
         cards.AddRange(GameReadyCards.ComingSoon());
 
@@ -307,10 +343,310 @@ public sealed class GameReadyService
         {
             _controllers = controllers;
             _cards = cards;
+            _consoleSignInInfo = new ConsoleSignInInfo(
+                consoleSignIn.UserName,
+                consoleSignIn.Launcher,
+                consoleSignIn.Configured,
+                consoleSignIn.Launchers.Select(launcher => new ConsoleSignInLauncher(launcher.Id, launcher.Name, launcher.Available, launcher.Reason)).ToList());
+            _powerModeInfo = powerMode.Info;
+            _cec = cec;
+            _ambientInfo = BuildAmbientInfo(ambient, report);
             _readAt = _time.GetUtcNow();
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static AmbientInfo BuildAmbientInfo(AmbientReading reading, AmbientReportMessage? report)
+    {
+        var settings = reading.Settings;
+        return new AmbientInfo(
+            settings.Enabled,
+            settings.IdleMinutes,
+            settings.ShowHostStatus,
+            settings.ShowRunningVms,
+            settings.ShowDevices,
+            settings.SoftLock,
+            settings.Chord,
+            reading.Supported,
+            reading.UnsupportedReason,
+            reading.ScreensaverPath,
+            report?.Screensaver,
+            report?.CpuPercent,
+            report?.GpuPercent,
+            report?.MeasuredSeconds,
+            reading.CecDevice);
+    }
+
+    /// <summary>The saved power mode, how the active plan compares, the cost model, and (in Console idle) the measured load.</summary>
+    private async Task<(PowerModeReading Reading, PowerModeInfo Info)> ReadPowerModeAsync(CancellationToken cancellationToken)
+    {
+        var reading = _powerMode.Read();
+        var settings = reading.Settings;
+        IdleLoad? load = null;
+        if (settings.Mode == PowerModes.ConsoleIdle)
+        {
+            try
+            {
+                load = await _idleLoad.SampleAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or Microsoft.Management.Infrastructure.CimException or InvalidOperationException)
+            {
+                _logger.LogDebug(ex, "The idle load could not be measured.");
+            }
+        }
+
+        var estimate = PowerCostModel.Estimate(settings);
+        return (
+            reading,
+            new PowerModeInfo(
+                settings.Mode,
+                settings.DisplayMinutes,
+                settings.ScheduleEnabled,
+                settings.SleepTime,
+                settings.WakeTime,
+                settings.Watts,
+                settings.RatePerKwh,
+                reading.Applied && reading.ScheduleInPlace,
+                new PowerModeEstimate(estimate.Watts, estimate.AlwaysReadyKwh, estimate.AlwaysReadyMonthlyCost, estimate.ScheduledKwh, estimate.ScheduledMonthlyCost, PowerCostModel.SleepWatts),
+                load?.CpuPercent,
+                load?.GpuPercent));
+    }
+
+    /// <summary>Applies a power mode and reads the PC again. Needs administrator rights.</summary>
+    /// <exception cref="GameReadyException">The settings are not valid or a step failed; the message says why.</exception>
+    public async Task ApplyPowerModeAsync(PowerModeSettings settings, CancellationToken cancellationToken)
+    {
+        RequireElevation();
+        lock (_gate)
+        {
+            if (_busy is not null && _busy != GameReadyBusy.Reading)
+            {
+                throw new GameReadyException("Another action is still running.");
+            }
+
+            _busy = GameReadyBusy.PowerMode;
+            _error = null;
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            // The ambient screen must start before the display turns off, so a shorter display timeout is refused.
+            if (_ambient.DisplayTimeoutProblem(settings) is { } ordering)
+            {
+                SetError(ordering);
+            }
+            else
+            {
+                await Task.Run(() => _powerMode.Apply(settings), cancellationToken);
+            }
+        }
+        catch (PowerModeException ex)
+        {
+            SetError(ex.Message);
+        }
+
+        try
+        {
+            await _readLock.WaitAsync(cancellationToken);
+            try
+            {
+                await ReadAsync(cancellationToken);
+            }
+            finally
+            {
+                _readLock.Release();
+            }
+        }
+        finally
+        {
+            SetBusy(null);
+        }
+    }
+
+    /// <summary>Saves the Ambient screen choices and reads the PC again. Needs administrator rights (the screensaver file is in Program Files).</summary>
+    /// <exception cref="GameReadyException">Another action is running or the host is not elevated.</exception>
+    public async Task ApplyAmbientAsync(AmbientSettings settings, CancellationToken cancellationToken)
+    {
+        RequireElevation();
+        lock (_gate)
+        {
+            if (_busy is not null && _busy != GameReadyBusy.Reading)
+            {
+                throw new GameReadyException("Another action is still running.");
+            }
+
+            _busy = GameReadyBusy.Ambient;
+            _error = null;
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            await Task.Run(() => _ambient.Apply(settings, _powerMode.Settings), cancellationToken);
+        }
+        catch (AmbientException ex)
+        {
+            SetError(ex.Message);
+        }
+
+        try
+        {
+            await _readLock.WaitAsync(cancellationToken);
+            try
+            {
+                await ReadAsync(cancellationToken);
+            }
+            finally
+            {
+                _readLock.Release();
+            }
+        }
+        finally
+        {
+            SetBusy(null);
+        }
+    }
+
+    /// <summary>
+    /// The tray's report of the desktop screensaver and the screen's measured cost. The card's checks read it, so the PC
+    /// is read again.
+    /// </summary>
+    public void ReportAmbient(AmbientReportMessage report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        bool changed;
+        lock (_gate)
+        {
+            changed = _ambientReport is null || _ambientReport.Screensaver != report.Screensaver;
+            _ambientReport = report;
+            if (_ambientInfo is { } info)
+            {
+                _ambientInfo = info with
+                {
+                    Screensaver = report.Screensaver,
+                    CpuPercent = report.CpuPercent,
+                    GpuPercent = report.GpuPercent,
+                    MeasuredSeconds = report.MeasuredSeconds,
+                };
+            }
+        }
+
+        if (changed)
+        {
+            _ = RefreshAsync(force: true, CancellationToken.None);
+        }
+        else
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Puts the host to sleep shortly, so the tray can show that it is going to.</summary>
+    public void SleepNow()
+    {
+        _logger.LogInformation("Sleep now was requested at the host.");
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(_beforeSleep);
+                _sleep.Sleep();
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                _logger.LogWarning(ex, "Sleep now failed.");
+                SetError($"The PC could not be put to sleep: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>The Console user and launcher are kept between reads so the form does not forget what was typed.</summary>
+    private ConsoleSignInReading ReadConsoleSignIn()
+    {
+        var userName = _consoleSignInInfo?.UserName;
+        var launcher = _consoleSignInInfo?.Launcher;
+        try
+        {
+            return _consoleSignIn.Read(userName, launcher);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or UnauthorizedAccessException or IOException or System.Security.Cryptography.CryptographicException)
+        {
+            // Without administrator rights the account, the LSA secret, and the saved record cannot be read.
+            _logger.LogDebug(ex, "The Console sign-in could not be read.");
+            return new ConsoleSignInReading(
+                userName ?? ConsoleUserPolicy.DefaultUserName,
+                launcher ?? ConsoleLaunchers.SteamBigPicture,
+                Configured: false,
+                UserExists: false,
+                UserIsStandard: false,
+                AutoSignInSet: false,
+                LauncherSet: false,
+                PlaintextPasswordPresent: false,
+                AdminAccountReport.None,
+                []);
+        }
+    }
+
+    /// <summary>Sets up the Console sign-in and reads the PC again. A failed setup undoes its own changes.</summary>
+    /// <exception cref="GameReadyException">The sign-in cannot be set up; the message says why.</exception>
+    public Task EnableConsoleSignInAsync(string userName, string launcher, CancellationToken cancellationToken) =>
+        RunConsoleSignInAsync(
+            () => _consoleSignIn.Enable(userName, launcher),
+            () => _consoleSignInInfo = new ConsoleSignInInfo(userName.Trim(), launcher, false, _consoleSignInInfo?.Launchers ?? []),
+            cancellationToken);
+
+    /// <summary>Turns the Console sign-in off and reads the PC again.</summary>
+    public Task DisableConsoleSignInAsync(bool deleteUser, CancellationToken cancellationToken) =>
+        RunConsoleSignInAsync(() => _consoleSignIn.Disable(deleteUser), null, cancellationToken);
+
+    private async Task RunConsoleSignInAsync(Action action, Action? remember, CancellationToken cancellationToken)
+    {
+        RequireElevation();
+        lock (_gate)
+        {
+            if (_busy is not null && _busy != GameReadyBusy.Reading)
+            {
+                throw new GameReadyException("Another action is still running.");
+            }
+
+            _busy = GameReadyBusy.ConsoleSignIn;
+            _error = null;
+            remember?.Invoke();
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            await Task.Run(action, cancellationToken);
+        }
+        catch (ConsoleSignInException ex)
+        {
+            SetError(ex.Message);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or UnauthorizedAccessException or InvalidOperationException or IOException)
+        {
+            _logger.LogWarning(ex, "The Console sign-in action failed.");
+            SetError($"The Console sign-in action failed: {ex.Message}");
+        }
+
+        try
+        {
+            await _readLock.WaitAsync(cancellationToken);
+            try
+            {
+                await ReadAsync(cancellationToken);
+            }
+            finally
+            {
+                _readLock.Release();
+            }
+        }
+        finally
+        {
+            SetBusy(null);
+        }
     }
 
     private async Task RunWakeTestAsync()

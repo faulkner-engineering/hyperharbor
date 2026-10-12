@@ -40,9 +40,22 @@ public sealed class InstallLayout
     /// Replaces the helper with a copy of <paramref name="source"/>. The helper may be the running process, so the
     /// old file is renamed aside (Windows allows renaming a running executable) and deleted on a later call.
     /// </summary>
-    public void InstallHelper(string source)
+    public void InstallHelper(string source) => ReplaceWithCopy(HelperExecutable, source);
+
+    /// <summary>
+    /// root\HyperHarbor Ambient.scr: a copy of the installed version that Windows starts as the screensaver of the Ambient
+    /// screen. It lives outside the version folders for the same reasons as the helper.
+    /// </summary>
+    public string AmbientScreensaver => Path.Combine(Root, AmbientScreensaverName);
+
+    public const string AmbientScreensaverName = Shared.Contracts.Ipc.AmbientScreensaver.FileName;
+
+    /// <summary>Replaces the screensaver with a copy of <paramref name="source"/> (the file may be running; see <see cref="InstallHelper"/>).</summary>
+    public void InstallAmbientScreensaver(string source) => ReplaceWithCopy(AmbientScreensaver, source);
+
+    private void ReplaceWithCopy(string target, string source)
     {
-        var old = HelperExecutable + ".old";
+        var old = target + ".old";
         try
         {
             File.Delete(old);
@@ -52,22 +65,22 @@ public sealed class InstallLayout
             // Still running from the last replacement; it goes next time.
         }
 
-        if (File.Exists(HelperExecutable))
+        if (File.Exists(target))
         {
             if (File.Exists(old))
             {
-                File.Delete(HelperExecutable);
+                File.Delete(target);
             }
             else
             {
-                File.Move(HelperExecutable, old);
+                File.Move(target, old);
             }
         }
 
-        var partial = HelperExecutable + ".partial";
+        var partial = target + ".partial";
         Directory.CreateDirectory(Root);
         File.Copy(source, partial, overwrite: true);
-        File.Move(partial, HelperExecutable);
+        File.Move(partial, target);
     }
 
     public string VersionFolder(SemanticVersion version) => Path.Combine(VersionsFolder, version.ToString());

@@ -10,6 +10,45 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- After a host update the tray now restarts itself. It used to keep running the old version, so the host window
+  showed the old screens until the tray was closed and opened again. The tray compares its version with the one the
+  service reports and starts the new copy when they differ. This takes effect from the update after the one that
+  installs it.
+
+### Added
+- Game ready: an Ambient screen card for Console idle. After 5 minutes (you choose) without input, Windows starts a full-screen
+  black screen with a clock and, if you turn them on, small widgets for the host status, the running virtual machines, and the
+  paired devices. It is a Windows screensaver (HyperHarbor Ambient.scr in the install folder), so Windows keeps the idle timer
+  and ends the screen on keyboard or mouse input; the tray also ends it when a controller is used. The screensaver must start
+  before the display turns off: Apply refuses a screen time at or above the display timeout, a shorter display timeout is
+  refused while the screen is on, and the card checks the timeout Windows actually has. When the display comes back on, the
+  screen stays for a moment and the next button press returns to the launcher. An optional soft lock asks for a controller
+  chord (LB + RB + Start by default) and otherwise shows the chord as a hint; it is not a security boundary, and keyboard and
+  mouse input still end the screen. Your own screensaver settings are saved and put back when you turn the screen off. The card
+  shows the screen's measured CPU and GPU use. An HDMI-CEC adapter is detected but standby over CEC is not built yet. Needs the
+  installed service and the Console idle power mode.
+- Game ready: a Power mode card with three exclusive modes. Console idle sets the active power plan's sleep and hibernate
+  timeouts (and the sleep after an unattended wake) to never and turns the display off after a time you choose (10 minutes
+  by default), so a controller press brings the TV back at once. An optional schedule (sleep at 01:00, wake at 17:00 by
+  default) registers two Windows scheduled tasks: one sleeps the host when no remote session, job, or full-screen game is in
+  use and tries again every 15 minutes until the wake time, the other wakes it, and wake timers are allowed in the plan.
+  Outside the schedule the host never sleeps on its own. Balanced puts the plan's earlier values back; Sleep when idle uses
+  short timers (display off after 5 minutes, sleep after 15). The modes change the active plan in place, so its GPU and
+  launcher tweaks stay, and switching is repeatable. The card shows an estimated idle cost per month from a wattage and a
+  price per kWh you set, and the host's measured CPU and GPU load in Console idle. While the display is off in Console idle,
+  the tray watches game controllers and asks Windows for the display once when one changes. "Sleep now" is in the tray menu
+  and on the card. Applying needs the installed service.
+- Game ready: a Console sign-in card. It creates a dedicated standard local user (named Console by default, not an
+  administrator and not a Hyper-V administrator) that Windows signs in automatically, and starts Steam Big Picture or
+  Playnite full screen at sign-in (Steam is started minimized for Playnite). The password is generated on the host, kept
+  only in the Windows LSA secret that Winlogon reads and in the host's encrypted store, and never shown. Setup needs the
+  installed service, undoes its own changes if a step fails, and refuses to replace an automatic sign-in or an account it
+  did not create. Disable restores the earlier values and can also delete the user and its profile. The card warns that
+  anyone with physical access reaches the Console desktop, and when a Microsoft-account administrator needs Windows Hello.
+  Note: Windows keeps "require sign-in after sleep" per power plan, so turning it off for the Console user applies to
+  every account while that plan is active; Disable restores it.
+
 ## [0.1.7-beta.3] - 2026-10-11 (API 1.17.0)
 
 ### Added
