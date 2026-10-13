@@ -1212,6 +1212,35 @@ async fn set_up_performance_guest(
 }
 
 #[tauri::command]
+async fn get_game_aware(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_game_aware(&host, &paired).await
+}
+
+/// Changes game-aware mode. Needs elevation.
+#[tauri::command]
+async fn set_game_aware(
+    state: State<'_, AppState>,
+    key: String,
+    settings: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.set_game_aware(&host, &paired, &settings).await
+}
+
+#[tauri::command]
+async fn not_a_game(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.not_a_game(&host, &paired).await
+}
+
+#[tauri::command]
 async fn list_backup_targets(
     state: State<'_, AppState>,
     key: String,
@@ -1741,6 +1770,9 @@ pub fn run() {
             apply_vm_performance,
             remove_vm_performance,
             set_up_performance_guest,
+            get_game_aware,
+            set_game_aware,
+            not_a_game,
             list_backup_targets,
             create_backup_target,
             attach_backup_target,

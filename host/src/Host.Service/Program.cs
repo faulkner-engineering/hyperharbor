@@ -545,6 +545,7 @@ app.MapSetupProfileEndpoints();
 app.MapProfileSourceEndpoints();
 app.MapPerformanceEndpoints();
 app.MapBackupEndpoints();
+app.MapGameAwareEndpoints();
 app.MapJobEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();

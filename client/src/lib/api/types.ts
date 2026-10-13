@@ -1622,6 +1622,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/game-aware": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Game-aware mode settings and whether a game is in the foreground now.
+         * @description When a game is in the foreground on the host, the host pauses (or saves) its running VMs and resumes exactly those it
+         *     changed when the game ends. `state.sessionVms` lists VMs left running because someone is connected; clients show
+         *     "the host is gaming" for them. A VM with a GPU partition is always paused.
+         */
+        get: operations["getGameAware"];
+        /**
+         * Change game-aware mode.
+         * @description Replaces the settings. A program on both lists is kept on the ignore list only. Turning the mode off during a game
+         *     resumes the VMs within seconds.
+         */
+        put: operations["setGameAware"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/game-aware/not-a-game": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * This was not a game: ignore the program that started the game state.
+         * @description Adds that program to the ignore list and resumes the VMs at once. `ignored` is absent when no game state was active.
+         */
+        post: operations["notAGame"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3045,6 +3092,63 @@ export interface components {
             /** Format: uuid */
             vmId?: string;
             vmName?: string;
+        };
+        /**
+         * @description What the host does with a running VM while a game is in the foreground. `pause` freezes it in memory, `save` saves
+         *     its memory to disk and stops it, `keep` leaves it running. A VM with a GPU partition is always paused.
+         * @enum {string}
+         */
+        GameVmAction: "pause" | "save" | "keep";
+        GameVmPolicy: {
+            /** Format: uuid */
+            vmId: string;
+            action: components["schemas"]["GameVmAction"];
+            /**
+             * @description Apply the action even while someone is connected to the VM.
+             * @default false
+             */
+            alwaysPause: boolean;
+        };
+        GameAwareSettings: {
+            enabled: boolean;
+            defaultAction: components["schemas"]["GameVmAction"];
+            /** @description Programs (lower case, no .exe) that count as a game whenever they are in the foreground. */
+            allowlist: string[];
+            /** @description Programs that never count, for false positives such as a presentation or a video player. */
+            ignoreList: string[];
+            /** @description VMs with their own action. The others use `defaultAction`. */
+            vmPolicies: components["schemas"]["GameVmPolicy"][];
+        };
+        GameAwareVm: {
+            /** Format: uuid */
+            vmId: string;
+            name: string;
+            /** @description The VM is in Performance mode, so it is always paused. */
+            gpuPartition: boolean;
+        };
+        GameAwareState: {
+            enabled: boolean;
+            /** @description A game is in the foreground on the host now. */
+            gaming: boolean;
+            /** @description The program that started the game state. */
+            process?: string;
+            /** @description Why the host thinks a game is, or is not, in the foreground. */
+            reason?: string;
+            /** Format: date-time */
+            since?: string;
+            /** @description Names of the VMs the host paused or saved and will resume. */
+            changedVms: string[];
+            /** @description Names of VMs left running because someone is connected. Clients show "the host is gaming". */
+            sessionVms: string[];
+        };
+        GameAwareInfo: {
+            settings: components["schemas"]["GameAwareSettings"];
+            state: components["schemas"]["GameAwareState"];
+            vms: components["schemas"]["GameAwareVm"][];
+        };
+        NotAGameResult: {
+            /** @description The program added to the ignore list. Absent when no game state was active. */
+            ignored?: string;
         };
     };
     responses: {
@@ -5795,6 +5899,75 @@ export interface operations {
             403: components["responses"]["ElevationRequired"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getGameAware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings, the state, and the host's VMs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameAwareInfo"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setGameAware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GameAwareSettings"];
+            };
+        };
+        responses: {
+            /** @description The settings as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameAwareSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
+    notAGame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotAGameResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
 }

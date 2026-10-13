@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.18.0
+  version: 1.19.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -2662,6 +2662,70 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /host/game-aware:
+    get:
+      tags: [Host]
+      operationId: getGameAware
+      summary: Game-aware mode settings and whether a game is in the foreground now.
+      description: |
+        When a game is in the foreground on the host, the host pauses (or saves) its running VMs and resumes exactly those it
+        changed when the game ends. `state.sessionVms` lists VMs left running because someone is connected; clients show
+        "the host is gaming" for them. A VM with a GPU partition is always paused.
+      responses:
+        "200":
+          description: The settings, the state, and the host's VMs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameAwareInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Host]
+      operationId: setGameAware
+      summary: Change game-aware mode.
+      description: |
+        Replaces the settings. A program on both lists is kept on the ignore list only. Turning the mode off during a game
+        resumes the VMs within seconds.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameAwareSettings"
+      responses:
+        "200":
+          description: The settings as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameAwareSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+
+  /host/game-aware/not-a-game:
+    post:
+      tags: [Host]
+      operationId: notAGame
+      summary: "This was not a game: ignore the program that started the game state."
+      description: Adds that program to the ignore list and resumes the VMs at once. `ignored` is absent when no game state was active.
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotAGameResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     mutualTLS:
@@ -5234,3 +5298,110 @@ components:
           format: uuid
         vmName:
           type: string
+
+    GameVmAction:
+      type: string
+      enum: [pause, save, keep]
+      description: |
+        What the host does with a running VM while a game is in the foreground. `pause` freezes it in memory, `save` saves
+        its memory to disk and stops it, `keep` leaves it running. A VM with a GPU partition is always paused.
+
+    GameVmPolicy:
+      type: object
+      required: [vmId, action]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        action:
+          $ref: "#/components/schemas/GameVmAction"
+        alwaysPause:
+          type: boolean
+          default: false
+          description: Apply the action even while someone is connected to the VM.
+
+    GameAwareSettings:
+      type: object
+      required: [enabled, defaultAction, allowlist, ignoreList, vmPolicies]
+      properties:
+        enabled:
+          type: boolean
+        defaultAction:
+          $ref: "#/components/schemas/GameVmAction"
+        allowlist:
+          type: array
+          description: Programs (lower case, no .exe) that count as a game whenever they are in the foreground.
+          items:
+            type: string
+        ignoreList:
+          type: array
+          description: Programs that never count, for false positives such as a presentation or a video player.
+          items:
+            type: string
+        vmPolicies:
+          type: array
+          description: VMs with their own action. The others use `defaultAction`.
+          items:
+            $ref: "#/components/schemas/GameVmPolicy"
+
+    GameAwareVm:
+      type: object
+      required: [vmId, name, gpuPartition]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        gpuPartition:
+          type: boolean
+          description: The VM is in Performance mode, so it is always paused.
+
+    GameAwareState:
+      type: object
+      required: [enabled, gaming, changedVms, sessionVms]
+      properties:
+        enabled:
+          type: boolean
+        gaming:
+          type: boolean
+          description: A game is in the foreground on the host now.
+        process:
+          type: string
+          description: The program that started the game state.
+        reason:
+          type: string
+          description: Why the host thinks a game is, or is not, in the foreground.
+        since:
+          type: string
+          format: date-time
+        changedVms:
+          type: array
+          description: Names of the VMs the host paused or saved and will resume.
+          items:
+            type: string
+        sessionVms:
+          type: array
+          description: Names of VMs left running because someone is connected. Clients show "the host is gaming".
+          items:
+            type: string
+
+    GameAwareInfo:
+      type: object
+      required: [settings, state, vms]
+      properties:
+        settings:
+          $ref: "#/components/schemas/GameAwareSettings"
+        state:
+          $ref: "#/components/schemas/GameAwareState"
+        vms:
+          type: array
+          items:
+            $ref: "#/components/schemas/GameAwareVm"
+
+    NotAGameResult:
+      type: object
+      properties:
+        ignored:
+          type: string
+          description: The program added to the ignore list. Absent when no game state was active.

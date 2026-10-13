@@ -24,6 +24,7 @@
     SetupProfilesApiVersion,
     ApplySetupProfileApiVersion,
     BackupApiVersion,
+    GameAwareApiVersion,
     type BackupTarget,
     type StoredSetupProfile,
     type Vm,
@@ -35,6 +36,8 @@
   import VmList from "$lib/components/VmList.svelte";
   import WakePanel from "$lib/components/WakePanel.svelte";
   import HostUpdatePanel from "$lib/components/HostUpdatePanel.svelte";
+  import GameAwarePanel from "$lib/components/GameAwarePanel.svelte";
+  import GamingNotice from "$lib/components/GamingNotice.svelte";
   import BackupPanel from "$lib/components/BackupPanel.svelte";
   import ReplaceDiskDialog from "$lib/components/ReplaceDiskDialog.svelte";
   import ClientUpdate from "$lib/components/ClientUpdate.svelte";
@@ -91,6 +94,7 @@
   let capturing = $state<Vm | null>(null);
   let applyingProfile = $state<Vm | null>(null);
   let showBackups = $state(false);
+  let showGameAware = $state(false);
   let replacingDisk = $state<Vm | null>(null);
   let backupTargets = $state<BackupTarget[]>([]);
   let now = $state(Date.now());
@@ -101,6 +105,7 @@
   const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
   const hostHasLogs = $derived(selectedHost ? hostSupports(selectedHost, HostLogsApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
+  const hostHasGameAware = $derived(selectedHost ? hostSupports(selectedHost, GameAwareApiVersion) : false);
   const hostHasBackups = $derived(selectedHost ? hostSupports(selectedHost, BackupApiVersion) : false);
   const hostAppliesProfiles = $derived(selectedHost ? hostSupports(selectedHost, ApplySetupProfileApiVersion) : false);
   // Setup profiles read provisioned packages from running Windows VMs.
@@ -116,6 +121,7 @@
     showWake = false;
     showUpdates = false;
     showBackups = false;
+    showGameAware = false;
     replacingDisk = null;
     provisioning = null;
     confirmTurnOff = null;
@@ -458,6 +464,11 @@
               <button type="button" onclick={() => (showWake = !showWake)}>
                 {showWake ? "Hide Wake-on-LAN" : "Wake-on-LAN"}
               </button>
+              {#if hostHasGameAware}
+                <button type="button" onclick={() => (showGameAware = !showGameAware)}>
+                  {showGameAware ? "Hide game-aware mode" : "Game-aware mode"}
+                </button>
+              {/if}
               {#if hostHasBackups}
                 <button type="button" onclick={() => (showBackups = !showBackups)}>
                   {showBackups ? "Hide backups" : "Backups"}
@@ -480,6 +491,12 @@
           </div>
         {/if}
       </header>
+
+      {#if selectedHost.paired && !offline && hostHasGameAware}
+        {#key selectedHost.key}
+          <GamingNotice host={selectedHost} />
+        {/key}
+      {/if}
 
       {#if !selectedHost.paired}
         {#key selectedHost.key}
@@ -626,6 +643,12 @@
       {#if selectedHost.paired && showWake}
         {#key selectedHost.key}
           <WakePanel host={selectedHost} />
+        {/key}
+      {/if}
+
+      {#if selectedHost.paired && showGameAware && hostHasGameAware}
+        {#key selectedHost.key}
+          <GameAwarePanel host={selectedHost} />
         {/key}
       {/if}
 

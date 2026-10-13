@@ -1144,6 +1144,49 @@ impl ApiClient {
         .await
     }
 
+    /// GET /host/game-aware.
+    pub async fn get_game_aware(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, "/host/game-aware").await
+    }
+
+    /// PUT /host/game-aware (needs elevation).
+    pub async fn set_game_aware(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        settings: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::PUT,
+            "/host/game-aware",
+            settings,
+        )
+        .await
+    }
+
+    /// POST /host/game-aware/not-a-game.
+    pub async fn not_a_game(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/host/game-aware/not-a-game",
+            )
+            .await?;
+        parse(response).await
+    }
+
     /// GET /backup/targets.
     pub async fn list_backup_targets(
         &self,

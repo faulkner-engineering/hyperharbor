@@ -323,6 +323,68 @@
     "description": "Dark theme for every website.",
     "edgeId": null
   },
+  "GameAwareInfo": {
+    "settings": {
+      "enabled": false,
+      "defaultAction": "pause",
+      "allowlist": [],
+      "ignoreList": [],
+      "vmPolicies": []
+    },
+    "state": {
+      "enabled": false,
+      "gaming": false,
+      "changedVms": [],
+      "sessionVms": []
+    },
+    "vms": [
+      {
+        "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+        "name": "Ubuntu Dev",
+        "gpuPartition": true
+      }
+    ]
+  },
+  "GameAwareSettings": {
+    "enabled": true,
+    "defaultAction": "pause",
+    "allowlist": [
+      "emulator"
+    ],
+    "ignoreList": [
+      "powerpnt"
+    ],
+    "vmPolicies": [
+      {
+        "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+        "action": "save",
+        "alwaysPause": false
+      }
+    ]
+  },
+  "GameAwareState": {
+    "enabled": true,
+    "gaming": true,
+    "changedVms": [
+      "Ubuntu Dev"
+    ],
+    "sessionVms": [
+      "Win11 Work"
+    ],
+    "process": "eldenring",
+    "reason": "A full-screen Direct3D application is running.",
+    "since": "2026-10-03T12:00:00\u002B00:00"
+  },
+  "GameAwareVm": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "name": "Ubuntu Dev",
+    "gpuPartition": false
+  },
+  "GameVmPolicy": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "action": "keep",
+    "alwaysPause": true
+  },
   "GpuDriverWarning": {
     "provider": "nvlddmkm",
     "eventId": 153,
@@ -373,7 +435,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.18.0",
+    "apiVersion": "1.19.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -478,6 +540,9 @@
       "noActiveSession": true,
       "notInGame": true
     }
+  },
+  "NotAGameResult": {
+    "ignored": "powerpnt"
   },
   "PackageCatalogItem": {
     "alias": "vscode",

@@ -724,3 +724,21 @@ export const restoreHostState = (key: string, targetId: string, snapshotId: stri
 /** Needs elevation; returns the replaceDisk job. `typedName` must equal the VM's name exactly. */
 export const replaceVmDisk = (key: string, vmId: string, targetId: string, snapshotId: string, typedName: string) =>
   invoke<VmJob>("replace_vm_disk", { key, vmId, request: { targetId, snapshotId, typedName } });
+
+export type GameAwareInfo = components["schemas"]["GameAwareInfo"];
+export type GameAwareSettings = components["schemas"]["GameAwareSettings"];
+export type GameAwareState = components["schemas"]["GameAwareState"];
+export type GameVmAction = components["schemas"]["GameVmAction"];
+export type GameVmPolicy = components["schemas"]["GameVmPolicy"];
+
+/** The API version that added game-aware mode. */
+export const GameAwareApiVersion = "1.19.0";
+
+export const getGameAware = (key: string) => invoke<GameAwareInfo>("get_game_aware", { key });
+
+/** Needs elevation. */
+export const setGameAware = (key: string, settings: GameAwareSettings) =>
+  invoke<GameAwareSettings>("set_game_aware", { key, settings });
+
+/** Ignores the program that started the game state and resumes the VMs. */
+export const notAGame = (key: string) => invoke<{ ignored?: string | null }>("not_a_game", { key });

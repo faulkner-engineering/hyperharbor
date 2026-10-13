@@ -35,6 +35,7 @@ public class OpenApiEnumTests
     [InlineData("BackupGpuMode", typeof(Shared.Contracts.Backup.BackupGpuMode))]
     [InlineData("RestoreVmOutcome", typeof(Shared.Contracts.Backup.RestoreVmOutcome))]
     [InlineData("DayOfWeek", typeof(DayOfWeek))]
+    [InlineData("GameVmAction", typeof(Shared.Contracts.Hosts.GameVmAction))]
     public void EnumWireValues_MatchOpenApiSchema(string schemaName, Type enumType)
     {
         var schema = (YamlMappingNode)Schemas[schemaName];
