@@ -1212,6 +1212,221 @@ async fn set_up_performance_guest(
 }
 
 #[tauri::command]
+async fn list_backup_targets(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.list_backup_targets(&host, &paired).await
+}
+
+/// Adds a backup target. Needs elevation. The request may hold remote storage keys.
+#[tauri::command]
+async fn create_backup_target(
+    state: State<'_, AppState>,
+    key: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .create_backup_target(&host, &paired, &request)
+        .await
+}
+
+/// Adds a target that already holds backups, using its saved recovery key. Needs elevation.
+#[tauri::command]
+async fn attach_backup_target(
+    state: State<'_, AppState>,
+    key: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .attach_backup_target(&host, &paired, &request)
+        .await
+}
+
+#[tauri::command]
+async fn update_backup_target(
+    state: State<'_, AppState>,
+    key: String,
+    target_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .update_backup_target(&host, &paired, &target_id, &request)
+        .await
+}
+
+#[tauri::command]
+async fn delete_backup_target(
+    state: State<'_, AppState>,
+    key: String,
+    target_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .delete_backup_target(&host, &paired, &target_id)
+        .await
+}
+
+#[tauri::command]
+async fn test_backup_target(
+    state: State<'_, AppState>,
+    key: String,
+    target_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .test_backup_target(&host, &paired, &target_id)
+        .await
+}
+
+/// Generates a target's recovery key. Needs elevation. The key is shown once and not stored by the client.
+#[tauri::command]
+async fn create_recovery_key(
+    state: State<'_, AppState>,
+    key: String,
+    target_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .create_recovery_key(&host, &paired, &target_id)
+        .await
+}
+
+#[tauri::command]
+async fn confirm_recovery_key(
+    state: State<'_, AppState>,
+    key: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .confirm_recovery_key(&host, &paired, &request)
+        .await
+}
+
+#[tauri::command]
+async fn list_backup_policies(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.list_backup_policies(&host, &paired).await
+}
+
+#[tauri::command]
+async fn set_backup_policy(
+    state: State<'_, AppState>,
+    key: String,
+    policy: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.set_backup_policy(&host, &paired, &policy).await
+}
+
+#[tauri::command]
+async fn delete_backup_policy(
+    state: State<'_, AppState>,
+    key: String,
+    target_id: String,
+    vm_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .delete_backup_policy(&host, &paired, &target_id, &vm_id)
+        .await
+}
+
+#[tauri::command]
+async fn get_backup_status(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_backup_status(&host, &paired).await
+}
+
+#[tauri::command]
+async fn list_backup_history(
+    state: State<'_, AppState>,
+    key: String,
+    limit: u32,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.list_backup_history(&host, &paired, limit).await
+}
+
+/// Backs up now. Returns the job.
+#[tauri::command]
+async fn start_backup_run(
+    state: State<'_, AppState>,
+    key: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.start_backup_run(&host, &paired, &request).await
+}
+
+/// Lists what a target holds, grouped by VM. Needs elevation.
+#[tauri::command]
+async fn scan_backups(
+    state: State<'_, AppState>,
+    key: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.scan_backups(&host, &paired, &request).await
+}
+
+/// Restores a snapshot as a new VM. Needs elevation; returns the job.
+#[tauri::command]
+async fn restore_vm_backup(
+    state: State<'_, AppState>,
+    key: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.restore_vm_backup(&host, &paired, &request).await
+}
+
+/// Restores the host's own settings from a snapshot. Needs elevation; returns the job.
+#[tauri::command]
+async fn restore_host_state(
+    state: State<'_, AppState>,
+    key: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.restore_host_state(&host, &paired, &request).await
+}
+
+/// Puts a snapshot's disks over a VM's disks. Needs elevation; returns the job.
+#[tauri::command]
+async fn replace_vm_disk(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .replace_vm_disk(&host, &paired, &vm_id, &request)
+        .await
+}
+
+#[tauri::command]
 async fn export_vm_disks(
     state: State<'_, AppState>,
     key: String,
@@ -1526,6 +1741,24 @@ pub fn run() {
             apply_vm_performance,
             remove_vm_performance,
             set_up_performance_guest,
+            list_backup_targets,
+            create_backup_target,
+            attach_backup_target,
+            update_backup_target,
+            delete_backup_target,
+            test_backup_target,
+            create_recovery_key,
+            confirm_recovery_key,
+            list_backup_policies,
+            set_backup_policy,
+            delete_backup_policy,
+            get_backup_status,
+            list_backup_history,
+            start_backup_run,
+            scan_backups,
+            restore_vm_backup,
+            restore_host_state,
+            replace_vm_disk,
             export_vm_disks
         ])
         .build(tauri::generate_context!())

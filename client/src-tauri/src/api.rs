@@ -33,6 +33,8 @@ const GUEST_READ_TIMEOUT: Duration = Duration::from_secs(4 * 60);
 /// Capture runs three guest reads, including winget export.
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(12 * 60 * 60);
+/// Opening a backup repository, or testing remote storage, waits on the storage provider.
+const BACKUP_STORAGE_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 /// Bytes read from disk per chunk of an upload.
 const UPLOAD_CHUNK_BYTES: usize = 1024 * 1024;
 
@@ -1142,6 +1144,279 @@ impl ApiClient {
         .await
     }
 
+    /// GET /backup/targets.
+    pub async fn list_backup_targets(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, "/backup/targets").await
+    }
+
+    /// POST /backup/targets (needs elevation). The body holds remote keys; it is never logged.
+    pub async fn create_backup_target(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(host, paired, reqwest::Method::POST, "/backup/targets", body)
+            .await
+    }
+
+    /// POST /backup/targets/attach (needs elevation). Checks the recovery key against the storage, which can take a while.
+    pub async fn attach_backup_target(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/backup/targets/attach",
+                Some(body),
+                Some(BACKUP_STORAGE_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// PATCH /backup/targets/{targetId} (needs elevation).
+    pub async fn update_backup_target(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        target_id: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::PATCH,
+            &target_path(target_id, "")?,
+            body,
+        )
+        .await
+    }
+
+    /// DELETE /backup/targets/{targetId} (needs elevation).
+    pub async fn delete_backup_target(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        target_id: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired(
+            host,
+            paired,
+            reqwest::Method::DELETE,
+            &target_path(target_id, "")?,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// POST /backup/targets/{targetId}/test. Reaching remote storage can take a while.
+    pub async fn test_backup_target(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        target_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &target_path(target_id, "/test")?,
+                None,
+                Some(BACKUP_STORAGE_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// POST /backup/targets/{targetId}/recovery-key (needs elevation). The key is returned once.
+    pub async fn create_recovery_key(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        target_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &target_path(target_id, "/recovery-key")?,
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// POST /backup/recovery-key/confirm (needs elevation).
+    pub async fn confirm_recovery_key(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            "/backup/recovery-key/confirm",
+            body,
+        )
+        .await
+    }
+
+    /// GET /backup/policies.
+    pub async fn list_backup_policies(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, "/backup/policies").await
+    }
+
+    /// PUT /backup/policies.
+    pub async fn set_backup_policy(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(host, paired, reqwest::Method::PUT, "/backup/policies", body)
+            .await
+    }
+
+    /// DELETE /backup/policies/{targetId}/{vmId}.
+    pub async fn delete_backup_policy(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        target_id: &str,
+        vm_id: &str,
+    ) -> Result<(), ClientError> {
+        if !crate::hosts::is_guid(vm_id) {
+            return Err(ClientError::InvalidVmId);
+        }
+
+        self.send_paired(
+            host,
+            paired,
+            reqwest::Method::DELETE,
+            &format!("/backup/policies/{}/{vm_id}", target_segment(target_id)?),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// GET /backup/status.
+    pub async fn get_backup_status(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, "/backup/status").await
+    }
+
+    /// GET /backup/history.
+    pub async fn list_backup_history(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        limit: u32,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(
+            host,
+            paired,
+            &format!("/backup/history?limit={}", limit.clamp(1, 500)),
+        )
+        .await
+    }
+
+    /// POST /backup/runs. Returns the job.
+    pub async fn start_backup_run(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(host, paired, reqwest::Method::POST, "/backup/runs", body)
+            .await
+    }
+
+    /// POST /backup/scan (needs elevation). Opens the target's repositories.
+    pub async fn scan_backups(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/backup/scan",
+                Some(body),
+                Some(BACKUP_STORAGE_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// POST /backup/restore (needs elevation). The body may hold an administrator password; it is never logged.
+    pub async fn restore_vm_backup(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(host, paired, reqwest::Method::POST, "/backup/restore", body)
+            .await
+    }
+
+    /// POST /backup/restore/host-state (needs elevation). Returns the job.
+    pub async fn restore_host_state(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            "/backup/restore/host-state",
+            body,
+        )
+        .await
+    }
+
+    /// POST /vms/{vmId}/replace-disk (needs elevation). Returns the job.
+    pub async fn replace_vm_disk(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "replace-disk")?,
+            body,
+        )
+        .await
+    }
+
     /// POST /vms/{vmId}/disks/export. Without a folder the host uses the backup folder set in its tray.
     pub async fn export_vm_disks(
         &self,
@@ -1468,6 +1743,31 @@ fn tries_next_address(error: &reqwest::Error) -> bool {
     error.is_connect()
 }
 
+/// The target id as a path segment. The host makes ids of lowercase hex; only plain identifier characters
+/// may become part of a path.
+fn target_segment(target_id: &str) -> Result<&str, ClientError> {
+    let valid = !target_id.is_empty()
+        && target_id.len() <= 64
+        && target_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if valid {
+        Ok(target_id)
+    } else {
+        Err(ClientError::InvalidRequest(
+            "The backup target id is not valid".to_string(),
+        ))
+    }
+}
+
+/// "/backup/targets/{targetId}{suffix}".
+fn target_path(target_id: &str, suffix: &str) -> Result<String, ClientError> {
+    Ok(format!(
+        "/backup/targets/{}{suffix}",
+        target_segment(target_id)?
+    ))
+}
+
 /// "/vms/{vmId}/{action}". The ID comes from the frontend; only a GUID may become part of a path.
 fn vm_path(vm_id: &str, action: &str) -> Result<String, ClientError> {
     if crate::hosts::is_guid(vm_id) {
@@ -1719,6 +2019,17 @@ fn encode_base64(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::hosts::ManualHost;
+
+    #[test]
+    fn backup_target_ids_must_be_plain_identifiers() {
+        assert_eq!(
+            target_path("3f2a9c1e5d7b4a60", "/test").unwrap(),
+            "/backup/targets/3f2a9c1e5d7b4a60/test"
+        );
+        for bad in ["", "../x", "a/b", "a b", "a?b", "x\\y", &"a".repeat(65)] {
+            assert!(target_path(bad, "").is_err(), "{bad:?} was accepted");
+        }
+    }
 
     #[test]
     fn the_log_bundle_name_comes_from_the_host_when_it_is_plain() {
