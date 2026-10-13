@@ -33,6 +33,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 - Host state backup (pairings, certificate, settings, profiles, provisioning records) to a separate repository. Secrets
   sealed to this PC (VM credentials, console accounts, the backup vault) are never included.
 - Backup job kinds backupVm and backupHostState in the job list (API enum only; the endpoints come later).
+- Backup scheduling (runs only for targets whose recovery key is confirmed and VMs with a policy): a nightly slot per
+  target (02:00 by default; a missed slot runs when the host is next up), an optional run after a VM shuts down (a
+  quiet period of 10 minutes by default; a restart within it cancels the run), and run conditions (no active session on
+  the VM, no game in the foreground, optional time window). A run whose conditions do not hold waits and is recorded as
+  skipped after 12 hours. Each run keeps the host awake and holds back a host update. The session check sees only
+  connections between the host and the guest, not Remote Desktop from other PCs.
 
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with

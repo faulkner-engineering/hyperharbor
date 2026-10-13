@@ -49,6 +49,15 @@ public sealed class ProvisioningStore
         }
     }
 
+    /// <summary>Whether any User has an account on the VM (recorded in a backup's manifest).</summary>
+    public bool AnyAccount(Guid vmId)
+    {
+        lock (_gate)
+        {
+            return Accounts().Any(account => account.VmId == vmId);
+        }
+    }
+
     public void Save(ProvisionedAccount account)
     {
         ArgumentNullException.ThrowIfNull(account);

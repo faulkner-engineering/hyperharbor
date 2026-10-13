@@ -2,6 +2,8 @@ using System.Net;
 using System.Security.Authentication;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Audit;
+using HyperHarbor.Host.Core.Backup;
+using HyperHarbor.Host.Core.Backup.Kopia;
 using HyperHarbor.Host.Core.Diagnostics;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
@@ -27,6 +29,7 @@ using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
+using HyperHarbor.Host.Service.Backup;
 using HyperHarbor.Host.Service.Discovery;
 using HyperHarbor.Host.Service.GameReady;
 using HyperHarbor.Host.Service.Installation;
@@ -394,6 +397,45 @@ builder.Services.AddSingleton<IGpuDriverSource, CimGpuDriverSource>();
 builder.Services.AddSingleton<IGuestPerformanceSetup, PowerShellDirectPerformanceSetup>();
 builder.Services.AddSingleton<VmPerformanceService>();
 builder.Services.AddSingleton<GpuVmShutdownCoordinator>();
+
+// Backup (Phase 21): Kopia is extracted from the executable on first use; the coordinator decides when runs start.
+builder.Services.AddSingleton<IBackupSecretStore>(new BackupSecretStore(dataDirectory));
+builder.Services.AddSingleton<RecoveryKeyService>();
+builder.Services.AddSingleton(new BackupConfigStore(dataDirectory));
+builder.Services.AddSingleton(new BackupHistoryStore(dataDirectory));
+builder.Services.AddSingleton<IToolPayload, EmbeddedToolPayload>();
+builder.Services.AddSingleton(services => new KopiaToolLocator(services.GetRequiredService<IToolPayload>(), Path.Combine(AppContext.BaseDirectory, "tools")));
+builder.Services.AddSingleton(services => new KopiaCli(new LazyKopiaRunner(services.GetRequiredService<KopiaToolLocator>())));
+builder.Services.AddSingleton<IBackupRepositories>(services => new BackupRepositories(
+    services.GetRequiredService<KopiaCli>(), services.GetRequiredService<IBackupSecretStore>(), dataDirectory));
+builder.Services.AddSingleton<IHyperVCheckpoints, CimHyperVCheckpoints>();
+builder.Services.AddSingleton<IHyperVDefinitionReader, CimHyperVDefinitionReader>();
+builder.Services.AddSingleton<IBackupStaging, WindowsBackupStaging>();
+builder.Services.AddSingleton(services => new VmBackupService(
+    services.GetRequiredService<IVmInventory>(), services.GetRequiredService<IHyperVDefinitionReader>(),
+    services.GetRequiredService<IHyperVCheckpoints>(), services.GetRequiredService<IHyperVStorage>(),
+    services.GetRequiredService<IBackupStaging>(), services.GetRequiredService<IBackupRepositories>(),
+    services.GetRequiredService<KopiaCli>(), services.GetRequiredService<BackupHistoryStore>(),
+    services.GetRequiredService<PerformanceStore>(),
+    vmId => services.GetRequiredService<ProvisioningStore>().AnyAccount(vmId),
+    services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<VmBackupService>>(), HostVersion.Current.ToString()));
+builder.Services.AddSingleton(services => new HostStateBackupService(
+    dataDirectory, services.GetRequiredService<IBackupRepositories>(), services.GetRequiredService<KopiaCli>(),
+    services.GetRequiredService<BackupHistoryStore>(), services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<HostStateBackupService>>(), HostVersion.Current.ToString()));
+builder.Services.AddSingleton<IBackupRunner, BackupRunner>();
+builder.Services.AddSingleton<IVmSessionProbe, TcpVmSessionProbe>();
+builder.Services.AddSingleton(services => new BackupCoordinator(
+    services.GetRequiredService<BackupConfigStore>(), services.GetRequiredService<IVmInventory>(),
+    services.GetRequiredService<IVmSessionProbe>(), () => services.GetRequiredService<ForegroundGameTracker>().Active,
+    services.GetRequiredService<BackupHistoryStore>(), services.GetRequiredService<IBackupRunner>(),
+    services.GetRequiredService<VmJobStore>(), () => services.GetRequiredService<HostActivity>().TryBegin(),
+    services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<BackupCoordinator>>()));
+if (selfTest is null)
+{
+    // A self-test run on a copy of the data must not start backups.
+    builder.Services.AddHostedService<BackupSchedulerService>();
+}
 
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))

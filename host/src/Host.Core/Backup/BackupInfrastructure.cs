@@ -145,6 +145,15 @@ public sealed class BackupHistoryStore
         }
     }
 
+    /// <summary>The latest run of any outcome, which is what decides whether a schedule slot was already served.</summary>
+    public BackupRunRecord? Last(string item, string targetId)
+    {
+        lock (_gate)
+        {
+            return Read().LastOrDefault(r => r.Item == item && r.TargetId == targetId);
+        }
+    }
+
     public BackupRunRecord? LastSuccess(string item, string targetId)
     {
         lock (_gate)

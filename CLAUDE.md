@@ -145,8 +145,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    recovery key confirmation, data format 3; 21.2 Kopia wrapper (Host.Core/Backup/Kopia: runner seam, KopiaCli, KopiaOutput),
    RESTORE.md, target tester; 21.3 VM backup (VmBackupService: consistency planner, production checkpoint with a sweep that
    removes every new checkpoint, hard-linked staging, manifest), host state backup, history store, verified live on a
-   throwaway VM (VmBackupLiveTests, HH_BACKUP_VM_LIVE=1 with HH_KOPIA_EXE). Todo: 21.4 scheduler, shutdown trigger with
-   debounce, run conditions, power hold; 21.5 restore (importer, state machine, TPM re-key); 21.6 API 1.18.0, tray, client,
+   throwaway VM (VmBackupLiveTests, HH_BACKUP_VM_LIVE=1 with HH_KOPIA_EXE). Done: 21.4 scheduler (BackupCoordinator, BackupSchedulerService), shutdown trigger with
+   debounce, run conditions, power hold (via HostActivity); Todo: 21.5 restore (importer, state machine, TPM re-key); 21.6 API 1.18.0, tray, client,
    ambient; 21.7 monthly restore test. rclone targets are deferred.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
