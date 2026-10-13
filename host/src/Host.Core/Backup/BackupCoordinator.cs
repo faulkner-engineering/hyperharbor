@@ -126,7 +126,7 @@ public sealed class BackupCoordinator(
     /// <summary>Starts a manual run now. Conditions are checked only when <paramref name="respectConditions"/> is set.</summary>
     /// <exception cref="BackupException">The target is unknown, disabled, or not ready, or the run is already going.</exception>
     /// <exception cref="VmBusyException">Another operation holds the VM.</exception>
-    public VmJobSnapshot StartManual(string targetId, Guid? vmId)
+    public VmJobSnapshot StartManual(string targetId, Guid? vmId, Guid? userId = null)
     {
         var settings = config.Load();
         var target = settings.Targets.FirstOrDefault(t => t.Id == targetId && t.Enabled)
@@ -147,7 +147,7 @@ public sealed class BackupCoordinator(
                 }
             }
 
-            return StartJob(item, target, policy, BackupTrigger.Manual, hold);
+            return StartJob(item, target, policy, BackupTrigger.Manual, hold, userId ?? HostUserId);
         }
         catch
         {
@@ -239,7 +239,7 @@ public sealed class BackupCoordinator(
         }
     }
 
-    private VmJobSnapshot StartJob(string item, BackupTarget target, BackupPolicy? policy, BackupTrigger trigger, IDisposable hold)
+    private VmJobSnapshot StartJob(string item, BackupTarget target, BackupPolicy? policy, BackupTrigger trigger, IDisposable hold, Guid? userId = null)
     {
         var key = (item, target.Id);
         var vmId = ParseVmItem(item);
@@ -253,7 +253,7 @@ public sealed class BackupCoordinator(
             return jobs.Start(
                 vmId is null ? VmJobKind.BackupHostState : VmJobKind.BackupVm,
                 vmId,
-                HostUserId,
+                userId ?? HostUserId,
                 "Starting the backup",
                 async context =>
                 {

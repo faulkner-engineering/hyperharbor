@@ -80,6 +80,17 @@ public sealed class RecoveryKeyService(IBackupSecretStore secrets, TimeProvider 
         }
     }
 
+    /// <summary>
+    /// The stored form of a key typed by hand: upper case, groups of four. A key copied without its dashes or in lower case
+    /// opens the same repository.
+    /// </summary>
+    public static string Canonical(string typed)
+    {
+        var plain = Normalize(typed);
+        return string.Join('-', Enumerable.Range(0, (plain.Length + GroupSize - 1) / GroupSize)
+            .Select(i => plain.Substring(i * GroupSize, Math.Min(GroupSize, plain.Length - i * GroupSize))));
+    }
+
     internal static string GenerateKey()
     {
         var bytes = RandomNumberGenerator.GetBytes(32);
