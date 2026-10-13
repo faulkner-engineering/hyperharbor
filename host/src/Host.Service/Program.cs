@@ -4,6 +4,7 @@ using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Backup;
 using HyperHarbor.Host.Core.Backup.Kopia;
+using HyperHarbor.Host.Core.Backup.Restore;
 using HyperHarbor.Host.Core.Diagnostics;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
@@ -424,6 +425,15 @@ builder.Services.AddSingleton(services => new HostStateBackupService(
     services.GetRequiredService<BackupHistoryStore>(), services.GetRequiredService<TimeProvider>(),
     services.GetRequiredService<ILogger<HostStateBackupService>>(), HostVersion.Current.ToString()));
 builder.Services.AddSingleton<IBackupRunner, BackupRunner>();
+builder.Services.AddSingleton<IHyperVImporter, CimHyperVImporter>();
+builder.Services.AddSingleton<ISnapshotRestorer, KopiaSnapshotRestorer>();
+builder.Services.AddSingleton<IGuestHeartbeat, InventoryGuestHeartbeat>();
+builder.Services.AddSingleton<IRestoreProvisioner, RestoreProvisioner>();
+builder.Services.AddSingleton<RestoreCoordinator>();
+builder.Services.AddSingleton<DiskReplacer>();
+builder.Services.AddSingleton(services => new HostStateRestorer(
+    dataDirectory, services.GetRequiredService<IBackupRepositories>(), services.GetRequiredService<ISnapshotRestorer>(),
+    services.GetRequiredService<ILogger<HostStateRestorer>>()));
 builder.Services.AddSingleton<IVmSessionProbe, TcpVmSessionProbe>();
 builder.Services.AddSingleton(services => new BackupCoordinator(
     services.GetRequiredService<BackupConfigStore>(), services.GetRequiredService<IVmInventory>(),

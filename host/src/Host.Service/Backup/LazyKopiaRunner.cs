@@ -21,3 +21,13 @@ internal sealed class LazyKopiaRunner(KopiaToolLocator locator) : IKopiaRunner
         return _inner.RunAsync(invocation, cancellationToken);
     }
 }
+
+/// <summary>Creates the default User's account in a restored guest with the administrator credential given for the restore.</summary>
+internal sealed class RestoreProvisioner(
+    HyperHarbor.Host.Core.Provisioning.ProvisioningService provisioning,
+    HyperHarbor.Host.Core.Users.UserStore users,
+    HyperHarbor.Host.Core.Unattend.IRemoteAccessProbe probe) : HyperHarbor.Host.Core.Backup.Restore.IRestoreProvisioner
+{
+    public async Task ProvisionAsync(Guid vmId, HyperHarbor.Shared.Contracts.Vms.ProvisionVmRequest administrator, CancellationToken cancellationToken) =>
+        await provisioning.ProvisionAsync(vmId, users.GetOrCreateDefault().UserId, administrator, cancellationToken, probe).ConfigureAwait(false);
+}

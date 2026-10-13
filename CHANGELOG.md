@@ -39,6 +39,18 @@ note anything that needs action, such as updating the host, a new elevation requ
   the VM, no game in the foreground, optional time window). A run whose conditions do not hold waits and is recorded as
   skipped after 12 hours. Each run keeps the host awake and holds back a host update. The session check sees only
   connections between the host and the guest, not Remote Desktop from other PCs.
+- Restore engine (not yet reachable from the API or the apps): a VM snapshot restores as a new VM on a new ID, named with
+  "(restored)", "(restored 2)" and so on when the name or its folder exists. Disks go to `<destination>\<name>\Virtual
+  Hard Disks`; processors, memory, Secure Boot template, notes, nested virtualization, and MAC spoofing come from the
+  backup's manifest. Network adapters use the switch of the same name, else the Default Switch (with a warning), else stay
+  unconnected. A VM with a virtual TPM gets a new key protector (the old one is never reused) and a warning that BitLocker
+  may ask for its recovery key. A GPU partition is restored when the host allows it and always flagged for a Performance
+  mode driver sync. Optionally the VM starts, waits for the guest to report in (5 minutes; otherwise it is kept and the
+  console is suggested), and creates your HyperHarbor account with the administrator credential you give once. A failure
+  removes everything the restore created. Generation 1 backups and manifests from a newer HyperHarbor are refused.
+- Host-state restore (pairings, certificate, settings, profiles; only the names a backup writes are accepted; the backup
+  configuration of this PC is kept) and replace-disk (VM off, no checkpoints, the exact VM name typed; the old disks are
+  kept until every new disk is in place and restored on any failure). Not yet built: browsing files inside a snapshot.
 
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with
