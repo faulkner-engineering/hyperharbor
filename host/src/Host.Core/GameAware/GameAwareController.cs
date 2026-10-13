@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Power;
+using HyperHarbor.Shared.Contracts.Ipc;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging;
 

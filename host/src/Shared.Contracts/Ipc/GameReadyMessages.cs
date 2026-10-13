@@ -226,9 +226,6 @@ public sealed record GameReadyPowerModeApplyMessage(
 /// <summary>Puts the host to sleep after a short delay. Asked for by a person at the host, so nothing gates it.</summary>
 public sealed record GameReadySleepNowMessage : TrayMessage;
 
-/// <summary>From the tray: whether a game runs in the foreground on this desktop. The scheduled sleep does not interrupt a game.</summary>
-public sealed record GameForegroundMessage(bool Active) : TrayMessage;
-
 /// <summary>From the scheduled sleep task: sleep now if nothing is in use.</summary>
 public sealed record ScheduledSleepRequestMessage : TrayMessage;
 

@@ -5,6 +5,7 @@ using HyperHarbor.Host.Core.Audit;
 using HyperHarbor.Host.Core.Backup;
 using HyperHarbor.Host.Core.Backup.Kopia;
 using HyperHarbor.Host.Core.Backup.Restore;
+using HyperHarbor.Host.Core.GameAware;
 using HyperHarbor.Host.Core.Diagnostics;
 using HyperHarbor.Host.Core.Discovery;
 using HyperHarbor.Host.Core.Elevation;
@@ -31,6 +32,7 @@ using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
 using HyperHarbor.Host.Service.Backup;
+using HyperHarbor.Host.Service.GameAware;
 using HyperHarbor.Host.Service.Discovery;
 using HyperHarbor.Host.Service.GameReady;
 using HyperHarbor.Host.Service.Installation;
@@ -451,6 +453,26 @@ if (selfTest is null)
 {
     // A self-test run on a copy of the data must not start backups.
     builder.Services.AddHostedService<BackupSchedulerService>();
+}
+
+// Game-aware mode: the tray reports the foreground, the monitor decides, the controller pauses and resumes VMs.
+builder.Services.AddSingleton(new GameAwareStore(dataDirectory));
+builder.Services.AddSingleton<IVmPauser, CimVmPauser>();
+builder.Services.AddSingleton(services => new GameAwareController(
+    services.GetRequiredService<GameAwareStore>(), services.GetRequiredService<IVmInventory>(), services.GetRequiredService<IVmPauser>(),
+    services.GetRequiredService<IHyperVPowerInvoker>(),
+    (vm, ct) => services.GetRequiredService<IVmSessionProbe>().HasActiveSessionAsync(vm, ct),
+    vmId => services.GetRequiredService<PerformanceStore>().Find(vmId) is not null,
+    services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<GameAwareController>>(), dataDirectory));
+builder.Services.AddSingleton(services => new GameAwareMonitor(
+    services.GetRequiredService<GameAwareStore>(), services.GetRequiredService<GameAwareController>(),
+    active => services.GetRequiredService<ForegroundGameTracker>().Report(active), services.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(services => new GameAwareService(
+    services.GetRequiredService<GameAwareStore>(), services.GetRequiredService<GameAwareController>(), services.GetRequiredService<GameAwareMonitor>(),
+    services.GetRequiredService<IVmInventory>(), vmId => services.GetRequiredService<PerformanceStore>().Find(vmId) is not null));
+if (selfTest is null)
+{
+    builder.Services.AddHostedService<GameAwareWatchdogService>();
 }
 
 builder.Services.AddOptions<ApiOptions>()

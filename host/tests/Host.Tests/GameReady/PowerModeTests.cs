@@ -574,38 +574,6 @@ public sealed class DisplayWakeTests
     }
 }
 
-public sealed class ForegroundGameReporterTests
-{
-    [Theory]
-    [InlineData(3, true)]
-    [InlineData(4, true)]
-    [InlineData(2, false)]
-    [InlineData(5, false)]
-    [InlineData(null, false)]
-    public void OnlyAFullScreenDirect3DApplicationOrPresentationModeIsAGame(int? state, bool game)
-    {
-        bool? sent = null;
-
-        new ForegroundGameReporter(() => state, active => sent = active).Tick();
-
-        Assert.Equal(game, sent);
-    }
-
-    [Fact]
-    public void ReportsChangesAtOnce_AndRepeatsAnUnchangedAnswerSoTheServiceKeepsHearingIt()
-    {
-        var sent = new List<bool>();
-        var reporter = new ForegroundGameReporter(() => 3, sent.Add);
-
-        for (var i = 0; i < ForegroundGameReporter.RepeatEvery * 2; i++)
-        {
-            reporter.Tick();
-        }
-
-        Assert.Equal(2, sent.Count);
-    }
-}
-
 internal sealed class FakeIdleLoad : IIdleLoadReader
 {
     public Task<IdleLoad> SampleAsync(CancellationToken cancellationToken) =>

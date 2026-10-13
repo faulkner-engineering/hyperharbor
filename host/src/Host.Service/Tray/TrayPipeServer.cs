@@ -349,8 +349,30 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 AuditTrayAction("traySleepNow", null, null, null);
                 _services.GetService<GameReady.GameReadyService>()?.SleepNow();
                 break;
-            case GameForegroundMessage foreground:
-                _services.GetService<Core.GameReady.PowerMode.ForegroundGameTracker>()?.Report(foreground.Active);
+            case GameSignalsMessage signals:
+                // Pausing VMs takes a while; the pipe keeps reading. The controller serializes its own work.
+                _ = RunGameAwareAsync(monitor => monitor.OnSignalsAsync(signals.Signals, CancellationToken.None));
+                break;
+            case GameAwareQueryMessage:
+                await SendGameAwareAsync(connection);
+                break;
+            case GameAwareApplyMessage apply when _services.GetService<Core.GameAware.GameAwareService>() is { } gameAware:
+                try
+                {
+                    gameAware.Apply(apply.Settings);
+                    AuditTrayAction("trayGameAwareApply", null, null, null, $"enabled={apply.Settings.Enabled}, default={apply.Settings.DefaultAction}");
+                }
+                catch (Core.Lifecycle.LifecycleValidationException ex)
+                {
+                    AuditTrayAction("trayGameAwareApply", null, null, null, ex.Message, AuditOutcome.Failed);
+                }
+
+                Broadcast(new GameAwareStatusMessage(await gameAware.GetAsync(CancellationToken.None)));
+                break;
+            case GameAwareNotAGameMessage when _services.GetService<Core.GameAware.GameAwareService>() is { } gameAware:
+                var ignored = await gameAware.NotAGameAsync(CancellationToken.None);
+                AuditTrayAction("trayGameAwareNotAGame", null, null, null, ignored is null ? "No game state was active." : $"ignored={ignored}");
+                Broadcast(new GameAwareStatusMessage(await gameAware.GetAsync(CancellationToken.None)));
                 break;
             case ScheduledSleepRequestMessage:
                 if (_services.GetService<Core.GameReady.PowerMode.ScheduledSleepService>() is { } scheduled)
@@ -397,6 +419,31 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
     }
 
     private static string Truncate(string? text) => text is { Length: > 40 } ? text[..40] : text ?? string.Empty;
+
+    private async Task SendGameAwareAsync(Connection connection)
+    {
+        if (_services.GetService<Core.GameAware.GameAwareService>() is { } gameAware)
+        {
+            await connection.SendAsync(new GameAwareStatusMessage(await gameAware.GetAsync(CancellationToken.None)));
+        }
+    }
+
+    private async Task RunGameAwareAsync(Func<Core.GameAware.GameAwareMonitor, Task> work)
+    {
+        if (_services.GetService<Core.GameAware.GameAwareMonitor>() is not { } monitor)
+        {
+            return;
+        }
+
+        try
+        {
+            await work(monitor);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Game-aware mode could not handle a report from the tray.");
+        }
+    }
 
     private async Task SendGameReadyStatusAsync(Connection connection, bool force)
     {

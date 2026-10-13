@@ -237,37 +237,3 @@ internal sealed class DisplayStateWatcher : NativeWindow, IDisposable
     private static extern bool UnregisterPowerSettingNotification(IntPtr handle);
 }
 
-/// <summary>
-/// Reports whether a game runs in the foreground on this desktop, so the scheduled sleep does not interrupt it.
-/// SHQueryUserNotificationState names a full-screen Direct3D application (3) or presentation mode (4). Borderless
-/// windowed games and Steam Big Picture are not recognized, on purpose: Big Picture is always full screen.
-/// </summary>
-internal sealed class ForegroundGameReporter(Func<int?> queryState, Action<bool> send)
-{
-    private const int RunningD3dFullScreen = 3;
-    private const int PresentationMode = 4;
-
-    /// <summary>The service ignores a report older than two minutes, so an unchanged answer is sent again this often (in ticks).</summary>
-    public const int RepeatEvery = 4;
-
-    private bool? _last;
-    private int _sinceSent;
-
-    public void Tick()
-    {
-        var active = queryState() is RunningD3dFullScreen or PresentationMode;
-        if (_last == active && ++_sinceSent < RepeatEvery)
-        {
-            return;
-        }
-
-        _last = active;
-        _sinceSent = 0;
-        send(active);
-    }
-
-    public static int? QueryWindowsState() => SHQueryUserNotificationState(out var state) == 0 ? state : null;
-
-    [DllImport("shell32.dll")]
-    private static extern int SHQueryUserNotificationState(out int state);
-}

@@ -1,5 +1,6 @@
 using HyperHarbor.Host.Core.GameAware;
 using HyperHarbor.Host.Core.Power;
+using HyperHarbor.Shared.Contracts.Ipc;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;

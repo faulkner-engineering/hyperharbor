@@ -39,7 +39,6 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private readonly DisplayWake _displayWake;
     private readonly DisplayStateWatcher _displayWatcher;
     private readonly AmbientCoordinator _ambient;
-    private readonly ForegroundGameReporter _gameReporter;
     private readonly System.Windows.Forms.Timer _releaseHostWindow;
     private readonly HashSet<string> _busy = [];
     private readonly bool _webViewAvailable = TrayWebView.RuntimeVersion is not null;
@@ -146,16 +145,10 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         };
         _inputPoll.Start();
 
-        // The scheduled sleep leaves a running game alone, and only this desktop can tell.
-        _gameReporter = new ForegroundGameReporter(ForegroundGameReporter.QueryWindowsState, active =>
-        {
-            if (_connected)
-            {
-                _ = _pipe.SendAsync(new GameForegroundMessage(active));
-            }
-        });
-        _gamePoll = new System.Windows.Forms.Timer { Interval = 15_000 };
-        _gamePoll.Tick += (_, _) => _gameReporter.Tick();
+        // Only this desktop can see the foreground. The service decides whether it is a game: game-aware mode, the
+        // scheduled sleep, and the backup conditions all use that answer.
+        _gamePoll = new System.Windows.Forms.Timer { Interval = GameSignalSeconds * 1_000 };
+        _gamePoll.Tick += (_, _) => SendGameSignals();
         _gamePoll.Start();
 
         _releaseHostWindow = new System.Windows.Forms.Timer { Interval = (int)KeepHiddenWindow.TotalMilliseconds };
@@ -507,6 +500,28 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     }
 
     /// <summary>Failures and overdue backups are announced even with the host window closed, so the service is asked every five minutes.</summary>
+    private const int GameSignalSeconds = 2;
+
+    private void SendGameSignals()
+    {
+        if (!_connected)
+        {
+            return;
+        }
+
+        try
+        {
+            if (GameAware.ForegroundProbe.Read() is { } signals)
+            {
+                _ = _pipe.SendAsync(new GameSignalsMessage(signals));
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // A window that vanished while it was read; the next tick tries again.
+        }
+    }
+
     private void PollBackup()
     {
         if (_connected && (_backupTicks++ % BackupPollSeconds == 0 || (HostWindowOpen && _backupTicks % 5 == 0)))

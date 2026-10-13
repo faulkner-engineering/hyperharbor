@@ -1,3 +1,5 @@
+using HyperHarbor.Shared.Contracts.Ipc;
+
 namespace HyperHarbor.Host.Core.GameAware;
 
 /// <summary>

@@ -1,23 +1,6 @@
-namespace HyperHarbor.Host.Core.GameAware;
+using HyperHarbor.Shared.Contracts.Ipc;
 
-/// <summary>
-/// What the tray saw about the foreground window on the signed-in desktop. Plain facts, so the decision is testable.
-/// </summary>
-/// <param name="NotificationState">SHQueryUserNotificationState: 3 is a full-screen Direct3D application, 4 is presentation mode.</param>
-/// <param name="CoversMonitor">The window fills the whole monitor it is on.</param>
-/// <param name="HasBorder">The window has a frame or caption (a windowed app, even a maximized one).</param>
-/// <param name="IsShell">The window belongs to the desktop or the taskbar.</param>
-/// <param name="IsOwnWindow">The window belongs to HyperHarbor.</param>
-/// <param name="ProcessName">Lower case, no ".exe"; null when it could not be read.</param>
-/// <param name="Lineage">Names of the process's parents, nearest first.</param>
-public sealed record ForegroundSignals(
-    int? NotificationState,
-    bool CoversMonitor,
-    bool HasBorder,
-    bool IsShell,
-    bool IsOwnWindow,
-    string? ProcessName,
-    IReadOnlyList<string> Lineage);
+namespace HyperHarbor.Host.Core.GameAware;
 
 /// <param name="Process">The program that triggered the verdict, or null.</param>
 /// <param name="Reason">Why, in words for the log and the host window.</param>
