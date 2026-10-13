@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { HostLeanRunSummary, HostLeanStatus, HostUpdateStatus } from "./bridge";
-import { countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
+import type { HostLeanRunSummary, HostLeanStatus, HostUpdateStatus, TrayBackupItem, TrayBackupStatus } from "./bridge";
+import { backupCardText, countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
 
 const update = (overrides: Partial<HostUpdateStatus> = {}): HostUpdateStatus => ({
   supported: true,
@@ -153,5 +153,55 @@ describe("lean numbers", () => {
     };
     expect(runDelta(run)).toBeNull();
     expect(runDelta({ ...run, after: { at: "", usedMemoryMb: 80, processCount: 12, idle: true } })).toEqual({ memory: "-20 MB", processes: "+2" });
+  });
+});
+
+describe("backupCardText", () => {
+  const now = new Date("2026-10-12T12:00:00Z").getTime();
+  const item = (overrides: Partial<TrayBackupItem> = {}): TrayBackupItem => ({
+    name: "Dev",
+    targetName: "Local",
+    outcome: "succeeded",
+    overdue: false,
+    lastSuccessAt: "2026-10-12T09:00:00Z",
+    ...overrides,
+  });
+  const status = (overrides: Partial<TrayBackupStatus> = {}): TrayBackupStatus => ({
+    configured: true,
+    pendingKeys: 0,
+    running: false,
+    waiting: 0,
+    items: [item()],
+    ...overrides,
+  });
+
+  it("is unknown without the service", () => {
+    expect(backupCardText(null, now).tone).toBe("neutral");
+  });
+
+  it("asks to set up when nothing is configured, and mentions a waiting key", () => {
+    const text = backupCardText(status({ configured: false, items: [], pendingKeys: 1 }), now);
+
+    expect(text.tone).toBe("warn");
+    expect(text.lines[0]).toContain("recovery key");
+  });
+
+  it("is up to date with the age of the last good backup", () => {
+    const text = backupCardText(status(), now);
+
+    expect(text).toEqual({ status: "Up to date", tone: "ok", lines: ["Last good backup 3 hours ago."] });
+  });
+
+  it("needs attention for a failure, with its reason, and for an overdue item", () => {
+    const failed = backupCardText(status({ items: [item({ outcome: "failed", reason: "The disk is full." })] }), now);
+    const overdue = backupCardText(status({ items: [item({ overdue: true })] }), now);
+
+    expect(failed.status).toBe("Needs attention");
+    expect(failed.lines).toEqual(["Dev to Local failed: The disk is full."]);
+    expect(overdue.lines).toEqual(["Dev has no good backup on Local for a while."]);
+  });
+
+  it("shows a run in progress", () => {
+    expect(backupCardText(status({ running: true }), now).tone).toBe("busy");
   });
 });

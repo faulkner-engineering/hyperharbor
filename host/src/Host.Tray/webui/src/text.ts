@@ -12,6 +12,7 @@ import type {
   HostLeanStatus,
   HostUpdateProgress,
   HostUpdateStatus,
+  TrayBackupStatus,
 } from "./bridge";
 
 export const MIN_PASSPHRASE = 8;
@@ -259,4 +260,48 @@ export function wakeTestText(test: GameReadyWakeTest, now: number = Date.now()):
     default:
       return null;
   }
+}
+
+export interface BackupCardText {
+  status: string;
+  tone: CardTone;
+  lines: string[];
+}
+
+/** The Backups card: whether anything is backed up, and what needs attention. */
+export function backupCardText(backup: TrayBackupStatus | null, now: number = Date.now()): BackupCardText {
+  if (backup === null) return { status: "Unknown until the service runs.", tone: "neutral", lines: [] };
+  if (!backup.configured) {
+    const lines = ["Add a backup target from a paired device (Host menu, Backups), and save its recovery key."];
+    if (backup.pendingKeys > 0) lines.unshift("A target is waiting for its recovery key to be confirmed.");
+    return { status: "Not set up", tone: "warn", lines };
+  }
+
+  const failed = backup.items.filter((item) => item.outcome === "failed");
+  const overdue = backup.items.filter((item) => item.overdue);
+  const lines = failed.map((item) => `${item.name} to ${item.targetName} failed${item.reason ? `: ${item.reason}` : "."}`);
+  for (const item of overdue) lines.push(`${item.name} has no good backup on ${item.targetName} for a while.`);
+  if (backup.pendingKeys > 0) lines.push("A target is waiting for its recovery key to be confirmed.");
+  if (backup.items.length > 0 && lines.length === 0) {
+    const latest = backup.items
+      .map((item) => item.lastSuccessAt)
+      .filter((at): at is string => !!at)
+      .sort()
+      .at(-1);
+    lines.push(latest ? `Last good backup ${backupAge(latest, now)}.` : "No backup has finished yet.");
+  }
+
+  if (backup.running) return { status: "Backing up…", tone: "busy", lines };
+  if (failed.length > 0 || overdue.length > 0) return { status: "Needs attention", tone: "warn", lines };
+  return { status: backup.items.length === 0 ? "Ready" : "Up to date", tone: "ok", lines };
+}
+
+function backupAge(iso: string, now: number): string {
+  const minutes = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "yesterday" : `${days} days ago`;
 }

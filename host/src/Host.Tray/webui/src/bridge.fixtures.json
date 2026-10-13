@@ -168,6 +168,24 @@
           "cecDevice": "Pulse-Eight USB-CEC Adapter"
         }
       },
+      "backup": {
+        "configured": true,
+        "pendingKeys": 1,
+        "running": false,
+        "waiting": 2,
+        "items": [
+          {
+            "name": "Dev Box",
+            "targetName": "Local",
+            "outcome": "failed",
+            "finishedAt": "2026-10-05T12:00:00\u002B00:00",
+            "reason": "The disk is full.",
+            "lastSuccessAt": "2026-10-03T12:00:00\u002B00:00",
+            "overdue": true,
+            "runId": "7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"
+          }
+        ]
+      },
       "busy": [
         "folder:iso"
       ],
@@ -194,6 +212,7 @@
       "update": null,
       "hostLean": null,
       "gameReady": null,
+      "backup": null,
       "busy": [],
       "pairing": null,
       "dataDirectory": "C:\\ProgramData\\HyperHarbor"

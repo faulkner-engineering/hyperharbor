@@ -59,4 +59,5 @@ public sealed record AmbientSnapshotQueryMessage : TrayMessage;
 /// <param name="RunningVms">Names of the virtual machines that are running.</param>
 /// <param name="PairedDevices">How many devices are paired.</param>
 /// <param name="InUse">A paired device used this host in the last minutes.</param>
-public sealed record AmbientSnapshotMessage(IReadOnlyList<string> RunningVms, int PairedDevices, bool InUse) : TrayMessage;
+/// <param name="Backup">ok, attention (a failed or overdue backup), or none; null when the service cannot tell.</param>
+public sealed record AmbientSnapshotMessage(IReadOnlyList<string> RunningVms, int PairedDevices, bool InUse, string? Backup = null) : TrayMessage;

@@ -16,6 +16,7 @@ namespace HyperHarbor.Host.Tray.Window;
 /// </param>
 /// <param name="HostLean">The Lean host action's status from the service; null while the service is not connected.</param>
 /// <param name="GameReady">The Game ready section's status from the service; null while the service is not connected.</param>
+/// <param name="Backup">The backup summary from the service; null while the service is not connected.</param>
 /// <param name="Pairing">The pairing request waiting for its PIN, if any.</param>
 public sealed record TrayViewState(
     bool Connected,
@@ -29,6 +30,7 @@ public sealed record TrayViewState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] HostUpdateStatus? Update,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] HostLeanStatus? HostLean,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] GameReadyStatus? GameReady,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] TrayBackupStatus? Backup,
     IReadOnlyList<string> Busy,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] TrayViewPairing? Pairing,
     string DataDirectory);

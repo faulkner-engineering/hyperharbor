@@ -159,7 +159,8 @@ internal sealed class AmbientCoordinator
             info.ShowHostStatus ? _hostStatus : null,
             info.ShowRunningVms ? snapshot?.RunningVms ?? [] : null,
             info.ShowDevices && snapshot is not null ? DeviceText(snapshot) : null,
-            info.SoftLock ? AmbientChord.Describe(info.Chord) : null);
+            info.SoftLock ? AmbientChord.Describe(info.Chord) : null,
+            info.ShowHostStatus ? BackupText(snapshot?.Backup) : null);
         if (_written is not null && Same(_written, data))
         {
             return;
@@ -177,6 +178,13 @@ internal sealed class AmbientCoordinator
         }
     }
 
+    internal static string? BackupText(string? summary) => summary switch
+    {
+        "attention" => "A backup needs attention",
+        "ok" => "Backups are up to date",
+        _ => null,
+    };
+
     internal static string DeviceText(AmbientSnapshotMessage snapshot) =>
         $"{snapshot.PairedDevices} paired {(snapshot.PairedDevices == 1 ? "device" : "devices")}{(snapshot.InUse ? ", in use now" : string.Empty)}";
 
@@ -184,5 +192,6 @@ internal sealed class AmbientCoordinator
         a.HostStatus == b.HostStatus
         && a.Devices == b.Devices
         && a.ChordHint == b.ChordHint
+        && a.Backup == b.Backup
         && (a.RunningVms is null ? b.RunningVms is null : b.RunningVms is not null && a.RunningVms.SequenceEqual(b.RunningVms));
 }

@@ -272,10 +272,16 @@ public sealed partial class TrayWindowTests
                 update,
                 lean,
                 gameReady,
+                new TrayBackupStatus(
+                    true,
+                    1,
+                    false,
+                    2,
+                    [new TrayBackupItem("Dev Box", "Local", "failed", time, "The disk is full.", time.AddDays(-2), true, Guid.Parse("7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"))]),
                 ["folder:iso"],
                 new TrayViewPairing(Id, "Laptop", "440141", time.AddMinutes(2)),
                 @"C:\ProgramData\HyperHarbor")),
-            new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
+            new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
             new HostToPage.Toast("success", "Admin passphrase saved", "Paired devices now need it to change VMs."),
             new HostToPage.Navigate("devices"),
         ];

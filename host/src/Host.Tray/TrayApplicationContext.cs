@@ -54,6 +54,9 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private string? _backupFolder;
     private IReadOnlyList<string> _gpuVms = [];
     private HostUpdateStatus? _update;
+    private TrayBackupStatus? _backup;
+    private readonly Backup.BackupNotifier _backupNotifier = new();
+    private int _backupTicks;
     private bool _restarting;
     private const string ConsoleIdleMode = "consoleIdle";
     private HostLeanStatus? _hostLean;
@@ -215,6 +218,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             {
                 _ = _pipe.SendAsync(new ListDevicesMessage());
                 _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+                _ = _pipe.SendAsync(new BackupStatusQueryMessage());
                 _ = _pipe.SendAsync(new HostLeanQueryMessage());
                 _ = _pipe.SendAsync(new GameReadyQueryMessage());
             }
@@ -269,6 +273,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             _connected ? _update : null,
             _connected ? _hostLean : null,
             _connected ? _gameReady : null,
+            _connected ? _backup : null,
             _busy.Order(StringComparer.Ordinal).ToList(),
             _pairing is null ? null : new TrayViewPairing(_pairing.PairingId, _pairing.DeviceName, _pairing.Pin, _pairing.ExpiresAt),
             DataDirectory));
@@ -313,10 +318,12 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         if (connected)
         {
             QueryGpuVms();
+            _ = _pipe.SendAsync(new BackupStatusQueryMessage());
             if (_hostWindow is not null)
             {
                 _ = _pipe.SendAsync(new ListDevicesMessage());
                 _ = _pipe.SendAsync(new UpdateStatusQueryMessage());
+                _ = _pipe.SendAsync(new BackupStatusQueryMessage());
                 _ = _pipe.SendAsync(new HostLeanQueryMessage());
                 _ = _pipe.SendAsync(new GameReadyQueryMessage());
             }
@@ -377,6 +384,9 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 break;
             case WakeFixRequestedMessage wakeFix:
                 _ = ApproveWakeFixAsync(wakeFix);
+                break;
+            case BackupStatusMessage backup:
+                OnBackupStatus(backup.Status);
                 break;
             case UpdateStatusMessage update:
                 OnUpdateStatus(update.Status);
@@ -496,8 +506,31 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         }
     }
 
+    /// <summary>Failures and overdue backups are announced even with the host window closed, so the service is asked every five minutes.</summary>
+    private void PollBackup()
+    {
+        if (_connected && (_backupTicks++ % BackupPollSeconds == 0 || (HostWindowOpen && _backupTicks % 5 == 0)))
+        {
+            _ = _pipe.SendAsync(new BackupStatusQueryMessage());
+        }
+    }
+
+    private void OnBackupStatus(TrayBackupStatus status)
+    {
+        _backup = status;
+        foreach (var (title, text) in _backupNotifier.Observe(status, DateTimeOffset.UtcNow))
+        {
+            Notify("error", title, text);
+        }
+
+        PushState();
+    }
+
+    private const int BackupPollSeconds = 300;
+
     private void PollUpdate()
     {
+        PollBackup();
         if (!_connected || !HostWindowOpen)
         {
             return;

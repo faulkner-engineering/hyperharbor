@@ -254,6 +254,9 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             case SetAdminPassphraseMessage set:
                 SetAdminPassphrase(set);
                 break;
+            case BackupStatusQueryMessage:
+                await connection.SendAsync(new BackupStatusMessage(await BuildBackupStatusAsync()));
+                break;
             case UpdateStatusQueryMessage:
                 await SendUpdateStatusAsync(connection);
                 break;
@@ -390,7 +393,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
 
         var lastUsed = _services.GetService<Core.Power.RemoteUseTracker>()?.LastUsed;
         var inUse = lastUsed is { } at && (_services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow() - at < RecentUse;
-        return new AmbientSnapshotMessage(running, _devices.List().Count, inUse);
+        return new AmbientSnapshotMessage(running, _devices.List().Count, inUse, Core.Backup.BackupTrayStatus.Summary(await BuildBackupStatusAsync()));
     }
 
     private static string Truncate(string? text) => text is { Length: > 40 } ? text[..40] : text ?? string.Empty;
@@ -480,6 +483,38 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         {
             Broadcast(new HostLeanStatusMessage(lean.Status()));
         }
+    }
+
+    /// <summary>The backup summary for the host window and the ambient screen. Without the backup services it is empty.</summary>
+    private async Task<TrayBackupStatus> BuildBackupStatusAsync()
+    {
+        if (_services.GetService<Core.Backup.BackupConfigStore>() is not { } config
+            || _services.GetService<Core.Backup.BackupHistoryStore>() is not { } history)
+        {
+            return new TrayBackupStatus(false, 0, false, 0, []);
+        }
+
+        var names = new Dictionary<Guid, string>();
+        if (_services.GetService<Core.IVmInventory>() is { } inventory)
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                foreach (var vm in await inventory.ListAsync(timeout.Token))
+                {
+                    names[vm.Id] = vm.Name;
+                }
+            }
+            catch (Exception ex) when (ex is Core.HyperV.HyperVUnavailableException or OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "The VM names for the backup status could not be read.");
+            }
+        }
+
+        var coordinator = _services.GetService<Core.Backup.BackupCoordinator>();
+        return Core.Backup.BackupTrayStatus.Build(
+            config.Load(), history, names, (_services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow(),
+            coordinator?.Busy ?? false, coordinator?.WaitingCount ?? 0);
     }
 
     private async Task SendUpdateStatusAsync(Connection connection)

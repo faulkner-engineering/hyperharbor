@@ -30,6 +30,8 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(GpuVmsStoppedMessage), "gpuVmsStopped")]
 [JsonDerivedType(typeof(UpdateStatusMessage), "updateStatus")]
 [JsonDerivedType(typeof(UpdateStatusQueryMessage), "updateStatusQuery")]
+[JsonDerivedType(typeof(BackupStatusMessage), "backupStatus")]
+[JsonDerivedType(typeof(BackupStatusQueryMessage), "backupStatusQuery")]
 [JsonDerivedType(typeof(CheckForUpdateMessage), "checkForUpdate")]
 [JsonDerivedType(typeof(InstallUpdateMessage), "installUpdate")]
 [JsonDerivedType(typeof(SetUpdateChannelMessage), "setUpdateChannel")]

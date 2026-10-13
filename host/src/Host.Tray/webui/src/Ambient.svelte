@@ -59,6 +59,7 @@
     {#if data.hostStatus}<li>{data.hostStatus}</li>{/if}
     {#if vms !== null}<li>{vms}</li>{/if}
     {#if data.devices}<li>{data.devices}</li>{/if}
+    {#if data.backup}<li>{data.backup}</li>{/if}
   </ul>
 
   {#if data.chordHint}

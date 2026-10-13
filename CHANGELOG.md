@@ -58,6 +58,15 @@ note anything that needs action, such as updating the host, a new elevation requ
   `restoreHostState`, `replaceDisk`) whose `restoreResult` lists warnings, a GPU driver re-sync, and a possible BitLocker
   recovery prompt. Adding or changing targets, the recovery key, scans, and every restore need elevation. Scheduled
   backups run under no User, so only manual runs appear to the client that started them.
+- Backups in the client (Host menu, Backups): add a target (folder, S3-compatible, Azure Blob) with a connection test, or
+  add one that already holds backups using its recovery key; the recovery key is shown once and confirmed by typing its
+  last four groups back; choose which VMs back up to which target, and whether also after they shut down; run a backup
+  now; see the latest result and history; Restore… (look at what a target holds, restore a VM as a new VM, or restore the
+  host's settings); and a VM's menu has "Restore disk from backup…" (VM off, its exact name typed).
+- The host window has a Backups card, and a failed backup or one with no good copy for twice its schedule is announced
+  (each failure once, each overdue item once a day). The Ambient screen shows one muted line about backups with the host
+  status. On a new PC: set the admin passphrase in the host window, pair a client, add the target with its recovery key,
+  then restore.
 
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with

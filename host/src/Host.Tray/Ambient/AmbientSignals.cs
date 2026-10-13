@@ -64,8 +64,9 @@ internal sealed class AmbientSignals : IAmbientSignals
 /// <param name="HostStatus">One line on the host, or null when the widget is off.</param>
 /// <param name="RunningVms">Null when the widget is off.</param>
 /// <param name="Devices">Null when the widget is off.</param>
+/// <param name="Backup">One muted line about the backups (shown with the host status); null when the widget is off or nothing is backed up.</param>
 /// <param name="ChordHint">The unlock chord, for example "LB + RB + Start"; null when the soft lock is off.</param>
-internal sealed record AmbientScreenData(string? HostStatus, IReadOnlyList<string>? RunningVms, string? Devices, string? ChordHint);
+internal sealed record AmbientScreenData(string? HostStatus, IReadOnlyList<string>? RunningVms, string? Devices, string? ChordHint, string? Backup = null);
 
 /// <summary>What the screensaver measured about itself while it ran.</summary>
 internal sealed record AmbientMetrics(DateTimeOffset At, double CpuPercent, double? GpuPercent, int Seconds);

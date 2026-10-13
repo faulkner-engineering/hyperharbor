@@ -3,6 +3,7 @@
   import ConfirmDialog from "../components/ConfirmDialog.svelte";
   import { tray } from "../store.svelte";
   import type { TrayViewState } from "../bridge";
+  import { backupCardText } from "../text";
 
   interface Props {
     view: TrayViewState;
@@ -14,6 +15,7 @@
 
   const consoleBusy = $derived(tray.isBusy("console"));
   const searchBusy = $derived(tray.isBusy("packageSearch"));
+  const backups = $derived(backupCardText(view.backup));
 
   function start(which: "console" | "packageSearch") {
     confirming = null;
@@ -73,6 +75,10 @@
       {/if}
     {/snippet}
   </Card>
+
+  <Card icon="storage" title="Backups" status={backups.status} tone={backups.tone}>
+    {#each backups.lines as line, index (index)}<span class="line">{line}</span>{/each}
+  </Card>
 </div>
 
 {#if confirming === "console"}
@@ -97,5 +103,9 @@
   .cards {
     display: grid;
     gap: 0.8rem;
+  }
+
+  .line {
+    display: block;
   }
 </style>

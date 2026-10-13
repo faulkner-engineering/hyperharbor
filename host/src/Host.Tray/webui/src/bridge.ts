@@ -202,6 +202,7 @@ export interface AmbientData {
   runningVms?: string[] | null;
   devices?: string | null;
   chordHint?: string | null;
+  backup?: string | null;
 }
 
 export interface GameReadyStatus {
@@ -223,6 +224,28 @@ export interface TrayViewDevice {
   pairedAt: string;
 }
 
+/** One backed-up item on one target (TrayBackupItem). */
+export interface TrayBackupItem {
+  name: string;
+  targetName: string;
+  /** succeeded, partial, skipped, or failed; absent when it never ran. */
+  outcome?: string | null;
+  finishedAt?: string | null;
+  reason?: string | null;
+  lastSuccessAt?: string | null;
+  overdue: boolean;
+  runId?: string | null;
+}
+
+/** The backup summary from the service (TrayBackupStatus). */
+export interface TrayBackupStatus {
+  configured: boolean;
+  pendingKeys: number;
+  running: boolean;
+  waiting: number;
+  items: TrayBackupItem[];
+}
+
 export interface TrayViewState {
   connected: boolean;
   /** Null while the service is not connected. */
@@ -238,6 +261,8 @@ export interface TrayViewState {
   hostLean: HostLeanStatus | null;
   /** Null while the service is not connected. */
   gameReady: GameReadyStatus | null;
+  /** Null while the service is not connected. */
+  backup: TrayBackupStatus | null;
   /** Work in progress: passphrase, console, packageSearch, folder:vm|iso|backup, device:<id>, update. */
   busy: string[];
   pairing: { pairingId: string; deviceName: string; pin: string; expiresAt: string } | null;
