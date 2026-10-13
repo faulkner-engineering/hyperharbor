@@ -62,6 +62,12 @@ public interface ITrayActions
     /// <summary>Puts this PC to sleep (after the page's confirmation).</summary>
     void GameReadySleepNow();
 
+    /// <summary>Saves the game-aware settings.</summary>
+    void GameAwareApply(Shared.Contracts.Hosts.GameAwareSettings settings);
+
+    /// <summary>"This was not a game": ignore the program that started the game state.</summary>
+    void GameAwareNotAGame();
+
     /// <param name="target">logs or audit.</param>
     void Open(string target);
 
@@ -161,6 +167,12 @@ public static class TrayCommands
             case "gameReadySleepNow":
                 actions.GameReadySleepNow();
                 return true;
+            case "gameAwareApply" when GameAwareSettingsOf(message) is { } gameAware:
+                actions.GameAwareApply(gameAware);
+                return true;
+            case "gameAwareNotAGame":
+                actions.GameAwareNotAGame();
+                return true;
             case "open" when Text(message, "target") is "logs" or "audit":
                 actions.Open(Text(message, "target")!);
                 return true;
@@ -175,6 +187,23 @@ public static class TrayCommands
                 return true;
             default:
                 return false;
+        }
+    }
+
+    private static Shared.Contracts.Hosts.GameAwareSettings? GameAwareSettingsOf(JsonElement message)
+    {
+        if (!message.TryGetProperty("settings", out var value) || value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        try
+        {
+            return value.Deserialize<Shared.Contracts.Hosts.GameAwareSettings>(Shared.Contracts.ContractJson.Options);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

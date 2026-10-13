@@ -68,6 +68,21 @@ note anything that needs action, such as updating the host, a new elevation requ
   status. On a new PC: set the admin passphrase in the host window, pair a client, add the target with its recovery key,
   then restore.
 
+- Game-aware mode (API 1.19.0, off by default): when a game is in the foreground on the host, the running VMs are paused
+  (or saved and stopped, or left running, per VM) so the game has the PC, and exactly those VMs are resumed when the game
+  ends. A game is found from a full-screen Direct3D app or presentation mode, a borderless full-screen window started by
+  Steam, Epic, Battle.net, Xbox, GOG, or Playnite, or a program on your allowlist. Programs on the ignore list, the
+  launchers' own windows, HyperHarbor's windows, and the desktop never count. A game must hold for 3 seconds before VMs
+  are touched and be gone for 10 seconds before they resume. A VM with a GPU partition (Performance mode) is always
+  paused. A VM someone is connected to is left running unless its setting says to pause it anyway, and the client then
+  shows "the host is gaming". If the tray stops reporting, or no game is reported for a minute, the VMs resume, and a
+  host restart resumes any VM a game left paused. Every pause and resume is logged with the program that caused it.
+  Where to find it: the client's Host menu, Game-aware mode (switch, per-VM action, allowlist and ignore list, "This was
+  not a game", and a banner while the host is gaming); the host window's Game-aware page; a line on the Ambient screen.
+  The same foreground check now also makes a scheduled backup or the scheduled sleep wait for a game, and it recognizes
+  borderless windowed games, which the old full-screen-only check missed. The session check for "someone is connected"
+  sees only connections between the host and the guest, not Remote Desktop from other PCs.
+
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with
   any newer data format. The `backup` folder in the data directory (Kopia caches) is not copied into update backups.

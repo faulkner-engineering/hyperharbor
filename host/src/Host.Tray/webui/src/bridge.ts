@@ -203,6 +203,7 @@ export interface AmbientData {
   devices?: string | null;
   chordHint?: string | null;
   backup?: string | null;
+  gaming?: string | null;
 }
 
 export interface GameReadyStatus {
@@ -222,6 +223,37 @@ export interface TrayViewDevice {
   name: string;
   fingerprint: string;
   pairedAt: string;
+}
+
+export type GameVmAction = "pause" | "save" | "keep";
+
+export interface GameVmPolicy {
+  vmId: string;
+  action: GameVmAction;
+  alwaysPause?: boolean;
+}
+
+/** Game-aware mode choices (GameAwareSettings in docs/api.yaml). */
+export interface GameAwareSettings {
+  enabled: boolean;
+  defaultAction: GameVmAction;
+  allowlist: string[];
+  ignoreList: string[];
+  vmPolicies: GameVmPolicy[];
+}
+
+export interface GameAwareInfo {
+  settings: GameAwareSettings;
+  state: {
+    enabled: boolean;
+    gaming: boolean;
+    process?: string | null;
+    reason?: string | null;
+    since?: string | null;
+    changedVms: string[];
+    sessionVms: string[];
+  };
+  vms: { vmId: string; name: string; gpuPartition: boolean }[];
 }
 
 /** One backed-up item on one target (TrayBackupItem). */
@@ -263,6 +295,8 @@ export interface TrayViewState {
   gameReady: GameReadyStatus | null;
   /** Null while the service is not connected. */
   backup: TrayBackupStatus | null;
+  /** Null while the service is not connected. */
+  gameAware: GameAwareInfo | null;
   /** Work in progress: passphrase, console, packageSearch, folder:vm|iso|backup, device:<id>, update. */
   busy: string[];
   pairing: { pairingId: string; deviceName: string; pin: string; expiresAt: string } | null;
@@ -294,6 +328,8 @@ export type PageMessage =
   | { type: "hostLeanApply"; source: "lean" | "undo" }
   | { type: "setHostLeanSchedule"; enabled: boolean }
   | { type: "gameReadyRefresh" }
+  | { type: "gameAwareApply"; settings: GameAwareSettings }
+  | { type: "gameAwareNotAGame" }
   | { type: "gameReadyFix"; cardId: string }
   | { type: "gameReadyTestWake"; delaySeconds: number }
   | { type: "gameReadyConsoleSignInEnable"; userName: string; launcher: string }

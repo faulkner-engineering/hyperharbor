@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { HostLeanRunSummary, HostLeanStatus, HostUpdateStatus, TrayBackupItem, TrayBackupStatus } from "./bridge";
-import { backupCardText, countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
+import type { GameAwareInfo, GameAwareSettings, HostLeanRunSummary, HostLeanStatus, HostUpdateStatus, TrayBackupItem, TrayBackupStatus } from "./bridge";
+import { addPrograms, backupCardText, effectiveAction, gameAwareStatus, normalizeProgram, withVmAction, countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
 
 const update = (overrides: Partial<HostUpdateStatus> = {}): HostUpdateStatus => ({
   supported: true,
@@ -203,5 +203,47 @@ describe("backupCardText", () => {
 
   it("shows a run in progress", () => {
     expect(backupCardText(status({ running: true }), now).tone).toBe("busy");
+  });
+});
+
+describe("game-aware helpers", () => {
+  const settings = (overrides: Partial<GameAwareSettings> = {}): GameAwareSettings => ({
+    enabled: true,
+    defaultAction: "pause",
+    allowlist: [],
+    ignoreList: [],
+    vmPolicies: [],
+    ...overrides,
+  });
+  const info = (overrides: Partial<GameAwareSettings> = {}, gaming = false): GameAwareInfo => ({
+    settings: settings(overrides),
+    state: { enabled: true, gaming, process: gaming ? "eldenring" : null, changedVms: [], sessionVms: [] },
+    vms: [
+      { vmId: "a", name: "Plain", gpuPartition: false },
+      { vmId: "g", name: "Gpu", gpuPartition: true },
+    ],
+  });
+
+  it("normalizes program names and merges pasted lists", () => {
+    expect(normalizeProgram(" C:\\Games\\Foo.EXE ")).toBe("foo");
+    expect(addPrograms(["foo"], "Foo.exe, bar;\nBaz.exe\n\n")).toEqual(["foo", "bar", "baz"]);
+  });
+
+  it("stores a VM's own action and drops it when it matches the default again", () => {
+    const changed = withVmAction(settings(), "a", "save", false);
+    expect(changed.vmPolicies).toEqual([{ vmId: "a", action: "save", alwaysPause: false }]);
+    expect(withVmAction(changed, "a", "pause", false).vmPolicies).toEqual([]);
+  });
+
+  it("forces pause for a GPU VM", () => {
+    const stored = info({ vmPolicies: [{ vmId: "g", action: "keep", alwaysPause: false }] });
+    expect(effectiveAction(stored, "g")).toEqual({ action: "pause", alwaysPause: false, forced: true });
+  });
+
+  it("describes the mode", () => {
+    expect(gameAwareStatus(null).tone).toBe("neutral");
+    expect(gameAwareStatus(info({ enabled: false }))).toEqual({ status: "Off", tone: "neutral" });
+    expect(gameAwareStatus(info())).toEqual({ status: "On, no game running", tone: "ok" });
+    expect(gameAwareStatus(info({}, true))).toEqual({ status: "Game running (eldenring)", tone: "busy" });
   });
 });

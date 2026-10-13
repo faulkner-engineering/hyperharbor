@@ -363,7 +363,7 @@ internal sealed class AmbientPageForm : Form
 
         _dataWritten = written;
         var data = AmbientFiles.Read<AmbientScreenData>(AmbientNames.ScreenDataFile);
-        Post(new { type = "data", hostStatus = data?.HostStatus, runningVms = data?.RunningVms, devices = data?.Devices, chordHint = data?.ChordHint, backup = data?.Backup });
+        Post(new { type = "data", hostStatus = data?.HostStatus, runningVms = data?.RunningVms, devices = data?.Devices, chordHint = data?.ChordHint, backup = data?.Backup, gaming = data?.Gaming });
     }
 
     private void Post(object message)

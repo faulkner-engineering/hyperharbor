@@ -54,6 +54,8 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private IReadOnlyList<string> _gpuVms = [];
     private HostUpdateStatus? _update;
     private TrayBackupStatus? _backup;
+    private GameAwareInfo? _gameAware;
+    private int _gameAwareTicks;
     private readonly Backup.BackupNotifier _backupNotifier = new();
     private int _backupTicks;
     private bool _restarting;
@@ -267,6 +269,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             _connected ? _hostLean : null,
             _connected ? _gameReady : null,
             _connected ? _backup : null,
+            _connected ? _gameAware : null,
             _busy.Order(StringComparer.Ordinal).ToList(),
             _pairing is null ? null : new TrayViewPairing(_pairing.PairingId, _pairing.DeviceName, _pairing.Pin, _pairing.ExpiresAt),
             DataDirectory));
@@ -312,6 +315,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         {
             QueryGpuVms();
             _ = _pipe.SendAsync(new BackupStatusQueryMessage());
+            _ = _pipe.SendAsync(new GameAwareQueryMessage());
             if (_hostWindow is not null)
             {
                 _ = _pipe.SendAsync(new ListDevicesMessage());
@@ -331,6 +335,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             _update = null;
             _hostLean = null;
             _gameReady = null;
+            _gameAware = null;
             _pendingCheck = null;
             _busy.Clear();
             EndPairing();
@@ -377,6 +382,9 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 break;
             case WakeFixRequestedMessage wakeFix:
                 _ = ApproveWakeFixAsync(wakeFix);
+                break;
+            case GameAwareStatusMessage gameAwareStatus:
+                OnGameAwareStatus(gameAwareStatus.Info);
                 break;
             case BackupStatusMessage backup:
                 OnBackupStatus(backup.Status);
@@ -524,10 +532,36 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
 
     private void PollBackup()
     {
+        PollGameAware();
         if (_connected && (_backupTicks++ % BackupPollSeconds == 0 || (HostWindowOpen && _backupTicks % 5 == 0)))
         {
             _ = _pipe.SendAsync(new BackupStatusQueryMessage());
         }
+    }
+
+    /// <summary>Asked every ten seconds, window open or not, so a game that pauses VMs is announced.</summary>
+    private void PollGameAware()
+    {
+        if (_connected && (_gameAwareTicks++ % 10 == 0 || (HostWindowOpen && _gameAwareTicks % 2 == 0)))
+        {
+            _ = _pipe.SendAsync(new GameAwareQueryMessage());
+        }
+    }
+
+    private void OnGameAwareStatus(GameAwareInfo info)
+    {
+        var before = _gameAware?.State;
+        _gameAware = info;
+        if (before is { Gaming: false } && info.State.Gaming && info.State.ChangedVms.Count > 0)
+        {
+            Notify("info", "Game detected", $"{info.State.Process ?? "A game"} is running. {info.State.ChangedVms.Count} VM(s) paused or saved until it ends.");
+        }
+        else if (before is { Gaming: true } && !info.State.Gaming)
+        {
+            Notify("info", "Game ended", "Paused VMs were resumed.");
+        }
+
+        PushState();
     }
 
     private void OnBackupStatus(TrayBackupStatus status)
@@ -808,6 +842,10 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         _ = _pipe.SendAsync(new GameReadyAmbientApplyMessage(enabled, idleMinutes, showHostStatus, showRunningVms, showDevices, softLock, chord));
 
     public void GameReadySleepNow() => _ = _pipe.SendAsync(new GameReadySleepNowMessage());
+
+    public void GameAwareApply(GameAwareSettings settings) => _ = _pipe.SendAsync(new GameAwareApplyMessage(settings));
+
+    public void GameAwareNotAGame() => _ = _pipe.SendAsync(new GameAwareNotAGameMessage());
 
     private void ConfirmSleepNow()
     {

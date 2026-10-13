@@ -415,7 +415,8 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
 
         var lastUsed = _services.GetService<Core.Power.RemoteUseTracker>()?.LastUsed;
         var inUse = lastUsed is { } at && (_services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow() - at < RecentUse;
-        return new AmbientSnapshotMessage(running, _devices.List().Count, inUse, Core.Backup.BackupTrayStatus.Summary(await BuildBackupStatusAsync()));
+        return new AmbientSnapshotMessage(running, _devices.List().Count, inUse, Core.Backup.BackupTrayStatus.Summary(await BuildBackupStatusAsync()),
+            _services.GetService<Core.GameAware.GameAwareController>()?.Status().Gaming ?? false);
     }
 
     private static string Truncate(string? text) => text is { Length: > 40 } ? text[..40] : text ?? string.Empty;

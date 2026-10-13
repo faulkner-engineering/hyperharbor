@@ -148,6 +148,16 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    throwaway VM (VmBackupLiveTests, HH_BACKUP_VM_LIVE=1 with HH_KOPIA_EXE). Done: 21.4 scheduler (BackupCoordinator, BackupSchedulerService), shutdown trigger with
    debounce, run conditions, power hold (via HostActivity); Done: 21.5 restore engine (Host.Core/Backup/Restore: importer, RestoreCoordinator, HostStateRestorer, DiskReplacer; file browse by mounting a VHDX is NOT built yet); Done: 21.6 API 1.18.0 (Host.Service/Api/BackupEndpoints, BackupMapping; BackupManagementService in Host.Core; one recovery key per target covers its VM and host repositories), client (BackupPanel and dialogs), tray Backups card with failure notifications (BackupNotifier), ambient line; not built: the first-run restore wizard in the tray (a new PC uses a paired client with the target and its recovery key), tray run-now; Todo: 21.7 monthly restore test. rclone targets are deferred.
 
+22. Game-aware mode, added at the user's request (2026-10-13; API 1.19.0; unit and API tested with Hyper-V mocked, never run
+   against a real game): the tray's ForegroundProbe (Host.Tray/GameAware) sends ForegroundSignals every 2 s; the service's
+   GameAwareMonitor (Host.Core/GameAware) combines them (GamingDetector: SHQueryUserNotificationState 3 or 4, borderless window
+   plus a launcher in the lineage, allowlist, ignore list, launcher and own-window exclusions), smooths them (GamingDebouncer:
+   3 s in, 10 s out), feeds ForegroundGameTracker (sleep and backup gates), and drives GameAwareController (per-VM Pause, Save,
+   or Keep through GamePolicyPlanner; GPU-P forces Pause; VMs with a TCP-visible session are skipped unless AlwaysPause; the
+   changed VMs are kept in game-aware-changed.json and resumed on exit, on a 60 s watchdog, and at host start). Off by
+   default. UI: client GameAwarePanel and GamingNotice, host window Game-aware page, ambient line. Not built: a Game ready
+   card (the page is its own nav item), configurable launcher list, per-VM Pause through the API's VmAction.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
 

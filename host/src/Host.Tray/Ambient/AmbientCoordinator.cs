@@ -160,7 +160,8 @@ internal sealed class AmbientCoordinator
             info.ShowRunningVms ? snapshot?.RunningVms ?? [] : null,
             info.ShowDevices && snapshot is not null ? DeviceText(snapshot) : null,
             info.SoftLock ? AmbientChord.Describe(info.Chord) : null,
-            info.ShowHostStatus ? BackupText(snapshot?.Backup) : null);
+            info.ShowHostStatus ? BackupText(snapshot?.Backup) : null,
+            info.ShowHostStatus && snapshot is { Gaming: true } ? "A game is running; VMs are paused" : null);
         if (_written is not null && Same(_written, data))
         {
             return;
@@ -193,5 +194,6 @@ internal sealed class AmbientCoordinator
         && a.Devices == b.Devices
         && a.ChordHint == b.ChordHint
         && a.Backup == b.Backup
+        && a.Gaming == b.Gaming
         && (a.RunningVms is null ? b.RunningVms is null : b.RunningVms is not null && a.RunningVms.SequenceEqual(b.RunningVms));
 }

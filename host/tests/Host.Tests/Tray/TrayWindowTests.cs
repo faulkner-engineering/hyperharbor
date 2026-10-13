@@ -55,6 +55,10 @@ public sealed partial class TrayWindowTests
 
         public void GameReadySleepNow() => Calls.Add("sleepNow");
 
+        public void GameAwareApply(HyperHarbor.Shared.Contracts.Hosts.GameAwareSettings settings) => Calls.Add($"gameAware:{settings.Enabled}:{settings.Allowlist.Count}");
+
+        public void GameAwareNotAGame() => Calls.Add("notAGame");
+
         public void Open(string target) => Calls.Add("open:" + target);
 
         public void OpenUrl(string url) => Calls.Add("url:" + url);
@@ -94,6 +98,8 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"gameReadyPowerModeApply","mode":"consoleIdle","displayMinutes":10,"scheduleEnabled":true,"sleepTime":"01:00","wakeTime":"17:00","watts":60,"ratePerKwh":0.15}""", "power:consoleIdle:10:True:01:00:17:00:60:0.15")]
     [InlineData("""{"type":"gameReadyAmbientApply","enabled":true,"idleMinutes":5,"showHostStatus":true,"showRunningVms":true,"showDevices":false,"softLock":true,"chord":"lb+rb+start"}""", "ambient:True:5:True:True:False:True:lb+rb+start")]
     [InlineData("""{"type":"gameReadySleepNow"}""", "sleepNow")]
+    [InlineData("""{"type":"gameAwareApply","settings":{"enabled":true,"defaultAction":"pause","allowlist":["a","b"],"ignoreList":[],"vmPolicies":[]}}""", "gameAware:True:2")]
+    [InlineData("""{"type":"gameAwareNotAGame"}""", "notAGame")]
     [InlineData("""{"type":"open","target":"audit"}""", "open:audit")]
     [InlineData("""{"type":"openUrl","url":"https://github.com/faulkner-engineering/hyperharbor/releases"}""", "url:https://github.com/faulkner-engineering/hyperharbor/releases")]
     [InlineData("""{"type":"cancelPairing","pairingId":"0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"}""", "cancel:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b")]
@@ -278,10 +284,14 @@ public sealed partial class TrayWindowTests
                     false,
                     2,
                     [new TrayBackupItem("Dev Box", "Local", "failed", time, "The disk is full.", time.AddDays(-2), true, Guid.Parse("7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"))]),
+                new GameAwareInfo(
+                    new GameAwareSettings(true, GameVmAction.Pause, ["emulator"], ["powerpnt"], [new GameVmPolicy(Id, GameVmAction.Keep, true)]),
+                    new GameAwareState(true, true, ["Dev Box"], ["Work"], "eldenring", "A full-screen Direct3D application is running.", time),
+                    [new GameAwareVm(Id, "Dev Box", false)]),
                 ["folder:iso"],
                 new TrayViewPairing(Id, "Laptop", "440141", time.AddMinutes(2)),
                 @"C:\ProgramData\HyperHarbor")),
-            new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
+            new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, null, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
             new HostToPage.Toast("success", "Admin passphrase saved", "Paired devices now need it to change VMs."),
             new HostToPage.Navigate("devices"),
         ];

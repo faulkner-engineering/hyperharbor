@@ -60,6 +60,7 @@
     {#if vms !== null}<li>{vms}</li>{/if}
     {#if data.devices}<li>{data.devices}</li>{/if}
     {#if data.backup}<li>{data.backup}</li>{/if}
+    {#if data.gaming}<li>{data.gaming}</li>{/if}
   </ul>
 
   {#if data.chordHint}
