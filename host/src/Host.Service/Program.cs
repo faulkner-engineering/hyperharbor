@@ -434,6 +434,12 @@ builder.Services.AddSingleton<DiskReplacer>();
 builder.Services.AddSingleton(services => new HostStateRestorer(
     dataDirectory, services.GetRequiredService<IBackupRepositories>(), services.GetRequiredService<ISnapshotRestorer>(),
     services.GetRequiredService<ILogger<HostStateRestorer>>()));
+builder.Services.AddSingleton(services => new BackupTargetTester(
+    services.GetRequiredService<KopiaCli>(), services.GetRequiredService<IBackupSecretStore>(), dataDirectory));
+builder.Services.AddSingleton(services => new BackupManagementService(
+    services.GetRequiredService<BackupConfigStore>(), services.GetRequiredService<IBackupSecretStore>(),
+    services.GetRequiredService<RecoveryKeyService>(), services.GetRequiredService<BackupTargetTester>(),
+    services.GetRequiredService<IBackupRepositories>(), services.GetRequiredService<KopiaCli>(), dataDirectory));
 builder.Services.AddSingleton<IVmSessionProbe, TcpVmSessionProbe>();
 builder.Services.AddSingleton(services => new BackupCoordinator(
     services.GetRequiredService<BackupConfigStore>(), services.GetRequiredService<IVmInventory>(),
@@ -516,6 +522,7 @@ app.MapUnattendEndpoints();
 app.MapSetupProfileEndpoints();
 app.MapProfileSourceEndpoints();
 app.MapPerformanceEndpoints();
+app.MapBackupEndpoints();
 app.MapJobEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();

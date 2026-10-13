@@ -21,6 +21,215 @@
     "note": null,
     "inBaseline": null
   },
+  "AttachBackupTargetRequest": {
+    "target": {
+      "name": "Local",
+      "kind": "local",
+      "local": {
+        "path": "D:\\Backups"
+      }
+    },
+    "recoveryKey": "ABCD-EFGH-IJKL-MNOP"
+  },
+  "BackupAzureSettings": {
+    "account": "mystorage",
+    "container": "backups",
+    "prefix": "pc1"
+  },
+  "BackupCatalog": {
+    "vms": [
+      {
+        "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+        "snapshots": [
+          {
+            "id": "k4f8a1b2c3d4e5f6",
+            "startTime": "2026-10-03T12:00:00\u002B00:00",
+            "totalSize": 64000000000
+          }
+        ]
+      }
+    ],
+    "hostSnapshots": [
+      {
+        "id": "k9a8b7c6d5e4f3a2",
+        "startTime": "2026-10-03T12:00:00\u002B00:00",
+        "totalSize": 1000000
+      }
+    ]
+  },
+  "BackupCatalogVm": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "snapshots": [
+      {
+        "id": "k4f8a1b2c3d4e5f6",
+        "startTime": "2026-10-03T12:00:00\u002B00:00",
+        "totalSize": 64000000000
+      }
+    ],
+    "name": "Ubuntu Dev"
+  },
+  "BackupConditions": {
+    "noActiveSession": true,
+    "notInGame": true,
+    "window": {
+      "start": "22:00",
+      "end": "06:00"
+    }
+  },
+  "BackupCredentials": {
+    "s3AccessKey": "AKIAFIXTURE",
+    "s3SecretKey": "fixture-secret"
+  },
+  "BackupItemStatus": {
+    "item": "vm:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "targetId": "3f2a9c1e5d7b4a60",
+    "targetName": "Local",
+    "overdue": false,
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "vmName": "Ubuntu Dev",
+    "lastRun": {
+      "runId": "7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+      "item": "vm:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+      "targetId": "3f2a9c1e5d7b4a60",
+      "trigger": "schedule",
+      "startedAt": "2026-10-03T12:00:00\u002B00:00",
+      "finishedAt": "2026-10-03T12:12:00\u002B00:00",
+      "outcome": "partial",
+      "totalBytes": 64000000000,
+      "warnings": [
+        "The checkpoint could not be removed."
+      ],
+      "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+      "vmName": "Ubuntu Dev",
+      "reason": "cleanup",
+      "snapshotId": "k4f8a1b2c3d4e5f6"
+    },
+    "lastSuccessAt": "2026-10-03T12:00:00\u002B00:00"
+  },
+  "BackupLocalSettings": {
+    "path": "D:\\Backups"
+  },
+  "BackupPolicy": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "targetId": "3f2a9c1e5d7b4a60",
+    "enabled": true,
+    "retention": {
+      "daily": 7,
+      "weekly": 4,
+      "monthly": 6
+    },
+    "bandwidthKbps": 2000,
+    "conditions": {
+      "noActiveSession": true,
+      "notInGame": true
+    },
+    "triggers": {
+      "schedule": true,
+      "onShutdown": true,
+      "debounceMinutes": 15
+    },
+    "gpuMode": "allowLive"
+  },
+  "BackupRetention": {
+    "daily": 7,
+    "weekly": 4,
+    "monthly": 6
+  },
+  "BackupRun": {
+    "runId": "7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+    "item": "vm:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "targetId": "3f2a9c1e5d7b4a60",
+    "trigger": "schedule",
+    "startedAt": "2026-10-03T12:00:00\u002B00:00",
+    "finishedAt": "2026-10-03T12:12:00\u002B00:00",
+    "outcome": "partial",
+    "totalBytes": 64000000000,
+    "warnings": [
+      "The checkpoint could not be removed."
+    ],
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "vmName": "Ubuntu Dev",
+    "reason": "cleanup",
+    "snapshotId": "k4f8a1b2c3d4e5f6"
+  },
+  "BackupS3Settings": {
+    "endpoint": "s3.example.com",
+    "bucket": "hyperharbor",
+    "region": "eu-central-1",
+    "prefix": "pc1",
+    "useTls": true
+  },
+  "BackupSchedule": {
+    "time": "02:00",
+    "days": [
+      "monday",
+      "thursday"
+    ]
+  },
+  "BackupSnapshot": {
+    "id": "k4f8a1b2c3d4e5f6",
+    "startTime": "2026-10-03T12:00:00\u002B00:00",
+    "totalSize": 64000000000
+  },
+  "BackupStatus": {
+    "items": [
+      {
+        "item": "host",
+        "targetId": "3f2a9c1e5d7b4a60",
+        "targetName": "Local",
+        "overdue": true
+      }
+    ],
+    "running": true,
+    "waiting": 1
+  },
+  "BackupTarget": {
+    "id": "3f2a9c1e5d7b4a60",
+    "name": "Local",
+    "kind": "local",
+    "enabled": true,
+    "keyState": "confirmed",
+    "schedule": {
+      "time": "02:00"
+    },
+    "retention": {
+      "daily": 7,
+      "weekly": 4,
+      "monthly": 6
+    },
+    "conditions": {
+      "noActiveSession": true,
+      "notInGame": true
+    },
+    "local": {
+      "path": "D:\\Backups"
+    },
+    "bandwidthKbps": 5000
+  },
+  "BackupTargetTest": {
+    "passed": true,
+    "steps": [
+      {
+        "name": "Folder",
+        "passed": true,
+        "detail": "The folder exists or was created."
+      }
+    ]
+  },
+  "BackupTestStep": {
+    "name": "Write",
+    "passed": true,
+    "detail": "A test file was written and read back."
+  },
+  "BackupTimeWindow": {
+    "start": "22:00",
+    "end": "06:00"
+  },
+  "BackupTriggers": {
+    "schedule": true,
+    "onShutdown": true,
+    "debounceMinutes": 10
+  },
   "BrowserCatalogItem": {
     "id": "brave",
     "name": "Brave",
@@ -38,6 +247,10 @@
     ],
     "description": null,
     "values": null
+  },
+  "ConfirmRecoveryKeyRequest": {
+    "setupId": "9b1d3c5e7f904a2b",
+    "typedBack": "IJKL-MNOP-QRST-UVWX"
   },
   "ConsoleSession": {
     "ticket": "fixture-ticket",
@@ -160,7 +373,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.17.0",
+    "apiVersion": "1.18.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -239,6 +452,32 @@
   "MmioSettings": {
     "lowGapMb": 1024,
     "highGapMb": 32768
+  },
+  "NewBackupTarget": {
+    "name": "Cloud",
+    "kind": "s3",
+    "s3": {
+      "endpoint": "s3.example.com",
+      "bucket": "hyperharbor",
+      "useTls": true
+    },
+    "credentials": {
+      "s3AccessKey": "AKIAFIXTURE",
+      "s3SecretKey": "fixture-secret"
+    },
+    "schedule": {
+      "time": "03:30"
+    },
+    "retention": {
+      "daily": 7,
+      "weekly": 4,
+      "monthly": 6
+    },
+    "bandwidthKbps": 2000,
+    "conditions": {
+      "noActiveSession": true,
+      "notInGame": true
+    }
   },
   "PackageCatalogItem": {
     "alias": "vscode",
@@ -420,6 +659,11 @@
     "installDesktop": true,
     "trustNewHostKey": true
   },
+  "RecoveryKeyOffer": {
+    "setupId": "9b1d3c5e7f904a2b",
+    "recoveryKey": "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-QRST",
+    "expiresAt": "2026-10-03T12:30:00\u002B00:00"
+  },
   "RegistryTweak": {
     "key": "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer",
     "name": "DisableSearchBoxSuggestions",
@@ -429,6 +673,11 @@
   "RenameIsoRequest": {
     "newName": "Windows 11 24H2.iso"
   },
+  "ReplaceDiskRequest": {
+    "targetId": "3f2a9c1e5d7b4a60",
+    "snapshotId": "k4f8a1b2c3d4e5f6",
+    "typedName": "Ubuntu Dev"
+  },
   "ResolvedExtension": {
     "store": "edge",
     "id": "odfafepnkmbhccpbejgmiehpchacaeak",
@@ -436,6 +685,38 @@
     "name": "uBlock Origin",
     "iconDataUrl": "data:image/png;base64,iVBORw0KGgo=",
     "inCatalog": false
+  },
+  "RestoreHostStateRequest": {
+    "targetId": "3f2a9c1e5d7b4a60",
+    "snapshotId": "k9a8b7c6d5e4f3a2"
+  },
+  "RestoreResult": {
+    "outcome": "succeededWithWarnings",
+    "warnings": [
+      "BitLocker may ask for its recovery key."
+    ],
+    "needsDriverResync": true,
+    "bitLockerRecoveryMayBeNeeded": true,
+    "restartRequired": false,
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "vmName": "Ubuntu Dev (restored)"
+  },
+  "RestoreVmRequest": {
+    "targetId": "3f2a9c1e5d7b4a60",
+    "snapshotId": "k4f8a1b2c3d4e5f6",
+    "name": "Ubuntu Dev",
+    "destination": "D:\\VMs",
+    "start": true,
+    "administrator": {
+      "adminUserName": "hhadmin",
+      "adminPassword": "fixture-password",
+      "enableRemoteDesktop": true,
+      "installDesktop": false,
+      "trustNewHostKey": false
+    }
+  },
+  "ScanBackupsRequest": {
+    "targetId": "3f2a9c1e5d7b4a60"
   },
   "SetupProfile": {
     "name": "Dev workstation",
@@ -548,6 +829,10 @@
     "browser": null,
     "updatedAt": "2026-10-03T12:00:00\u002B00:00",
     "error": null
+  },
+  "StartBackupRunRequest": {
+    "targetId": "3f2a9c1e5d7b4a60",
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"
   },
   "StoredSetupProfile": {
     "id": "dev-workstation",
@@ -677,6 +962,19 @@
       "finishedAt": "2026-10-03T12:40:00\u002B00:00",
       "restartPending": false
     }
+  },
+  "UpdateBackupTargetRequest": {
+    "name": "Renamed",
+    "enabled": true,
+    "schedule": {
+      "time": "01:00"
+    },
+    "retention": {
+      "daily": 3,
+      "weekly": 2,
+      "monthly": 1
+    },
+    "clearBandwidth": true
   },
   "UpdateVmComputeRequest": {
     "processorCount": 4,

@@ -6,7 +6,13 @@ using HyperHarbor.Host.Core.Installation;
 
 namespace HyperHarbor.Host.Core.Backup;
 
-public sealed class BackupException(string message, Exception? inner = null) : Exception(message, inner);
+public sealed class BackupException(string message, Exception? inner = null) : Exception(message, inner)
+{
+    /// <summary>The problem details code, when the client handles this failure specially.</summary>
+    public string? Code { get; init; }
+}
+
+public sealed class BackupTargetNotFoundException() : Exception("The backup target does not exist.");
 
 /// <summary>
 /// The staging folder a backup snapshots: hard links to the VM's (frozen) disk files plus manifest.json, so Kopia reads

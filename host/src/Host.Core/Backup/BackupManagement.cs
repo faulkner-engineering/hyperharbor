@@ -43,7 +43,7 @@ public sealed class BackupManagementService(
     public BackupConfig Load() => config.Load();
 
     public BackupTarget Find(string targetId) =>
-        config.FindTarget(targetId) ?? throw new LifecycleConflictException("The backup target does not exist.", "backupTargetNotFound");
+        config.FindTarget(targetId) ?? throw new BackupTargetNotFoundException();
 
     public BackupTarget AddTarget(BackupTarget draft, TargetCredentials credentials)
     {
@@ -288,7 +288,7 @@ public sealed class BackupManagementService(
             }
         }
 
-        throw new BackupException("No HyperHarbor backups were found at this location.", last);
+        throw new BackupException("No HyperHarbor backups were found at this location.", last) { Code = "noBackupsFound" };
     }
 
     private static BackupTarget Normalize(BackupTarget draft, string id) =>

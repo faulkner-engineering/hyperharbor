@@ -51,6 +51,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 - Host-state restore (pairings, certificate, settings, profiles; only the names a backup writes are accepted; the backup
   configuration of this PC is kept) and replace-disk (VM off, no checkpoints, the exact VM name typed; the old disks are
   kept until every new disk is in place and restored on any failure). Not yet built: browsing files inside a snapshot.
+- Backup and restore API (API 1.18.0, `Backup` tag): targets (list, add, change, remove, connection test), the recovery
+  key (shown once; the user types its last four groups back to confirm; one key protects a target's VM and host-state
+  repositories), adding a target that already holds backups with its key, per-VM policies, status with an overdue flag,
+  history, run now, scan, restore as a new VM, restore host state, and replace disk. Restores run as jobs (`restoreVm`,
+  `restoreHostState`, `replaceDisk`) whose `restoreResult` lists warnings, a GPU driver re-sync, and a possible BitLocker
+  recovery prompt. Adding or changing targets, the recovery key, scans, and every restore need elevation. Scheduled
+  backups run under no User, so only manual runs appear to the client that started them.
 
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with

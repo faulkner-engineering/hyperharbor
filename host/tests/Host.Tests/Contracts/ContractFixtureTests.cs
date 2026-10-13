@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Auth;
+using HyperHarbor.Shared.Contracts.Backup;
 using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Pairing;
 using HyperHarbor.Shared.Contracts.Profiles;
@@ -24,6 +25,10 @@ public class ContractFixtureTests
 {
     private static readonly Guid VmId = Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b");
     private static readonly DateTimeOffset Time = new(2026, 10, 3, 12, 0, 0, TimeSpan.Zero);
+
+    private static readonly BackupRun BackupRunSample = new(
+        Guid.Parse("7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"), $"vm:{VmId:D}", "3f2a9c1e5d7b4a60", BackupRunTrigger.Schedule, Time, Time.AddMinutes(12),
+        BackupRunOutcome.Partial, 64_000_000_000, ["The checkpoint could not be removed."], VmId, "Ubuntu Dev", "cleanup", "k4f8a1b2c3d4e5f6");
 
     private static readonly SetupProfileResult SetupResultSample = new(6, ["7-Zip: winget install failed (0x8A150011)."], true, new(2026, 10, 3, 12, 40, 0, TimeSpan.Zero), RestartPending: false);
 
@@ -132,6 +137,42 @@ public class ContractFixtureTests
         ["GuestSetupRequest"] = new GuestSetupRequest(DriversOnly: true),
         ["ExportDisksRequest"] = new ExportDisksRequest(@"D:\Backups"),
         ["HostGpu"] = new HostGpu([new HostGpuDevice("Intel(R) UHD Graphics", GpuVendor.Intel, "30.0.101.1122", true, 32, null)], []),
+        ["BackupSchedule"] = new BackupSchedule("02:00", [DayOfWeek.Monday, DayOfWeek.Thursday]),
+        ["BackupRetention"] = new BackupRetention(7, 4, 6),
+        ["BackupTimeWindow"] = new BackupTimeWindow("22:00", "06:00"),
+        ["BackupConditions"] = new BackupConditions(true, true, new BackupTimeWindow("22:00", "06:00")),
+        ["BackupTriggers"] = new BackupTriggers(true, true, 10),
+        ["BackupLocalSettings"] = new BackupLocalSettings(@"D:\Backups"),
+        ["BackupS3Settings"] = new BackupS3Settings("s3.example.com", "hyperharbor", "eu-central-1", "pc1", true),
+        ["BackupAzureSettings"] = new BackupAzureSettings("mystorage", "backups", "pc1"),
+        ["BackupCredentials"] = new BackupCredentials("AKIAFIXTURE", "fixture-secret", null),
+        ["NewBackupTarget"] = new NewBackupTarget(
+            "Cloud", BackupKind.S3, null, new BackupS3Settings("s3.example.com", "hyperharbor"), null, new BackupCredentials("AKIAFIXTURE", "fixture-secret"),
+            new BackupSchedule("03:30"), new BackupRetention(7, 4, 6), 2000, new BackupConditions()),
+        ["AttachBackupTargetRequest"] = new AttachBackupTargetRequest(new NewBackupTarget("Local", BackupKind.Local, new BackupLocalSettings(@"D:\Backups")), "ABCD-EFGH-IJKL-MNOP"),
+        ["UpdateBackupTargetRequest"] = new UpdateBackupTargetRequest("Renamed", true, new BackupSchedule("01:00"), new BackupRetention(3, 2, 1), null, ClearBandwidth: true),
+        ["BackupTarget"] = new BackupTarget(
+            "3f2a9c1e5d7b4a60", "Local", BackupKind.Local, true, BackupKeyState.Confirmed, new BackupSchedule("02:00"), new BackupRetention(7, 4, 6),
+            new BackupConditions(), new BackupLocalSettings(@"D:\Backups"), null, null, 5000),
+        ["RecoveryKeyOffer"] = new RecoveryKeyOffer("9b1d3c5e7f904a2b", "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-QRST", Time.AddMinutes(30)),
+        ["ConfirmRecoveryKeyRequest"] = new ConfirmRecoveryKeyRequest("9b1d3c5e7f904a2b", "IJKL-MNOP-QRST-UVWX"),
+        ["BackupTestStep"] = new BackupTestStep("Write", true, "A test file was written and read back."),
+        ["BackupTargetTest"] = new BackupTargetTest(true, [new BackupTestStep("Folder", true, "The folder exists or was created.")]),
+        ["BackupPolicy"] = new BackupPolicy(VmId, "3f2a9c1e5d7b4a60", true, new BackupRetention(7, 4, 6), 2000, new BackupConditions(), new BackupTriggers(true, true, 15), BackupGpuMode.AllowLive),
+        ["BackupRun"] = BackupRunSample,
+        ["BackupItemStatus"] = new BackupItemStatus($"vm:{VmId:D}", "3f2a9c1e5d7b4a60", "Local", false, VmId, "Ubuntu Dev", BackupRunSample, Time),
+        ["BackupStatus"] = new BackupStatus([new BackupItemStatus("host", "3f2a9c1e5d7b4a60", "Local", true)], true, 1),
+        ["StartBackupRunRequest"] = new StartBackupRunRequest("3f2a9c1e5d7b4a60", VmId),
+        ["ScanBackupsRequest"] = new ScanBackupsRequest("3f2a9c1e5d7b4a60"),
+        ["BackupSnapshot"] = new BackupSnapshot("k4f8a1b2c3d4e5f6", Time, 64_000_000_000),
+        ["BackupCatalogVm"] = new BackupCatalogVm(VmId, [new BackupSnapshot("k4f8a1b2c3d4e5f6", Time, 64_000_000_000)], "Ubuntu Dev"),
+        ["BackupCatalog"] = new BackupCatalog(
+            [new BackupCatalogVm(VmId, [new BackupSnapshot("k4f8a1b2c3d4e5f6", Time, 64_000_000_000)])],
+            [new BackupSnapshot("k9a8b7c6d5e4f3a2", Time, 1_000_000)]),
+        ["RestoreVmRequest"] = new RestoreVmRequest("3f2a9c1e5d7b4a60", "k4f8a1b2c3d4e5f6", "Ubuntu Dev", @"D:\VMs", true, new ProvisionVmRequest("hhadmin", "fixture-password")),
+        ["ReplaceDiskRequest"] = new ReplaceDiskRequest("3f2a9c1e5d7b4a60", "k4f8a1b2c3d4e5f6", "Ubuntu Dev"),
+        ["RestoreHostStateRequest"] = new RestoreHostStateRequest("3f2a9c1e5d7b4a60", "k9a8b7c6d5e4f3a2"),
+        ["RestoreResult"] = new RestoreResult(RestoreVmOutcome.SucceededWithWarnings, ["BitLocker may ask for its recovery key."], true, true, false, VmId, "Ubuntu Dev (restored)"),
         ["IsoInspection"] = new IsoInspection(InstallOs.Windows, "Windows", ["Windows 11 Home", "Windows 11 Pro"]),
         ["ValidationIssue"] = new ValidationIssue("processorCount", "Use at most 16 virtual processors."),
         ["VmDeleteRequest"] = new VmDeleteRequest(true, true, "Ubuntu Dev"),

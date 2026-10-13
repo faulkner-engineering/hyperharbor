@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.17.0
+  version: 1.18.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -36,6 +36,8 @@ security:
 tags:
   - name: Host
     description: Host identity and version.
+  - name: Backup
+    description: Backing VMs and host state up with Kopia, and restoring them.
   - name: Performance
     description: GPU partitioning, fixed resources, and Remote Desktop tuning for Windows VMs.
   - name: Unattended
@@ -2153,6 +2155,513 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /backup/targets:
+    get:
+      tags: [Backup]
+      operationId: listBackupTargets
+      summary: List the backup targets.
+      description: |
+        A target is a place backups go: a local folder, S3-compatible storage, or Azure Blob. Keys are never returned.
+        A target whose `keyState` is `pendingKey` has no repository yet and cannot run; set its recovery key first.
+      responses:
+        "200":
+          description: The targets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BackupTarget"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Backup]
+      operationId: createBackupTarget
+      summary: Add a backup target.
+      description: |
+        The target starts with a pending recovery key. Call `POST /backup/targets/{targetId}/recovery-key` to get the key,
+        then `POST /backup/recovery-key/confirm`. Remote keys go into the host's DPAPI vault and are never returned.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewBackupTarget"
+      responses:
+        "201":
+          description: The new target.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupTarget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+
+  /backup/targets/attach:
+    post:
+      tags: [Backup]
+      operationId: attachBackupTarget
+      summary: Add a target that already holds backups, using its saved recovery key.
+      description: |
+        For a new PC or a target that was removed. The key is checked against the storage before anything is kept.
+        A wrong key answers 409 with code `badRecoveryKey`; storage with no HyperHarbor backups answers 409 with code
+        `noBackupsFound`.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttachBackupTargetRequest"
+      responses:
+        "201":
+          description: The target, with its recovery key confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupTarget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "502":
+          $ref: "#/components/responses/BackupStorageFailed"
+
+  /backup/targets/{targetId}:
+    parameters:
+      - $ref: "#/components/parameters/BackupTargetId"
+    patch:
+      tags: [Backup]
+      operationId: updateBackupTarget
+      summary: Change a target.
+      description: Omitted properties stay as they are. Replacing a key replaces only the key given.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBackupTargetRequest"
+      responses:
+        "200":
+          description: The target.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupTarget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Backup]
+      operationId: deleteBackupTarget
+      summary: Remove a target, its policies, and its keys from this host.
+      description: |
+        Backups already in the storage stay there. To reach them again, add the target with its recovery key.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /backup/targets/{targetId}/test:
+    parameters:
+      - $ref: "#/components/parameters/BackupTargetId"
+    post:
+      tags: [Backup]
+      operationId: testBackupTarget
+      summary: Check that the target can be reached and written to.
+      description: |
+        A local folder is written to and read back, and its free space is checked. A remote target is reached with its keys.
+        A failed check is a 200 with `passed` false; the steps say what to fix.
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupTargetTest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /backup/targets/{targetId}/recovery-key:
+    parameters:
+      - $ref: "#/components/parameters/BackupTargetId"
+    post:
+      tags: [Backup]
+      operationId: createRecoveryKey
+      summary: Generate the target's recovery key. It is shown once.
+      description: |
+        Nothing is stored until `POST /backup/recovery-key/confirm`. Starting again discards the earlier key. A target whose
+        key is already confirmed answers 409 with code `recoveryKeyConfirmed`.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "200":
+          description: The key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryKeyOffer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /backup/recovery-key/confirm:
+    post:
+      tags: [Backup]
+      operationId: confirmRecoveryKey
+      summary: Confirm the recovery key was saved.
+      description: |
+        The user types back the last four groups of the key from their saved copy. A mismatch answers 409 with code
+        `badRecoveryKey` and keeps the offer open; an expired offer answers 409 with code `recoverySetupExpired`.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmRecoveryKeyRequest"
+      responses:
+        "200":
+          description: The target, now usable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupTarget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /backup/policies:
+    get:
+      tags: [Backup]
+      operationId: listBackupPolicies
+      summary: List the VMs' backup policies.
+      responses:
+        "200":
+          description: The policies.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BackupPolicy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Backup]
+      operationId: setBackupPolicy
+      summary: Back a VM up to a target, or change how.
+      description: One policy exists per VM and target. Omitted settings take the target's defaults.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupPolicy"
+      responses:
+        "200":
+          description: The policy as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /backup/policies/{targetId}/{vmId}:
+    parameters:
+      - $ref: "#/components/parameters/BackupTargetId"
+      - $ref: "#/components/parameters/VmId"
+    delete:
+      tags: [Backup]
+      operationId: deleteBackupPolicy
+      summary: Stop backing a VM up to a target. Existing backups stay in the storage.
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /backup/status:
+    get:
+      tags: [Backup]
+      operationId: getBackupStatus
+      summary: How the latest backup of each item went.
+      description: |
+        One entry for the host's own state and one per VM policy, for every usable target. `overdue` is set when the last
+        success is older than twice the schedule's longest gap.
+      responses:
+        "200":
+          description: The status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /backup/history:
+    get:
+      tags: [Backup]
+      operationId: listBackupHistory
+      summary: Recent runs, newest first.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        "200":
+          description: The runs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BackupRun"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /backup/runs:
+    post:
+      tags: [Backup]
+      operationId: startBackupRun
+      summary: Back up now.
+      description: |
+        Starts a `backupVm` job (with `vmId`) or a `backupHostState` job. The run ignores the run conditions. A VM that
+        another operation holds answers 409; so does a run of the same item that is already going.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartBackupRunRequest"
+      responses:
+        "202":
+          description: The job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /backup/scan:
+    post:
+      tags: [Backup]
+      operationId: scanBackups
+      summary: List what a target holds, grouped by VM.
+      description: Opens the target's repositories. Used by the guided restore.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanBackupsRequest"
+      responses:
+        "200":
+          description: The backups.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupCatalog"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BackupStorageFailed"
+
+  /backup/restore:
+    post:
+      tags: [Backup]
+      operationId: restoreVmFromBackup
+      summary: Restore a snapshot as a new VM.
+      description: |
+        Starts a `restoreVm` job; its `restoreResult` says how it ended. A taken name gets a suffix, switches are matched
+        by name (the Default Switch otherwise), a new virtual TPM key is created, and a GPU partition is flagged for a
+        driver re-sync. With `start`, the job waits for the guest and, when `administrator` is given, sets the User's
+        account up again.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreVmRequest"
+      responses:
+        "202":
+          description: The job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /backup/restore/host-state:
+    post:
+      tags: [Backup]
+      operationId: restoreHostState
+      summary: Restore the host's own settings from a snapshot.
+      description: |
+        Starts a `restoreHostState` job. Only files a backup writes are restored, this PC's backup configuration is kept,
+        and a snapshot from a newer data format is refused. The job's `restoreResult.restartRequired` says the host must
+        be restarted. Credentials sealed to the old PC (VM account passwords, console accounts) are not restored.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreHostStateRequest"
+      responses:
+        "202":
+          description: The job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /vms/{vmId}/replace-disk:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [Backup]
+      operationId: replaceVmDisk
+      summary: Put a snapshot's disks over this VM's disks.
+      description: |
+        Starts a `replaceDisk` job. The VM must be off with no checkpoints, `typedName` must equal its name exactly, and
+        the snapshot must have as many disks. The old disks are kept until every new disk is in place and put back on any
+        failure.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplaceDiskRequest"
+      responses:
+        "202":
+          description: The job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
 components:
   securitySchemes:
     mutualTLS:
@@ -2198,6 +2707,14 @@ components:
       description: An image file name in the ISO library, ending in .iso (URL-encoded).
       schema:
         type: string
+    BackupTargetId:
+      name: targetId
+      in: path
+      required: true
+      description: A backup target ID.
+      schema:
+        type: string
+        maxLength: 64
     JobId:
       name: jobId
       in: path
@@ -2208,6 +2725,12 @@ components:
         format: uuid
 
   responses:
+    BackupStorageFailed:
+      description: The backup storage could not be reached, refused the keys, or did not answer in time.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
     BadRequest:
       description: The request was malformed or failed validation.
       content:
@@ -2999,7 +3522,7 @@ components:
 
     VmJobKind:
       type: string
-      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState]
+      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState]
 
     VmJobState:
       type: string
@@ -3050,6 +3573,11 @@ components:
           description: What an `applySetupProfile` job did, once it succeeded (API 1.14.0). Omitted for other jobs.
           oneOf:
             - $ref: "#/components/schemas/SetupProfileResult"
+            - type: "null"
+        restoreResult:
+          description: What a `restoreVm` or `restoreHostState` job did, once it succeeded (API 1.18.0). Omitted for other jobs.
+          oneOf:
+            - $ref: "#/components/schemas/RestoreResult"
             - type: "null"
 
     ApplySetupProfileRequest:
@@ -4189,3 +4717,520 @@ components:
           oneOf:
             - $ref: "#/components/schemas/VmJob"
             - type: "null"
+
+    BackupKind:
+      type: string
+      enum: [local, s3, azure]
+
+    BackupKeyState:
+      type: string
+      enum: [pendingKey, confirmed]
+      description: A target whose key is pending has no repository and cannot run.
+
+    BackupRunOutcome:
+      type: string
+      enum: [succeeded, failed, skipped, partial]
+
+    BackupRunTrigger:
+      type: string
+      enum: [schedule, shutdown, manual]
+
+    BackupGpuMode:
+      type: string
+      enum: [requireOff, allowLive]
+      description: |
+        What to do with a running VM that has a GPU partition. `requireOff` skips it until it is off; `allowLive` copies the
+        running VM's disk (crash consistent) and records a warning.
+
+    RestoreVmOutcome:
+      type: string
+      enum: [succeeded, succeededWithWarnings, needsConsole]
+
+    DayOfWeek:
+      type: string
+      enum: [sunday, monday, tuesday, wednesday, thursday, friday, saturday]
+
+    BackupSchedule:
+      type: object
+      required: [time]
+      properties:
+        time:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: Local time of day, HH:mm.
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayOfWeek"
+          description: The days to run. Omitted means every day.
+
+    BackupRetention:
+      type: object
+      properties:
+        daily:
+          type: integer
+          minimum: 0
+          default: 7
+        weekly:
+          type: integer
+          minimum: 0
+          default: 4
+        monthly:
+          type: integer
+          minimum: 0
+          default: 6
+
+    BackupTimeWindow:
+      type: object
+      required: [start, end]
+      description: Both times are local, HH:mm. The end is exclusive, and a window may cross midnight. Equal times mean all day.
+      properties:
+        start:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        end:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+
+    BackupConditions:
+      type: object
+      description: Conditions for a scheduled or shutdown-triggered run to start. A deferred run waits up to 12 hours, then is recorded as skipped.
+      properties:
+        noActiveSession:
+          type: boolean
+          default: true
+          description: Wait while someone is connected to the VM.
+        notInGame:
+          type: boolean
+          default: true
+          description: Wait while a game is in the foreground on the host.
+        window:
+          $ref: "#/components/schemas/BackupTimeWindow"
+
+    BackupTriggers:
+      type: object
+      properties:
+        schedule:
+          type: boolean
+          default: true
+        onShutdown:
+          type: boolean
+          default: false
+        debounceMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+          default: 10
+          description: A shutdown backup waits this long; starting the VM again cancels it.
+
+    BackupLocalSettings:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+
+    BackupS3Settings:
+      type: object
+      required: [endpoint, bucket]
+      properties:
+        endpoint:
+          type: string
+        bucket:
+          type: string
+        region:
+          type: string
+        prefix:
+          type: string
+        useTls:
+          type: boolean
+          default: true
+
+    BackupAzureSettings:
+      type: object
+      required: [account, container]
+      properties:
+        account:
+          type: string
+        container:
+          type: string
+        prefix:
+          type: string
+
+    BackupCredentials:
+      type: object
+      description: Keys for a remote target. They go into the host's DPAPI vault and are never returned.
+      properties:
+        s3AccessKey:
+          type: string
+        s3SecretKey:
+          type: string
+        azureKey:
+          type: string
+
+    NewBackupTarget:
+      type: object
+      required: [name, kind]
+      description: Exactly the settings object of the `kind` is used. A remote kind needs its credentials.
+      properties:
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/BackupKind"
+        local:
+          $ref: "#/components/schemas/BackupLocalSettings"
+        s3:
+          $ref: "#/components/schemas/BackupS3Settings"
+        azure:
+          $ref: "#/components/schemas/BackupAzureSettings"
+        credentials:
+          $ref: "#/components/schemas/BackupCredentials"
+        schedule:
+          $ref: "#/components/schemas/BackupSchedule"
+        retention:
+          $ref: "#/components/schemas/BackupRetention"
+        bandwidthKbps:
+          type: integer
+          minimum: 1
+          description: Upload limit in kilobits per second. Omitted means no limit.
+        conditions:
+          $ref: "#/components/schemas/BackupConditions"
+
+    AttachBackupTargetRequest:
+      type: object
+      required: [target, recoveryKey]
+      properties:
+        target:
+          $ref: "#/components/schemas/NewBackupTarget"
+        recoveryKey:
+          type: string
+          description: The key saved when the target was first set up. Case and dashes do not matter.
+
+    UpdateBackupTargetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        schedule:
+          $ref: "#/components/schemas/BackupSchedule"
+        retention:
+          $ref: "#/components/schemas/BackupRetention"
+        bandwidthKbps:
+          type: integer
+          minimum: 1
+        clearBandwidth:
+          type: boolean
+          default: false
+          description: Removes the bandwidth limit.
+        conditions:
+          $ref: "#/components/schemas/BackupConditions"
+        credentials:
+          $ref: "#/components/schemas/BackupCredentials"
+
+    BackupTarget:
+      type: object
+      required: [id, name, kind, enabled, keyState, schedule, retention, conditions]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/BackupKind"
+        enabled:
+          type: boolean
+        keyState:
+          $ref: "#/components/schemas/BackupKeyState"
+        schedule:
+          $ref: "#/components/schemas/BackupSchedule"
+        retention:
+          $ref: "#/components/schemas/BackupRetention"
+        conditions:
+          $ref: "#/components/schemas/BackupConditions"
+        local:
+          $ref: "#/components/schemas/BackupLocalSettings"
+        s3:
+          $ref: "#/components/schemas/BackupS3Settings"
+        azure:
+          $ref: "#/components/schemas/BackupAzureSettings"
+        bandwidthKbps:
+          type: integer
+
+    RecoveryKeyOffer:
+      type: object
+      required: [setupId, recoveryKey, expiresAt]
+      description: Shown once. Nothing is stored until the user confirms they saved it.
+      properties:
+        setupId:
+          type: string
+        recoveryKey:
+          type: string
+          description: Groups of four letters and digits. It opens every backup of the target, on any PC.
+        expiresAt:
+          type: string
+          format: date-time
+
+    ConfirmRecoveryKeyRequest:
+      type: object
+      required: [setupId, typedBack]
+      properties:
+        setupId:
+          type: string
+        typedBack:
+          type: string
+          description: The last four groups of the key, typed from the user's saved copy.
+
+    BackupTestStep:
+      type: object
+      required: [name, passed, detail]
+      properties:
+        name:
+          type: string
+        passed:
+          type: boolean
+        detail:
+          type: string
+
+    BackupTargetTest:
+      type: object
+      required: [passed, steps]
+      properties:
+        passed:
+          type: boolean
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackupTestStep"
+
+    BackupPolicy:
+      type: object
+      required: [vmId, targetId]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        targetId:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+        retention:
+          $ref: "#/components/schemas/BackupRetention"
+        bandwidthKbps:
+          type: integer
+          minimum: 1
+        conditions:
+          $ref: "#/components/schemas/BackupConditions"
+        triggers:
+          $ref: "#/components/schemas/BackupTriggers"
+        gpuMode:
+          $ref: "#/components/schemas/BackupGpuMode"
+
+    BackupRun:
+      type: object
+      required: [runId, item, targetId, trigger, startedAt, finishedAt, outcome, totalBytes, warnings]
+      properties:
+        runId:
+          type: string
+          format: uuid
+        item:
+          type: string
+          description: "`vm:<id>` or `host`."
+        targetId:
+          type: string
+        trigger:
+          $ref: "#/components/schemas/BackupRunTrigger"
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        outcome:
+          $ref: "#/components/schemas/BackupRunOutcome"
+        totalBytes:
+          type: integer
+          format: int64
+        warnings:
+          type: array
+          items:
+            type: string
+        vmId:
+          type: string
+          format: uuid
+        vmName:
+          type: string
+        reason:
+          type: string
+          description: Why a run failed or was skipped.
+        snapshotId:
+          type: string
+
+    BackupItemStatus:
+      type: object
+      required: [item, targetId, targetName, overdue]
+      properties:
+        item:
+          type: string
+        targetId:
+          type: string
+        targetName:
+          type: string
+        overdue:
+          type: boolean
+          description: The last success is older than twice the schedule's longest gap.
+        vmId:
+          type: string
+          format: uuid
+        vmName:
+          type: string
+        lastRun:
+          $ref: "#/components/schemas/BackupRun"
+        lastSuccessAt:
+          type: string
+          format: date-time
+
+    BackupStatus:
+      type: object
+      required: [items, running, waiting]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackupItemStatus"
+        running:
+          type: boolean
+          description: A backup is running now.
+        waiting:
+          type: integer
+          description: Runs waiting for their conditions.
+
+    StartBackupRunRequest:
+      type: object
+      required: [targetId]
+      properties:
+        targetId:
+          type: string
+        vmId:
+          type: string
+          format: uuid
+          description: The VM to back up. Omitted backs up the host's own state.
+
+    ScanBackupsRequest:
+      type: object
+      required: [targetId]
+      properties:
+        targetId:
+          type: string
+
+    BackupSnapshot:
+      type: object
+      required: [id, startTime, totalSize]
+      properties:
+        id:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        totalSize:
+          type: integer
+          format: int64
+
+    BackupCatalogVm:
+      type: object
+      required: [vmId, snapshots]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: The name the VM had when last backed up.
+        snapshots:
+          type: array
+          description: Newest first.
+          items:
+            $ref: "#/components/schemas/BackupSnapshot"
+
+    BackupCatalog:
+      type: object
+      required: [vms, hostSnapshots]
+      properties:
+        vms:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackupCatalogVm"
+        hostSnapshots:
+          type: array
+          description: Newest first.
+          items:
+            $ref: "#/components/schemas/BackupSnapshot"
+
+    RestoreVmRequest:
+      type: object
+      required: [targetId, snapshotId]
+      properties:
+        targetId:
+          type: string
+        snapshotId:
+          type: string
+        name:
+          type: string
+          description: A name for the VM. A taken name gets a suffix. Omitted means the name it had.
+        destination:
+          type: string
+          description: The folder for the VM's files. Omitted means the host's VM folder.
+        start:
+          type: boolean
+          default: false
+          description: Start the VM and wait for the guest to report in.
+        administrator:
+          $ref: "#/components/schemas/ProvisionVmRequest"
+
+    ReplaceDiskRequest:
+      type: object
+      required: [targetId, snapshotId, typedName]
+      properties:
+        targetId:
+          type: string
+        snapshotId:
+          type: string
+        typedName:
+          type: string
+          description: The VM's exact name, typed by the user.
+
+    RestoreHostStateRequest:
+      type: object
+      required: [targetId, snapshotId]
+      properties:
+        targetId:
+          type: string
+        snapshotId:
+          type: string
+
+    RestoreResult:
+      type: object
+      required: [outcome, warnings, needsDriverResync, bitLockerRecoveryMayBeNeeded, restartRequired]
+      properties:
+        outcome:
+          $ref: "#/components/schemas/RestoreVmOutcome"
+        warnings:
+          type: array
+          items:
+            type: string
+        needsDriverResync:
+          type: boolean
+          description: The VM has a GPU partition; run guest setup with `driversOnly` for Performance mode.
+        bitLockerRecoveryMayBeNeeded:
+          type: boolean
+          description: The VM has a virtual TPM with a new key, so BitLocker may ask for its recovery key.
+        restartRequired:
+          type: boolean
+          description: A host state restore finished; restart the host.
+        vmId:
+          type: string
+          format: uuid
+        vmName:
+          type: string

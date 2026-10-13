@@ -176,7 +176,7 @@ public sealed class BackupManagementTests : IDisposable
     {
         var target = _service.AddTarget(Local(), new TargetCredentials());
 
-        Assert.Throws<LifecycleConflictException>(() => _service.SetPolicy(new BackupPolicy { VmId = VmId.ToString(), TargetId = "missing" }));
+        Assert.Throws<BackupTargetNotFoundException>(() => _service.SetPolicy(new BackupPolicy { VmId = VmId.ToString(), TargetId = "missing" }));
         Assert.Throws<LifecycleValidationException>(() => _service.SetPolicy(
             new BackupPolicy { VmId = VmId.ToString(), TargetId = target.Id, Retention = new RetentionPolicy(0, 0, 0) }));
     }

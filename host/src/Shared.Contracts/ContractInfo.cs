@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.17.0";
+    public const string ApiVersion = "1.18.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -53,5 +53,23 @@ public static class ContractInfo
 
         /// <summary>409: package search needs PowerShell 7 and the WinGet PowerShell module on the host (tray: Set up package search).</summary>
         public const string WingetUnavailable = "wingetUnavailable";
+
+        /// <summary>409: the recovery key typed back, or entered for an existing target, does not match.</summary>
+        public const string BadRecoveryKey = "badRecoveryKey";
+
+        /// <summary>409: the recovery key offer expired or was never made; start the target's setup again.</summary>
+        public const string RecoverySetupExpired = "recoverySetupExpired";
+
+        /// <summary>409: the target's recovery key was already confirmed.</summary>
+        public const string RecoveryKeyConfirmed = "recoveryKeyConfirmed";
+
+        /// <summary>409: the storage holds no HyperHarbor backups.</summary>
+        public const string NoBackupsFound = "noBackupsFound";
+
+        /// <summary>404: no backup target has this id.</summary>
+        public const string BackupTargetNotFound = "backupTargetNotFound";
+
+        /// <summary>409: a backup, restore, or disk replacement was refused or failed; the detail says why.</summary>
+        public const string BackupFailed = "backupFailed";
     }
 }

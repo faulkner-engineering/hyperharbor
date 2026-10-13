@@ -3,12 +3,16 @@ using System.Security.Cryptography;
 namespace HyperHarbor.Host.Core.Backup;
 
 /// <summary>What the user sees once: the setup id to confirm with, and the recovery key.</summary>
-public sealed record RecoveryKeyOffer(string SetupId, string RecoveryKey)
+public sealed record RecoveryKeyOffer(string SetupId, string RecoveryKey, DateTimeOffset ExpiresAt)
 {
     public override string ToString() => $"RecoveryKeyOffer {{ SetupId = {SetupId}, RecoveryKey = ***** }}";
 }
 
-public sealed class RecoveryKeyException(string message) : Exception(message);
+public sealed class RecoveryKeyException(string message, bool expired = false) : Exception(message)
+{
+    /// <summary>True when the setup is gone (expired or never made), so the key cannot be confirmed any more.</summary>
+    public bool Expired { get; } = expired;
+}
 
 /// <summary>
 /// Generates repository passphrases and holds them in memory only until the user proves they saved the key by
@@ -34,13 +38,15 @@ public sealed class RecoveryKeyService(IBackupSecretStore secrets, TimeProvider 
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
         var key = GenerateKey();
         var setupId = Guid.NewGuid().ToString("N");
+        DateTimeOffset expires;
         lock (_gate)
         {
             Purge();
-            _pending[setupId] = new Pending(repoId, key, time.GetUtcNow() + OfferLifetime);
+            expires = time.GetUtcNow() + OfferLifetime;
+            _pending[setupId] = new Pending(repoId, key, expires);
         }
 
-        return new RecoveryKeyOffer(setupId, key);
+        return new RecoveryKeyOffer(setupId, key, expires);
     }
 
     /// <summary>
@@ -55,7 +61,7 @@ public sealed class RecoveryKeyService(IBackupSecretStore secrets, TimeProvider 
             Purge();
             if (!_pending.TryGetValue(setupId, out var pending))
             {
-                throw new RecoveryKeyException("This setup has expired. Start the target setup again to get a new recovery key.");
+                throw new RecoveryKeyException("This setup has expired. Start the target setup again to get a new recovery key.", expired: true);
             }
 
             if (!CryptographicOperations.FixedTimeEquals(

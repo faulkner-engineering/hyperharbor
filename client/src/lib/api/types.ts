@@ -1286,6 +1286,342 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backup/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the backup targets.
+         * @description A target is a place backups go: a local folder, S3-compatible storage, or Azure Blob. Keys are never returned.
+         *     A target whose `keyState` is `pendingKey` has no repository yet and cannot run; set its recovery key first.
+         */
+        get: operations["listBackupTargets"];
+        put?: never;
+        /**
+         * Add a backup target.
+         * @description The target starts with a pending recovery key. Call `POST /backup/targets/{targetId}/recovery-key` to get the key,
+         *     then `POST /backup/recovery-key/confirm`. Remote keys go into the host's DPAPI vault and are never returned.
+         */
+        post: operations["createBackupTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/targets/attach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a target that already holds backups, using its saved recovery key.
+         * @description For a new PC or a target that was removed. The key is checked against the storage before anything is kept.
+         *     A wrong key answers 409 with code `badRecoveryKey`; storage with no HyperHarbor backups answers 409 with code
+         *     `noBackupsFound`.
+         */
+        post: operations["attachBackupTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/targets/{targetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a target, its policies, and its keys from this host.
+         * @description Backups already in the storage stay there. To reach them again, add the target with its recovery key.
+         */
+        delete: operations["deleteBackupTarget"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a target.
+         * @description Omitted properties stay as they are. Replacing a key replaces only the key given.
+         */
+        patch: operations["updateBackupTarget"];
+        trace?: never;
+    };
+    "/backup/targets/{targetId}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check that the target can be reached and written to.
+         * @description A local folder is written to and read back, and its free space is checked. A remote target is reached with its keys.
+         *     A failed check is a 200 with `passed` false; the steps say what to fix.
+         */
+        post: operations["testBackupTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/targets/{targetId}/recovery-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate the target's recovery key. It is shown once.
+         * @description Nothing is stored until `POST /backup/recovery-key/confirm`. Starting again discards the earlier key. A target whose
+         *     key is already confirmed answers 409 with code `recoveryKeyConfirmed`.
+         */
+        post: operations["createRecoveryKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/recovery-key/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm the recovery key was saved.
+         * @description The user types back the last four groups of the key from their saved copy. A mismatch answers 409 with code
+         *     `badRecoveryKey` and keeps the offer open; an expired offer answers 409 with code `recoverySetupExpired`.
+         */
+        post: operations["confirmRecoveryKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the VMs' backup policies. */
+        get: operations["listBackupPolicies"];
+        /**
+         * Back a VM up to a target, or change how.
+         * @description One policy exists per VM and target. Omitted settings take the target's defaults.
+         */
+        put: operations["setBackupPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/policies/{targetId}/{vmId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop backing a VM up to a target. Existing backups stay in the storage. */
+        delete: operations["deleteBackupPolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How the latest backup of each item went.
+         * @description One entry for the host's own state and one per VM policy, for every usable target. `overdue` is set when the last
+         *     success is older than twice the schedule's longest gap.
+         */
+        get: operations["getBackupStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent runs, newest first. */
+        get: operations["listBackupHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Back up now.
+         * @description Starts a `backupVm` job (with `vmId`) or a `backupHostState` job. The run ignores the run conditions. A VM that
+         *     another operation holds answers 409; so does a run of the same item that is already going.
+         */
+        post: operations["startBackupRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List what a target holds, grouped by VM.
+         * @description Opens the target's repositories. Used by the guided restore.
+         */
+        post: operations["scanBackups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a snapshot as a new VM.
+         * @description Starts a `restoreVm` job; its `restoreResult` says how it ended. A taken name gets a suffix, switches are matched
+         *     by name (the Default Switch otherwise), a new virtual TPM key is created, and a GPU partition is flagged for a
+         *     driver re-sync. With `start`, the job waits for the guest and, when `administrator` is given, sets the User's
+         *     account up again.
+         */
+        post: operations["restoreVmFromBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/restore/host-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore the host's own settings from a snapshot.
+         * @description Starts a `restoreHostState` job. Only files a backup writes are restored, this PC's backup configuration is kept,
+         *     and a snapshot from a newer data format is refused. The job's `restoreResult.restartRequired` says the host must
+         *     be restarted. Credentials sealed to the old PC (VM account passwords, console accounts) are not restored.
+         */
+        post: operations["restoreHostState"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/replace-disk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Put a snapshot's disks over this VM's disks.
+         * @description Starts a `replaceDisk` job. The VM must be off with no checkpoints, `typedName` must equal its name exactly, and
+         *     the snapshot must have as many disks. The old disks are kept until every new disk is in place and put back on any
+         *     failure.
+         */
+        post: operations["replaceVmDisk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1785,7 +2121,7 @@ export interface components {
             blockers: components["schemas"]["DeleteBlocker"][];
         };
         /** @enum {string} */
-        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState";
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState";
         /** @enum {string} */
         VmJobState: "running" | "succeeded" | "failed";
         JobError: {
@@ -1812,6 +2148,8 @@ export interface components {
             error: components["schemas"]["JobError"] | null;
             /** @description What an `applySetupProfile` job did, once it succeeded (API 1.14.0). Omitted for other jobs. */
             setupResult?: components["schemas"]["SetupProfileResult"] | null;
+            /** @description What a `restoreVm` or `restoreHostState` job did, once it succeeded (API 1.18.0). Omitted for other jobs. */
+            restoreResult?: components["schemas"]["RestoreResult"] | null;
         };
         ApplySetupProfileRequest: {
             /** @description An `id` from `GET /setup-profiles`. */
@@ -2430,8 +2768,295 @@ export interface components {
             settings: components["schemas"]["VmComputeSettings"] | null;
             job: components["schemas"]["VmJob"] | null;
         };
+        /** @enum {string} */
+        BackupKind: "local" | "s3" | "azure";
+        /**
+         * @description A target whose key is pending has no repository and cannot run.
+         * @enum {string}
+         */
+        BackupKeyState: "pendingKey" | "confirmed";
+        /** @enum {string} */
+        BackupRunOutcome: "succeeded" | "failed" | "skipped" | "partial";
+        /** @enum {string} */
+        BackupRunTrigger: "schedule" | "shutdown" | "manual";
+        /**
+         * @description What to do with a running VM that has a GPU partition. `requireOff` skips it until it is off; `allowLive` copies the
+         *     running VM's disk (crash consistent) and records a warning.
+         * @enum {string}
+         */
+        BackupGpuMode: "requireOff" | "allowLive";
+        /** @enum {string} */
+        RestoreVmOutcome: "succeeded" | "succeededWithWarnings" | "needsConsole";
+        /** @enum {string} */
+        DayOfWeek: "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
+        BackupSchedule: {
+            /** @description Local time of day, HH:mm. */
+            time: string;
+            /** @description The days to run. Omitted means every day. */
+            days?: components["schemas"]["DayOfWeek"][];
+        };
+        BackupRetention: {
+            /** @default 7 */
+            daily: number;
+            /** @default 4 */
+            weekly: number;
+            /** @default 6 */
+            monthly: number;
+        };
+        /** @description Both times are local, HH:mm. The end is exclusive, and a window may cross midnight. Equal times mean all day. */
+        BackupTimeWindow: {
+            start: string;
+            end: string;
+        };
+        /** @description Conditions for a scheduled or shutdown-triggered run to start. A deferred run waits up to 12 hours, then is recorded as skipped. */
+        BackupConditions: {
+            /**
+             * @description Wait while someone is connected to the VM.
+             * @default true
+             */
+            noActiveSession: boolean;
+            /**
+             * @description Wait while a game is in the foreground on the host.
+             * @default true
+             */
+            notInGame: boolean;
+            window?: components["schemas"]["BackupTimeWindow"];
+        };
+        BackupTriggers: {
+            /** @default true */
+            schedule: boolean;
+            /** @default false */
+            onShutdown: boolean;
+            /**
+             * @description A shutdown backup waits this long; starting the VM again cancels it.
+             * @default 10
+             */
+            debounceMinutes: number;
+        };
+        BackupLocalSettings: {
+            path: string;
+        };
+        BackupS3Settings: {
+            endpoint: string;
+            bucket: string;
+            region?: string;
+            prefix?: string;
+            /** @default true */
+            useTls: boolean;
+        };
+        BackupAzureSettings: {
+            account: string;
+            container: string;
+            prefix?: string;
+        };
+        /** @description Keys for a remote target. They go into the host's DPAPI vault and are never returned. */
+        BackupCredentials: {
+            s3AccessKey?: string;
+            s3SecretKey?: string;
+            azureKey?: string;
+        };
+        /** @description Exactly the settings object of the `kind` is used. A remote kind needs its credentials. */
+        NewBackupTarget: {
+            name: string;
+            kind: components["schemas"]["BackupKind"];
+            local?: components["schemas"]["BackupLocalSettings"];
+            s3?: components["schemas"]["BackupS3Settings"];
+            azure?: components["schemas"]["BackupAzureSettings"];
+            credentials?: components["schemas"]["BackupCredentials"];
+            schedule?: components["schemas"]["BackupSchedule"];
+            retention?: components["schemas"]["BackupRetention"];
+            /** @description Upload limit in kilobits per second. Omitted means no limit. */
+            bandwidthKbps?: number;
+            conditions?: components["schemas"]["BackupConditions"];
+        };
+        AttachBackupTargetRequest: {
+            target: components["schemas"]["NewBackupTarget"];
+            /** @description The key saved when the target was first set up. Case and dashes do not matter. */
+            recoveryKey: string;
+        };
+        UpdateBackupTargetRequest: {
+            name?: string;
+            enabled?: boolean;
+            schedule?: components["schemas"]["BackupSchedule"];
+            retention?: components["schemas"]["BackupRetention"];
+            bandwidthKbps?: number;
+            /**
+             * @description Removes the bandwidth limit.
+             * @default false
+             */
+            clearBandwidth: boolean;
+            conditions?: components["schemas"]["BackupConditions"];
+            credentials?: components["schemas"]["BackupCredentials"];
+        };
+        BackupTarget: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["BackupKind"];
+            enabled: boolean;
+            keyState: components["schemas"]["BackupKeyState"];
+            schedule: components["schemas"]["BackupSchedule"];
+            retention: components["schemas"]["BackupRetention"];
+            conditions: components["schemas"]["BackupConditions"];
+            local?: components["schemas"]["BackupLocalSettings"];
+            s3?: components["schemas"]["BackupS3Settings"];
+            azure?: components["schemas"]["BackupAzureSettings"];
+            bandwidthKbps?: number;
+        };
+        /** @description Shown once. Nothing is stored until the user confirms they saved it. */
+        RecoveryKeyOffer: {
+            setupId: string;
+            /** @description Groups of four letters and digits. It opens every backup of the target, on any PC. */
+            recoveryKey: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ConfirmRecoveryKeyRequest: {
+            setupId: string;
+            /** @description The last four groups of the key, typed from the user's saved copy. */
+            typedBack: string;
+        };
+        BackupTestStep: {
+            name: string;
+            passed: boolean;
+            detail: string;
+        };
+        BackupTargetTest: {
+            passed: boolean;
+            steps: components["schemas"]["BackupTestStep"][];
+        };
+        BackupPolicy: {
+            /** Format: uuid */
+            vmId: string;
+            targetId: string;
+            /** @default true */
+            enabled: boolean;
+            retention?: components["schemas"]["BackupRetention"];
+            bandwidthKbps?: number;
+            conditions?: components["schemas"]["BackupConditions"];
+            triggers?: components["schemas"]["BackupTriggers"];
+            gpuMode?: components["schemas"]["BackupGpuMode"];
+        };
+        BackupRun: {
+            /** Format: uuid */
+            runId: string;
+            /** @description `vm:<id>` or `host`. */
+            item: string;
+            targetId: string;
+            trigger: components["schemas"]["BackupRunTrigger"];
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt: string;
+            outcome: components["schemas"]["BackupRunOutcome"];
+            /** Format: int64 */
+            totalBytes: number;
+            warnings: string[];
+            /** Format: uuid */
+            vmId?: string;
+            vmName?: string;
+            /** @description Why a run failed or was skipped. */
+            reason?: string;
+            snapshotId?: string;
+        };
+        BackupItemStatus: {
+            item: string;
+            targetId: string;
+            targetName: string;
+            /** @description The last success is older than twice the schedule's longest gap. */
+            overdue: boolean;
+            /** Format: uuid */
+            vmId?: string;
+            vmName?: string;
+            lastRun?: components["schemas"]["BackupRun"];
+            /** Format: date-time */
+            lastSuccessAt?: string;
+        };
+        BackupStatus: {
+            items: components["schemas"]["BackupItemStatus"][];
+            /** @description A backup is running now. */
+            running: boolean;
+            /** @description Runs waiting for their conditions. */
+            waiting: number;
+        };
+        StartBackupRunRequest: {
+            targetId: string;
+            /**
+             * Format: uuid
+             * @description The VM to back up. Omitted backs up the host's own state.
+             */
+            vmId?: string;
+        };
+        ScanBackupsRequest: {
+            targetId: string;
+        };
+        BackupSnapshot: {
+            id: string;
+            /** Format: date-time */
+            startTime: string;
+            /** Format: int64 */
+            totalSize: number;
+        };
+        BackupCatalogVm: {
+            /** Format: uuid */
+            vmId: string;
+            /** @description The name the VM had when last backed up. */
+            name?: string;
+            /** @description Newest first. */
+            snapshots: components["schemas"]["BackupSnapshot"][];
+        };
+        BackupCatalog: {
+            vms: components["schemas"]["BackupCatalogVm"][];
+            /** @description Newest first. */
+            hostSnapshots: components["schemas"]["BackupSnapshot"][];
+        };
+        RestoreVmRequest: {
+            targetId: string;
+            snapshotId: string;
+            /** @description A name for the VM. A taken name gets a suffix. Omitted means the name it had. */
+            name?: string;
+            /** @description The folder for the VM's files. Omitted means the host's VM folder. */
+            destination?: string;
+            /**
+             * @description Start the VM and wait for the guest to report in.
+             * @default false
+             */
+            start: boolean;
+            administrator?: components["schemas"]["ProvisionVmRequest"];
+        };
+        ReplaceDiskRequest: {
+            targetId: string;
+            snapshotId: string;
+            /** @description The VM's exact name, typed by the user. */
+            typedName: string;
+        };
+        RestoreHostStateRequest: {
+            targetId: string;
+            snapshotId: string;
+        };
+        RestoreResult: {
+            outcome: components["schemas"]["RestoreVmOutcome"];
+            warnings: string[];
+            /** @description The VM has a GPU partition; run guest setup with `driversOnly` for Performance mode. */
+            needsDriverResync: boolean;
+            /** @description The VM has a virtual TPM with a new key, so BitLocker may ask for its recovery key. */
+            bitLockerRecoveryMayBeNeeded: boolean;
+            /** @description A host state restore finished; restart the host. */
+            restartRequired: boolean;
+            /** Format: uuid */
+            vmId?: string;
+            vmName?: string;
+        };
     };
     responses: {
+        /** @description The backup storage could not be reached, refused the keys, or did not answer in time. */
+        BackupStorageFailed: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
         /** @description The request was malformed or failed validation. */
         BadRequest: {
             headers: {
@@ -2561,6 +3186,8 @@ export interface components {
         SetupProfileId: string;
         /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
         IsoName: string;
+        /** @description A backup target ID. */
+        BackupTargetId: string;
         /** @description Job ID returned when the job was started. */
         JobId: string;
     };
@@ -4687,6 +5314,486 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listBackupTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The targets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupTarget"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createBackupTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewBackupTarget"];
+            };
+        };
+        responses: {
+            /** @description The new target. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupTarget"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
+    attachBackupTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachBackupTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description The target, with its recovery key confirmed. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupTarget"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            409: components["responses"]["Conflict"];
+            502: components["responses"]["BackupStorageFailed"];
+        };
+    };
+    deleteBackupTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateBackupTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBackupTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description The target. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupTarget"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    testBackupTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupTargetTest"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createRecoveryKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryKeyOffer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    confirmRecoveryKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmRecoveryKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description The target, now usable. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupTarget"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listBackupPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupPolicy"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setBackupPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupPolicy"];
+            };
+        };
+        responses: {
+            /** @description The policy as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteBackupPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A backup target ID. */
+                targetId: components["parameters"]["BackupTargetId"];
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getBackupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listBackupHistory: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The runs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupRun"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    startBackupRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartBackupRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    scanBackups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanBackupsRequest"];
+            };
+        };
+        responses: {
+            /** @description The backups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupCatalog"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BackupStorageFailed"];
+        };
+    };
+    restoreVmFromBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreVmRequest"];
+            };
+        };
+        responses: {
+            /** @description The job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreHostState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreHostStateRequest"];
+            };
+        };
+        responses: {
+            /** @description The job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceVmDisk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceDiskRequest"];
+            };
+        };
+        responses: {
+            /** @description The job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
     };

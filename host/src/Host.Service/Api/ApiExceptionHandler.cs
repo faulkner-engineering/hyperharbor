@@ -1,5 +1,8 @@
 using System.Globalization;
 using HyperHarbor.Host.Core.Audit;
+using HyperHarbor.Host.Core.Backup;
+using HyperHarbor.Host.Core.Backup.Kopia;
+using HyperHarbor.Host.Core.Backup.Restore;
 using HyperHarbor.Host.Core.Elevation;
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Lifecycle;
@@ -91,6 +94,11 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         ElevationRateLimitedException => ContractInfo.ProblemCodes.TooManyAttempts,
         ResourceWarningsException => ContractInfo.ProblemCodes.ResourceWarnings,
         LifecycleConflictException { Code: { } code } => code,
+        BackupTargetNotFoundException => ContractInfo.ProblemCodes.BackupTargetNotFound,
+        RecoveryKeyException { Expired: true } => ContractInfo.ProblemCodes.RecoverySetupExpired,
+        RecoveryKeyException => ContractInfo.ProblemCodes.BadRecoveryKey,
+        BackupException { Code: { } code } => code,
+        BackupException or RestoreException => ContractInfo.ProblemCodes.BackupFailed,
         ConsoleConflictException conflict => conflict.Code,
         RemoteDesktopConflictException conflict => conflict.Code,
         PackageSearchUnavailableException => ContractInfo.ProblemCodes.WingetUnavailable,
@@ -117,6 +125,10 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             ElevationRateLimitedException => (StatusCodes.Status429TooManyRequests, "Too many attempts"),
             BadHttpRequestException bad => (bad.StatusCode, "Invalid request"),
             VmNotFoundException => (StatusCodes.Status404NotFound, "Virtual machine not found"),
+            BackupTargetNotFoundException => (StatusCodes.Status404NotFound, "Backup target not found"),
+            RecoveryKeyException => (StatusCodes.Status409Conflict, "Recovery key rejected"),
+            BackupException or RestoreException => (StatusCodes.Status409Conflict, "Backup operation failed"),
+            KopiaException => (StatusCodes.Status502BadGateway, "Backup storage failed"),
             VmActionNotAllowedException => (StatusCodes.Status409Conflict, "Action not allowed"),
             VmBusyException => (StatusCodes.Status409Conflict, "Virtual machine busy"),
             LifecycleValidationException => (StatusCodes.Status400BadRequest, "Invalid request"),

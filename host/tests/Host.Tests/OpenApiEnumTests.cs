@@ -28,6 +28,13 @@ public class OpenApiEnumTests
     [InlineData("GpuVendor", typeof(GpuVendor))]
     [InlineData("HostUpdateMode", typeof(Shared.Contracts.Hosts.HostUpdateMode))]
     [InlineData("HostUpdateActivity", typeof(Shared.Contracts.Hosts.HostUpdateActivity))]
+    [InlineData("BackupKind", typeof(Shared.Contracts.Backup.BackupKind))]
+    [InlineData("BackupKeyState", typeof(Shared.Contracts.Backup.BackupKeyState))]
+    [InlineData("BackupRunOutcome", typeof(Shared.Contracts.Backup.BackupRunOutcome))]
+    [InlineData("BackupRunTrigger", typeof(Shared.Contracts.Backup.BackupRunTrigger))]
+    [InlineData("BackupGpuMode", typeof(Shared.Contracts.Backup.BackupGpuMode))]
+    [InlineData("RestoreVmOutcome", typeof(Shared.Contracts.Backup.RestoreVmOutcome))]
+    [InlineData("DayOfWeek", typeof(DayOfWeek))]
     public void EnumWireValues_MatchOpenApiSchema(string schemaName, Type enumType)
     {
         var schema = (YamlMappingNode)Schemas[schemaName];

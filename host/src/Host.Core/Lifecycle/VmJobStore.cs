@@ -11,6 +11,7 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// <param name="ErrorTitle">Set when <paramref name="State"/> is Failed.</param>
 /// <param name="ErrorDetail">Safe to show to the client; unexpected failures get a generic message.</param>
 /// <param name="SetupResult">What an applySetupProfile job did.</param>
+/// <param name="RestoreResult">What a restore job did.</param>
 public sealed record VmJobSnapshot(
     Guid Id,
     VmJobKind Kind,
@@ -23,7 +24,8 @@ public sealed record VmJobSnapshot(
     DateTimeOffset UpdatedAt,
     string? ErrorTitle,
     string? ErrorDetail,
-    Shared.Contracts.Unattend.SetupProfileResult? SetupResult = null);
+    Shared.Contracts.Unattend.SetupProfileResult? SetupResult = null,
+    Shared.Contracts.Backup.RestoreResult? RestoreResult = null);
 
 /// <summary>Handed to a job's work so it can report progress.</summary>
 public sealed class VmJobContext
@@ -54,6 +56,9 @@ public sealed class VmJobContext
 
     /// <summary>Records what an applySetupProfile job did, for the job's snapshot.</summary>
     public void ReportSetupResult(Shared.Contracts.Unattend.SetupProfileResult result) => _store.SetSetupResult(_jobId, result);
+
+    /// <summary>Records what a restore job did, for the job's snapshot.</summary>
+    public void ReportRestoreResult(Shared.Contracts.Backup.RestoreResult result) => _store.SetRestoreResult(_jobId, result);
 }
 
 /// <summary>
@@ -175,6 +180,9 @@ public sealed class VmJobStore : IDisposable
         VmJobKind.ApplySetupProfile => "applying a setup profile",
         VmJobKind.BackupVm => "backing up the virtual machine",
         VmJobKind.BackupHostState => "backing up the host state",
+        VmJobKind.RestoreVm => "restoring the virtual machine",
+        VmJobKind.ReplaceDisk => "replacing the virtual machine's disk",
+        VmJobKind.RestoreHostState => "restoring the host state",
         _ => kind.ToString(),
     };
 
@@ -196,6 +204,17 @@ public sealed class VmJobStore : IDisposable
             if (_jobs.TryGetValue(jobId, out var entry))
             {
                 entry.Snapshot = entry.Snapshot with { SetupResult = result, UpdatedAt = _time.GetUtcNow() };
+            }
+        }
+    }
+
+    internal void SetRestoreResult(Guid jobId, Shared.Contracts.Backup.RestoreResult result)
+    {
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue(jobId, out var entry))
+            {
+                entry.Snapshot = entry.Snapshot with { RestoreResult = result, UpdatedAt = _time.GetUtcNow() };
             }
         }
     }

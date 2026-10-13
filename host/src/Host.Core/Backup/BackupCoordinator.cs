@@ -126,11 +126,16 @@ public sealed class BackupCoordinator(
     /// <summary>Starts a manual run now. Conditions are checked only when <paramref name="respectConditions"/> is set.</summary>
     /// <exception cref="BackupException">The target is unknown, disabled, or not ready, or the run is already going.</exception>
     /// <exception cref="VmBusyException">Another operation holds the VM.</exception>
-    public VmJobSnapshot StartManual(string targetId, Guid? vmId, Guid? userId = null)
+    public VmJobSnapshot StartManual(string targetId, Guid? vmId, Guid? userId = null, Action<VmJobSnapshot>? onFinished = null)
     {
         var settings = config.Load();
         var target = settings.Targets.FirstOrDefault(t => t.Id == targetId && t.Enabled)
             ?? throw new BackupException("The backup target does not exist or is disabled.");
+        if (target.VmRepository?.KeyState != RepositoryKeyState.Confirmed || target.HostRepository?.KeyState != RepositoryKeyState.Confirmed)
+        {
+            throw new BackupException($"The backup target \"{target.Name}\" is not ready: its recovery key has not been confirmed.");
+        }
+
         var item = vmId is { } id ? VmItem(id) : HostItem;
         var policy = vmId is { } vm
             ? settings.Policies.FirstOrDefault(p => p.TargetId == targetId && VmIdOf(p) == vm)
@@ -147,7 +152,7 @@ public sealed class BackupCoordinator(
                 }
             }
 
-            return StartJob(item, target, policy, BackupTrigger.Manual, hold, userId ?? HostUserId);
+            return StartJob(item, target, policy, BackupTrigger.Manual, hold, userId ?? HostUserId, onFinished);
         }
         catch
         {
@@ -239,7 +244,7 @@ public sealed class BackupCoordinator(
         }
     }
 
-    private VmJobSnapshot StartJob(string item, BackupTarget target, BackupPolicy? policy, BackupTrigger trigger, IDisposable hold, Guid? userId = null)
+    private VmJobSnapshot StartJob(string item, BackupTarget target, BackupPolicy? policy, BackupTrigger trigger, IDisposable hold, Guid? userId = null, Action<VmJobSnapshot>? onFinished = null)
     {
         var key = (item, target.Id);
         var vmId = ParseVmItem(item);
@@ -275,7 +280,8 @@ public sealed class BackupCoordinator(
                             _running.Remove(key);
                         }
                     }
-                });
+                },
+                onFinished);
         }
         catch
         {

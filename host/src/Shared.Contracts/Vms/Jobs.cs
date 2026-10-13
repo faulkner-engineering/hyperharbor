@@ -14,6 +14,9 @@ public enum VmJobKind
     ApplySetupProfile,
     BackupVm,
     BackupHostState,
+    RestoreVm,
+    ReplaceDisk,
+    RestoreHostState,
 }
 
 /// <summary>Schema: VmJobState.</summary>
@@ -32,6 +35,7 @@ public sealed record JobError(string Title, string Detail);
 /// <param name="Step">What the job is doing now, for example "Deleting disks".</param>
 /// <param name="Error">Set when <paramref name="State"/> is failed.</param>
 /// <param name="SetupResult">What an applySetupProfile job did, once it succeeded; omitted otherwise.</param>
+/// <param name="RestoreResult">What a restoreVm or restoreHostState job did, once it succeeded; omitted otherwise.</param>
 public sealed record VmJob(
     Guid Id,
     VmJobKind Kind,
@@ -42,4 +46,5 @@ public sealed record VmJob(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] JobError? Error,
-    Unattend.SetupProfileResult? SetupResult = null);
+    Unattend.SetupProfileResult? SetupResult = null,
+    Backup.RestoreResult? RestoreResult = null);
