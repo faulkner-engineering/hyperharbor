@@ -23,6 +23,8 @@
     downloadHostLogs,
     SetupProfilesApiVersion,
     ApplySetupProfileApiVersion,
+    BackupApiVersion,
+    type BackupTarget,
     type StoredSetupProfile,
     type Vm,
   } from "$lib/api/client";
@@ -33,6 +35,8 @@
   import VmList from "$lib/components/VmList.svelte";
   import WakePanel from "$lib/components/WakePanel.svelte";
   import HostUpdatePanel from "$lib/components/HostUpdatePanel.svelte";
+  import BackupPanel from "$lib/components/BackupPanel.svelte";
+  import ReplaceDiskDialog from "$lib/components/ReplaceDiskDialog.svelte";
   import ClientUpdate from "$lib/components/ClientUpdate.svelte";
   import ProvisionDialog from "$lib/components/ProvisionDialog.svelte";
   import ElevationDialog from "$lib/components/ElevationDialog.svelte";
@@ -86,6 +90,9 @@
   let view = $state<"vms" | "isos" | "profiles" | "setup">("vms");
   let capturing = $state<Vm | null>(null);
   let applyingProfile = $state<Vm | null>(null);
+  let showBackups = $state(false);
+  let replacingDisk = $state<Vm | null>(null);
+  let backupTargets = $state<BackupTarget[]>([]);
   let now = $state(Date.now());
 
   const selectedHost = $derived(hosts.find((host) => host.key === selectedKey) ?? null);
@@ -94,6 +101,7 @@
   const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
   const hostHasLogs = $derived(selectedHost ? hostSupports(selectedHost, HostLogsApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
+  const hostHasBackups = $derived(selectedHost ? hostSupports(selectedHost, BackupApiVersion) : false);
   const hostAppliesProfiles = $derived(selectedHost ? hostSupports(selectedHost, ApplySetupProfileApiVersion) : false);
   // Setup profiles read provisioned packages from running Windows VMs.
   const runningWindows = $derived((vms ?? []).filter((vm) => vm.state === "running" && vm.guestOs.family === "windows"));
@@ -107,6 +115,8 @@
     offline = false;
     showWake = false;
     showUpdates = false;
+    showBackups = false;
+    replacingDisk = null;
     provisioning = null;
     confirmTurnOff = null;
     deleting = null;
@@ -448,6 +458,18 @@
               <button type="button" onclick={() => (showWake = !showWake)}>
                 {showWake ? "Hide Wake-on-LAN" : "Wake-on-LAN"}
               </button>
+              {#if hostHasBackups}
+                <button type="button" onclick={() => (showBackups = !showBackups)}>
+                  {showBackups ? "Hide backups" : "Backups"}
+                </button>
+              {:else}
+                <button
+                  type="button"
+                  disabled
+                  title="{selectedHost.displayName} runs an older HyperHarbor version. Update the host to use this."
+                  >Backups (update host)</button
+                >
+              {/if}
               <button type="button" onclick={() => (showUpdates = !showUpdates)}>
                 {showUpdates ? "Hide updates" : "Updates"}
               </button>
@@ -531,12 +553,16 @@
             onmonitors={(vm) => (choosingMonitors = vm)}
             oncamera={(vm) => (configuringCamera = vm)}
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
+            onreplacedisk={hostHasBackups ? (vm) => (replacingDisk = vm) : undefined}
             onapplyprofile={hostAppliesProfiles ? (vm) => (applyingProfile = vm) : undefined}
             ondelete={(vm) => (deleting = vm)}
           />
         {/if}
         {#if provisioning}
           <ProvisionDialog host={selectedHost} vm={provisioning} onclose={provisioned} />
+        {/if}
+        {#if replacingDisk}
+          <ReplaceDiskDialog host={selectedHost} vm={replacingDisk} targets={backupTargets} onclose={() => (replacingDisk = null)} />
         {/if}
         {#if capturing}
           <CaptureReview host={selectedHost} vm={capturing} onclose={captured} />
@@ -600,6 +626,12 @@
       {#if selectedHost.paired && showWake}
         {#key selectedHost.key}
           <WakePanel host={selectedHost} />
+        {/key}
+      {/if}
+
+      {#if selectedHost.paired && showBackups && hostHasBackups}
+        {#key selectedHost.key}
+          <BackupPanel host={selectedHost} vms={vms ?? []} ontargets={(targets) => (backupTargets = targets)} />
         {/key}
       {/if}
 

@@ -23,6 +23,7 @@
     oncapture?: (vm: Vm) => void;
     /** Apply a setup profile to a running Windows VM; leave unset for hosts that cannot. */
     onapplyprofile?: (vm: Vm) => void;
+    onreplacedisk?: (vm: Vm) => void;
     ondelete?: (vm: Vm) => void;
   }
 
@@ -41,6 +42,7 @@
     oncamera,
     oncapture,
     onapplyprofile,
+    onreplacedisk,
     ondelete,
   }: Props = $props();
 
@@ -235,6 +237,9 @@
               {/if}
               {#if onapplyprofile && vm.state === "running" && vm.guestOs.family === "windows" && !vm.installState}
                 <button type="button" onclick={() => onapplyprofile(vm)}>Apply setup profile…</button>
+              {/if}
+              {#if onreplacedisk && vm.state === "off"}
+                <button type="button" onclick={() => onreplacedisk(vm)}>Restore disk from backup…</button>
               {/if}
               <button type="button" class="danger" onclick={() => ondelete?.(vm)}>Delete…</button>
             </Menu>

@@ -98,6 +98,12 @@ export const ProblemCodes = {
   hostOutdated: "hostOutdated",
   updateNotReady: "updateNotReady",
   wingetUnavailable: "wingetUnavailable",
+  badRecoveryKey: "badRecoveryKey",
+  recoverySetupExpired: "recoverySetupExpired",
+  recoveryKeyConfirmed: "recoveryKeyConfirmed",
+  noBackupsFound: "noBackupsFound",
+  backupTargetNotFound: "backupTargetNotFound",
+  backupFailed: "backupFailed",
 } as const;
 
 export interface WakeFixOutcome {
@@ -633,3 +639,88 @@ export const setClientUpdateSettings = (settings: ClientUpdateSettings) =>
 
 export const onClientUpdateChanged = (handler: (status: ClientUpdateStatus) => void): Promise<UnlistenFn> =>
   listen<ClientUpdateStatus>("client-update-changed", (event) => handler(event.payload));
+
+export type BackupTarget = components["schemas"]["BackupTarget"];
+export type BackupKind = components["schemas"]["BackupKind"];
+export type NewBackupTarget = components["schemas"]["NewBackupTarget"];
+export type UpdateBackupTargetRequest = components["schemas"]["UpdateBackupTargetRequest"];
+export type BackupSchedule = components["schemas"]["BackupSchedule"];
+export type BackupRetention = components["schemas"]["BackupRetention"];
+export type BackupConditions = components["schemas"]["BackupConditions"];
+export type BackupTargetTest = components["schemas"]["BackupTargetTest"];
+export type RecoveryKeyOffer = components["schemas"]["RecoveryKeyOffer"];
+export type BackupPolicy = components["schemas"]["BackupPolicy"];
+export type BackupRun = components["schemas"]["BackupRun"];
+export type BackupItemStatus = components["schemas"]["BackupItemStatus"];
+export type BackupStatus = components["schemas"]["BackupStatus"];
+export type BackupCatalog = components["schemas"]["BackupCatalog"];
+export type BackupCatalogVm = components["schemas"]["BackupCatalogVm"];
+export type BackupSnapshot = components["schemas"]["BackupSnapshot"];
+export type RestoreVmRequest = components["schemas"]["RestoreVmRequest"];
+export type RestoreResult = components["schemas"]["RestoreResult"];
+
+/** The API version that added backup and restore. */
+export const BackupApiVersion = "1.18.0";
+
+export const listBackupTargets = (key: string) => invoke<BackupTarget[]>("list_backup_targets", { key });
+
+/** Needs elevation. Remote storage keys travel in `credentials`; the host never returns them. */
+export const createBackupTarget = (key: string, request: NewBackupTarget) =>
+  invoke<BackupTarget>("create_backup_target", { key, request });
+
+/** Needs elevation. Adds a target that already holds backups, using the recovery key saved earlier. */
+export const attachBackupTarget = (key: string, target: NewBackupTarget, recoveryKey: string) =>
+  invoke<BackupTarget>("attach_backup_target", { key, request: { target, recoveryKey } });
+
+/** Needs elevation. */
+export const updateBackupTarget = (key: string, targetId: string, request: UpdateBackupTargetRequest) =>
+  invoke<BackupTarget>("update_backup_target", { key, targetId, request });
+
+/** Needs elevation. Backups already in the storage stay there. */
+export const deleteBackupTarget = (key: string, targetId: string) =>
+  invoke<void>("delete_backup_target", { key, targetId });
+
+/** A failed check is part of the result (`passed` false), not an error. */
+export const testBackupTarget = (key: string, targetId: string) =>
+  invoke<BackupTargetTest>("test_backup_target", { key, targetId });
+
+/** Needs elevation. The key is returned once and is not stored by the client. */
+export const createRecoveryKey = (key: string, targetId: string) =>
+  invoke<RecoveryKeyOffer>("create_recovery_key", { key, targetId });
+
+/** Needs elevation. `typedBack` is the last four groups of the key, typed from the user's saved copy. */
+export const confirmRecoveryKey = (key: string, setupId: string, typedBack: string) =>
+  invoke<BackupTarget>("confirm_recovery_key", { key, request: { setupId, typedBack } });
+
+export const listBackupPolicies = (key: string) => invoke<BackupPolicy[]>("list_backup_policies", { key });
+
+export const setBackupPolicy = (key: string, policy: BackupPolicy) =>
+  invoke<BackupPolicy>("set_backup_policy", { key, policy });
+
+export const deleteBackupPolicy = (key: string, targetId: string, vmId: string) =>
+  invoke<void>("delete_backup_policy", { key, targetId, vmId });
+
+export const getBackupStatus = (key: string) => invoke<BackupStatus>("get_backup_status", { key });
+
+export const listBackupHistory = (key: string, limit = 50) =>
+  invoke<BackupRun[]>("list_backup_history", { key, limit });
+
+/** Backs up now; returns the job. Without `vmId` it backs up the host's own state. */
+export const startBackupRun = (key: string, targetId: string, vmId?: string) =>
+  invoke<VmJob>("start_backup_run", { key, request: { targetId, vmId } });
+
+/** Needs elevation. Opens the target's repositories, which can take a while on remote storage. */
+export const scanBackups = (key: string, targetId: string) =>
+  invoke<BackupCatalog>("scan_backups", { key, request: { targetId } });
+
+/** Needs elevation; returns the restoreVm job. */
+export const restoreVmFromBackup = (key: string, request: RestoreVmRequest) =>
+  invoke<VmJob>("restore_vm_backup", { key, request });
+
+/** Needs elevation; returns the restoreHostState job. */
+export const restoreHostState = (key: string, targetId: string, snapshotId: string) =>
+  invoke<VmJob>("restore_host_state", { key, request: { targetId, snapshotId } });
+
+/** Needs elevation; returns the replaceDisk job. `typedName` must equal the VM's name exactly. */
+export const replaceVmDisk = (key: string, vmId: string, targetId: string, snapshotId: string, typedName: string) =>
+  invoke<VmJob>("replace_vm_disk", { key, vmId, request: { targetId, snapshotId, typedName } });
