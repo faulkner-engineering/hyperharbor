@@ -10,6 +10,7 @@ mod paired;
 mod rdp;
 mod sessions;
 mod spake2;
+mod tailnet;
 #[cfg(test)]
 mod test_server;
 mod tls;

@@ -142,6 +142,7 @@ fn entry_from(announcement: Announcement<'_>, local_host_name: &str) -> Option<H
         source: HostSource::Discovered,
         paired: false,
         can_wake: false,
+        tailscale: None,
     })
 }
 

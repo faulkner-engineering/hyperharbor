@@ -2393,6 +2393,7 @@ mod server_tests {
             is_local: false,
             paired: true,
             can_wake: false,
+            tailscale: None,
         }
     }
 

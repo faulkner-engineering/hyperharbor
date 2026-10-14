@@ -158,6 +158,7 @@ export interface ClientError {
     | "pairingVerificationFailed"
     | "noWakeInfo"
     | "wakeFailed"
+    | "noWakeRelay"
     | "rdpFailed"
     | "vmUnreachable"
     | "unreachable"

@@ -35,6 +35,9 @@ pub enum ClientError {
     #[error("The wake signal could not be sent: {0}")]
     WakeFailed(String),
 
+    #[error("This PC is not on the same network as the sleeping host, and no other paired host on that network is reachable to send the wake signal. Connect to a network with the host, or wake another host on its network first.")]
+    NoWakeRelay,
+
     #[error("Remote Desktop could not be started: {0}")]
     RdpFailed(String),
 
@@ -86,6 +89,7 @@ impl ClientError {
             ClientError::PairingVerificationFailed => "pairingVerificationFailed",
             ClientError::NoWakeInfo => "noWakeInfo",
             ClientError::WakeFailed(_) => "wakeFailed",
+            ClientError::NoWakeRelay => "noWakeRelay",
             ClientError::RdpFailed(_) => "rdpFailed",
             ClientError::VmUnreachable(_) => "vmUnreachable",
             ClientError::Unreachable(_) => "unreachable",
@@ -163,6 +167,7 @@ mod tests {
             ClientError::Storage(String::new()),
             ClientError::UpdateFailed(String::new()),
             ClientError::SessionsActive(0),
+            ClientError::NoWakeRelay,
         ];
         for error in &all {
             match error {
@@ -174,6 +179,7 @@ mod tests {
                 | ClientError::PairingVerificationFailed
                 | ClientError::NoWakeInfo
                 | ClientError::WakeFailed(_)
+                | ClientError::NoWakeRelay
                 | ClientError::RdpFailed(_)
                 | ClientError::VmUnreachable(_)
                 | ClientError::Unreachable(_)

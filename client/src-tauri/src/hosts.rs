@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::error::ClientError;
+use crate::tailnet::TailnetInfo;
 
 /// DNS-SD service type advertised by HyperHarbor hosts.
 pub const SERVICE_TYPE: &str = "_hyperharbor._tcp.local.";
@@ -22,6 +23,8 @@ pub const TXT_API_VERSION: &str = "api";
 pub enum HostSource {
     Discovered,
     Manual,
+    /// A host found by probing the tailnet, not announced on the LAN.
+    Tailnet,
     /// A paired host that is not currently announcing itself, for example because it is asleep.
     Remembered,
 }
@@ -45,6 +48,9 @@ pub struct HostEntry {
     pub paired: bool,
     /// True when Wake-on-LAN details are cached, so a wake signal can be sent.
     pub can_wake: bool,
+    /// What Tailscale reports about the host, when this PC found it on the tailnet. Its Tailscale
+    /// addresses are also in `addresses`, so one host appears once with both.
+    pub tailscale: Option<TailnetInfo>,
 }
 
 /// A manually added host as stored on disk.
@@ -117,6 +123,7 @@ impl ManualHost {
             is_local: is_local_address(&self.address, local_host_name),
             paired: false,
             can_wake: false,
+            tailscale: None,
         }
     }
 }

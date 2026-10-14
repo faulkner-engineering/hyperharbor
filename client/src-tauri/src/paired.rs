@@ -66,6 +66,7 @@ impl PairedHost {
                 .is_some_and(|name| is_local_host_name(name, local_host_name)),
             paired: true,
             can_wake: !self.wake_adapters.is_empty(),
+            tailscale: None,
         }
     }
 }
@@ -275,6 +276,7 @@ mod tests {
             is_local: false,
             paired: false,
             can_wake: false,
+            tailscale: None,
         }
     }
 
