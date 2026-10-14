@@ -96,6 +96,22 @@ pub fn wake(adapters: &[WakeAdapter]) -> Result<usize, ClientError> {
     Ok(sent)
 }
 
+/// True when this PC has an address on the subnet of one of the adapters, so it can wake the host itself. Away from
+/// that network the wake goes through another host on it instead.
+pub fn on_same_lan(adapters: &[WakeAdapter]) -> bool {
+    on_same_lan_with(&local_ipv4_networks(), adapters)
+}
+
+fn on_same_lan_with(locals: &[(Ipv4Addr, Ipv4Addr)], adapters: &[WakeAdapter]) -> bool {
+    adapters.iter().any(|adapter| {
+        adapter
+            .ipv4_address
+            .parse::<Ipv4Addr>()
+            .ok()
+            .is_some_and(|host| source_for(locals, host).is_some())
+    })
+}
+
 /// Local IPv4 addresses with their netmasks, excluding loopback.
 fn local_ipv4_networks() -> Vec<(Ipv4Addr, Ipv4Addr)> {
     if_addrs::get_if_addrs()
@@ -162,6 +178,23 @@ mod tests {
             Some("192.168.0.70".parse().unwrap())
         );
         assert_eq!(source_for(&locals, "10.1.2.3".parse().unwrap()), None);
+    }
+
+    #[test]
+    fn this_pc_is_on_the_hosts_lan_only_when_it_has_an_address_on_its_subnet() {
+        let mask24: Ipv4Addr = "255.255.255.0".parse().unwrap();
+        let locals = vec![("192.168.0.70".parse().unwrap(), mask24)];
+        let adapter = |ip: &str| WakeAdapter {
+            name: "Ethernet".into(),
+            mac_address: "90-2E-16-66-C5-AE".into(),
+            ipv4_address: ip.into(),
+            broadcast_address: "255.255.255.255".into(),
+        };
+
+        assert!(on_same_lan_with(&locals, &[adapter("192.168.0.235")]));
+        assert!(!on_same_lan_with(&locals, &[adapter("10.0.0.5")]));
+        assert!(!on_same_lan_with(&locals, &[]));
+        assert!(!on_same_lan_with(&locals, &[adapter("not an address")]));
     }
 
     #[test]

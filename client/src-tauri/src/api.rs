@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::json;
@@ -11,12 +11,15 @@ use crate::hosts::HostEntry;
 use crate::identity::{pem_to_der, ClientIdentity};
 use crate::paired::PairedHost;
 use crate::spake2::ClientExchange;
+use crate::tailnet;
 use crate::tls;
 use crate::wake::WakeAdapter;
 
 const API_BASE_PATH: &str = "/api/v1";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// Looking for a host on a tailnet peer: a peer without HyperHarbor refuses at once or not at all.
+const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
 /// PowerShell Direct calls in the guest take tens of seconds.
 /// Linux setup can install xrdp and a desktop; the host allows 20 minutes for that.
 const PROVISION_TIMEOUT: Duration = Duration::from_secs(25 * 60);
@@ -219,6 +222,8 @@ pub struct ApiClient {
     clients: Mutex<HashMap<String, reqwest::Client>>,
     /// The base URL that last worked for each host ID.
     last_good: Mutex<HashMap<String, String>>,
+    /// When a request last worked over a Tailscale address, by host ID. While recent, that address stays first.
+    tailnet_since: Mutex<HashMap<String, Instant>>,
     /// Elevation tokens by host ID. In memory only; a restart of the client drops them.
     elevations: Mutex<HashMap<String, Elevation>>,
 }
@@ -230,6 +235,7 @@ impl ApiClient {
             device_name,
             clients: Mutex::new(HashMap::new()),
             last_good: Mutex::new(HashMap::new()),
+            tailnet_since: Mutex::new(HashMap::new()),
             elevations: Mutex::new(HashMap::new()),
         }
     }
@@ -1726,10 +1732,7 @@ impl ApiClient {
 
             match request.send().await {
                 Ok(response) => {
-                    self.last_good
-                        .lock()
-                        .unwrap()
-                        .insert(paired.host_id.clone(), base_url);
+                    self.note_success(&paired.host_id, base_url);
                     return parse(check(response).await?).await;
                 }
                 Err(_) if cancel.load(std::sync::atomic::Ordering::SeqCst) => {
@@ -1751,14 +1754,142 @@ impl ApiClient {
             .map(|elevation| elevation.token.clone())
     }
 
-    /// The host's addresses, the one that last worked first.
+    /// The host's addresses in the order to try them: the LAN before Tailscale, and the address that worked last
+    /// first within its group (see `tailnet::order_candidates`).
     fn ordered_candidates(&self, host: &HostEntry, paired: &PairedHost) -> Vec<String> {
-        let mut candidates = candidate_base_urls(host);
-        if let Some(good) = self.last_good.lock().unwrap().get(&paired.host_id) {
-            candidates.retain(|url| url != good);
-            candidates.insert(0, good.clone());
+        let last_good = self.last_good.lock().unwrap().get(&paired.host_id).cloned();
+        let recent = self
+            .tailnet_since
+            .lock()
+            .unwrap()
+            .get(&paired.host_id)
+            .is_some_and(|at| at.elapsed() < tailnet::TAILNET_STICKY);
+        tailnet::order_candidates(candidate_base_urls(host), last_good.as_deref(), recent)
+    }
+
+    /// Records the address a request worked on.
+    fn note_success(&self, host_id: &str, base_url: String) {
+        {
+            let mut since = self.tailnet_since.lock().unwrap();
+            if tailnet::url_is_tailnet(&base_url) {
+                since.insert(host_id.to_string(), Instant::now());
+            } else {
+                since.remove(host_id);
+            }
         }
-        candidates
+        self.last_good
+            .lock()
+            .unwrap()
+            .insert(host_id.to_string(), base_url);
+    }
+
+    /// The address the last request to this host worked on, for the connection details.
+    pub fn last_good_url(&self, host_id: &str) -> Option<String> {
+        self.last_good.lock().unwrap().get(host_id).cloned()
+    }
+
+    /// Connects to an address with this device's certificate and returns the SHA-256 of the certificate the
+    /// server presented, but only when the server answers like a HyperHarbor host: its API answers JSON with
+    /// 200, 401 or 403. Anything else that speaks TLS on the port is not a host.
+    pub async fn probe_certificate(&self, address: &str, port: u16) -> Option<[u8; 32]> {
+        let (config, slot) = tls::capturing(&self.identity);
+        let client = reqwest::Client::builder()
+            .tls_backend_preconfigured(config)
+            .connect_timeout(PROBE_TIMEOUT)
+            .timeout(PROBE_TIMEOUT * 2)
+            .build()
+            .ok()?;
+        let authority = match address.parse::<std::net::IpAddr>() {
+            Ok(std::net::IpAddr::V6(v6)) => format!("[{v6}]"),
+            _ => address.to_string(),
+        };
+        let response = client
+            .get(format!("https://{authority}:{port}{API_BASE_PATH}/host"))
+            .send()
+            .await
+            .ok()?;
+        let json = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.contains("json"));
+        if !json || !matches!(response.status().as_u16(), 200 | 401 | 403) {
+            return None;
+        }
+        let der = slot.lock().unwrap().clone()?;
+        Some(Sha256::digest(&der).into())
+    }
+
+    /// One signed-in request to exactly one address, with no fallback, for the reachability test.
+    pub async fn check_via_address(
+        &self,
+        paired: &PairedHost,
+        address: &str,
+        port: u16,
+    ) -> tailnet::ApiCheck {
+        let http = match self.pinned_client(paired) {
+            Ok(http) => http,
+            Err(error) => return tailnet::ApiCheck::Failed(error.to_string()),
+        };
+        let authority = match address.parse::<std::net::IpAddr>() {
+            Ok(std::net::IpAddr::V6(v6)) => format!("[{v6}]"),
+            _ => address.to_string(),
+        };
+        let response = http
+            .get(format!("https://{authority}:{port}{API_BASE_PATH}/host"))
+            .send()
+            .await;
+        match response {
+            Ok(response) => match check(response).await {
+                Ok(_) => tailnet::ApiCheck::Ok,
+                Err(error)
+                    if error
+                        .problem_code()
+                        .is_some_and(|code| code.starts_with("tailscaleNode")) =>
+                {
+                    tailnet::ApiCheck::NodeRefused(error.to_string())
+                }
+                Err(error) => tailnet::ApiCheck::Failed(error.to_string()),
+            },
+            Err(error) => tailnet::ApiCheck::Failed(unreachable(Some(error)).to_string()),
+        }
+    }
+
+    /// POST /wake/relay: asks this host to send magic packets on its LAN for a sleeping host. Returns how many
+    /// datagrams it sent.
+    pub async fn relay_wake(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        adapters: &[WakeAdapter],
+    ) -> Result<usize, ClientError> {
+        let body = json!({ "adapters": adapters });
+        let value = self
+            .send_json(host, paired, reqwest::Method::POST, "/wake/relay", &body)
+            .await?;
+        Ok(value
+            .get("sent")
+            .and_then(|sent| sent.as_u64())
+            .unwrap_or(0) as usize)
+    }
+
+    /// PUT /host/tailscale/settings (needs elevation). Returns the HostTailscale.
+    pub async fn set_host_tailscale_settings(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        local_api_port: u16,
+        control_url: Option<&str>,
+    ) -> Result<serde_json::Value, ClientError> {
+        let body = json!({ "localApiPort": local_api_port, "controlUrl": control_url });
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::PUT,
+            "/host/tailscale/settings",
+            &body,
+        )
+        .await
     }
 
     async fn get_json(
@@ -1840,10 +1971,7 @@ impl ApiClient {
             }
             match request.send().await {
                 Ok(response) => {
-                    self.last_good
-                        .lock()
-                        .unwrap()
-                        .insert(paired.host_id.clone(), base_url);
+                    self.note_success(&paired.host_id, base_url);
                     let checked = check(response).await;
                     if let Err(error) = &checked {
                         // An expired or revoked token is useless; the frontend asks for the passphrase again.
@@ -1878,6 +2006,12 @@ impl ApiClient {
     }
 }
 
+impl tailnet::CertProbe for ApiClient {
+    async fn probe(&self, address: &str, port: u16) -> Option<[u8; 32]> {
+        self.probe_certificate(address, port).await
+    }
+}
+
 /// Read-only host-level resources the frontend can ask for by name.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -1889,6 +2023,7 @@ pub enum HostResource {
     Gpu,
     Update,
     RemoteDesktop,
+    Tailscale,
     SetupProfiles,
     SetupProfileCatalog,
     PackageCatalog,
@@ -1905,6 +2040,7 @@ impl HostResource {
             HostResource::UnattendProfiles => "/unattend-profiles",
             HostResource::Gpu => "/host/gpu",
             HostResource::RemoteDesktop => "/host/remote-desktop",
+            HostResource::Tailscale => "/host/tailscale",
             HostResource::SetupProfiles => "/setup-profiles",
             HostResource::SetupProfileCatalog => "/setup-profiles/catalog",
             HostResource::PackageCatalog => "/packages/catalog",

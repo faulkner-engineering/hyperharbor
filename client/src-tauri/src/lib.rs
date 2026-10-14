@@ -50,9 +50,14 @@ struct AppState {
     camera: Arc<camera::service::CameraService>,
     /// Updates of this program (the host updates itself through its own API).
     updates: update::service::UpdateService,
+    /// Tailscale on this PC and the hosts found on the tailnet.
+    tailnet: Arc<tailnet::TailnetService>,
     // Kept alive so mDNS browsing continues for the lifetime of the app.
     _mdns: Option<mdns_sd::ServiceDaemon>,
 }
+
+/// How often this PC looks at its tailnet for hosts.
+const TAILNET_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Wake details are refreshed at most this often while a host is reachable.
 const WAKE_REFRESH_SECONDS: u64 = 60 * 60;
@@ -72,8 +77,43 @@ impl AppState {
                 }
             }
         }
-        paired::add_remembered(&mut hosts, &self.paired.all(), self.hosts.local_host_name());
+
+        // Hosts found on the tailnet join the entry that is already listed, so one host appears once with both
+        // addresses; a paired host reachable only over the tailnet is listed too.
+        let paired = self.paired.all();
+        tailnet::merge_tailnet(
+            &mut hosts,
+            &self.tailnet.snapshot().hosts,
+            &paired,
+            self.hosts.local_host_name(),
+        );
+        for host in &mut hosts {
+            if host.tailscale.is_some() {
+                self.annotate(host);
+                if host.paired && host.source != HostSource::Manual {
+                    if let Some(pairing) = self.pairing_for(host) {
+                        // Best effort, like the discovered address above: keeps the Tailscale address for later.
+                        let _ = self.paired.update_endpoint(&pairing.host_id, host);
+                    }
+                }
+            }
+        }
+        paired::add_remembered(&mut hosts, &paired, self.hosts.local_host_name());
         hosts
+    }
+
+    /// Reads Tailscale on this PC and probes its peers. Returns true when the host list may have changed.
+    async fn refresh_tailnet(&self) -> bool {
+        let port = self.tailnet.settings.get().local_api_port;
+        self.tailnet
+            .refresh_with(
+                &tailnet::HttpSource { port },
+                &tailnet::CliSource,
+                self.api.as_ref(),
+                &self.paired.all(),
+                std::time::Instant::now(),
+            )
+            .await
     }
 
     fn host(&self, key: &str) -> Result<HostEntry, ClientError> {
@@ -1596,10 +1636,176 @@ async fn export_vm_disks(
 }
 
 /// Sends Wake-on-LAN magic packets using the cached adapter details. Returns datagrams sent.
+/// Wakes a host. On the host's own network this PC sends the magic packet. Away from it, any other paired host that is
+/// online on that network is asked to send it (the best candidate first), so a host can be woken from anywhere.
 #[tauri::command]
-fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
+async fn wake_host(state: State<'_, AppState>, key: String) -> Result<usize, ClientError> {
     let (_, paired) = state.paired_host(&key)?;
-    wake::wake(&paired.wake_adapters)
+    if paired.wake_adapters.is_empty() || wake::on_same_lan(&paired.wake_adapters) {
+        return wake::wake(&paired.wake_adapters);
+    }
+
+    let hosts = state.all_hosts();
+    let all_paired = state.paired.all();
+    let candidates: Vec<tailnet::RelayCandidate<'_>> = all_paired
+        .iter()
+        .filter_map(|candidate| {
+            hosts
+                .iter()
+                .find(|entry| {
+                    entry
+                        .host_id
+                        .as_deref()
+                        .is_some_and(|id| id.eq_ignore_ascii_case(&candidate.host_id))
+                        || candidate.entry_keys.contains(&entry.key)
+                })
+                .map(|entry| tailnet::RelayCandidate {
+                    paired: candidate,
+                    entry,
+                })
+        })
+        .collect();
+
+    for relay in tailnet::rank_wake_relays(&paired, &candidates) {
+        let Some(entry) = candidates
+            .iter()
+            .find(|candidate| candidate.paired.host_id == relay.host_id)
+            .map(|candidate| candidate.entry)
+        else {
+            continue;
+        };
+        if let Ok(sent) = state
+            .api
+            .relay_wake(entry, relay, &paired.wake_adapters)
+            .await
+        {
+            return Ok(sent);
+        }
+    }
+    Err(ClientError::NoWakeRelay)
+}
+
+/// Tailscale on this PC, read now.
+#[tauri::command]
+async fn get_tailnet_status(
+    state: State<'_, AppState>,
+) -> Result<tailnet::TailnetStatus, ClientError> {
+    let port = state.tailnet.settings.get().local_api_port;
+    Ok(state
+        .tailnet
+        .read_now(&tailnet::HttpSource { port }, &tailnet::CliSource)
+        .await)
+}
+
+/// Looks at the tailnet again and tells the list to reload when it found something new.
+#[tauri::command]
+async fn refresh_tailnet(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), ClientError> {
+    if state.refresh_tailnet().await {
+        let _ = app.emit(HOSTS_CHANGED_EVENT, ());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_tailnet_settings(state: State<'_, AppState>) -> tailnet::TailnetSettings {
+    state.tailnet.settings.get()
+}
+
+#[tauri::command]
+fn set_tailnet_settings(
+    state: State<'_, AppState>,
+    settings: tailnet::TailnetSettings,
+) -> Result<(), ClientError> {
+    state.tailnet.settings.set(settings)
+}
+
+/// How the last request to a host reached it: over the LAN or over Tailscale (Direct or Relayed).
+#[tauri::command]
+fn get_connection_route(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<tailnet::ConnectionRoute, ClientError> {
+    let host = state.host(&key)?;
+    let last_good = state
+        .pairing_for(&host)
+        .and_then(|paired| state.api.last_good_url(&paired.host_id));
+    Ok(tailnet::describe_route(&host, last_good.as_deref()))
+}
+
+/// Checks the way to a host over Tailscale, one step at a time, and says where it stops.
+#[tauri::command]
+async fn test_tailscale_reachability(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<Vec<tailnet::ReachabilityStep>, ClientError> {
+    let host = state.host(&key)?;
+    let paired = state.pairing_for(&host);
+    let port = state.tailnet.settings.get().local_api_port;
+    let status = state
+        .tailnet
+        .read_now(&tailnet::HttpSource { port }, &tailnet::CliSource)
+        .await;
+
+    let address: Option<String> = host
+        .tailscale
+        .as_ref()
+        .and_then(|info| tailnet::first_ipv4(&info.addresses))
+        .or_else(|| {
+            host.addresses
+                .iter()
+                .find(|address| {
+                    tailnet::is_tailnet_ip(address) && address.parse::<std::net::Ipv4Addr>().is_ok()
+                })
+                .map(String::as_str)
+        })
+        .map(str::to_string);
+
+    let mut certificate = tailnet::CertCheck::NoAnswer;
+    let mut api = tailnet::ApiCheck::NotTried;
+    if let (Some(address), true) = (&address, status.running()) {
+        if let Some(hash) = state.api.probe_certificate(address, host.port).await {
+            certificate = match &paired {
+                None => tailnet::CertCheck::Unpaired,
+                Some(paired) if paired.certificate_hash() == Some(hash) => {
+                    tailnet::CertCheck::Pinned
+                }
+                Some(_) => tailnet::CertCheck::Different,
+            };
+            if let (tailnet::CertCheck::Pinned, Some(paired)) = (&certificate, &paired) {
+                api = state
+                    .api
+                    .check_via_address(paired, address, host.port)
+                    .await;
+            }
+        }
+    }
+
+    Ok(tailnet::build_reachability(&tailnet::ReachabilityInput {
+        status: &status,
+        address: address.as_deref(),
+        port: host.port,
+        certificate,
+        api,
+    }))
+}
+
+/// Changes where the host finds its Tailscale client and the control server in the command it suggests (needs
+/// elevation). Returns the host's HostTailscale.
+#[tauri::command]
+async fn set_host_tailscale_settings(
+    state: State<'_, AppState>,
+    key: String,
+    local_api_port: u16,
+    control_url: Option<String>,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .set_host_tailscale_settings(&host, &paired, local_api_port, control_url.as_deref())
+        .await
 }
 
 #[tauri::command]
@@ -1772,6 +1978,9 @@ pub fn run() {
                     Some(config_dir.join("camera-settings.json")),
                     config_dir.join("camera-ledger.json"),
                 ),
+                tailnet: Arc::new(tailnet::TailnetService::new(
+                    tailnet::TailnetSettingsStore::new(Some(config_dir.join("tailscale.json"))),
+                )),
                 updates: {
                     let version = app.package_info().version.to_string();
                     let handle = app.handle().clone();
@@ -1789,6 +1998,21 @@ pub fn run() {
                     )
                 },
                 _mdns: mdns,
+            });
+
+            // Look at the tailnet every half minute. A PC without Tailscale answers "not installed" quickly and
+            // costs nothing more.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut ticks = tokio::time::interval(TAILNET_REFRESH_INTERVAL);
+                ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    ticks.tick().await;
+                    let state = handle.state::<AppState>();
+                    if state.refresh_tailnet().await {
+                        let _ = handle.emit(HOSTS_CHANGED_EVENT, ());
+                    }
+                }
             });
 
             // Look for a new version of this program shortly after start and then once a day, unless
@@ -1833,6 +2057,13 @@ pub fn run() {
             cancel_pairing,
             unpair,
             wake_host,
+            get_tailnet_status,
+            refresh_tailnet,
+            get_tailnet_settings,
+            set_tailnet_settings,
+            get_connection_route,
+            test_tailscale_reachability,
+            set_host_tailscale_settings,
             get_wake_readiness,
             fix_wake,
             start_wake_test,

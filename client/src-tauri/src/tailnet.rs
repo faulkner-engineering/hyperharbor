@@ -146,7 +146,7 @@ fn is_tailnet_v6(address: Ipv6Addr) -> bool {
     address.segments()[..3] == [0xFD7A, 0x115C, 0xA1E0]
 }
 
-fn first_ipv4(addresses: &[String]) -> Option<&str> {
+pub fn first_ipv4(addresses: &[String]) -> Option<&str> {
     addresses
         .iter()
         .find(|address| address.parse::<Ipv4Addr>().is_ok())
@@ -160,7 +160,9 @@ fn url_host(url: &str) -> &str {
     if let Some(inner) = authority.strip_prefix('[') {
         return inner.split(']').next().unwrap_or(inner);
     }
-    authority.rsplit_once(':').map_or(authority, |(host, _)| host)
+    authority
+        .rsplit_once(':')
+        .map_or(authority, |(host, _)| host)
 }
 
 pub fn url_is_tailnet(url: &str) -> bool {
@@ -481,7 +483,10 @@ impl TailnetSettingsStore {
 /// Which online peers are worth a probe on the HyperHarbor port. Peers with the host tag come first and, when any
 /// exist, are the only ones probed besides peers whose address a paired host used before. A tailnet with no tagged
 /// peer probes every online peer, up to a limit.
-pub fn probe_targets<'a>(status: &'a TailnetStatus, known_addresses: &[String]) -> Vec<&'a TailnetPeer> {
+pub fn probe_targets<'a>(
+    status: &'a TailnetStatus,
+    known_addresses: &[String],
+) -> Vec<&'a TailnetPeer> {
     if !status.running() {
         return Vec::new();
     }
@@ -518,12 +523,17 @@ impl ProbeCache {
     /// The remembered answer while it is fresh: `Some(None)` is a remembered "no HyperHarbor host here".
     pub fn lookup(&self, address: &str, port: u16, now: Instant) -> Option<Option<[u8; 32]>> {
         let (result, at) = self.entries.get(&format!("{address}:{port}"))?;
-        let lifetime = if result.is_some() { FOUND_TTL } else { MISSING_TTL };
+        let lifetime = if result.is_some() {
+            FOUND_TTL
+        } else {
+            MISSING_TTL
+        };
         (now.saturating_duration_since(*at) < lifetime).then_some(*result)
     }
 
     pub fn store(&mut self, address: &str, port: u16, result: Option<[u8; 32]>, now: Instant) {
-        self.entries.insert(format!("{address}:{port}"), (result, now));
+        self.entries
+            .insert(format!("{address}:{port}"), (result, now));
     }
 }
 
@@ -565,18 +575,19 @@ pub async fn scan(
         }
     }
 
-    let answers = futures_util::future::join_all(jobs.iter().map(|(_, address, port)| async move {
-        let cached = cache.lock().unwrap().lookup(address, *port, now);
-        match cached {
-            Some(answer) => answer,
-            None => {
-                let answer = probe.probe(address, *port).await;
-                cache.lock().unwrap().store(address, *port, answer, now);
-                answer
+    let answers =
+        futures_util::future::join_all(jobs.iter().map(|(_, address, port)| async move {
+            let cached = cache.lock().unwrap().lookup(address, *port, now);
+            match cached {
+                Some(answer) => answer,
+                None => {
+                    let answer = probe.probe(address, *port).await;
+                    cache.lock().unwrap().store(address, *port, answer, now);
+                    answer
+                }
             }
-        }
-    }))
-    .await;
+        }))
+        .await;
 
     jobs.iter()
         .zip(answers)
@@ -606,9 +617,11 @@ pub fn merge_tailnet(
     local_host_name: &str,
 ) {
     for host in found {
-        let fingerprint_owner = paired
-            .iter()
-            .find(|candidate| candidate.host_certificate_fingerprint.eq_ignore_ascii_case(&host.fingerprint));
+        let fingerprint_owner = paired.iter().find(|candidate| {
+            candidate
+                .host_certificate_fingerprint
+                .eq_ignore_ascii_case(&host.fingerprint)
+        });
 
         let index = if let Some(owner) = fingerprint_owner {
             match hosts.iter().position(|entry| {
@@ -776,7 +789,12 @@ pub fn rank_wake_relays<'a>(
 
     let mut ranked: Vec<(&RelayCandidate<'a>, (u8, u8))> = candidates
         .iter()
-        .filter(|candidate| !candidate.paired.host_id.eq_ignore_ascii_case(&target.host_id))
+        .filter(|candidate| {
+            !candidate
+                .paired
+                .host_id
+                .eq_ignore_ascii_case(&target.host_id)
+        })
         .filter(|candidate| candidate.entry.source != HostSource::Remembered)
         .filter(|candidate| {
             candidate
@@ -807,7 +825,10 @@ pub fn rank_wake_relays<'a>(
                 .cmp(&b.0.paired.display_name.to_lowercase())
         })
     });
-    ranked.into_iter().map(|(candidate, _)| candidate.paired).collect()
+    ranked
+        .into_iter()
+        .map(|(candidate, _)| candidate.paired)
+        .collect()
 }
 
 // ----- The reachability test -----------------------------------------------------------------------------
@@ -883,7 +904,11 @@ pub fn build_reachability(input: &ReachabilityInput<'_>) -> Vec<ReachabilityStep
     steps.push(step(
         "tailscale",
         "Tailscale on this PC",
-        if running { StepStatus::Pass } else { StepStatus::Fail },
+        if running {
+            StepStatus::Pass
+        } else {
+            StepStatus::Fail
+        },
         (!running).then(|| match input.status.state {
             TailnetState::NotInstalled => "Tailscale is not installed on this PC.".to_string(),
             TailnetState::NeedsLogin => "Sign in to Tailscale on this PC.".to_string(),
@@ -929,22 +954,37 @@ pub fn build_reachability(input: &ReachabilityInput<'_>) -> Vec<ReachabilityStep
     steps.push(step(
         "online",
         "Host online",
-        if peer.online { StepStatus::Pass } else { StepStatus::Fail },
-        (!peer.online).then(|| "Tailscale reports the host as offline. It may be asleep or not running Tailscale.".to_string()),
+        if peer.online {
+            StepStatus::Pass
+        } else {
+            StepStatus::Fail
+        },
+        (!peer.online).then(|| {
+            "Tailscale reports the host as offline. It may be asleep or not running Tailscale."
+                .to_string()
+        }),
     ));
     if !peer.online {
         return steps;
     }
 
     steps.push(match peer.path {
-        TailnetPath::Direct => step("path", "Connection path", StepStatus::Pass, Some("Direct".into())),
+        TailnetPath::Direct => step(
+            "path",
+            "Connection path",
+            StepStatus::Pass,
+            Some("Direct".into()),
+        ),
         TailnetPath::Relayed => step(
             "path",
             "Connection path",
             StepStatus::Warn,
             Some(format!(
                 "Relayed{}. {RELAYED_HINT}",
-                peer.relay.as_deref().map(|r| format!(" through {r}")).unwrap_or_default()
+                peer.relay
+                    .as_deref()
+                    .map(|r| format!(" through {r}"))
+                    .unwrap_or_default()
             )),
         ),
         TailnetPath::Unknown => step(
@@ -971,7 +1011,12 @@ pub fn build_reachability(input: &ReachabilityInput<'_>) -> Vec<ReachabilityStep
     }
 
     match input.certificate {
-        CertCheck::Pinned => steps.push(step("identity", "Host identity", StepStatus::Pass, Some("The certificate matches the one pinned when you paired.".into()))),
+        CertCheck::Pinned => steps.push(step(
+            "identity",
+            "Host identity",
+            StepStatus::Pass,
+            Some("The certificate matches the one pinned when you paired.".into()),
+        )),
         CertCheck::Different => {
             steps.push(step(
                 "identity",
@@ -981,13 +1026,28 @@ pub fn build_reachability(input: &ReachabilityInput<'_>) -> Vec<ReachabilityStep
             ));
             return steps;
         }
-        _ => steps.push(step("identity", "Host identity", StepStatus::Warn, Some("Not paired yet, so the certificate cannot be compared.".into()))),
+        _ => steps.push(step(
+            "identity",
+            "Host identity",
+            StepStatus::Warn,
+            Some("Not paired yet, so the certificate cannot be compared.".into()),
+        )),
     }
 
     match &input.api {
         ApiCheck::Ok => steps.push(step("access", "Signed-in request", StepStatus::Pass, None)),
-        ApiCheck::NodeRefused(message) => steps.push(step("access", "Signed-in request", StepStatus::Fail, Some(message.clone()))),
-        ApiCheck::Failed(message) => steps.push(step("access", "Signed-in request", StepStatus::Fail, Some(message.clone()))),
+        ApiCheck::NodeRefused(message) => steps.push(step(
+            "access",
+            "Signed-in request",
+            StepStatus::Fail,
+            Some(message.clone()),
+        )),
+        ApiCheck::Failed(message) => steps.push(step(
+            "access",
+            "Signed-in request",
+            StepStatus::Fail,
+            Some(message.clone()),
+        )),
         ApiCheck::NotTried => {}
     }
     steps
@@ -1054,7 +1114,11 @@ impl TailnetService {
     }
 
     /// Reads only the status, ignoring the cache of probes: for the Tailscale dialog.
-    pub async fn read_now(&self, http: &impl StatusSource, cli: &impl StatusSource) -> TailnetStatus {
+    pub async fn read_now(
+        &self,
+        http: &impl StatusSource,
+        cli: &impl StatusSource,
+    ) -> TailnetStatus {
         let status = read_status(http, cli).await;
         self.snapshot.lock().unwrap().status = status.clone();
         status
@@ -1085,7 +1149,11 @@ mod tests {
     }
 
     fn peer<'a>(status: &'a TailnetStatus, name: &str) -> &'a TailnetPeer {
-        status.peers.iter().find(|p| p.node.host_name == name).unwrap()
+        status
+            .peers
+            .iter()
+            .find(|p| p.node.host_name == name)
+            .unwrap()
     }
 
     // ---- Parsing ----
@@ -1095,7 +1163,10 @@ mod tests {
         let status = status();
         assert_eq!(status.state, TailnetState::Running);
         assert_eq!(status.magic_dns_suffix.as_deref(), Some("tail1234.ts.net"));
-        assert_eq!(status.self_node.as_ref().unwrap().dns_name, "laptop.tail1234.ts.net");
+        assert_eq!(
+            status.self_node.as_ref().unwrap().dns_name,
+            "laptop.tail1234.ts.net"
+        );
         assert_eq!(status.peers.len(), 4);
         assert_eq!(peer(&status, "gaming-pc").ipv4(), Some("100.64.0.1"));
         assert!(peer(&status, "gaming-pc").tagged());
@@ -1121,7 +1192,8 @@ mod tests {
             ("Stopped", TailnetState::Stopped),
             ("Starting", TailnetState::Other),
         ] {
-            let json = format!(r#"{{"BackendState":"{backend}","Self":{{"ID":"n1","HostName":"pc"}}}}"#);
+            let json =
+                format!(r#"{{"BackendState":"{backend}","Self":{{"ID":"n1","HostName":"pc"}}}}"#);
             let status = parse_status(&json);
             assert_eq!(status.state, expected);
             assert!(status.self_node.is_none());
@@ -1167,24 +1239,102 @@ mod tests {
 
     #[tokio::test]
     async fn the_local_api_is_preferred() {
-        let status = read_status(&Fake(Reply::Ok(STATUS.into())), &Fake(Reply::Ok("{}".into()))).await;
+        let status = read_status(
+            &Fake(Reply::Ok(STATUS.into())),
+            &Fake(Reply::Ok("{}".into())),
+        )
+        .await;
         assert_eq!(status.peers.len(), 4);
     }
 
     #[tokio::test]
     async fn the_command_line_answers_when_the_local_api_does_not() {
-        let status = read_status(&Fake(Reply::Failed("down".into())), &Fake(Reply::Ok(STATUS.into()))).await;
+        let status = read_status(
+            &Fake(Reply::Failed("down".into())),
+            &Fake(Reply::Ok(STATUS.into())),
+        )
+        .await;
         assert_eq!(status.state, TailnetState::Running);
     }
 
     #[tokio::test]
     async fn not_installed_is_decided_by_the_command_line_only() {
-        let missing = read_status(&Fake(Reply::Failed("down".into())), &Fake(Reply::NotInstalled)).await;
+        let missing = read_status(
+            &Fake(Reply::Failed("down".into())),
+            &Fake(Reply::NotInstalled),
+        )
+        .await;
         assert_eq!(missing.state, TailnetState::NotInstalled);
 
-        let broken = read_status(&Fake(Reply::Failed("down".into())), &Fake(Reply::Failed("daemon not running".into()))).await;
+        let broken = read_status(
+            &Fake(Reply::Failed("down".into())),
+            &Fake(Reply::Failed("daemon not running".into())),
+        )
+        .await;
         assert_eq!(broken.state, TailnetState::Unreachable);
         assert_eq!(broken.error.as_deref(), Some("daemon not running"));
+    }
+
+    /// A stand-in for the Tailscale local API: answers one request on a loopback port and returns what it was sent.
+    async fn serve_once(
+        status_line: &'static str,
+        body: &'static str,
+    ) -> (u16, tokio::task::JoinHandle<String>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = vec![0u8; 4096];
+            let read = socket.read(&mut buffer).await.unwrap();
+            let response = format!(
+                "HTTP/1.1 {status_line}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+            String::from_utf8_lossy(&buffer[..read]).into_owned()
+        });
+        (port, handle)
+    }
+
+    #[tokio::test]
+    async fn the_http_source_reads_the_status_from_the_configured_port() {
+        let (port, request) = serve_once("200 OK", STATUS).await;
+
+        let status = read_status(&HttpSource { port }, &Fake(Reply::NotInstalled)).await;
+
+        assert_eq!(status.state, TailnetState::Running);
+        assert_eq!(status.peers.len(), 4);
+        let request = request.await.unwrap();
+        assert!(
+            request.starts_with("GET /localapi/v0/status HTTP/1.1"),
+            "{request}"
+        );
+        assert!(
+            request.to_lowercase().contains("sec-tailscale: localapi"),
+            "{request}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_http_error_falls_through_to_the_command_line() {
+        let (port, _request) = serve_once("403 Forbidden", "access denied").await;
+
+        let status = read_status(&HttpSource { port }, &Fake(Reply::Ok(STATUS.into()))).await;
+
+        assert_eq!(status.state, TailnetState::Running);
+    }
+
+    #[tokio::test]
+    async fn a_closed_port_is_not_proof_that_tailscale_is_missing() {
+        // Nothing listens on port 1.
+        let status = read_status(
+            &HttpSource { port: 1 },
+            &Fake(Reply::Failed("daemon not running".into())),
+        )
+        .await;
+
+        assert_eq!(status.state, TailnetState::Unreachable);
     }
 
     // ---- Probe targets, cache, scan ----
@@ -1203,7 +1353,10 @@ mod tests {
 
     fn probe_with(hosts: &[(&str, u8)]) -> FakeProbe {
         FakeProbe {
-            hosts: hosts.iter().map(|(a, b)| (a.to_string(), [*b; 32])).collect(),
+            hosts: hosts
+                .iter()
+                .map(|(a, b)| (a.to_string(), [*b; 32]))
+                .collect(),
             calls: Mutex::new(Vec::new()),
         }
     }
@@ -1211,7 +1364,10 @@ mod tests {
     #[test]
     fn tagged_peers_are_probed_and_offline_or_untagged_ones_are_not() {
         let status = status();
-        let names: Vec<&str> = probe_targets(&status, &[]).iter().map(|p| p.node.host_name.as_str()).collect();
+        let names: Vec<&str> = probe_targets(&status, &[])
+            .iter()
+            .map(|p| p.node.host_name.as_str())
+            .collect();
         assert_eq!(names, vec!["den-pc", "gaming-pc"]);
     }
 
@@ -1249,7 +1405,10 @@ mod tests {
         assert_eq!(cache.lookup("100.64.0.2", 48443, soon), Some(None));
 
         let later = start + Duration::from_secs(5 * 60);
-        assert_eq!(cache.lookup("100.64.0.1", 48443, later), Some(Some([1; 32])));
+        assert_eq!(
+            cache.lookup("100.64.0.1", 48443, later),
+            Some(Some([1; 32]))
+        );
         assert_eq!(cache.lookup("100.64.0.2", 48443, later), None);
 
         let much_later = start + Duration::from_secs(11 * 60);
@@ -1273,7 +1432,15 @@ mod tests {
         assert_eq!(probe.calls.lock().unwrap().len(), 2);
 
         // A second scan inside the cache lifetime opens no connection.
-        scan(&status, &[], &[48443], &probe, &cache, now + Duration::from_secs(30)).await;
+        scan(
+            &status,
+            &[],
+            &[48443],
+            &probe,
+            &cache,
+            now + Duration::from_secs(30),
+        )
+        .await;
         assert_eq!(probe.calls.lock().unwrap().len(), 2);
     }
 
@@ -1349,7 +1516,10 @@ mod tests {
 
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].key, "mdns:ID-1");
-        assert_eq!(hosts[0].addresses, vec!["192.168.0.235", "100.64.0.1", "fd7a:115c:a1e0::1"]);
+        assert_eq!(
+            hosts[0].addresses,
+            vec!["192.168.0.235", "100.64.0.1", "fd7a:115c:a1e0::1"]
+        );
         let info = hosts[0].tailscale.as_ref().unwrap();
         assert_eq!(info.path, TailnetPath::Direct);
         assert!(info.tagged);
@@ -1418,27 +1588,43 @@ mod tests {
 
     #[test]
     fn the_lan_address_is_tried_before_the_tailscale_address() {
-        assert_eq!(order_candidates(urls(&[TAIL, LAN]), None, false), urls(&[LAN, TAIL]));
+        assert_eq!(
+            order_candidates(urls(&[TAIL, LAN]), None, false),
+            urls(&[LAN, TAIL])
+        );
     }
 
     #[test]
     fn the_address_that_worked_last_goes_first_within_its_group() {
-        assert_eq!(order_candidates(urls(&[LAN, LAN_B, TAIL]), Some(LAN_B), false), urls(&[LAN_B, LAN, TAIL]));
+        assert_eq!(
+            order_candidates(urls(&[LAN, LAN_B, TAIL]), Some(LAN_B), false),
+            urls(&[LAN_B, LAN, TAIL])
+        );
     }
 
     #[test]
     fn a_tailscale_address_that_worked_a_moment_ago_stays_first() {
-        assert_eq!(order_candidates(urls(&[LAN, TAIL]), Some(TAIL), true), urls(&[TAIL, LAN]));
+        assert_eq!(
+            order_candidates(urls(&[LAN, TAIL]), Some(TAIL), true),
+            urls(&[TAIL, LAN])
+        );
     }
 
     #[test]
     fn an_old_tailscale_success_does_not_beat_the_lan() {
-        assert_eq!(order_candidates(urls(&[LAN, TAIL]), Some(TAIL), false), urls(&[LAN, TAIL]));
+        assert_eq!(
+            order_candidates(urls(&[LAN, TAIL]), Some(TAIL), false),
+            urls(&[LAN, TAIL])
+        );
     }
 
     #[test]
     fn every_address_is_kept() {
-        let out = order_candidates(urls(&[TAIL, LAN, "https://100.64.0.2:48443"]), Some("https://100.64.0.2:48443"), true);
+        let out = order_candidates(
+            urls(&[TAIL, LAN, "https://100.64.0.2:48443"]),
+            Some("https://100.64.0.2:48443"),
+            true,
+        );
         assert_eq!(out.len(), 3);
         assert_eq!(out[0], "https://100.64.0.2:48443");
     }
@@ -1515,13 +1701,25 @@ mod tests {
             entry_for(&other_net, HostSource::Tailnet, Some(TailnetPath::Direct)),
         ];
         let candidates = [
-            RelayCandidate { paired: &same_net, entry: &entries[0] },
-            RelayCandidate { paired: &other_net, entry: &entries[1] },
+            RelayCandidate {
+                paired: &same_net,
+                entry: &entries[0],
+            },
+            RelayCandidate {
+                paired: &other_net,
+                entry: &entries[1],
+            },
         ];
 
         let ranked = rank_wake_relays(&target, &candidates);
 
-        assert_eq!(ranked.iter().map(|h| h.host_id.as_str()).collect::<Vec<_>>(), vec!["A"]);
+        assert_eq!(
+            ranked
+                .iter()
+                .map(|h| h.host_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["A"]
+        );
     }
 
     #[test]
@@ -1533,8 +1731,14 @@ mod tests {
             entry_for(&asleep, HostSource::Remembered, None),
         ];
         let candidates = [
-            RelayCandidate { paired: &target, entry: &entries[0] },
-            RelayCandidate { paired: &asleep, entry: &entries[1] },
+            RelayCandidate {
+                paired: &target,
+                entry: &entries[0],
+            },
+            RelayCandidate {
+                paired: &asleep,
+                entry: &entries[1],
+            },
         ];
 
         assert!(rank_wake_relays(&target, &candidates).is_empty());
@@ -1552,20 +1756,46 @@ mod tests {
             entry_for(&direct_b, HostSource::Tailnet, Some(TailnetPath::Direct)),
         ];
         let candidates = [
-            RelayCandidate { paired: &relayed, entry: &entries[0] },
-            RelayCandidate { paired: &direct_c, entry: &entries[1] },
-            RelayCandidate { paired: &direct_b, entry: &entries[2] },
+            RelayCandidate {
+                paired: &relayed,
+                entry: &entries[0],
+            },
+            RelayCandidate {
+                paired: &direct_c,
+                entry: &entries[1],
+            },
+            RelayCandidate {
+                paired: &direct_b,
+                entry: &entries[2],
+            },
         ];
 
         let ranked = rank_wake_relays(&target, &candidates);
 
-        assert_eq!(ranked.iter().map(|h| h.host_id.as_str()).collect::<Vec<_>>(), vec!["B", "C", "A"]);
+        assert_eq!(
+            ranked
+                .iter()
+                .map(|h| h.host_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["B", "C", "A"]
+        );
     }
 
     // ---- Reachability ----
 
-    fn input<'a>(status: &'a TailnetStatus, address: Option<&'a str>, certificate: CertCheck, api: ApiCheck) -> ReachabilityInput<'a> {
-        ReachabilityInput { status, address, port: 48443, certificate, api }
+    fn input<'a>(
+        status: &'a TailnetStatus,
+        address: Option<&'a str>,
+        certificate: CertCheck,
+        api: ApiCheck,
+    ) -> ReachabilityInput<'a> {
+        ReachabilityInput {
+            status,
+            address,
+            port: 48443,
+            certificate,
+            api,
+        }
     }
 
     fn ids(steps: &[ReachabilityStep]) -> Vec<(&'static str, StepStatus)> {
@@ -1575,7 +1805,12 @@ mod tests {
     #[test]
     fn a_direct_reachable_paired_host_passes_every_step() {
         let status = status();
-        let steps = build_reachability(&input(&status, Some("100.64.0.1"), CertCheck::Pinned, ApiCheck::Ok));
+        let steps = build_reachability(&input(
+            &status,
+            Some("100.64.0.1"),
+            CertCheck::Pinned,
+            ApiCheck::Ok,
+        ));
         assert_eq!(
             ids(&steps),
             vec![
@@ -1593,7 +1828,12 @@ mod tests {
     #[test]
     fn a_relayed_path_warns_with_the_split_tunneling_hint() {
         let status = status();
-        let steps = build_reachability(&input(&status, Some("100.64.0.2"), CertCheck::Pinned, ApiCheck::Ok));
+        let steps = build_reachability(&input(
+            &status,
+            Some("100.64.0.2"),
+            CertCheck::Pinned,
+            ApiCheck::Ok,
+        ));
         let path = steps.iter().find(|s| s.id == "path").unwrap();
         assert_eq!(path.status, StepStatus::Warn);
         assert!(path.detail.as_deref().unwrap().contains("through fra"));
@@ -1603,18 +1843,45 @@ mod tests {
     #[test]
     fn the_test_stops_at_the_first_failure() {
         let stopped = parse_status(r#"{"BackendState":"Stopped"}"#);
-        assert_eq!(ids(&build_reachability(&input(&stopped, Some("100.64.0.1"), CertCheck::Pinned, ApiCheck::Ok))), vec![("tailscale", StepStatus::Fail)]);
+        assert_eq!(
+            ids(&build_reachability(&input(
+                &stopped,
+                Some("100.64.0.1"),
+                CertCheck::Pinned,
+                ApiCheck::Ok
+            ))),
+            vec![("tailscale", StepStatus::Fail)]
+        );
 
         let status = status();
         assert_eq!(
-            ids(&build_reachability(&input(&status, Some("100.64.0.77"), CertCheck::Pinned, ApiCheck::Ok))),
+            ids(&build_reachability(&input(
+                &status,
+                Some("100.64.0.77"),
+                CertCheck::Pinned,
+                ApiCheck::Ok
+            ))),
             vec![("tailscale", StepStatus::Pass), ("peer", StepStatus::Fail)]
         );
         assert_eq!(
-            ids(&build_reachability(&input(&status, Some("100.64.0.4"), CertCheck::Pinned, ApiCheck::Ok))),
-            vec![("tailscale", StepStatus::Pass), ("peer", StepStatus::Pass), ("online", StepStatus::Fail)]
+            ids(&build_reachability(&input(
+                &status,
+                Some("100.64.0.4"),
+                CertCheck::Pinned,
+                ApiCheck::Ok
+            ))),
+            vec![
+                ("tailscale", StepStatus::Pass),
+                ("peer", StepStatus::Pass),
+                ("online", StepStatus::Fail)
+            ]
         );
-        let silent = build_reachability(&input(&status, Some("100.64.0.1"), CertCheck::NoAnswer, ApiCheck::NotTried));
+        let silent = build_reachability(&input(
+            &status,
+            Some("100.64.0.1"),
+            CertCheck::NoAnswer,
+            ApiCheck::NotTried,
+        ));
         assert_eq!(silent.last().unwrap().id, "api");
         assert_eq!(silent.last().unwrap().status, StepStatus::Fail);
     }
@@ -1622,7 +1889,12 @@ mod tests {
     #[test]
     fn a_different_certificate_or_a_refused_node_fails_with_a_clear_message() {
         let status = status();
-        let different = build_reachability(&input(&status, Some("100.64.0.1"), CertCheck::Different, ApiCheck::Ok));
+        let different = build_reachability(&input(
+            &status,
+            Some("100.64.0.1"),
+            CertCheck::Different,
+            ApiCheck::Ok,
+        ));
         assert_eq!(different.last().unwrap().id, "identity");
         assert_eq!(different.last().unwrap().status, StepStatus::Fail);
 
@@ -1635,13 +1907,22 @@ mod tests {
         let access = refused.last().unwrap();
         assert_eq!(access.id, "access");
         assert_eq!(access.status, StepStatus::Fail);
-        assert!(access.detail.as_deref().unwrap().contains("different Tailscale node"));
+        assert!(access
+            .detail
+            .as_deref()
+            .unwrap()
+            .contains("different Tailscale node"));
     }
 
     #[test]
     fn an_unpaired_host_warns_about_identity_and_skips_the_signed_in_request() {
         let status = status();
-        let steps = build_reachability(&input(&status, Some("100.64.0.1"), CertCheck::Unpaired, ApiCheck::NotTried));
+        let steps = build_reachability(&input(
+            &status,
+            Some("100.64.0.1"),
+            CertCheck::Unpaired,
+            ApiCheck::NotTried,
+        ));
         assert_eq!(steps.last().unwrap().id, "identity");
         assert_eq!(steps.last().unwrap().status, StepStatus::Warn);
     }
@@ -1650,13 +1931,23 @@ mod tests {
 
     #[test]
     fn settings_persist_and_reject_port_zero() {
-        let path = std::env::temp_dir().join(format!("hyperharbor-tailnet-{}.json", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("hyperharbor-tailnet-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let store = TailnetSettingsStore::new(Some(path.clone()));
         assert_eq!(store.get().local_api_port, DEFAULT_LOCAL_API_PORT);
 
-        store.set(TailnetSettings { local_api_port: 5555 }).unwrap();
-        assert_eq!(TailnetSettingsStore::new(Some(path.clone())).get().local_api_port, 5555);
+        store
+            .set(TailnetSettings {
+                local_api_port: 5555,
+            })
+            .unwrap();
+        assert_eq!(
+            TailnetSettingsStore::new(Some(path.clone()))
+                .get()
+                .local_api_port,
+            5555
+        );
         assert!(store.set(TailnetSettings { local_api_port: 0 }).is_err());
         let _ = std::fs::remove_file(&path);
     }
