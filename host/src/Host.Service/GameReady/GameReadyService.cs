@@ -1,3 +1,5 @@
+using HyperHarbor.Host.Core.Tailscale;
+using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Host.Core.GameReady;
 using HyperHarbor.Host.Core.GameReady.ConsoleSignIn;
 using HyperHarbor.Host.Core.GameReady.Ambient;
@@ -58,6 +60,9 @@ public sealed class GameReadyService
     private readonly TimeProvider _time;
     private readonly ILogger<GameReadyService> _logger;
     private readonly bool _elevated;
+    private readonly ITailscaleReader? _tailscale;
+    private readonly TailscaleSettingsStore? _tailscaleSettings;
+    private HostTailscale? _tailscaleInfo;
     private readonly TimeSpan _resumeSettle;
     private readonly TimeSpan _beforeSleep;
     private readonly SemaphoreSlim _readLock = new(1, 1);
@@ -87,8 +92,10 @@ public sealed class GameReadyService
         IIdleLoadReader idleLoad,
         AmbientService ambient,
         TimeProvider time,
-        ILogger<GameReadyService> logger)
-        : this(environment, devices, power, networkFixes, sleep, consoleSignIn, powerMode, idleLoad, ambient, time, logger, Environment.IsPrivilegedProcess, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5))
+        ILogger<GameReadyService> logger,
+        ITailscaleReader? tailscale = null,
+        TailscaleSettingsStore? tailscaleSettings = null)
+        : this(environment, devices, power, networkFixes, sleep, consoleSignIn, powerMode, idleLoad, ambient, time, logger, Environment.IsPrivilegedProcess, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), tailscale, tailscaleSettings)
     {
     }
 
@@ -106,8 +113,12 @@ public sealed class GameReadyService
         ILogger<GameReadyService> logger,
         bool elevated,
         TimeSpan beforeSleep,
-        TimeSpan resumeSettle)
+        TimeSpan resumeSettle,
+        ITailscaleReader? tailscale = null,
+        TailscaleSettingsStore? tailscaleSettings = null)
     {
+        _tailscale = tailscale;
+        _tailscaleSettings = tailscaleSettings;
         _beforeSleep = beforeSleep;
         _environment = environment;
         _devices = devices;
@@ -131,7 +142,7 @@ public sealed class GameReadyService
     {
         lock (_gate)
         {
-            return new GameReadyStatus(_readAt, _busy, _error, _cards, _wakeTest, _consoleSignInInfo, _powerModeInfo, _ambientInfo);
+            return new GameReadyStatus(_readAt, _busy, _error, _cards, _wakeTest, _consoleSignInInfo, _powerModeInfo, _ambientInfo, _tailscaleInfo);
         }
     }
 
@@ -326,6 +337,7 @@ public sealed class GameReadyService
         {
             report = _ambientReport;
         }
+        var tailscale = _tailscale is null ? null : await _tailscale.ReadAsync(cancellationToken, refresh: true);
         var cards = new List<GameReadyCard>
         {
             GameReadyCards.WakeOnLan(WakeReadinessEvaluator.Evaluate(environment)),
@@ -339,6 +351,10 @@ public sealed class GameReadyService
         };
         cards.AddRange(GameReadyCards.ComingSoon());
         cards.Add(GameReadyCards.GameAware());
+        if (tailscale is not null)
+        {
+            cards.Add(GameReadyCards.Tailscale(tailscale));
+        }
 
         lock (_gate)
         {
@@ -352,6 +368,7 @@ public sealed class GameReadyService
             _powerModeInfo = powerMode.Info;
             _cec = cec;
             _ambientInfo = BuildAmbientInfo(ambient, report);
+            _tailscaleInfo = tailscale;
             _readAt = _time.GetUtcNow();
         }
 
@@ -508,6 +525,27 @@ public sealed class GameReadyService
         {
             SetBusy(null);
         }
+    }
+
+    /// <summary>Saves where the host finds its Tailscale client and reads the card again. A value that is not valid is reported on the page.</summary>
+    public async Task SaveTailscaleSettingsAsync(int localApiPort, string? controlUrl, CancellationToken cancellationToken)
+    {
+        if (_tailscaleSettings is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _tailscaleSettings.Save(new TailscaleSettings { LocalApiPort = localApiPort, ControlUrl = controlUrl });
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(ex.Message.Split(Environment.NewLine)[0]);
+            return;
+        }
+
+        await RefreshAsync(force: true, cancellationToken);
     }
 
     /// <summary>

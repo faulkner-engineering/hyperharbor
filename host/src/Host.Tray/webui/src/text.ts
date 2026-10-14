@@ -1,6 +1,7 @@
 // Words the window shows for each state. Pure functions, so tests check them directly.
 
 import type {
+  HostTailscale,
   RestoreWizardStatus,
   ControllerWakeState,
   GameReadyCard,
@@ -367,6 +368,27 @@ export function restoreStatus(wizard: RestoreWizardStatus | null): { status: str
       return { status: wizard.error ? "The last restore failed" : "Choose what to restore", tone: wizard.error ? "warn" : "ok" };
     default:
       return { status: wizard.error ? "The backups could not be opened" : "Enter where your backups are", tone: wizard.error ? "warn" : "neutral" };
+  }
+}
+
+/** The Tailscale card's status line on the Overview. Tailscale is optional, so "not installed" is neutral. */
+export function tailscaleStatus(info: HostTailscale | null | undefined): { status: string; tone: CardTone } {
+  if (!info) return { status: "Unknown until the service runs.", tone: "neutral" };
+  switch (info.state) {
+    case "notInstalled":
+      return { status: "Not installed (optional)", tone: "neutral" };
+    case "unreachable":
+      return { status: "Installed, not answering", tone: "warn" };
+    case "needsLogin":
+      return { status: "Sign in to Tailscale", tone: "warn" };
+    case "stopped":
+      return { status: "Turned off", tone: "warn" };
+    case "running":
+      return info.tagged
+        ? { status: `On the tailnet as ${info.dnsName ?? info.ipv4 ?? "this PC"}`, tone: "ok" }
+        : { status: "On the tailnet, not tagged", tone: "warn" };
+    default:
+      return { status: "Starting", tone: "busy" };
   }
 }
 

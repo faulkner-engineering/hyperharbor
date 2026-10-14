@@ -29,3 +29,15 @@ public static class HostTailscaleBuilder
             new TailscaleConfig(settings.LocalApiPort, settings.ControlUrl));
     }
 }
+
+/// <summary>Reads the local Tailscale client and the host settings together, for the cards and the API.</summary>
+public interface ITailscaleReader
+{
+    Task<HostTailscale> ReadAsync(CancellationToken cancellationToken, bool refresh = false);
+}
+
+public sealed class TailscaleReader(TailscaleStatusProvider provider, TailscaleSettingsStore settings) : ITailscaleReader
+{
+    public async Task<HostTailscale> ReadAsync(CancellationToken cancellationToken, bool refresh = false) =>
+        HostTailscaleBuilder.Build(await provider.GetStatusAsync(cancellationToken, refresh), settings.Load());
+}

@@ -57,6 +57,9 @@ public interface ITrayActions
     void GameReadyPowerModeApply(string mode, int displayMinutes, bool scheduleEnabled, string sleepTime, string wakeTime, double watts, double ratePerKwh);
 
     /// <summary>Saves the Ambient screen choices (idle minutes, widgets, soft lock and its chord).</summary>
+    /// <summary>Game ready: where the host finds its Tailscale client (local API port, optional control server URL).</summary>
+    void GameReadyTailscaleSettings(int localApiPort, string? controlUrl);
+
     void GameReadyAmbientApply(bool enabled, int idleMinutes, bool showHostStatus, bool showRunningVms, bool showDevices, bool softLock, string chord);
 
     /// <summary>Puts this PC to sleep (after the page's confirmation).</summary>
@@ -173,6 +176,9 @@ public static class TrayCommands
                     && Flag(message, "softLock") is { } softLock
                     && Text(message, "chord") is { Length: > 0 and <= 40 } chord:
                 actions.GameReadyAmbientApply(ambientEnabled, ambientMinutes, showHostStatus, showRunningVms, showDevices, softLock, chord);
+                return true;
+            case "gameReadyTailscaleSettings" when Number(message, "localApiPort") is { } tailscalePort:
+                actions.GameReadyTailscaleSettings(tailscalePort, Text(message, "controlUrl") is { Length: > 0 and <= 300 } controlUrl ? controlUrl : null);
                 return true;
             case "gameReadySleepNow":
                 actions.GameReadySleepNow();

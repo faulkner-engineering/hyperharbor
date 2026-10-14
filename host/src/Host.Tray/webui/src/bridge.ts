@@ -206,6 +206,18 @@ export interface AmbientData {
   gaming?: string | null;
 }
 
+/** The host's Tailscale state (HostTailscale in docs/api.yaml). */
+export interface HostTailscale {
+  state: "notInstalled" | "unreachable" | "needsLogin" | "stopped" | "running" | "other";
+  error?: string | null;
+  ipv4?: string | null;
+  dnsName?: string | null;
+  tagged: boolean;
+  tag: string;
+  upCommand: string;
+  config: { localApiPort: number; controlUrl?: string | null };
+}
+
 export interface GameReadyStatus {
   readAt?: string | null;
   /** "reading", "fix:<card id>", or null when idle. */
@@ -216,6 +228,7 @@ export interface GameReadyStatus {
   consoleSignIn?: ConsoleSignInInfo | null;
   powerMode?: PowerModeInfo | null;
   ambient?: AmbientInfo | null;
+  tailscale?: HostTailscale | null;
 }
 
 export interface TrayViewDevice {
@@ -406,6 +419,7 @@ export type PageMessage =
       chord: string;
     }
   | { type: "gameReadySleepNow" }
+  | { type: "gameReadyTailscaleSettings"; localApiPort: number; controlUrl?: string }
   | { type: "setChannel"; channel: string }
   | { type: "open"; target: "logs" | "audit" }
   | { type: "openUrl"; url: string }

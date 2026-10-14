@@ -25,6 +25,7 @@
     powerMode: "power",
     ambientScreen: "clock",
     gameAwareMode: "gamepad",
+    tailscale: "devices",
   };
 
   // Chords that are hard to press by accident. The stored value is the buttons joined by "+".
@@ -179,6 +180,40 @@
     );
   }
 
+  // The Tailscale card: where the client is found, and a copy button for the tag command.
+  let tsPort = $state("41112");
+  let tsUrl = $state("");
+  let tsSeeded = $state(false);
+  let tsCopied = $state(false);
+  const tailscale = $derived(game?.tailscale ?? null);
+  const tsBusy = $derived(tray.requested.includes("gameReadyTailscale"));
+
+  $effect(() => {
+    if (tailscale && !tsSeeded) {
+      tsPort = String(tailscale.config.localApiPort);
+      tsUrl = tailscale.config.controlUrl ?? "";
+      tsSeeded = true;
+    }
+  });
+
+  function saveTailscale() {
+    tray.send(
+      { type: "gameReadyTailscaleSettings", localApiPort: Number(tsPort), controlUrl: tsUrl.trim() === "" ? undefined : tsUrl.trim() },
+      "gameReadyTailscale",
+    );
+  }
+
+  async function copyTailscaleCommand() {
+    if (!tailscale) return;
+    try {
+      await navigator.clipboard.writeText(tailscale.upCommand);
+      tsCopied = true;
+      setTimeout(() => (tsCopied = false), 2500);
+    } catch {
+      tsCopied = false;
+    }
+  }
+
   function sleepNow() {
     confirmingSleep = false;
     tray.send({ type: "gameReadySleepNow" }, "gameReadySleepNow");
@@ -249,6 +284,22 @@
             </label>
           {/if}
           <button type="button" class="btn" onclick={() => (tray.page = "gameAware")}>Open Game-aware settings</button>
+        {/if}
+        {#if card.id === "tailscale" && tailscale}
+          <p>{card.summary}</p>
+          {#if tailscale.state === "running" || tailscale.state === "stopped" || tailscale.state === "needsLogin"}
+            <p class="small"><code>{tailscale.upCommand}</code></p>
+          {/if}
+          <div class="signin">
+            <label>
+              Local API port
+              <input type="number" min="1" max="65535" bind:value={tsPort} disabled={tsBusy || !view.connected} />
+            </label>
+            <label>
+              Control server
+              <input type="url" placeholder="Headscale URL, optional" bind:value={tsUrl} disabled={tsBusy || !view.connected} />
+            </label>
+          </div>
         {/if}
         {#if card.state === "comingSoon"}
           <p>{card.summary}</p>
@@ -464,6 +515,12 @@
                 <button type="button" class="btn" disabled={signInBusy || !!card.fixBlockedReason} onclick={() => (confirmingDisable = true)}>
                   Disable…
                 </button>
+              {/if}
+            {/if}
+            {#if card.id === "tailscale" && tailscale}
+              <button type="button" class="btn" disabled={tsBusy || !view.connected} onclick={saveTailscale}>Save settings</button>
+              {#if tailscale.state !== "notInstalled"}
+                <button type="button" class="btn primary" onclick={copyTailscaleCommand}>{tsCopied ? "Copied" : "Copy tag command"}</button>
               {/if}
             {/if}
             {#if card.id === "ambientScreen" && ambient}

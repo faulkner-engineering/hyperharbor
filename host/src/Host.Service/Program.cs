@@ -489,6 +489,7 @@ builder.Services.AddSingleton(services => new TailscaleStatusProvider(
     ],
     services.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<TailscaleNodeVerifier>();
+builder.Services.AddSingleton<ITailscaleReader, TailscaleReader>();
 builder.Services.AddSingleton<IWakeRelayNetwork, SystemWakeRelayNetwork>();
 builder.Services.AddSingleton<WakeRelayService>();
 

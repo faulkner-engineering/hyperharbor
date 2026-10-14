@@ -855,6 +855,9 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     public void GameReadyPowerModeApply(string mode, int displayMinutes, bool scheduleEnabled, string sleepTime, string wakeTime, double watts, double ratePerKwh) =>
         _ = _pipe.SendAsync(new GameReadyPowerModeApplyMessage(mode, displayMinutes, scheduleEnabled, sleepTime, wakeTime, watts, ratePerKwh));
 
+    public void GameReadyTailscaleSettings(int localApiPort, string? controlUrl) =>
+        _ = _pipe.SendAsync(new GameReadyTailscaleSettingsMessage(localApiPort, controlUrl));
+
     public void GameReadyAmbientApply(bool enabled, int idleMinutes, bool showHostStatus, bool showRunningVms, bool showDevices, bool softLock, string chord) =>
         _ = _pipe.SendAsync(new GameReadyAmbientApplyMessage(enabled, idleMinutes, showHostStatus, showRunningVms, showDevices, softLock, chord));
 

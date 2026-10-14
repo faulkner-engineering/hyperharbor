@@ -53,6 +53,8 @@ public sealed partial class TrayWindowTests
         public void GameReadyAmbientApply(bool enabled, int idleMinutes, bool showHostStatus, bool showRunningVms, bool showDevices, bool softLock, string chord) =>
             Calls.Add($"ambient:{enabled}:{idleMinutes}:{showHostStatus}:{showRunningVms}:{showDevices}:{softLock}:{chord}");
 
+        public void GameReadyTailscaleSettings(int localApiPort, string? controlUrl) => Calls.Add($"tailscale:{localApiPort}:{controlUrl}");
+
         public void GameReadySleepNow() => Calls.Add("sleepNow");
 
         public void GameAwareApply(HyperHarbor.Shared.Contracts.Hosts.GameAwareSettings settings) => Calls.Add($"gameAware:{settings.Enabled}:{settings.Allowlist.Count}");
@@ -104,6 +106,8 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"gameReadyConsoleSignInEnable","userName":"Console","launcher":"steamBigPicture"}""", "signIn:Console:steamBigPicture")]
     [InlineData("""{"type":"gameReadyConsoleSignInDisable","deleteUser":true}""", "signInOff:True")]
     [InlineData("""{"type":"gameReadyPowerModeApply","mode":"consoleIdle","displayMinutes":10,"scheduleEnabled":true,"sleepTime":"01:00","wakeTime":"17:00","watts":60,"ratePerKwh":0.15}""", "power:consoleIdle:10:True:01:00:17:00:60:0.15")]
+    [InlineData("""{"type":"gameReadyTailscaleSettings","localApiPort":5555,"controlUrl":"https://hs.example.com"}""", "tailscale:5555:https://hs.example.com")]
+    [InlineData("""{"type":"gameReadyTailscaleSettings","localApiPort":41112}""", "tailscale:41112:")]
     [InlineData("""{"type":"gameReadyAmbientApply","enabled":true,"idleMinutes":5,"showHostStatus":true,"showRunningVms":true,"showDevices":false,"softLock":true,"chord":"lb+rb+start"}""", "ambient:True:5:True:True:False:True:lb+rb+start")]
     [InlineData("""{"type":"gameReadySleepNow"}""", "sleepNow")]
     [InlineData("""{"type":"gameAwareApply","settings":{"enabled":true,"defaultAction":"pause","allowlist":["a","b"],"ignoreList":[],"vmPolicies":[]}}""", "gameAware:True:2")]

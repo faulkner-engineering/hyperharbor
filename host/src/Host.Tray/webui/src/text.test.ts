@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { RestoreWizardStatus, GameAwareInfo, GameAwareSettings, HostLeanRunSummary, HostLeanStatus, HostUpdateStatus, TrayBackupItem, TrayBackupStatus } from "./bridge";
-import { restoreStatus, snapshotLabel, addPrograms, backupCardText, effectiveAction, gameAwareStatus, normalizeProgram, withVmAction, countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
+import type { HostTailscale, RestoreWizardStatus, GameAwareInfo, GameAwareSettings, HostLeanRunSummary, HostLeanStatus, HostUpdateStatus, TrayBackupItem, TrayBackupStatus } from "./bridge";
+import { tailscaleStatus, restoreStatus, snapshotLabel, addPrograms, backupCardText, effectiveAction, gameAwareStatus, normalizeProgram, withVmAction, countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
 
 const update = (overrides: Partial<HostUpdateStatus> = {}): HostUpdateStatus => ({
   supported: true,
@@ -266,5 +266,34 @@ describe("restore page text", () => {
     expect(restoreStatus(wizard({ phase: "restoring" })).tone).toBe("busy");
     expect(restoreStatus(wizard({ phase: "ready" }))).toEqual({ status: "Choose what to restore", tone: "ok" });
     expect(restoreStatus(wizard({ phase: "ready", error: "x" })).tone).toBe("warn");
+  });
+});
+
+describe("tailscale card text", () => {
+  const info = (overrides: Partial<HostTailscale> = {}): HostTailscale => ({
+    state: "running",
+    ipv4: "100.64.0.1",
+    dnsName: "pc.tail1.ts.net",
+    tagged: true,
+    tag: "tag:hyperharbor-host",
+    upCommand: "tailscale up --advertise-tags=tag:hyperharbor-host",
+    config: { localApiPort: 41112 },
+    ...overrides,
+  });
+
+  it("treats a missing Tailscale as optional, not as a failure", () => {
+    expect(tailscaleStatus(info({ state: "notInstalled" }))).toEqual({ status: "Not installed (optional)", tone: "neutral" });
+    expect(tailscaleStatus(null).tone).toBe("neutral");
+  });
+
+  it("asks for attention when it is installed but not usable", () => {
+    for (const state of ["unreachable", "needsLogin", "stopped"] as const) {
+      expect(tailscaleStatus(info({ state })).tone).toBe("warn");
+    }
+  });
+
+  it("names the host on the tailnet, and notes a missing tag", () => {
+    expect(tailscaleStatus(info())).toEqual({ status: "On the tailnet as pc.tail1.ts.net", tone: "ok" });
+    expect(tailscaleStatus(info({ tagged: false }))).toEqual({ status: "On the tailnet, not tagged", tone: "warn" });
   });
 });

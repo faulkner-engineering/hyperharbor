@@ -15,6 +15,7 @@ public static class GameReadyCardIds
     public const string SteamDesktopLayout = "steamDesktopLayout";
     public const string LeanHost = "leanHost";
     public const string GameAwareMode = "gameAwareMode";
+    public const string Tailscale = "tailscale";
 
     /// <summary>The cards whose Fix action exists.</summary>
     public static IReadOnlySet<string> Fixable { get; } = new HashSet<string>(StringComparer.Ordinal)
@@ -190,7 +191,8 @@ public sealed record GameReadyStatus(
     GameReadyWakeTest WakeTest,
     ConsoleSignInInfo? ConsoleSignIn = null,
     PowerModeInfo? PowerMode = null,
-    AmbientInfo? Ambient = null);
+    AmbientInfo? Ambient = null,
+    Hosts.HostTailscale? Tailscale = null);
 
 /// <summary>The Game ready status, sent on connect and after every change.</summary>
 public sealed record GameReadyStatusMessage(GameReadyStatus Status) : TrayMessage;
@@ -222,6 +224,9 @@ public sealed record GameReadyPowerModeApplyMessage(
     string WakeTime,
     double Watts,
     double RatePerKwh) : TrayMessage;
+
+/// <summary>Saves where the host finds its Tailscale client: the local API port, and a Headscale control server for the suggested command. The tray pipe admits only administrators, so no elevation token is needed.</summary>
+public sealed record GameReadyTailscaleSettingsMessage(int LocalApiPort, string? ControlUrl) : TrayMessage;
 
 /// <summary>Puts the host to sleep after a short delay. Asked for by a person at the host, so nothing gates it.</summary>
 public sealed record GameReadySleepNowMessage : TrayMessage;

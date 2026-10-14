@@ -22,6 +22,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   Tailscale node, pair it again.
 - `POST /wake/relay`: a paired host on a sleeping host's LAN sends the magic packet for a client that is away. It
   only sends from, and to the broadcast address of, its own networks.
+- A Tailscale card in the host window (Overview and Game ready): installed, signed in, connected, the host's
+  Tailscale address and MagicDNS name, and whether it has the `tag:hyperharbor-host` tag, with a Copy tag command button
+  and fields for the local API port and a Headscale control server URL. Tailscale stays optional: a PC without it shows
+  the card as unavailable.
 - Backup foundations (work in progress toward backup and restore with Kopia): backup targets (local folder, S3,
   Azure Blob) and per-VM policies are stored in `backup-config.json`; repository passphrases and cloud keys are kept
   only in a DPAPI-protected vault. A repository is created only after you confirm that you saved its recovery key by

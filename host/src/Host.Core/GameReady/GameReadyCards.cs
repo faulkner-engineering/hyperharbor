@@ -3,6 +3,8 @@ using HyperHarbor.Host.Core.GameReady.Ambient;
 using HyperHarbor.Host.Core.GameReady.ConsoleSignIn;
 using HyperHarbor.Host.Core.GameReady.PowerMode;
 using HyperHarbor.Host.Core.Wake;
+using HyperHarbor.Host.Core.Tailscale;
+using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Ipc;
 using HyperHarbor.Shared.Contracts.Wake;
 
@@ -434,6 +436,69 @@ public static class GameReadyCards
     public static GameReadyCard GameAware() =>
         new(GameReadyCardIds.GameAwareMode, "Game-aware mode", GameReadyStates.Ready,
             "Pause or save running VMs while a game is in the foreground, and resume them afterwards.", NoChecks, NoControllers, NoHints, false, null, false);
+
+    /// <summary>
+    /// The Tailscale card. Tailscale is optional, so a PC without it is unavailable rather than needing attention. The tag only
+    /// decides which hosts a client tries first on the tailnet; without it the host is still found, a little later.
+    /// </summary>
+    public static GameReadyCard Tailscale(HostTailscale info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+
+        var installed = info.State != TailscaleHostState.NotInstalled;
+        var signedIn = info.State is TailscaleHostState.Running or TailscaleHostState.Stopped;
+        var running = info.State == TailscaleHostState.Running;
+        var checks = new List<GameReadyCheck>
+        {
+            new("installed", "Tailscale is installed", installed ? GameReadyCheckStatuses.Pass : GameReadyCheckStatuses.Fail,
+                installed ? null : "Install Tailscale from tailscale.com/download, then check again.", false),
+        };
+
+        if (info.State == TailscaleHostState.Unreachable)
+        {
+            checks.Add(new GameReadyCheck("answering", "Tailscale answers", GameReadyCheckStatuses.Warn,
+                info.Error ?? "Tailscale did not answer. Check that its service is running, or set the local API port below.", false));
+        }
+        else if (installed)
+        {
+            checks.Add(new GameReadyCheck("signedIn", "Signed in", signedIn ? GameReadyCheckStatuses.Pass : GameReadyCheckStatuses.Fail,
+                signedIn ? null : "Sign in from the Tailscale icon in the notification area.", false));
+            checks.Add(new GameReadyCheck("connected", "Connected to the tailnet", running ? GameReadyCheckStatuses.Pass : GameReadyCheckStatuses.Fail,
+                running ? null : "Tailscale is turned off. Turn it on from its notification-area icon.", false));
+        }
+
+        if (running)
+        {
+            checks.Add(new GameReadyCheck("address", "Address", GameReadyCheckStatuses.Pass,
+                string.Join(", ", new[] { info.Ipv4, info.DnsName }.Where(part => !string.IsNullOrEmpty(part))), false));
+            checks.Add(new GameReadyCheck("tag", $"Tagged {info.Tag}", info.Tagged ? GameReadyCheckStatuses.Pass : GameReadyCheckStatuses.Warn,
+                info.Tagged ? null : "Not tagged. Clients still find this PC, but look at tagged PCs first.", false));
+        }
+
+        var hints = new List<string>();
+        if (running && !info.Tagged)
+        {
+            hints.Add($"To tag this PC, run the command below in a terminal. Your tailnet policy must list {info.Tag} under tagOwners first. If Tailscale asks you to repeat your other options, add them to the command.");
+        }
+
+        if (running)
+        {
+            hints.Add("Remote Desktop to your VMs still goes through this host, so the VMs need no Tailscale. To check the connection, open this PC in a HyperHarbor client and choose Host > Tailscale > Test reachability.");
+        }
+
+        var (state, summary) = info.State switch
+        {
+            TailscaleHostState.NotInstalled => (GameReadyStates.Unavailable, "Tailscale is not installed. It is optional: it lets clients reach this PC away from home."),
+            TailscaleHostState.Running when info.Tagged => (GameReadyStates.Ready, $"Ready: reachable at {info.DnsName ?? info.Ipv4} on your tailnet."),
+            TailscaleHostState.Running => (GameReadyStates.Attention, "Connected, but this PC does not have the HyperHarbor tag."),
+            TailscaleHostState.Unreachable => (GameReadyStates.Attention, "Tailscale is installed but did not answer."),
+            TailscaleHostState.NeedsLogin => (GameReadyStates.Attention, "Tailscale is installed. Sign in to use it."),
+            TailscaleHostState.Stopped => (GameReadyStates.Attention, "Tailscale is turned off."),
+            _ => (GameReadyStates.Attention, "Tailscale is starting or waiting for approval."),
+        };
+
+        return new GameReadyCard(GameReadyCardIds.Tailscale, "Tailscale", state, summary, checks, NoControllers, hints, false, null, false);
+    }
 
     private static GameReadyCard Soon(string id, string title, string summary) =>
         new(id, title, GameReadyStates.ComingSoon, summary, NoChecks, NoControllers, NoHints, false, null, false);

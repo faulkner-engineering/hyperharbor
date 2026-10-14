@@ -363,6 +363,10 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                         ambient.Chord),
                     CancellationToken.None));
                 break;
+            case GameReadyTailscaleSettingsMessage tailscale:
+                AuditTrayAction("trayTailscale", null, null, null, $"localApiPort={tailscale.LocalApiPort}, controlUrl={Truncate(tailscale.ControlUrl)}");
+                _ = RunGameReadyAsync(gameReady => gameReady.SaveTailscaleSettingsAsync(tailscale.LocalApiPort, tailscale.ControlUrl, CancellationToken.None));
+                break;
             case AmbientReportMessage report:
                 _services.GetService<GameReady.GameReadyService>()?.ReportAmbient(report);
                 break;

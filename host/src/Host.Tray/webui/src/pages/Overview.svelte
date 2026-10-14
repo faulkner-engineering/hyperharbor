@@ -3,7 +3,7 @@
   import ConfirmDialog from "../components/ConfirmDialog.svelte";
   import { tray } from "../store.svelte";
   import type { TrayViewState } from "../bridge";
-  import { backupCardText } from "../text";
+  import { backupCardText, tailscaleStatus } from "../text";
 
   interface Props {
     view: TrayViewState;
@@ -16,6 +16,7 @@
   const consoleBusy = $derived(tray.isBusy("console"));
   const searchBusy = $derived(tray.isBusy("packageSearch"));
   const backups = $derived(backupCardText(view.backup));
+  const tailscale = $derived(tailscaleStatus(view.gameReady?.tailscale));
 
   function start(which: "console" | "packageSearch") {
     confirming = null;
@@ -84,6 +85,18 @@
       {/snippet}
     </Card>
   {/if}
+
+  <Card icon="devices" title="Tailscale" status={tailscale.status} tone={tailscale.tone}>
+    {#if view.gameReady?.tailscale?.state === "running"}
+      Clients away from home can reach this PC at {view.gameReady.tailscale.ipv4 ?? "its Tailscale address"}. Remote Desktop to VMs
+      still goes through this host.
+    {:else}
+      Optional: with Tailscale installed, clients can reach this PC away from home without opening a port.
+    {/if}
+    {#snippet action()}
+      <button type="button" class="btn" onclick={() => (tray.page = "gameReady")}>Details</button>
+    {/snippet}
+  </Card>
 
   <Card icon="storage" title="Backups" status={backups.status} tone={backups.tone}>
     {#each backups.lines as line, index (index)}<span class="line">{line}</span>{/each}
