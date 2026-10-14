@@ -71,7 +71,8 @@ public sealed record RestoreVmRequest(
     string DestinationRoot,
     string? Name = null,
     bool Start = false,
-    ProvisionVmRequest? Administrator = null);
+    ProvisionVmRequest? Administrator = null,
+    bool Isolated = false);
 
 public sealed record RestoreVmResult(
     RestoreOutcome Outcome,
@@ -79,7 +80,8 @@ public sealed record RestoreVmResult(
     string VmName,
     IReadOnlyList<string> Warnings,
     bool NeedsDriverResync,
-    bool BitLockerRecoveryMayBeNeeded);
+    bool BitLockerRecoveryMayBeNeeded,
+    bool GuestReported = false);
 
 /// <summary>
 /// Restores one VM from a snapshot: files, then the VM defined from the manifest on a new ID with a fresh virtual TPM key
@@ -178,7 +180,10 @@ public sealed class RestoreCoordinator(
 
             progress("Mapping the network", 72);
             var switches = await host.ListSwitchesAsync(cancellationToken).ConfigureAwait(false);
-            var network = SwitchMapper.Map(manifest.Network, switches);
+            // An isolated restore (the restore test) must never reach the network, so no adapter is connected.
+            var network = request.Isolated
+                ? new SwitchMapper.Mapping(manifest.Network.Select(_ => new ImportAdapter(null)).ToList(), [])
+                : SwitchMapper.Map(manifest.Network, switches);
             warnings.AddRange(network.Warnings);
 
             progress("Defining the virtual machine", 75);
@@ -234,6 +239,7 @@ public sealed class RestoreCoordinator(
             vmFolder = null;
 
             var outcome = RestoreOutcome.Succeeded;
+            var guestReported = false;
             if (request.Start)
             {
                 progress("Starting the virtual machine", 93);
@@ -252,6 +258,7 @@ public sealed class RestoreCoordinator(
 
                 if (started && await heartbeat.WaitAsync(vmId, HeartbeatTimeout, cancellationToken).ConfigureAwait(false))
                 {
+                    guestReported = true;
                     if (request.Administrator is { } administrator && manifest.Guest.Provisioned)
                     {
                         progress("Setting up your account", 98);
@@ -278,7 +285,7 @@ public sealed class RestoreCoordinator(
                 outcome = RestoreOutcome.SucceededWithWarnings;
             }
 
-            return new RestoreVmResult(outcome, vmId, name, warnings, needsResync, bitLocker);
+            return new RestoreVmResult(outcome, vmId, name, warnings, needsResync, bitLocker, guestReported);
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not RestoreException)
         {
