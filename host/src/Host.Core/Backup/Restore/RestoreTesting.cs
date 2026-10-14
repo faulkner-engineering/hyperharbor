@@ -199,6 +199,10 @@ public sealed class RestoreTestService(
     ILogger<RestoreTestService> logger) : IDisposable
 {
     public const string NamePrefix = "HH-RestoreTest-";
+    public const int RemoveAttempts = 10;
+
+    /// <summary>Pause between attempts to remove the throwaway VM.</summary>
+    public TimeSpan RemoveRetryDelay { get; init; } = TimeSpan.FromSeconds(3);
 
     private readonly object _gate = new();
     private readonly CancellationTokenSource _stopping = new();
@@ -393,9 +397,9 @@ public sealed class RestoreTestService(
         }
         finally
         {
-            if (result is not null && !await RemoveAsync(result, root).ConfigureAwait(false))
+            if (result is not null && await RemoveAsync(result, root).ConfigureAwait(false) is { } problem)
             {
-                warnings.Add($"The test VM \"{result.VmName}\" could not be removed. Delete it and its folder by hand.");
+                warnings.Add($"The test VM \"{result.VmName}\" could not be removed ({problem}). Delete it and its folder by hand.");
             }
         }
 
@@ -405,15 +409,16 @@ public sealed class RestoreTestService(
     }
 
     /// <summary>Turns the throwaway VM off, removes it, and deletes its files. Only a VM this test created, by its name.</summary>
-    private async Task<bool> RemoveAsync(RestoreVmResult result, string root)
+    /// <returns>Null when everything was removed, else what went wrong.</returns>
+    private async Task<string?> RemoveAsync(RestoreVmResult result, string root)
     {
         if (!result.VmName.StartsWith(NamePrefix, StringComparison.Ordinal))
         {
             logger.LogError("Refusing to remove {Name}: it is not a restore test VM.", result.VmName);
-            return false;
+            return "the name is not a restore test name";
         }
 
-        var clean = true;
+        string? problem = null;
         try
         {
             await power.InvokeAsync(result.VmId, VmAction.TurnOff, CancellationToken.None).ConfigureAwait(false);
@@ -424,17 +429,28 @@ public sealed class RestoreTestService(
             logger.LogDebug(ex, "Turning off the test VM {Name} was not needed.", result.VmName);
         }
 
-        try
+        // Turning off can return before Hyper-V reports the VM as off, and a VM that is not off cannot be removed.
+        for (var attempt = 1; ; attempt++)
         {
-            await storage.DeleteVmAsync(result.VmId, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogError(ex, "The test VM {Name} could not be removed.", result.VmName);
-            clean = false;
+            try
+            {
+                await storage.DeleteVmAsync(result.VmId, CancellationToken.None).ConfigureAwait(false);
+                break;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                if (attempt >= RemoveAttempts)
+                {
+                    logger.LogError(ex, "The test VM {Name} could not be removed.", result.VmName);
+                    problem = ex.Message;
+                    break;
+                }
+
+                await Task.Delay(RemoveRetryDelay, time, CancellationToken.None).ConfigureAwait(false);
+            }
         }
 
-        if (clean)
+        if (problem is null)
         {
             try
             {
@@ -447,11 +463,11 @@ public sealed class RestoreTestService(
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogError(ex, "The files of the test VM {Name} could not be removed.", result.VmName);
-                clean = false;
+                problem = ex.Message;
             }
         }
 
-        return clean;
+        return problem;
     }
 
     private long? FreeSpaceOrNull(string root)

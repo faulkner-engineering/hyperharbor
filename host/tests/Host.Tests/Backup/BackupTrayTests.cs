@@ -1,4 +1,5 @@
 using HyperHarbor.Host.Core.Backup;
+using HyperHarbor.Host.Core.Backup.Restore;
 using HyperHarbor.Host.Tray.Ambient;
 using HyperHarbor.Host.Tray.Backup;
 using HyperHarbor.Shared.Contracts.Ipc;
@@ -20,6 +21,18 @@ public sealed class BackupNotifierTests
         var notifier = new BackupNotifier();
 
         Assert.Empty(notifier.Observe(Status(Item("failed"), Item(overdue: true, name: "Other")), Now));
+    }
+
+    [Fact]
+    public void AFailedRestoreTest_IsAnnouncedAsOne()
+    {
+        var notifier = new BackupNotifier();
+        notifier.Observe(Status(Item()), Now);
+
+        var message = Assert.Single(notifier.Observe(Status(Item("failed", name: "Restore test of Dev")), Now));
+
+        Assert.Equal("A restore test failed", message.Title);
+        Assert.Contains("latest backup of Dev on Local could not be restored", message.Text);
     }
 
     [Fact]
@@ -104,6 +117,28 @@ public sealed class BackupTrayStatusTests : IDisposable
         Assert.Equal("failed", item.Outcome);
         Assert.Equal("Disk full.", item.Reason);
         Assert.Equal("attention", BackupTrayStatus.Summary(status));
+    }
+
+    private static RestoreTestRecord Test(RestoreTestOutcome outcome, int minutesAgo, string reason = "The guest did not report in.") =>
+        new(Guid.NewGuid(), VmId, "Dev", "t1", "snap", BackupTrigger.Schedule, Now.AddMinutes(-minutesAgo), Now.AddMinutes(-minutesAgo), outcome, reason, []);
+
+    [Fact]
+    public void ALatestFailedRestoreTest_IsAFailedItem_UntilALaterTestClearsIt()
+    {
+        var history = new BackupHistoryStore(_directory);
+        history.Add(new BackupRunRecord(Guid.NewGuid(), "host", null, null, "t1", BackupTrigger.Schedule, Now, Now, BackupOutcome.Succeeded, null, "s", 1, []));
+        var config = new BackupConfig { Targets = [Target(true)] };
+        var failed = Test(RestoreTestOutcome.Failed, 30);
+
+        var broken = BackupTrayStatus.Build(config, history, new Dictionary<Guid, string>(), Now, false, 0, [failed, Test(RestoreTestOutcome.Passed, 90)]);
+        var fixedLater = BackupTrayStatus.Build(config, history, new Dictionary<Guid, string>(), Now, false, 0, [failed, Test(RestoreTestOutcome.Passed, 5)]);
+
+        var item = broken.Items.Single(i => i.Name == "Restore test of Dev");
+        Assert.Equal("failed", item.Outcome);
+        Assert.Equal("The guest did not report in.", item.Reason);
+        Assert.Equal("attention", BackupTrayStatus.Summary(broken));
+        Assert.Equal("ok", BackupTrayStatus.Summary(fixedLater));
+        Assert.DoesNotContain(fixedLater.Items, i => i.Name.StartsWith("Restore test", StringComparison.Ordinal));
     }
 
     [Fact]

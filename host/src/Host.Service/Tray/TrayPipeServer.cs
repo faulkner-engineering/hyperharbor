@@ -562,7 +562,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         var coordinator = _services.GetService<Core.Backup.BackupCoordinator>();
         return Core.Backup.BackupTrayStatus.Build(
             config.Load(), history, names, (_services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow(),
-            coordinator?.Busy ?? false, coordinator?.WaitingCount ?? 0);
+            coordinator?.Busy ?? false, coordinator?.WaitingCount ?? 0, _services.GetService<Core.Backup.Restore.RestoreTestStore>()?.List(200));
     }
 
     private async Task SendUpdateStatusAsync(Connection connection)

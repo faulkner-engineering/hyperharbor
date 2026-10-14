@@ -1,3 +1,4 @@
+using HyperHarbor.Host.Core.Backup.Restore;
 using HyperHarbor.Shared.Contracts.Ipc;
 
 namespace HyperHarbor.Host.Core.Backup;
@@ -6,7 +7,8 @@ namespace HyperHarbor.Host.Core.Backup;
 public static class BackupTrayStatus
 {
     public static TrayBackupStatus Build(
-        BackupConfig config, BackupHistoryStore history, IReadOnlyDictionary<Guid, string> vmNames, DateTimeOffset now, bool running, int waiting)
+        BackupConfig config, BackupHistoryStore history, IReadOnlyDictionary<Guid, string> vmNames, DateTimeOffset now, bool running, int waiting,
+        IEnumerable<RestoreTestRecord>? restoreTests = null)
     {
         var items = BackupStatusBuilder.Build(config, history, vmNames, now)
             .Select(item => new TrayBackupItem(
@@ -19,6 +21,7 @@ public static class BackupTrayStatus
                 item.Overdue,
                 item.LastRun?.RunId))
             .ToList();
+        items.AddRange(FailedRestoreTests(config, restoreTests ?? []));
         var ready = config.Targets.Count(t => t.Enabled && t.VmRepository?.KeyState == RepositoryKeyState.Confirmed);
         var pending = config.Targets.Count(t => t.VmRepository?.KeyState != RepositoryKeyState.Confirmed);
         return new TrayBackupStatus(ready > 0, pending, running, waiting, items);
@@ -34,6 +37,27 @@ public static class BackupTrayStatus
 
         return status.Items.Any(item => item.Overdue || item.Outcome == "failed") ? "attention" : "ok";
     }
+
+    public const string RestoreTestPrefix = "Restore test of ";
+
+    /// <summary>
+    /// A VM whose latest restore test failed counts as a failed item, so the card, the notification, and the ambient summary
+    /// treat a backup that cannot be restored like one that did not run. A later pass or skip clears it.
+    /// </summary>
+    private static IEnumerable<TrayBackupItem> FailedRestoreTests(BackupConfig config, IEnumerable<RestoreTestRecord> records) =>
+        records
+            .GroupBy(r => r.VmId)
+            .Select(g => g.OrderByDescending(r => r.FinishedAt).First())
+            .Where(r => r.Outcome == RestoreTestOutcome.Failed)
+            .Select(r => new TrayBackupItem(
+                RestoreTestPrefix + r.VmName,
+                config.Targets.FirstOrDefault(t => t.Id == r.TargetId)?.Name ?? r.TargetId,
+                "failed",
+                r.FinishedAt,
+                r.Reason,
+                null,
+                false,
+                r.RunId));
 
     private static string OutcomeName(BackupOutcome outcome) => outcome switch
     {

@@ -40,7 +40,7 @@ public sealed class RestoreTestingTests : IDisposable
             _store, _config, _history, _restorer, _power, _storage,
             id => _gpu.Contains(id), () => _game, () => _backupBusy,
             () => _gateClosed ? null : new Hold(this),
-            _ => Task.FromResult(_root), _ => _free, _time, NullLogger<RestoreTestService>.Instance);
+            _ => Task.FromResult(_root), _ => _free, _time, NullLogger<RestoreTestService>.Instance) { RemoveRetryDelay = TimeSpan.Zero };
     }
 
     public void Dispose()

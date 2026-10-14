@@ -20,7 +20,9 @@ internal sealed class BackupNotifier
         {
             if (item.Outcome == "failed" && item.RunId is { } run && _announcedRuns.Add(run) && _primed)
             {
-                messages.Add(("A backup failed", $"{item.Name} to {item.TargetName}: {Reason(item)}"));
+                messages.Add(item.Name.StartsWith("Restore test of ", StringComparison.Ordinal)
+                    ? ("A restore test failed", $"{item.Name.Replace("Restore test of ", "The latest backup of ", StringComparison.Ordinal)} on {item.TargetName} could not be restored: {Reason(item)}")
+                    : ("A backup failed", $"{item.Name} to {item.TargetName}: {Reason(item)}"));
             }
 
             var key = item.Name + "\n" + item.TargetName;

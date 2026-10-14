@@ -1,6 +1,7 @@
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.Backup;
 using HyperHarbor.Host.Core.Backup.Kopia;
+using HyperHarbor.Host.Core.Backup.Restore;
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Performance;
@@ -118,6 +119,29 @@ public sealed class VmBackupLiveTests(ITestOutputHelper output) : IDisposable
             output.WriteLine($"Manifest consistency: {manifest.Consistency.Mode}");
             Assert.Equal(vmId, manifest.Vm.Id);
             Assert.Equal(new FileInfo(disk.Path).Length, new FileInfo(Path.Combine(restored, manifest.Disks[0].File)).Length);
+
+            // 4. The restore test: restores the latest backup as an isolated throwaway VM, starts it, and removes it again.
+            // The VM has no operating system, so the guest never reports in; the test must fail for that reason and clean up.
+            await power.InvokeAsync(vmId, VmAction.TurnOff, default);
+            await WaitForStateAsync(inventory, vmId, VmState.Off);
+            var config = new BackupConfigStore(data);
+            config.Update(_ => new BackupConfig { Targets = [target] });
+            var coordinator = new RestoreCoordinator(
+                new BackupRepositories(kopia, secrets, data), new KopiaSnapshotRestorer(kopia), inventory, new CimHyperVHost(),
+                new CimHyperVImporter(new CimHyperVBuilder()), new CimHyperVCompute(), new CimHyperVPerformance(), storage, power,
+                new NoHeartbeat(), new FakeProvisioner(), new PerformanceStore(data), TimeProvider.System, NullLogger<RestoreCoordinator>.Instance);
+            var testStore = new RestoreTestStore(data);
+            var testRoot = Path.Combine(_root, "vms");
+            using var test = new RestoreTestService(
+                testStore, config, history, new CoordinatorVmRestorer(coordinator), power, storage, _ => false, () => false, () => false,
+                () => new NoopHold(), _ => Task.FromResult(testRoot), _ => long.MaxValue, TimeProvider.System, NullLogger<RestoreTestService>.Instance) { RemoveRetryDelay = TimeSpan.FromSeconds(2) };
+            await test.RunAsync(BackupTrigger.Manual, default);
+            var record = Assert.Single(testStore.List());
+            output.WriteLine($"Restore test: {record.Outcome} {record.Reason}; {string.Join(" | ", record.Warnings)}");
+            Assert.Equal(RestoreTestOutcome.Failed, record.Outcome);
+            Assert.Contains("did not", record.Reason);
+            Assert.DoesNotContain(await inventory.ListAsync(default), vm => vm.Name.StartsWith(RestoreTestService.NamePrefix, StringComparison.Ordinal));
+            Assert.Empty(Directory.EnumerateDirectories(testRoot, RestoreTestService.NamePrefix + "*"));
         }
         finally
         {
@@ -137,6 +161,18 @@ public sealed class VmBackupLiveTests(ITestOutputHelper output) : IDisposable
         }
 
         Assert.DoesNotContain(await inventory.ListAsync(default), vm => vm.Name == VmName);
+    }
+
+    private sealed class NoHeartbeat : IGuestHeartbeat
+    {
+        public Task<bool> WaitAsync(Guid vmId, TimeSpan timeout, CancellationToken cancellationToken) => Task.FromResult(false);
+    }
+
+    private sealed class NoopHold : IDisposable
+    {
+        public void Dispose()
+        {
+        }
     }
 
     private static async Task WaitForStateAsync(IVmInventory inventory, Guid vmId, VmState state)

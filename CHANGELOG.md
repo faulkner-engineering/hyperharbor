@@ -73,6 +73,7 @@ note anything that needs action, such as updating the host, a new elevation requ
   partition and VMs that would not fit on the disk are skipped. GET /backup/restore-test, PUT /backup/restore-test/settings,
   and POST /backup/restore-test/run (run now).
   In the client: Host menu, Backups, Restore test (turn on or off, interval and time window, Run test now, latest results).
+  A failed test is announced by the tray like a failed backup and shows on the Backups card and the Ambient screen.
 
 - Game-aware mode (API 1.19.0, off by default): when a game is in the foreground on the host, the running VMs are paused
   (or saved and stopped, or left running, per VM) so the game has the PC, and exactly those VMs are resumed when the game
