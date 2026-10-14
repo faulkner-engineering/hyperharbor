@@ -1927,6 +1927,28 @@ mod tests {
         assert_eq!(steps.last().unwrap().status, StepStatus::Warn);
     }
 
+    /// Reads the Tailscale installed on this PC. Run with: cargo test live_local_tailscale -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore = "needs Tailscale installed on this PC"]
+    async fn live_local_tailscale() {
+        let status = read_status(
+            &HttpSource {
+                port: DEFAULT_LOCAL_API_PORT,
+            },
+            &CliSource,
+        )
+        .await;
+        println!("{status:#?}");
+        assert_eq!(status.state, TailnetState::Running);
+        let me = status.self_node.expect("a running client has a node");
+        assert!(
+            me.addresses.iter().any(|a| is_tailnet_ip(a)),
+            "{:?}",
+            me.addresses
+        );
+        assert!(!me.dns_name.is_empty());
+    }
+
     // ---- Settings ----
 
     #[test]
