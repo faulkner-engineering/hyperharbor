@@ -10,6 +10,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.1.7-beta.5] - 2026-10-14 (API 1.23.0)
+
 ### Added
 - Tailscale, host side (API 1.23.0; uses the Tailscale client you already installed, nothing is installed or signed in for you):
   the host reads its own client through the local API (port 41112 by default, changeable for other setups) and falls
@@ -153,6 +155,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with
   any newer data format. The `backup` folder in the data directory (Kopia caches) is not copied into update backups.
+
+### Security
+- The client's TLS library (rustls) is updated to 0.23.46, which fixes four published advisories (RUSTSEC-2026-0346 to 0349:
+  secrets in debug output, data sent after an ECH rejection, a large pre-authentication allocation, and a possible
+  key-exchange downgrade). Update the client on every PC.
 
 ## [0.1.7-beta.4] - 2026-10-12 (API 1.17.0)
 
