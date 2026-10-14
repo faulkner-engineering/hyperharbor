@@ -12,6 +12,7 @@
 
   let allowText = $state("");
   let ignoreText = $state("");
+  let launcherText = $state("");
 
   const info = $derived(view.gameAware);
   const status = $derived(gameAwareStatus(info));
@@ -27,6 +28,13 @@
     const text = allowText;
     allowText = "";
     save((s) => ({ ...s, allowlist: addPrograms(s.allowlist, text) }));
+  }
+
+  function addLauncher(event: SubmitEvent) {
+    event.preventDefault();
+    const text = launcherText;
+    launcherText = "";
+    save((s) => ({ ...s, launchers: addPrograms(s.launchers ?? [], text) }));
   }
 
   function addIgnore(event: SubmitEvent) {
@@ -157,6 +165,25 @@
       <form onsubmit={addIgnore}>
         <input type="text" aria-label="Add a program to the ignore list" placeholder="powerpnt.exe" bind:value={ignoreText} disabled={busy} />
         <button type="submit" class="btn" disabled={busy || ignoreText.trim() === ""}>Add</button>
+      </form>
+    </section>
+
+    <section class="block">
+      <h2>Game launchers</h2>
+      <p class="muted">
+        Steam, Epic, Battle.net, Xbox, GOG, and Playnite are built in. A game a launcher starts counts; its own window does not.
+      </p>
+      <ul class="chips">
+        {#each info.settings.launchers ?? [] as name (name)}
+          <li>
+            {name}
+            <button type="button" aria-label="Remove {name} from the launchers" disabled={busy} onclick={() => save((s) => ({ ...s, launchers: (s.launchers ?? []).filter((n) => n !== name) }))}>×</button>
+          </li>
+        {/each}
+      </ul>
+      <form onsubmit={addLauncher}>
+        <input type="text" aria-label="Add a launcher" placeholder="itch.exe" bind:value={launcherText} disabled={busy} />
+        <button type="submit" class="btn" disabled={busy || launcherText.trim() === ""}>Add</button>
       </form>
     </section>
   {/if}

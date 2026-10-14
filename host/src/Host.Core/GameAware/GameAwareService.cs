@@ -28,7 +28,8 @@ public sealed class GameAwareService(
     /// <exception cref="LifecycleValidationException">A list is too long, or a VM is listed twice.</exception>
     public Wire.GameAwareSettings Apply(Wire.GameAwareSettings request)
     {
-        if (request.Allowlist.Count > GameAwareStore.MaxListEntries || request.IgnoreList.Count > GameAwareStore.MaxListEntries)
+        if (request.Allowlist.Count > GameAwareStore.MaxListEntries || request.IgnoreList.Count > GameAwareStore.MaxListEntries
+            || (request.Launchers?.Count ?? 0) > GameAwareStore.MaxListEntries)
         {
             throw new LifecycleValidationException(
                 $"A list can hold at most {GameAwareStore.MaxListEntries} programs.",
@@ -48,6 +49,7 @@ public sealed class GameAwareService(
             // A program cannot be both: the ignore list wins.
             Allowlist = request.Allowlist.Where(name => !ignore.Contains(GameAwareSettings.NormalizeProcess(name))).ToList(),
             IgnoreList = request.IgnoreList,
+            ExtraLaunchers = request.Launchers ?? [],
             VmPolicies = request.VmPolicies.ToDictionary(p => p.VmId.ToString("D"), p => new GameVmPolicy(ToCore(p.Action), p.AlwaysPause)),
         }));
     }
@@ -63,7 +65,8 @@ public sealed class GameAwareService(
         settings.VmPolicies
             .Where(pair => Guid.TryParse(pair.Key, out _))
             .Select(pair => new Wire.GameVmPolicy(Guid.Parse(pair.Key), ToWire(pair.Value.Policy), pair.Value.AlwaysPause))
-            .ToList());
+            .ToList(),
+        settings.ExtraLaunchers);
 
     private static Wire.GameVmAction ToWire(GamePolicy policy) => policy switch
     {

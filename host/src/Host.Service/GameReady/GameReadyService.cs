@@ -338,6 +338,7 @@ public sealed class GameReadyService
             GameReadyCards.AmbientScreen(ambient, powerMode.Reading.Settings, report?.Screensaver, _elevated),
         };
         cards.AddRange(GameReadyCards.ComingSoon());
+        cards.Add(GameReadyCards.GameAware());
 
         lock (_gate)
         {

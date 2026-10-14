@@ -26,12 +26,14 @@ public sealed record GameVmPolicy(
 /// <param name="Allowlist">Programs (lower case, no .exe) that count as a game whenever they are in the foreground.</param>
 /// <param name="IgnoreList">Programs that never count, for false positives.</param>
 /// <param name="VmPolicies">VMs with their own action; the others use <paramref name="DefaultAction"/>.</param>
+/// <param name="Launchers">Launchers to add to the built-in ones (lower case, no .exe); a game they start counts as a game.</param>
 public sealed record GameAwareSettings(
     [property: JsonRequired] bool Enabled,
     [property: JsonRequired] GameVmAction DefaultAction,
     IReadOnlyList<string> Allowlist,
     IReadOnlyList<string> IgnoreList,
-    IReadOnlyList<GameVmPolicy> VmPolicies);
+    IReadOnlyList<GameVmPolicy> VmPolicies,
+    IReadOnlyList<string>? Launchers = null);
 
 /// <summary>Schema: GameAwareVm.</summary>
 /// <param name="GpuPartition">The VM is in Performance mode, so it is always paused (never saved or kept running).</param>

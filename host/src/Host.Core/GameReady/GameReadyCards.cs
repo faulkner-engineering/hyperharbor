@@ -425,8 +425,15 @@ public static class GameReadyCards
         Soon(GameReadyCardIds.BootToLauncher, "Boot to launcher", "Start the game launcher straight after sign-in, without the desktop."),
         Soon(GameReadyCardIds.SteamDesktopLayout, "Steam desktop layout", "A Steam controller layout for using the desktop with a gamepad."),
         Soon(GameReadyCardIds.LeanHost, "Lean host", "Trim the PC for gaming. This card will summarize the Lean host page."),
-        Soon(GameReadyCardIds.GameAwareMode, "Game-aware mode", "Hold back updates and background work while a game runs."),
     ];
+
+    /// <summary>
+    /// The Game-aware card. The page shows the live state and switch from the game-aware settings, which the tray already
+    /// holds; the card only keeps its place in the section.
+    /// </summary>
+    public static GameReadyCard GameAware() =>
+        new(GameReadyCardIds.GameAwareMode, "Game-aware mode", GameReadyStates.Ready,
+            "Pause or save running VMs while a game is in the foreground, and resume them afterwards.", NoChecks, NoControllers, NoHints, false, null, false);
 
     private static GameReadyCard Soon(string id, string title, string summary) =>
         new(id, title, GameReadyStates.ComingSoon, summary, NoChecks, NoControllers, NoHints, false, null, false);

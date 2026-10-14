@@ -481,6 +481,28 @@ public sealed class GameAwareControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task AUserAddedLauncher_MakesItsBorderlessChildrenGames_ButNotItsOwnWindow()
+    {
+        Enable();
+        _store.Update(s => s with { ExtraLaunchers = ["Itch.EXE", "itch.exe", "  "] });
+        var vm = AddVm("a");
+        var monitor = Monitor();
+        var child = new ForegroundSignals(null, true, false, false, false, "indiegame", ["itch", "explorer"]);
+        var launcher = new ForegroundSignals(3, true, false, false, false, "itch", []);
+
+        Assert.Equal(["itch"], _store.Load().ExtraLaunchers);
+        await monitor.OnSignalsAsync(launcher, default);
+        _time.Advance(TimeSpan.FromSeconds(3));
+        await monitor.OnSignalsAsync(launcher, default);
+        Assert.Equal(VmState.Running, StateOf(vm));
+
+        await monitor.OnSignalsAsync(child, default);
+        _time.Advance(TimeSpan.FromSeconds(3));
+        await monitor.OnSignalsAsync(child, default);
+        Assert.Equal(VmState.Paused, StateOf(vm));
+    }
+
+    [Fact]
     public async Task NotAGame_IgnoresTheProgram_AndResumesAtOnce()
     {
         Enable();

@@ -240,6 +240,8 @@ export interface GameAwareSettings {
   allowlist: string[];
   ignoreList: string[];
   vmPolicies: GameVmPolicy[];
+  /** Launchers added to the built-in ones. */
+  launchers?: string[];
 }
 
 export interface GameAwareInfo {

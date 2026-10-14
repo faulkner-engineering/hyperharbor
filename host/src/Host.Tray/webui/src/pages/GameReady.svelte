@@ -5,7 +5,7 @@
   import Modal from "../components/Modal.svelte";
   import { tray } from "../store.svelte";
   import type { GameReadyCard, PowerModeId, TrayViewState } from "../bridge";
-  import { cardBusy, cardStatus, cardTone, connectionLabel, gameReadySummary, wakeLabel, wakeTestText } from "../text";
+  import { cardBusy, cardStatus, cardTone, gameAwareStatus, connectionLabel, gameReadySummary, wakeLabel, wakeTestText } from "../text";
 
   interface Props {
     view: TrayViewState;
@@ -24,6 +24,7 @@
     consoleSignIn: "lock",
     powerMode: "power",
     ambientScreen: "clock",
+    gameAwareMode: "gamepad",
   };
 
   // Chords that are hard to press by accident. The stored value is the buttons joined by "+".
@@ -228,9 +229,27 @@
       <Card
         icon={icons[card.id] ?? "clock"}
         title={card.title}
-        status={cardStatus(game, card)}
-        tone={cardTone(game, card)}
+        status={card.id === "gameAwareMode" ? gameAwareStatus(view.gameAware).status : cardStatus(game, card)}
+        tone={card.id === "gameAwareMode" ? gameAwareStatus(view.gameAware).tone : cardTone(game, card)}
       >
+        {#if card.id === "gameAwareMode"}
+          <p>{card.summary}</p>
+          {#if view.gameAware}
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={view.gameAware.settings.enabled}
+                disabled={!view.connected || tray.requested.includes("gameAwareApply")}
+                onchange={(event) => {
+                  const settings = { ...view.gameAware!.settings, enabled: event.currentTarget.checked };
+                  tray.send({ type: "gameAwareApply", settings }, "gameAwareApply");
+                }}
+              />
+              <span>Pause VMs while a game runs</span>
+            </label>
+          {/if}
+          <button type="button" class="btn" onclick={() => (tray.page = "gameAware")}>Open Game-aware settings</button>
+        {/if}
         {#if card.state === "comingSoon"}
           <p>{card.summary}</p>
         {/if}

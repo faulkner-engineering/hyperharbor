@@ -3218,6 +3218,8 @@ export interface components {
             ignoreList: string[];
             /** @description VMs with their own action. The others use `defaultAction`. */
             vmPolicies: components["schemas"]["GameVmPolicy"][];
+            /** @description Launchers added to the built-in ones (Steam, Epic, Battle.net, Xbox, GOG, Playnite). A game one of them starts counts as a game; the launcher's own window does not. */
+            launchers?: string[];
         };
         GameAwareVm: {
             /** Format: uuid */

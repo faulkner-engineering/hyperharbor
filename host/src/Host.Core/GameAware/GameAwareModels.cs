@@ -38,6 +38,9 @@ public sealed record GameAwareSettings
     /// <summary>Programs that never count (false positives such as a presentation or a video player).</summary>
     public IReadOnlyList<string> IgnoreList { get; init; } = [];
 
+    /// <summary>Launchers added by the user, besides the built-in ones. A game started by one counts; its own window does not.</summary>
+    public IReadOnlyList<string> ExtraLaunchers { get; init; } = [];
+
     public GameVmPolicy PolicyFor(Guid vmId) =>
         VmPolicies.TryGetValue(vmId.ToString("D"), out var own) ? own : new GameVmPolicy(DefaultPolicy);
 
@@ -90,6 +93,7 @@ public sealed class GameAwareStore
     {
         Allowlist = CleanList(settings.Allowlist),
         IgnoreList = CleanList(settings.IgnoreList),
+        ExtraLaunchers = CleanList(settings.ExtraLaunchers),
     };
 
     private static List<string> CleanList(IEnumerable<string> names) =>

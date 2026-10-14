@@ -95,8 +95,9 @@ public sealed class GameReadyServiceTests
         Assert.Equal(
             ["wakeOnLan", "controllerWake", "fastStartup", "usbSelectiveSuspend", "usbPowerInSleep", "consoleSignIn", "powerMode", "ambientScreen", "bootToLauncher", "steamDesktopLayout", "leanHost", "gameAwareMode"],
             cards.Select(card => card.Id));
-        Assert.All(cards.Skip(8), card => Assert.Equal(GameReadyStates.ComingSoon, card.State));
+        Assert.All(cards.Skip(8).Take(3), card => Assert.Equal(GameReadyStates.ComingSoon, card.State));
         Assert.All(cards.Skip(8), card => Assert.False(card.CanFix));
+        Assert.Equal(GameReadyStates.Ready, cards[^1].State);
         Assert.Equal(GameReadyStates.Manual, Card(service, "usbPowerInSleep").State);
         Assert.DoesNotContain(Card(service, "wakeOnLan").Checks, check => check.Id == WakeCheckIds.FastStartupDisabled);
     }

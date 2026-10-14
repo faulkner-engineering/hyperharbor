@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.20.0
+  version: 1.21.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -5480,6 +5480,11 @@ components:
           description: VMs with their own action. The others use `defaultAction`.
           items:
             $ref: "#/components/schemas/GameVmPolicy"
+        launchers:
+          type: array
+          description: Launchers added to the built-in ones (Steam, Epic, Battle.net, Xbox, GOG, Playnite). A game one of them starts counts as a game; the launcher's own window does not.
+          items:
+            type: string
 
     GameAwareVm:
       type: object

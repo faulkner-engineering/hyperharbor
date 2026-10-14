@@ -34,7 +34,7 @@ public sealed class GameAwareMonitor(
     public async Task OnSignalsAsync(ForegroundSignals signals, CancellationToken cancellationToken)
     {
         var current = settings.Load();
-        var verdict = GamingDetector.Evaluate(signals, current.Allowlist, current.IgnoreList);
+        var verdict = GamingDetector.Evaluate(signals, current.Allowlist, current.IgnoreList, current.ExtraLaunchers);
         bool gaming;
         string? process;
         lock (_gate)

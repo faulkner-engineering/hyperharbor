@@ -28,6 +28,7 @@
   let notice = $state<string | null>(null);
   let allowText = $state("");
   let ignoreText = $state("");
+  let launcherText = $state("");
   let timer: ReturnType<typeof setInterval> | undefined;
 
   const gaming = $derived(info ? gamingNotice(info.state) : null);
@@ -82,6 +83,12 @@
     const text = allowText;
     allowText = "";
     return save((s) => ({ ...s, allowlist: addPrograms(s.allowlist, text) }));
+  };
+
+  const addLauncher = () => {
+    const text = launcherText;
+    launcherText = "";
+    return save((s) => ({ ...s, launchers: addPrograms(s.launchers ?? [], text) }));
   };
 
   const addIgnore = () => {
@@ -197,6 +204,24 @@
     <form onsubmit={(event) => { event.preventDefault(); void addIgnore(); }}>
       <input type="text" aria-label="Add a program to the ignore list" placeholder="powerpnt.exe" bind:value={ignoreText} disabled={saving} />
       <button type="submit" disabled={saving || ignoreText.trim() === ""}>Add</button>
+    </form>
+
+    <h4>Game launchers</h4>
+    <p class="muted">
+      Steam, Epic, Battle.net, Xbox, GOG, and Playnite are built in. A game one of them starts counts as a game; the launcher's
+      own window does not. Add another launcher here.
+    </p>
+    <ul class="chips">
+      {#each info.settings.launchers ?? [] as name (name)}
+        <li>
+          {name}
+          <button type="button" aria-label="Remove {name} from the launchers" disabled={saving} onclick={() => save((s) => ({ ...s, launchers: (s.launchers ?? []).filter((n) => n !== name) }))}>×</button>
+        </li>
+      {/each}
+    </ul>
+    <form onsubmit={(event) => { event.preventDefault(); void addLauncher(); }}>
+      <input type="text" aria-label="Add a launcher" placeholder="itch.exe" bind:value={launcherText} disabled={saving} />
+      <button type="submit" disabled={saving || launcherText.trim() === ""}>Add</button>
     </form>
 
     {#if notice}<p role="status">{notice}</p>{/if}

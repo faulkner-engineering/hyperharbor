@@ -182,7 +182,7 @@ public class ContractFixtureTests
         ["RestoreHostStateRequest"] = new RestoreHostStateRequest("3f2a9c1e5d7b4a60", "k9a8b7c6d5e4f3a2"),
         ["RestoreResult"] = new RestoreResult(RestoreVmOutcome.SucceededWithWarnings, ["BitLocker may ask for its recovery key."], true, true, false, VmId, "Ubuntu Dev (restored)"),
         ["GameVmPolicy"] = new GameVmPolicy(VmId, GameVmAction.Keep, true),
-        ["GameAwareSettings"] = new GameAwareSettings(true, GameVmAction.Pause, ["emulator"], ["powerpnt"], [new GameVmPolicy(VmId, GameVmAction.Save)]),
+        ["GameAwareSettings"] = new GameAwareSettings(true, GameVmAction.Pause, ["emulator"], ["powerpnt"], [new GameVmPolicy(VmId, GameVmAction.Save)], ["itch"]),
         ["GameAwareVm"] = new GameAwareVm(VmId, "Ubuntu Dev", false),
         ["GameAwareState"] = new GameAwareState(true, true, ["Ubuntu Dev"], ["Win11 Work"], "eldenring", "A full-screen Direct3D application is running.", Time),
         ["GameAwareInfo"] = new GameAwareInfo(
