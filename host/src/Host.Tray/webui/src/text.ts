@@ -1,6 +1,7 @@
 // Words the window shows for each state. Pure functions, so tests check them directly.
 
 import type {
+  RestoreWizardStatus,
   ControllerWakeState,
   GameReadyCard,
   GameReadyController,
@@ -346,6 +347,29 @@ export function effectiveAction(info: GameAwareInfo, vmId: string): { action: Ga
 }
 
 /** The status line of the Game-aware page. */
+/** "11 Oct 2026, 02:00 (64 GB)" for a snapshot in a list. */
+export function snapshotLabel(snapshot: { startTime: string; totalSize: number }): string {
+  const when = new Date(snapshot.startTime).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const gb = snapshot.totalSize / 1024 ** 3;
+  const size = gb >= 1 ? `${gb.toFixed(gb >= 100 ? 0 : 1)} GB` : `${Math.max(1, Math.round(snapshot.totalSize / 1024 ** 2))} MB`;
+  return `${when} (${size})`;
+}
+
+/** The Restore card's status line. */
+export function restoreStatus(wizard: RestoreWizardStatus | null): { status: string; tone: CardTone } {
+  if (wizard === null) return { status: "Unknown until the service runs.", tone: "neutral" };
+  switch (wizard.phase) {
+    case "attaching":
+      return { status: "Opening the backups…", tone: "busy" };
+    case "restoring":
+      return { status: "Restoring…", tone: "busy" };
+    case "ready":
+      return { status: wizard.error ? "The last restore failed" : "Choose what to restore", tone: wizard.error ? "warn" : "ok" };
+    default:
+      return { status: wizard.error ? "The backups could not be opened" : "Enter where your backups are", tone: wizard.error ? "warn" : "neutral" };
+  }
+}
+
 export function gameAwareStatus(info: GameAwareInfo | null): { status: string; tone: CardTone } {
   if (info === null) return { status: "Unknown until the service runs.", tone: "neutral" };
   if (!info.settings.enabled) return { status: "Off", tone: "neutral" };

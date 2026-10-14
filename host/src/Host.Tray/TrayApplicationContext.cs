@@ -55,6 +55,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private HostUpdateStatus? _update;
     private TrayBackupStatus? _backup;
     private GameAwareInfo? _gameAware;
+    private RestoreWizardStatus? _restoreWizard;
     private int _gameAwareTicks;
     private readonly Backup.BackupNotifier _backupNotifier = new();
     private int _backupTicks;
@@ -216,6 +217,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 _ = _pipe.SendAsync(new BackupStatusQueryMessage());
                 _ = _pipe.SendAsync(new HostLeanQueryMessage());
                 _ = _pipe.SendAsync(new GameReadyQueryMessage());
+                _ = _pipe.SendAsync(new RestoreWizardQueryMessage());
             }
         }
 
@@ -270,6 +272,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             _connected ? _gameReady : null,
             _connected ? _backup : null,
             _connected ? _gameAware : null,
+            _connected ? _restoreWizard : null,
             _busy.Order(StringComparer.Ordinal).ToList(),
             _pairing is null ? null : new TrayViewPairing(_pairing.PairingId, _pairing.DeviceName, _pairing.Pin, _pairing.ExpiresAt),
             DataDirectory));
@@ -323,6 +326,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 _ = _pipe.SendAsync(new BackupStatusQueryMessage());
                 _ = _pipe.SendAsync(new HostLeanQueryMessage());
                 _ = _pipe.SendAsync(new GameReadyQueryMessage());
+                _ = _pipe.SendAsync(new RestoreWizardQueryMessage());
             }
         }
         else
@@ -336,6 +340,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             _hostLean = null;
             _gameReady = null;
             _gameAware = null;
+            _restoreWizard = null;
             _pendingCheck = null;
             _busy.Clear();
             EndPairing();
@@ -393,6 +398,10 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                     runNow.Started > 0
                         ? $"{runNow.Started} backup{(runNow.Started == 1 ? string.Empty : "s")} started.{(runNow.Problems.Count > 0 ? " " + string.Join(" ", runNow.Problems) : string.Empty)}"
                         : runNow.Problems.Count > 0 ? string.Join(" ", runNow.Problems) : "Nothing is set up to back up yet.");
+                break;
+            case RestoreWizardStatusMessage wizard:
+                _restoreWizard = wizard.Status;
+                PushState();
                 break;
             case BackupStatusMessage backup:
                 OnBackupStatus(backup.Status);
@@ -852,6 +861,13 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     public void GameReadySleepNow() => _ = _pipe.SendAsync(new GameReadySleepNowMessage());
 
     public void GameAwareApply(GameAwareSettings settings) => _ = _pipe.SendAsync(new GameAwareApplyMessage(settings));
+
+    public void RestoreWizardAttach(RestoreWizardForm form) => _ = _pipe.SendAsync(new RestoreWizardAttachMessage(form));
+
+    public void RestoreWizardRestore(string kind, string snapshotId, string? name, bool start) =>
+        _ = _pipe.SendAsync(new RestoreWizardRestoreMessage(kind, snapshotId, name, start));
+
+    public void RestoreWizardReset() => _ = _pipe.SendAsync(new RestoreWizardResetMessage());
 
     public void BackupRunNow() => _ = _pipe.SendAsync(new BackupRunNowMessage());
 

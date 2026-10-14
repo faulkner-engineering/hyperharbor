@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { GameAwareInfo, GameAwareSettings, HostLeanRunSummary, HostLeanStatus, HostUpdateStatus, TrayBackupItem, TrayBackupStatus } from "./bridge";
-import { addPrograms, backupCardText, effectiveAction, gameAwareStatus, normalizeProgram, withVmAction, countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
+import type { RestoreWizardStatus, GameAwareInfo, GameAwareSettings, HostLeanRunSummary, HostLeanStatus, HostUpdateStatus, TrayBackupItem, TrayBackupStatus } from "./bridge";
+import { restoreStatus, snapshotLabel, addPrograms, backupCardText, effectiveAction, gameAwareStatus, normalizeProgram, withVmAction, countdown, deviceCount, formatPin, groupChanges, leanSummary, metricsText, passphraseProblem, progressText, runDelta, shortFingerprint, signed, updateSteps, updateSummary } from "./text";
 
 const update = (overrides: Partial<HostUpdateStatus> = {}): HostUpdateStatus => ({
   supported: true,
@@ -245,5 +245,26 @@ describe("game-aware helpers", () => {
     expect(gameAwareStatus(info({ enabled: false }))).toEqual({ status: "Off", tone: "neutral" });
     expect(gameAwareStatus(info())).toEqual({ status: "On, no game running", tone: "ok" });
     expect(gameAwareStatus(info({}, true))).toEqual({ status: "Game running (eldenring)", tone: "busy" });
+  });
+});
+
+describe("restore page text", () => {
+  const wizard = (overrides: Partial<RestoreWizardStatus> = {}): RestoreWizardStatus => ({
+    phase: "idle", step: "", percent: 0, error: null, targetName: null, vms: [], hostSnapshots: [], messages: [], restartRequired: false, ...overrides,
+  });
+
+  it("labels a snapshot with its size", () => {
+    expect(snapshotLabel({ startTime: "2026-10-11T02:00:00Z", totalSize: 64 * 1024 ** 3 })).toMatch(/\(64\.0 GB\)$/);
+    expect(snapshotLabel({ startTime: "2026-10-11T02:00:00Z", totalSize: 5 * 1024 ** 2 })).toMatch(/\(5 MB\)$/);
+  });
+
+  it("describes each phase", () => {
+    expect(restoreStatus(null).tone).toBe("neutral");
+    expect(restoreStatus(wizard())).toEqual({ status: "Enter where your backups are", tone: "neutral" });
+    expect(restoreStatus(wizard({ error: "Wrong key." }))).toEqual({ status: "The backups could not be opened", tone: "warn" });
+    expect(restoreStatus(wizard({ phase: "attaching" })).tone).toBe("busy");
+    expect(restoreStatus(wizard({ phase: "restoring" })).tone).toBe("busy");
+    expect(restoreStatus(wizard({ phase: "ready" }))).toEqual({ status: "Choose what to restore", tone: "ok" });
+    expect(restoreStatus(wizard({ phase: "ready", error: "x" })).tone).toBe("warn");
   });
 });

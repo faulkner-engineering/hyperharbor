@@ -70,6 +70,14 @@ public interface ITrayActions
 
     void BackupRunNow();
 
+    /// <summary>Restore page: check the recovery key and list what the location holds.</summary>
+    void RestoreWizardAttach(RestoreWizardForm form);
+
+    /// <summary>Restore page: restore a host-state ("host") or VM ("vm") snapshot.</summary>
+    void RestoreWizardRestore(string kind, string snapshotId, string? name, bool start);
+
+    void RestoreWizardReset();
+
     /// <param name="target">logs or audit.</param>
     void Open(string target);
 
@@ -172,6 +180,15 @@ public static class TrayCommands
             case "gameAwareApply" when GameAwareSettingsOf(message) is { } gameAware:
                 actions.GameAwareApply(gameAware);
                 return true;
+            case "restoreWizardAttach" when RestoreFormOf(message) is { } form:
+                actions.RestoreWizardAttach(form);
+                return true;
+            case "restoreWizardRestore" when Text(message, "kind") is "host" or "vm" && Text(message, "snapshotId") is { } snapshotId:
+                actions.RestoreWizardRestore(Text(message, "kind")!, snapshotId, Text(message, "name"), message.TryGetProperty("start", out var start) && start.ValueKind == JsonValueKind.True);
+                return true;
+            case "restoreWizardReset":
+                actions.RestoreWizardReset();
+                return true;
             case "backupRunNow":
                 actions.BackupRunNow();
                 return true;
@@ -192,6 +209,24 @@ public static class TrayCommands
                 return true;
             default:
                 return false;
+        }
+    }
+
+    private static RestoreWizardForm? RestoreFormOf(JsonElement message)
+    {
+        if (!message.TryGetProperty("form", out var value) || value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        try
+        {
+            var form = value.Deserialize<RestoreWizardForm>(Shared.Contracts.ContractJson.Options);
+            return form is { Kind: "local" or "s3" or "azure", RecoveryKey.Length: > 0 } ? form : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

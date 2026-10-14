@@ -18,6 +18,7 @@ namespace HyperHarbor.Host.Tray.Window;
 /// <param name="GameReady">The Game ready section's status from the service; null while the service is not connected.</param>
 /// <param name="Backup">The backup summary from the service; null while the service is not connected.</param>
 /// <param name="GameAware">Game-aware mode settings and state from the service; null while the service is not connected.</param>
+/// <param name="RestoreWizard">The Restore page's state from the service; null while the service is not connected.</param>
 /// <param name="Pairing">The pairing request waiting for its PIN, if any.</param>
 public sealed record TrayViewState(
     bool Connected,
@@ -33,6 +34,7 @@ public sealed record TrayViewState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] GameReadyStatus? GameReady,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] TrayBackupStatus? Backup,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] GameAwareInfo? GameAware,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] RestoreWizardStatus? RestoreWizard,
     IReadOnlyList<string> Busy,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] TrayViewPairing? Pairing,
     string DataDirectory);

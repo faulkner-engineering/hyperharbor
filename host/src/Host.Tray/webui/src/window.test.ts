@@ -86,6 +86,7 @@ const state = (overrides: Partial<TrayViewState> = {}): TrayViewState => ({
   gameReady: gameReady(),
   backup: null,
   gameAware: null,
+  restoreWizard: null,
   busy: [],
   pairing: null,
   dataDirectory: "C:\\ProgramData\\HyperHarbor",

@@ -9,6 +9,7 @@
   import Lean from "./pages/Lean.svelte";
   import Logs from "./pages/Logs.svelte";
   import Overview from "./pages/Overview.svelte";
+  import Restore from "./pages/Restore.svelte";
   import Storage from "./pages/Storage.svelte";
   import Updates from "./pages/Updates.svelte";
   import { tray, type Page } from "./store.svelte";
@@ -19,6 +20,7 @@
     { id: "storage", label: "Storage", icon: "storage", heading: "Storage" },
     { id: "gameReady", label: "Game ready", icon: "gamepad", heading: "Game ready" },
     { id: "gameAware", label: "Game-aware", icon: "gamepad", heading: "Game-aware mode" },
+    { id: "restore", label: "Restore", icon: "storage", heading: "Restore from a backup" },
     { id: "lean", label: "Lean host", icon: "lean", heading: "Lean host" },
     { id: "updates", label: "Updates", icon: "updates", heading: "Updates" },
     { id: "logs", label: "Logs", icon: "logs", heading: "Logs" },
@@ -89,6 +91,8 @@
               <GameReady view={state} />
             {:else if tray.page === "gameAware"}
               <GameAware view={state} />
+            {:else if tray.page === "restore"}
+              <Restore view={state} />
             {:else if tray.page === "lean"}
               <Lean view={state} />
             {:else if tray.page === "updates"}

@@ -61,6 +61,12 @@ public sealed partial class TrayWindowTests
 
         public void BackupRunNow() => Calls.Add("backupRunNow");
 
+        public void RestoreWizardAttach(HyperHarbor.Shared.Contracts.Ipc.RestoreWizardForm form) => Calls.Add($"wizardAttach:{form.Kind}:{form.Path}");
+
+        public void RestoreWizardRestore(string kind, string snapshotId, string? name, bool start) => Calls.Add($"wizardRestore:{kind}:{snapshotId}:{name}:{start}");
+
+        public void RestoreWizardReset() => Calls.Add("wizardReset");
+
         public void Open(string target) => Calls.Add("open:" + target);
 
         public void OpenUrl(string url) => Calls.Add("url:" + url);
@@ -103,6 +109,10 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"gameAwareApply","settings":{"enabled":true,"defaultAction":"pause","allowlist":["a","b"],"ignoreList":[],"vmPolicies":[]}}""", "gameAware:True:2")]
     [InlineData("""{"type":"gameAwareNotAGame"}""", "notAGame")]
     [InlineData("""{"type":"backupRunNow"}""", "backupRunNow")]
+    [InlineData("""{"type":"restoreWizardAttach","form":{"kind":"local","name":"Old","recoveryKey":"AAAA-BBBB","path":"D:\\B"}}""", "wizardAttach:local:D:\\B")]
+    [InlineData("""{"type":"restoreWizardRestore","kind":"vm","snapshotId":"k1","name":"Copy","start":true}""", "wizardRestore:vm:k1:Copy:True")]
+    [InlineData("""{"type":"restoreWizardRestore","kind":"host","snapshotId":"k2"}""", "wizardRestore:host:k2::False")]
+    [InlineData("""{"type":"restoreWizardReset"}""", "wizardReset")]
     [InlineData("""{"type":"open","target":"audit"}""", "open:audit")]
     [InlineData("""{"type":"openUrl","url":"https://github.com/faulkner-engineering/hyperharbor/releases"}""", "url:https://github.com/faulkner-engineering/hyperharbor/releases")]
     [InlineData("""{"type":"cancelPairing","pairingId":"0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"}""", "cancel:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b")]
@@ -291,10 +301,15 @@ public sealed partial class TrayWindowTests
                     new GameAwareSettings(true, GameVmAction.Pause, ["emulator"], ["powerpnt"], [new GameVmPolicy(Id, GameVmAction.Keep, true)]),
                     new GameAwareState(true, true, ["Dev Box"], ["Work"], "eldenring", "A full-screen Direct3D application is running.", time),
                     [new GameAwareVm(Id, "Dev Box", false)]),
+                new RestoreWizardStatus(
+                    "ready", "Restoring the files", 40, null, "Old backups",
+                    [new RestoreWizardVm(Id, "Dev Box", [new RestoreWizardSnapshot("k4f8a1b2", time, 64_000_000_000)])],
+                    [new RestoreWizardSnapshot("k9a8b7c6", time, 1_000_000)],
+                    ["Dev Box was restored."], true),
                 ["folder:iso"],
                 new TrayViewPairing(Id, "Laptop", "440141", time.AddMinutes(2)),
                 @"C:\ProgramData\HyperHarbor")),
-            new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, null, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
+            new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, null, null, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
             new HostToPage.Toast("success", "Admin passphrase saved", "Paired devices now need it to change VMs."),
             new HostToPage.Navigate("devices"),
         ];

@@ -225,6 +225,36 @@
           }
         ]
       },
+      "restoreWizard": {
+        "phase": "ready",
+        "step": "Restoring the files",
+        "percent": 40,
+        "targetName": "Old backups",
+        "vms": [
+          {
+            "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+            "name": "Dev Box",
+            "snapshots": [
+              {
+                "id": "k4f8a1b2",
+                "startTime": "2026-10-05T12:00:00\u002B00:00",
+                "totalSize": 64000000000
+              }
+            ]
+          }
+        ],
+        "hostSnapshots": [
+          {
+            "id": "k9a8b7c6",
+            "startTime": "2026-10-05T12:00:00\u002B00:00",
+            "totalSize": 1000000
+          }
+        ],
+        "messages": [
+          "Dev Box was restored."
+        ],
+        "restartRequired": true
+      },
       "busy": [
         "folder:iso"
       ],
@@ -253,6 +283,7 @@
       "gameReady": null,
       "backup": null,
       "gameAware": null,
+      "restoreWizard": null,
       "busy": [],
       "pairing": null,
       "dataDirectory": "C:\\ProgramData\\HyperHarbor"

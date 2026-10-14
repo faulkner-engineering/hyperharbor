@@ -76,6 +76,15 @@
     {/snippet}
   </Card>
 
+  {#if view.connected && view.backup && !view.backup.configured && view.devices.length === 0}
+    <Card icon="storage" title="New PC?" status="Restore from a backup" tone="warn">
+      If HyperHarbor was set up on another PC before, restore its paired devices and VMs from your backups.
+      {#snippet action()}
+        <button type="button" class="btn" onclick={() => (tray.page = "restore")}>Restore…</button>
+      {/snippet}
+    </Card>
+  {/if}
+
   <Card icon="storage" title="Backups" status={backups.status} tone={backups.tone}>
     {#each backups.lines as line, index (index)}<span class="line">{line}</span>{/each}
     {#snippet action()}

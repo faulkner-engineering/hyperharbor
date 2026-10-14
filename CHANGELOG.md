@@ -81,6 +81,11 @@ note anything that needs action, such as updating the host, a new elevation requ
   use, and removes the work folder when closed (or at the next host start). While open, the disk's volumes appear as
   read-only drives on the host. Links inside the backup are never followed. Disks with a file system Windows cannot read
   (for example most Linux guests) or an encrypted volume cannot be browsed; restore the VM instead.
+- Restore page in the host window, for a new or reinstalled PC (no paired client needed): enter where the backups are (a
+  folder, S3-compatible storage, or Azure Blob) and the recovery key, then restore the host's settings (paired devices,
+  certificate, settings, profiles) and VMs as new VMs. The key is checked against the backups and kept in this PC's protected
+  store. The Overview shows a "New PC?" card on a host with no devices and no backups configured. Restore the VMs first or
+  the settings first; after restoring settings, restart the host service.
 - The host window's Backups card has a "Back up now" button: it starts the host-state backup and every VM that has a backup
   policy, on every ready target, and says which could not start and why.
 - Game-aware mode additions (API 1.21.0): you can add your own game launchers to the built-in list (a game a launcher starts

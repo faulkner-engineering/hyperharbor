@@ -258,6 +258,49 @@ export interface GameAwareInfo {
   vms: { vmId: string; name: string; gpuPartition: boolean }[];
 }
 
+/** What the Restore page sends to check a backup location (RestoreWizardForm). Secrets are sent once and not kept by the page. */
+export interface RestoreWizardForm {
+  kind: "local" | "s3" | "azure";
+  name: string;
+  recoveryKey: string;
+  path?: string;
+  endpoint?: string;
+  bucket?: string;
+  region?: string;
+  prefix?: string;
+  useTls?: boolean;
+  accessKey?: string;
+  secretKey?: string;
+  azureAccount?: string;
+  azureContainer?: string;
+  azureKey?: string;
+}
+
+export interface RestoreWizardSnapshot {
+  id: string;
+  startTime: string;
+  totalSize: number;
+}
+
+export interface RestoreWizardVm {
+  vmId: string;
+  name?: string | null;
+  snapshots: RestoreWizardSnapshot[];
+}
+
+/** The Restore page's state (RestoreWizardStatus). Phase: idle, attaching, ready, or restoring. */
+export interface RestoreWizardStatus {
+  phase: "idle" | "attaching" | "ready" | "restoring";
+  step: string;
+  percent: number;
+  error?: string | null;
+  targetName?: string | null;
+  vms: RestoreWizardVm[];
+  hostSnapshots: RestoreWizardSnapshot[];
+  messages: string[];
+  restartRequired: boolean;
+}
+
 /** One backed-up item on one target (TrayBackupItem). */
 export interface TrayBackupItem {
   name: string;
@@ -299,6 +342,8 @@ export interface TrayViewState {
   backup: TrayBackupStatus | null;
   /** Null while the service is not connected. */
   gameAware: GameAwareInfo | null;
+  /** Null while the service is not connected. */
+  restoreWizard: RestoreWizardStatus | null;
   /** Work in progress: passphrase, console, packageSearch, folder:vm|iso|backup, device:<id>, update. */
   busy: string[];
   pairing: { pairingId: string; deviceName: string; pin: string; expiresAt: string } | null;
@@ -333,6 +378,9 @@ export type PageMessage =
   | { type: "gameAwareApply"; settings: GameAwareSettings }
   | { type: "gameAwareNotAGame" }
   | { type: "backupRunNow" }
+  | { type: "restoreWizardAttach"; form: RestoreWizardForm }
+  | { type: "restoreWizardRestore"; kind: "host" | "vm"; snapshotId: string; name?: string; start?: boolean }
+  | { type: "restoreWizardReset" }
   | { type: "gameReadyFix"; cardId: string }
   | { type: "gameReadyTestWake"; delaySeconds: number }
   | { type: "gameReadyConsoleSignInEnable"; userName: string; launcher: string }
