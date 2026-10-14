@@ -1439,6 +1439,99 @@ async fn start_restore_test(
     state.api.start_restore_test(&host, &paired).await
 }
 
+/// Opens a snapshot for browsing. Needs elevation.
+#[tauri::command]
+async fn open_backup_browse(
+    state: State<'_, AppState>,
+    key: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.open_backup_browse(&host, &paired, &request).await
+}
+
+#[tauri::command]
+async fn get_backup_browse(
+    state: State<'_, AppState>,
+    key: String,
+    session_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .get_backup_browse(&host, &paired, &session_id)
+        .await
+}
+
+#[tauri::command]
+async fn close_backup_browse(
+    state: State<'_, AppState>,
+    key: String,
+    session_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .close_backup_browse(&host, &paired, &session_id)
+        .await
+}
+
+/// Lists a folder inside an open backup. Needs elevation.
+#[tauri::command]
+async fn list_backup_browse(
+    state: State<'_, AppState>,
+    key: String,
+    session_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .list_backup_browse(&host, &paired, &session_id, &request)
+        .await
+}
+
+/// Saves one file from an open backup where the user chooses. Needs elevation. Returns the path, or None when the
+/// user cancels the save dialog.
+#[tauri::command]
+async fn download_backup_browse_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+    session_id: String,
+    volume: String,
+    path: String,
+) -> Result<Option<String>, ClientError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (host, paired) = state.paired_host(&key)?;
+    let leaf = path
+        .rsplit(['\\', '/'])
+        .find(|part| !part.is_empty())
+        .unwrap_or("file")
+        .to_string();
+    let dialog = app.clone();
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        dialog
+            .dialog()
+            .file()
+            .set_title("Save the file from the backup")
+            .set_file_name(&leaf)
+            .blocking_save_file()
+    })
+    .await
+    .map_err(|e| ClientError::InvalidRequest(e.to_string()))?;
+    let Some(destination) = chosen.and_then(|file| file.into_path().ok()) else {
+        return Ok(None);
+    };
+    let body = serde_json::json!({ "volume": volume, "path": path });
+    state
+        .api
+        .download_backup_browse_file(&host, &paired, &session_id, &body, &destination)
+        .await?;
+    Ok(Some(destination.to_string_lossy().into_owned()))
+}
+
 /// Lists what a target holds, grouped by VM. Needs elevation.
 #[tauri::command]
 async fn scan_backups(
@@ -1817,6 +1910,11 @@ pub fn run() {
             set_backup_policy,
             delete_backup_policy,
             get_backup_status,
+            open_backup_browse,
+            get_backup_browse,
+            close_backup_browse,
+            list_backup_browse,
+            download_backup_browse_file,
             get_restore_test,
             set_restore_test_settings,
             start_restore_test,

@@ -75,6 +75,12 @@ note anything that needs action, such as updating the host, a new elevation requ
   In the client: Host menu, Backups, Restore test (turn on or off, interval and time window, Run test now, latest results).
   A failed test is announced by the tray like a failed backup and shows on the Backups card and the Ambient screen.
 
+- Browse the files inside a backup (API 1.22.0): in the client's Restore window, "Browse files…" restores the chosen snapshot
+  into a work folder on the host, opens its disks read-only, and lets you walk the folders and save single files without
+  restoring the VM. It needs the admin passphrase, shows one backup at a time, closes by itself after 30 minutes without
+  use, and removes the work folder when closed (or at the next host start). While open, the disk's volumes appear as
+  read-only drives on the host. Links inside the backup are never followed. Disks with a file system Windows cannot read
+  (for example most Linux guests) or an encrypted volume cannot be browsed; restore the VM instead.
 - The host window's Backups card has a "Back up now" button: it starts the host-state backup and every VM that has a backup
   policy, on every ready target, and says which could not start and why.
 - Game-aware mode additions (API 1.21.0): you can add your own game launchers to the built-in list (a game a launcher starts

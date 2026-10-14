@@ -1591,6 +1591,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backup/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a snapshot to look at its files.
+         * @description Restores the snapshot's files into a work folder on the host, mounts its disks read-only, and answers at once
+         *     with a session in state `preparing`; poll `GET /backup/browse/{sessionId}` until it is `ready` or `failed`.
+         *     One session at a time (409 otherwise). It closes by itself after 30 minutes without use. While it is open the
+         *     disk's volumes appear as drives on the host, read-only. Links inside the backup are never followed.
+         */
+        post: operations["openBackupBrowse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/browse/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        /** The state of a browse session. */
+        get: operations["getBackupBrowse"];
+        put?: never;
+        post?: never;
+        /** Close a browse session, detach its disks, and delete the work folder. */
+        delete: operations["closeBackupBrowse"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/browse/{sessionId}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List a folder inside the backup, folders first.
+         * @description A POST because the request is audited, and so needs the admin passphrase. At most 5000 entries.
+         */
+        post: operations["listBackupBrowseEntries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/browse/{sessionId}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download one file from inside the backup.
+         * @description A POST because the request is audited, and so needs the admin passphrase.
+         */
+        post: operations["downloadBackupBrowseFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backup/scan": {
         parameters: {
             query?: never;
@@ -3104,6 +3191,49 @@ export interface components {
             nextDue?: string;
             /** @description Newest first, at most 50. */
             results: components["schemas"]["RestoreTestResult"][];
+        };
+        /** @enum {string} */
+        BackupBrowseState: "preparing" | "ready" | "failed";
+        OpenBackupBrowseRequest: {
+            targetId: string;
+            /** @description A VM snapshot from the scan. */
+            snapshotId: string;
+        };
+        BackupBrowseVolume: {
+            /** @description The drive letter the volume has on the host, for example `E:`. */
+            drive: string;
+            label?: string;
+            /** Format: int64 */
+            sizeBytes: number;
+        };
+        BackupBrowseSession: {
+            id: string;
+            state: components["schemas"]["BackupBrowseState"];
+            /** @description What the host is doing while `preparing`. */
+            step: string;
+            vmName?: string;
+            volumes: components["schemas"]["BackupBrowseVolume"][];
+            /** @description Why the session failed. */
+            error?: string;
+            /**
+             * Format: date-time
+             * @description Use of the session moves this forward.
+             */
+            expiresAt: string;
+        };
+        BackupBrowsePath: {
+            /** @description A drive from the session's volumes. */
+            volume: string;
+            /** @description A path inside the volume with slash or backslash separators. Omitted, it is the volume's root. */
+            path?: string;
+        };
+        BackupBrowseEntry: {
+            name: string;
+            isDirectory: boolean;
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            modified?: string;
         };
         BackupItemStatus: {
             item: string;
@@ -5946,6 +6076,140 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    openBackupBrowse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenBackupBrowseRequest"];
+            };
+        };
+        responses: {
+            /** @description The session. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupBrowseSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getBackupBrowse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupBrowseSession"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    closeBackupBrowse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed (also when it was already closed). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listBackupBrowseEntries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupBrowsePath"];
+            };
+        };
+        responses: {
+            /** @description The entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupBrowseEntry"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    downloadBackupBrowseFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupBrowsePath"];
+            };
+        };
+        responses: {
+            /** @description The file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
             409: components["responses"]["Conflict"];
         };
     };

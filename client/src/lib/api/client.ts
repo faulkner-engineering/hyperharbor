@@ -700,6 +700,29 @@ export const setBackupPolicy = (key: string, policy: BackupPolicy) =>
 export const deleteBackupPolicy = (key: string, targetId: string, vmId: string) =>
   invoke<void>("delete_backup_policy", { key, targetId, vmId });
 
+export type BackupBrowseSession = components["schemas"]["BackupBrowseSession"];
+export type BackupBrowseEntry = components["schemas"]["BackupBrowseEntry"];
+
+/** The API version that added browsing the files inside a backup. */
+export const BackupBrowseApiVersion = "1.22.0";
+
+/** Needs elevation. Starts preparing the snapshot; poll `getBackupBrowse` until it is ready. */
+export const openBackupBrowse = (key: string, targetId: string, snapshotId: string) =>
+  invoke<BackupBrowseSession>("open_backup_browse", { key, request: { targetId, snapshotId } });
+
+export const getBackupBrowse = (key: string, sessionId: string) =>
+  invoke<BackupBrowseSession>("get_backup_browse", { key, sessionId });
+
+export const closeBackupBrowse = (key: string, sessionId: string) => invoke<void>("close_backup_browse", { key, sessionId });
+
+/** Needs elevation. */
+export const listBackupBrowse = (key: string, sessionId: string, volume: string, path?: string) =>
+  invoke<BackupBrowseEntry[]>("list_backup_browse", { key, sessionId, request: { volume, path } });
+
+/** Needs elevation. Asks where to save; returns the saved path, or null when the person cancels. */
+export const downloadBackupBrowseFile = (key: string, sessionId: string, volume: string, path: string) =>
+  invoke<string | null>("download_backup_browse_file", { key, sessionId, volume, path });
+
 export type RestoreTestSettings = components["schemas"]["RestoreTestSettings"];
 export type RestoreTestResult = components["schemas"]["RestoreTestResult"];
 export type RestoreTestStatus = components["schemas"]["RestoreTestStatus"];

@@ -1437,6 +1437,96 @@ impl ApiClient {
         parse(response).await
     }
 
+    /// POST /backup/browse (needs elevation). Starts preparing a snapshot for browsing; poll the session.
+    pub async fn open_backup_browse(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(host, paired, reqwest::Method::POST, "/backup/browse", body)
+            .await
+    }
+
+    /// GET /backup/browse/{sessionId}.
+    pub async fn get_backup_browse(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        session_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("/backup/browse/{}", target_segment(session_id)?);
+        self.get_json(host, paired, &path).await
+    }
+
+    /// DELETE /backup/browse/{sessionId}.
+    pub async fn close_backup_browse(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        session_id: &str,
+    ) -> Result<(), ClientError> {
+        let path = format!("/backup/browse/{}", target_segment(session_id)?);
+        let response = self
+            .send_paired(host, paired, reqwest::Method::DELETE, &path)
+            .await?;
+        check(response).await?;
+        Ok(())
+    }
+
+    /// POST /backup/browse/{sessionId}/entries (needs elevation).
+    pub async fn list_backup_browse(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        session_id: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("/backup/browse/{}/entries", target_segment(session_id)?);
+        self.send_json(host, paired, reqwest::Method::POST, &path, body)
+            .await
+    }
+
+    /// POST /backup/browse/{sessionId}/file (needs elevation). Streams the file to `destination` piece by piece, so a
+    /// large file never sits in memory. A partly written file is removed when the download fails.
+    pub async fn download_backup_browse_file(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        session_id: &str,
+        body: &serde_json::Value,
+        destination: &std::path::Path,
+    ) -> Result<u64, ClientError> {
+        use std::io::Write;
+
+        let path = format!("/backup/browse/{}/file", target_segment(session_id)?);
+        let mut response = self
+            .send_paired_with(host, paired, reqwest::Method::POST, &path, Some(body), None)
+            .await?;
+        let mut file =
+            std::fs::File::create(destination).map_err(|e| ClientError::Storage(e.to_string()))?;
+        let mut written: u64 = 0;
+        let result = async {
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| ClientError::InvalidResponse(e.without_url().to_string()))?
+            {
+                file.write_all(&chunk)
+                    .map_err(|e| ClientError::Storage(e.to_string()))?;
+                written += chunk.len() as u64;
+            }
+            Ok::<(), ClientError>(())
+        }
+        .await;
+        drop(file);
+        if let Err(error) = result {
+            let _ = std::fs::remove_file(destination);
+            return Err(error);
+        }
+        Ok(written)
+    }
+
     /// POST /backup/scan (needs elevation). Opens the target's repositories.
     pub async fn scan_backups(
         &self,

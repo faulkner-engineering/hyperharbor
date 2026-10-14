@@ -1,6 +1,8 @@
 <script lang="ts">
   import {
+    BackupBrowseApiVersion,
     errorMessage,
+    hostSupports,
     restoreHostState,
     restoreVmFromBackup,
     scanBackups,
@@ -12,6 +14,7 @@
   } from "$lib/api/client";
   import { snapshotLabel, targetReady } from "$lib/backup";
   import { ElevationCancelled, waitForJob, withElevation } from "$lib/lifecycle.svelte";
+  import BackupBrowseDialog from "./BackupBrowseDialog.svelte";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
 
@@ -38,6 +41,7 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let job = $state<VmJob | null>(null);
+  let browsing = $state(false);
 
   const chosenVm = $derived(catalog?.vms.find((vm) => vm.vmId === vmId) ?? null);
   const finished = $derived(job !== null && job.state !== "running");
@@ -145,6 +149,9 @@
             <input id="rs-pass" type="password" bind:value={adminPassword} disabled={busy} autocomplete="off" />
           {/if}
           <div class="actions">
+            {#if hostSupports(host, BackupBrowseApiVersion)}
+              <button type="button" onclick={() => (browsing = true)} disabled={busy || !snapshotId}>Browse files…</button>
+            {/if}
             <button type="submit" class="primary" disabled={busy || !snapshotId}>{busy ? "Starting…" : "Restore this VM"}</button>
           </div>
         </form>
@@ -199,6 +206,10 @@
     {/if}
   {/if}
 </Dialog>
+
+{#if browsing && chosenVm}
+  <BackupBrowseDialog {host} {targetId} {snapshotId} vmName={chosenVm.name ?? "the VM"} onclose={() => (browsing = false)} />
+{/if}
 
 <style>
   h4 {

@@ -217,6 +217,29 @@ export function snapshotLabel(snapshot: BackupSnapshot): string {
   return `${when} (${formatBytes(snapshot.totalSize)})`;
 }
 
+/** A path inside a backup volume: folders joined with backslashes, no leading separator. */
+export function joinPath(parent: string, name: string): string {
+  return parent === "" ? name : `${parent}\\${name}`;
+}
+
+/** The folder above `path`, or "" at the volume's root. */
+export function parentPath(path: string): string {
+  const cut = path.lastIndexOf("\\");
+  return cut < 0 ? "" : path.slice(0, cut);
+}
+
+/** The folders leading to `path`, each with the path that opens it, for a breadcrumb row. */
+export function crumbs(path: string): { name: string; path: string }[] {
+  const parts = path.split("\\").filter((part) => part !== "");
+  return parts.map((name, index) => ({ name, path: parts.slice(0, index + 1).join("\\") }));
+}
+
+/** "Windows (E:, 120 GB)" for a volume picker. */
+export function volumeLabel(volume: { drive: string; label?: string | null; sizeBytes: number }): string {
+  const name = volume.label ? `${volume.label} (` : "(";
+  return `${name}${volume.drive}, ${formatBytes(volume.sizeBytes)})`;
+}
+
 /** One sentence about the restore test as a whole. */
 export function restoreTestSummary(status: RestoreTestStatus, now: Date = new Date()): string {
   if (status.running) return status.current ? `Testing ${status.current}…` : "Testing…";

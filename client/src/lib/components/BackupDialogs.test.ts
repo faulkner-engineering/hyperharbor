@@ -5,6 +5,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
+import BackupBrowseDialog from "./BackupBrowseDialog.svelte";
 import RecoveryKeyDialog from "./RecoveryKeyDialog.svelte";
 import ReplaceDiskDialog from "./ReplaceDiskDialog.svelte";
 import type { BackupTarget, HostEntry, Vm } from "$lib/api/client";
@@ -163,5 +164,56 @@ describe("ReplaceDiskDialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Look for backups" }));
 
     expect(await screen.findByText(/holds no backup of Dev Box/)).toBeTruthy();
+  });
+});
+
+describe("BackupBrowseDialog", () => {
+  const session = (state: "preparing" | "ready") => ({
+    id: "abc123",
+    state,
+    step: state === "ready" ? "Ready" : "Restoring the snapshot's files.",
+    volumes: state === "ready" ? [{ drive: "E:", label: "Windows", sizeBytes: 1024 }] : [],
+    expiresAt: "2026-10-12T12:30:00Z",
+    vmName: "Dev Box",
+  });
+
+  it("waits for the disks, lists the root, opens a folder, saves a file, and closes the session", async () => {
+    invoke.mockImplementation((command: string, args: { request?: { path?: string } }) => {
+      if (command === "open_backup_browse") return Promise.resolve(session("preparing"));
+      if (command === "get_backup_browse") return Promise.resolve(session("ready"));
+      if (command === "list_backup_browse") {
+        return Promise.resolve(
+          args.request?.path
+            ? [{ name: "notes.txt", isDirectory: false, size: 5 }]
+            : [{ name: "Docs", isDirectory: true, size: 0 }],
+        );
+      }
+      if (command === "download_backup_browse_file") return Promise.resolve("C:\\Users\\me\\notes.txt");
+      if (command === "close_backup_browse") return Promise.resolve(undefined);
+      return Promise.reject(new Error(`unexpected ${command}`));
+    });
+    const onclose = vi.fn();
+    render(BackupBrowseDialog, { props: { host, targetId: "t1", snapshotId: "k1", vmName: "Dev Box", onclose } });
+
+    expect(await screen.findByText(/Restoring the snapshot/)).toBeTruthy();
+    const folder = await screen.findByRole("button", { name: /Docs/ }, { timeout: 5000 });
+    await fireEvent.click(folder);
+    await fireEvent.click(await screen.findByRole("button", { name: "Save…" }));
+    expect(await screen.findByText(/Saved notes.txt to/)).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("download_backup_browse_file", { key: host.key, sessionId: "abc123", volume: "E:", path: "Docs\\notes.txt" });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Close backup" }));
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    expect(invoke).toHaveBeenCalledWith("close_backup_browse", { key: host.key, sessionId: "abc123" });
+  });
+
+  it("shows why a backup could not be opened", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "open_backup_browse") return Promise.reject({ code: "api", message: "A backup is already open for browsing. Close it first.", status: 409 });
+      return Promise.reject(new Error(`unexpected ${command}`));
+    });
+    render(BackupBrowseDialog, { props: { host, targetId: "t1", snapshotId: "k1", vmName: "Dev Box", onclose: vi.fn() } });
+
+    expect(await screen.findByText(/already open for browsing/)).toBeTruthy();
   });
 });

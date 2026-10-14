@@ -6,8 +6,12 @@ import {
   emptyTargetForm,
   formProblem,
   formatBytes,
+  crumbs,
   groupKey,
   intervalText,
+  joinPath,
+  parentPath,
+  volumeLabel,
   itemName,
   normalizeKey,
   restoreTestLine,
@@ -162,6 +166,27 @@ describe("targetLocation", () => {
     expect(targetLocation(target({ local: { path: "D:\\B" } }))).toBe("D:\\B");
     expect(targetLocation(target({ s3: { endpoint: "s3.example.com", bucket: "b", useTls: true } }))).toBe("s3.example.com/b");
     expect(targetLocation(target({ azure: { account: "a", container: "c" } }))).toBe("a/c");
+  });
+});
+
+describe("browse paths", () => {
+  it("joins, splits, and walks up", () => {
+    expect(joinPath("", "Users")).toBe("Users");
+    expect(joinPath("Users", "me")).toBe("Users\\me");
+    expect(parentPath("Users\\me")).toBe("Users");
+    expect(parentPath("Users")).toBe("");
+    expect(parentPath("")).toBe("");
+    expect(crumbs("Users\\me\\Docs")).toEqual([
+      { name: "Users", path: "Users" },
+      { name: "me", path: "Users\\me" },
+      { name: "Docs", path: "Users\\me\\Docs" },
+    ]);
+    expect(crumbs("")).toEqual([]);
+  });
+
+  it("labels a volume", () => {
+    expect(volumeLabel({ drive: "E:", label: "Windows", sizeBytes: 128 * 1024 ** 3 })).toBe("Windows (E:, 128 GB)");
+    expect(volumeLabel({ drive: "F:", sizeBytes: 1024 ** 2 })).toBe("(F:, 1 MB)");
   });
 });
 
