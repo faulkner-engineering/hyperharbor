@@ -59,6 +59,8 @@ public sealed partial class TrayWindowTests
 
         public void GameAwareNotAGame() => Calls.Add("notAGame");
 
+        public void BackupRunNow() => Calls.Add("backupRunNow");
+
         public void Open(string target) => Calls.Add("open:" + target);
 
         public void OpenUrl(string url) => Calls.Add("url:" + url);
@@ -100,6 +102,7 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"gameReadySleepNow"}""", "sleepNow")]
     [InlineData("""{"type":"gameAwareApply","settings":{"enabled":true,"defaultAction":"pause","allowlist":["a","b"],"ignoreList":[],"vmPolicies":[]}}""", "gameAware:True:2")]
     [InlineData("""{"type":"gameAwareNotAGame"}""", "notAGame")]
+    [InlineData("""{"type":"backupRunNow"}""", "backupRunNow")]
     [InlineData("""{"type":"open","target":"audit"}""", "open:audit")]
     [InlineData("""{"type":"openUrl","url":"https://github.com/faulkner-engineering/hyperharbor/releases"}""", "url:https://github.com/faulkner-engineering/hyperharbor/releases")]
     [InlineData("""{"type":"cancelPairing","pairingId":"0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"}""", "cancel:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b")]

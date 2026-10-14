@@ -257,6 +257,9 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
             case BackupStatusQueryMessage:
                 await connection.SendAsync(new BackupStatusMessage(await BuildBackupStatusAsync()));
                 break;
+            case BackupRunNowMessage:
+                await RunBackupsNowAsync(connection);
+                break;
             case UpdateStatusQueryMessage:
                 await SendUpdateStatusAsync(connection);
                 break;
@@ -563,6 +566,14 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         return Core.Backup.BackupTrayStatus.Build(
             config.Load(), history, names, (_services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow(),
             coordinator?.Busy ?? false, coordinator?.WaitingCount ?? 0, _services.GetService<Core.Backup.Restore.RestoreTestStore>()?.List(200));
+    }
+
+    private async Task RunBackupsNowAsync(Connection connection)
+    {
+        var result = _services.GetService<Core.Backup.BackupCoordinator>()?.StartAllManual()
+            ?? new Core.Backup.BackupCoordinator.StartAllResult(0, ["Backups are not available in this run of the host."]);
+        await connection.SendAsync(new BackupRunNowResultMessage(result.Started, result.Problems));
+        await connection.SendAsync(new BackupStatusMessage(await BuildBackupStatusAsync()));
     }
 
     private async Task SendUpdateStatusAsync(Connection connection)

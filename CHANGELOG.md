@@ -75,6 +75,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   In the client: Host menu, Backups, Restore test (turn on or off, interval and time window, Run test now, latest results).
   A failed test is announced by the tray like a failed backup and shows on the Backups card and the Ambient screen.
 
+- The host window's Backups card has a "Back up now" button: it starts the host-state backup and every VM that has a backup
+  policy, on every ready target, and says which could not start and why.
 - Game-aware mode additions (API 1.21.0): you can add your own game launchers to the built-in list (a game a launcher starts
   counts; the launcher's own window does not), in the client's Game-aware panel and the host window's Game-aware page
   ("launchers" in the settings). The Game ready section now has a Game-aware mode card with its status, an on/off switch,

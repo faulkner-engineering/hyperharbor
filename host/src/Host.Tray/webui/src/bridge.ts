@@ -332,6 +332,7 @@ export type PageMessage =
   | { type: "gameReadyRefresh" }
   | { type: "gameAwareApply"; settings: GameAwareSettings }
   | { type: "gameAwareNotAGame" }
+  | { type: "backupRunNow" }
   | { type: "gameReadyFix"; cardId: string }
   | { type: "gameReadyTestWake"; delaySeconds: number }
   | { type: "gameReadyConsoleSignInEnable"; userName: string; launcher: string }

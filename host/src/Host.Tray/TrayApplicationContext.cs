@@ -386,6 +386,14 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             case GameAwareStatusMessage gameAwareStatus:
                 OnGameAwareStatus(gameAwareStatus.Info);
                 break;
+            case BackupRunNowResultMessage runNow:
+                Notify(
+                    runNow.Started > 0 ? "success" : "error",
+                    runNow.Started > 0 ? "Backups started" : "No backup started",
+                    runNow.Started > 0
+                        ? $"{runNow.Started} backup{(runNow.Started == 1 ? string.Empty : "s")} started.{(runNow.Problems.Count > 0 ? " " + string.Join(" ", runNow.Problems) : string.Empty)}"
+                        : runNow.Problems.Count > 0 ? string.Join(" ", runNow.Problems) : "Nothing is set up to back up yet.");
+                break;
             case BackupStatusMessage backup:
                 OnBackupStatus(backup.Status);
                 break;
@@ -844,6 +852,8 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     public void GameReadySleepNow() => _ = _pipe.SendAsync(new GameReadySleepNowMessage());
 
     public void GameAwareApply(GameAwareSettings settings) => _ = _pipe.SendAsync(new GameAwareApplyMessage(settings));
+
+    public void BackupRunNow() => _ = _pipe.SendAsync(new BackupRunNowMessage());
 
     public void GameAwareNotAGame() => _ = _pipe.SendAsync(new GameAwareNotAGameMessage());
 

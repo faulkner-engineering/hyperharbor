@@ -78,6 +78,18 @@
 
   <Card icon="storage" title="Backups" status={backups.status} tone={backups.tone}>
     {#each backups.lines as line, index (index)}<span class="line">{line}</span>{/each}
+    {#snippet action()}
+      {#if view.backup?.configured}
+        <button
+          type="button"
+          class="btn"
+          disabled={!view.connected || view.backup.running || tray.requested.includes("backupRunNow")}
+          onclick={() => tray.send({ type: "backupRunNow" }, "backupRunNow")}
+        >
+          Back up now
+        </button>
+      {/if}
+    {/snippet}
   </Card>
 </div>
 

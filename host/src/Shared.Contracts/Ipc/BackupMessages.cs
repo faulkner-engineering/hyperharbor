@@ -27,3 +27,10 @@ public sealed record TrayBackupStatus(bool Configured, int PendingKeys, bool Run
 public sealed record BackupStatusQueryMessage : TrayMessage;
 
 public sealed record BackupStatusMessage(TrayBackupStatus Status) : TrayMessage;
+
+/// <summary>"Back up now" from the host window: runs everything that is backed up.</summary>
+public sealed record BackupRunNowMessage : TrayMessage;
+
+/// <summary>The answer to <see cref="BackupRunNowMessage"/>.</summary>
+/// <param name="Problems">One sentence for each run that could not start.</param>
+public sealed record BackupRunNowResultMessage(int Started, IReadOnlyList<string> Problems) : TrayMessage;

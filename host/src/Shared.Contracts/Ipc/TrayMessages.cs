@@ -31,6 +31,8 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(UpdateStatusMessage), "updateStatus")]
 [JsonDerivedType(typeof(UpdateStatusQueryMessage), "updateStatusQuery")]
 [JsonDerivedType(typeof(BackupStatusMessage), "backupStatus")]
+[JsonDerivedType(typeof(BackupRunNowMessage), "backupRunNow")]
+[JsonDerivedType(typeof(BackupRunNowResultMessage), "backupRunNowResult")]
 [JsonDerivedType(typeof(BackupStatusQueryMessage), "backupStatusQuery")]
 [JsonDerivedType(typeof(CheckForUpdateMessage), "checkForUpdate")]
 [JsonDerivedType(typeof(InstallUpdateMessage), "installUpdate")]

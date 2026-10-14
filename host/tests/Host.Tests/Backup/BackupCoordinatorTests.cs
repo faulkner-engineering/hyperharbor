@@ -248,6 +248,34 @@ public sealed class BackupCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public async Task Run_all_starts_the_host_state_and_each_VM_with_a_policy_and_reports_what_cannot_start()
+    {
+        Configure(Policy());
+        var other = new BackupTarget
+        {
+            Id = "t2", Name = "Pending", Kind = BackupTargetKind.Local, Local = new LocalTargetSettings(@"D:C"),
+            VmRepository = new RepositoryRef("r3", RepositoryKeyState.PendingKey), HostRepository = new RepositoryRef("r4", RepositoryKeyState.PendingKey),
+        };
+        _config.Update(c => c with { Targets = [.. c.Targets, other] });
+        _game = true;
+
+        var result = _coordinator.StartAllManual();
+        await WaitForRunsAsync(2);
+
+        Assert.Equal(2, result.Started);
+        Assert.Equal(VmId, Assert.Single(_runner.Vm).VmId);
+        Assert.Equal(1, _runner.HostRuns);
+        Assert.Contains("Pending", Assert.Single(result.Problems));
+        Assert.Equal(0, Volatile.Read(ref _holds));
+    }
+
+    [Fact]
+    public void Run_all_without_a_target_starts_nothing()
+    {
+        Assert.Equal(0, _coordinator.StartAllManual().Started);
+    }
+
+    [Fact]
     public void A_manual_run_for_an_unknown_target_is_refused()
     {
         Configure();

@@ -161,6 +161,47 @@ public sealed class BackupCoordinator(
         }
     }
 
+    /// <summary>Result of <see cref="StartAllManual"/>.</summary>
+    /// <param name="Started">Runs started.</param>
+    /// <param name="Problems">One sentence for each run that could not start.</param>
+    public sealed record StartAllResult(int Started, IReadOnlyList<string> Problems);
+
+    /// <summary>
+    /// Starts a manual run of everything that is backed up: each ready target's host state and each VM with a policy on it.
+    /// Items that cannot start (busy VM, run already going) are reported, not thrown.
+    /// </summary>
+    public StartAllResult StartAllManual(Guid? userId = null)
+    {
+        var settings = config.Load();
+        var started = 0;
+        var problems = new List<string>();
+        foreach (var target in settings.Targets.Where(t => t.Enabled))
+        {
+            if (target.VmRepository?.KeyState != RepositoryKeyState.Confirmed || target.HostRepository?.KeyState != RepositoryKeyState.Confirmed)
+            {
+                problems.Add($"{target.Name}: its recovery key has not been confirmed.");
+                continue;
+            }
+
+            var items = new List<Guid?> { null };
+            items.AddRange(settings.Policies.Where(p => p.Enabled && p.TargetId == target.Id).Select(VmIdOf).Where(id => id is not null));
+            foreach (var vmId in items)
+            {
+                try
+                {
+                    StartManual(target.Id, vmId, userId);
+                    started++;
+                }
+                catch (Exception ex) when (ex is BackupException or VmBusyException)
+                {
+                    problems.Add($"{target.Name}: {ex.Message}");
+                }
+            }
+        }
+
+        return new StartAllResult(started, problems);
+    }
+
     private void EnqueueIfDue(BackupTarget target, string item, DateTimeOffset local)
     {
         var last = history.Last(item, target.Id)?.FinishedAt;

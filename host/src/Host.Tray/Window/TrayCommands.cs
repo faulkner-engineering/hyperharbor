@@ -68,6 +68,8 @@ public interface ITrayActions
     /// <summary>"This was not a game": ignore the program that started the game state.</summary>
     void GameAwareNotAGame();
 
+    void BackupRunNow();
+
     /// <param name="target">logs or audit.</param>
     void Open(string target);
 
@@ -169,6 +171,9 @@ public static class TrayCommands
                 return true;
             case "gameAwareApply" when GameAwareSettingsOf(message) is { } gameAware:
                 actions.GameAwareApply(gameAware);
+                return true;
+            case "backupRunNow":
+                actions.BackupRunNow();
                 return true;
             case "gameAwareNotAGame":
                 actions.GameAwareNotAGame();
