@@ -67,6 +67,11 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (_services.GetService<TrayRestoreWizard>() is { } wizard)
+        {
+            wizard.Changed += (_, _) => Broadcast(new RestoreWizardStatusMessage(wizard.Status));
+        }
+
         if (_services.GetService<HostLeanService>() is { } lean)
         {
             lean.Changed += (_, _) => Broadcast(new HostLeanStatusMessage(lean.Status()));
@@ -256,6 +261,22 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 break;
             case BackupStatusQueryMessage:
                 await connection.SendAsync(new BackupStatusMessage(await BuildBackupStatusAsync()));
+                break;
+            case RestoreWizardQueryMessage:
+                if (_services.GetService<TrayRestoreWizard>() is { } queried)
+                {
+                    await connection.SendAsync(new RestoreWizardStatusMessage(queried.Status));
+                }
+
+                break;
+            case RestoreWizardAttachMessage attach:
+                _services.GetService<TrayRestoreWizard>()?.Attach(attach.Form);
+                break;
+            case RestoreWizardRestoreMessage restoreRequest:
+                _services.GetService<TrayRestoreWizard>()?.Restore(restoreRequest);
+                break;
+            case RestoreWizardResetMessage:
+                _services.GetService<TrayRestoreWizard>()?.Reset();
                 break;
             case BackupRunNowMessage:
                 await RunBackupsNowAsync(connection);

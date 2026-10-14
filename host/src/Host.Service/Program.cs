@@ -449,6 +449,7 @@ builder.Services.AddSingleton(services => new BackupCoordinator(
     services.GetRequiredService<BackupHistoryStore>(), services.GetRequiredService<IBackupRunner>(),
     services.GetRequiredService<VmJobStore>(), () => services.GetRequiredService<HostActivity>().TryBegin(),
     services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<BackupCoordinator>>()));
+builder.Services.AddSingleton<TrayRestoreWizard>();
 builder.Services.AddSingleton<IVhdMounter, PowerShellVhdMounter>();
 builder.Services.AddSingleton(services => new SnapshotBrowser(
     services.GetRequiredService<IBackupRepositories>(), services.GetRequiredService<ISnapshotRestorer>(), services.GetRequiredService<IVhdMounter>(),
