@@ -6,7 +6,17 @@ namespace HyperHarbor.Host.Core.Security;
 /// <summary>A client device allowed to call the API with mTLS. Every device belongs to a User.</summary>
 /// <param name="UserId">The User the device acts for. Guid.Empty only in files written before Users existed.</param>
 /// <param name="CertificateFingerprint">SHA-256 of the client certificate DER, uppercase hex.</param>
-public sealed record PairedDevice(Guid DeviceId, Guid UserId, string Name, string CertificateFingerprint, DateTimeOffset PairedAt);
+/// <param name="TailscaleNodeId">The stable Tailscale node ID the device paired or first connected from over the tailnet.
+/// While it is set, a request from this device over the tailnet must come from that node. Null until then.</param>
+/// <param name="TailscaleNodeName">The node's name when it was recorded, for display only.</param>
+public sealed record PairedDevice(
+    Guid DeviceId,
+    Guid UserId,
+    string Name,
+    string CertificateFingerprint,
+    DateTimeOffset PairedAt,
+    string? TailscaleNodeId = null,
+    string? TailscaleNodeName = null);
 
 /// <summary>
 /// Persists paired devices. Any change grants or revokes API access, so the file is written
@@ -71,6 +81,24 @@ public sealed class PairedDeviceStore
 
         Changed?.Invoke(this, EventArgs.Empty);
         return device;
+    }
+
+    /// <summary>Records the Tailscale node a device uses. Returns false when the device is no longer paired.</summary>
+    public bool SetTailscaleNode(Guid deviceId, string nodeId, string? nodeName)
+    {
+        lock (_gate)
+        {
+            var devices = Devices();
+            var index = devices.FindIndex(device => device.DeviceId == deviceId);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            devices[index] = devices[index] with { TailscaleNodeId = nodeId, TailscaleNodeName = nodeName };
+            Save(devices);
+            return true;
+        }
     }
 
     public bool Remove(Guid deviceId)

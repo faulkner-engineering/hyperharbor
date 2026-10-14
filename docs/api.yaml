@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.22.0
+  version: 1.23.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -210,6 +210,58 @@ paths:
           $ref: "#/components/responses/ElevationRequired"
         "409":
           $ref: "#/components/responses/UpdatesUnsupported"
+
+  /host/tailscale:
+    get:
+      tags: [Host]
+      operationId: getHostTailscale
+      summary: Get the host's Tailscale state.
+      description: |
+        What the host's own Tailscale client reports: whether it is installed and signed in, the host's
+        Tailscale address and MagicDNS name, and whether it carries the `tag:hyperharbor-host` tag that clients
+        prefer when they look for hosts on the tailnet. `upCommand` is a suggestion for the user to run; the host
+        never installs, signs in, or changes Tailscale.
+      responses:
+        "200":
+          description: The host's Tailscale state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostTailscale"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /host/tailscale/settings:
+    put:
+      tags: [Host]
+      operationId: setHostTailscaleSettings
+      summary: Change where the host finds its Tailscale client.
+      description: |
+        The local API port (41112 by default) and, for Headscale and similar servers, the control server URL used in
+        the suggested `tailscale up` command. These decide what the host trusts as Tailscale, so the request needs
+        elevation.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TailscaleConfig"
+      responses:
+        "200":
+          description: The settings were saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostTailscale"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
 
   /host/resources:
     get:
@@ -2155,6 +2207,36 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /wake/relay:
+    post:
+      tags: [Wake]
+      operationId: relayWake
+      summary: Send magic packets on this host's LAN for another host.
+      description: |
+        A client that is away from a sleeping host's LAN asks a paired host that is on that LAN to send the magic
+        packet. The host sends only for adapters whose address is on one of its own networks, from that network, to
+        that network's broadcast address; anything else is ignored. Returns 409 with `code: wakeTargetNotOnLan` when
+        no adapter is on a network this host is on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WakeRelayRequest"
+      responses:
+        "200":
+          description: Magic packets were sent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WakeRelayResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /backup/targets:
     get:
       tags: [Backup]
@@ -3009,7 +3091,11 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
     Unauthorized:
-      description: The client certificate is missing or not paired with this host.
+      description: |
+        The client certificate is missing or not paired with this host. A request that arrives over a Tailscale
+        address from a different node than the one the device is tied to is refused with 403 and
+        `code: tailscaleNodeMismatch`, or `code: tailscaleNodeUnverified` when the host's Tailscale client cannot say
+        which node sent it. Every route can answer this.
       content:
         application/problem+json:
           schema:
@@ -3680,6 +3766,26 @@ components:
           minimum: 5
           maximum: 300
 
+    WakeRelayRequest:
+      type: object
+      required: [adapters]
+      properties:
+        adapters:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/WakeAdapter"
+
+    WakeRelayResult:
+      type: object
+      required: [sent]
+      properties:
+        sent:
+          type: integer
+          minimum: 1
+          description: How many datagrams the host sent.
+
     WakeTestScheduled:
       type: object
       required: [sleepAt]
@@ -3884,6 +3990,62 @@ components:
         edition:
           type: string
           description: The Windows edition, for display, for example "Windows 11 Pro".
+
+    TailscaleState:
+      type: string
+      enum: [notInstalled, unreachable, needsLogin, stopped, running, other]
+      description: |
+        `notInstalled`: no Tailscale client was found. `unreachable`: one is installed but did not answer.
+        `needsLogin`: signed out. `stopped`: signed in with Tailscale turned off. `running`: connected.
+
+    TailscaleConfig:
+      type: object
+      required: [localApiPort]
+      properties:
+        localApiPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: The loopback port of the Tailscale client's local API. 41112 by default.
+        controlUrl:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: A custom control server (Headscale), an http or https URL. Null for Tailscale's own.
+
+    HostTailscale:
+      type: object
+      required: [state, tagged, tag, upCommand, config]
+      properties:
+        state:
+          $ref: "#/components/schemas/TailscaleState"
+        error:
+          type:
+            - string
+            - "null"
+          description: Why the state could not be read, when it could not.
+        ipv4:
+          type:
+            - string
+            - "null"
+          description: The host's Tailscale IPv4 address while Tailscale runs.
+        dnsName:
+          type:
+            - string
+            - "null"
+          description: The host's MagicDNS name without the trailing dot.
+        tagged:
+          type: boolean
+          description: The host carries `tag`, so clients prefer it when they look for hosts on the tailnet.
+        tag:
+          type: string
+          description: The tag clients prefer, `tag:hyperharbor-host`.
+        upCommand:
+          type: string
+          description: The `tailscale up` command that gives the host the tag. A suggestion; the host never runs it.
+        config:
+          $ref: "#/components/schemas/TailscaleConfig"
 
     HostResources:
       type: object

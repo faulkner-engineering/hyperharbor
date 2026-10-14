@@ -111,6 +111,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/tailscale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's Tailscale state.
+         * @description What the host's own Tailscale client reports: whether it is installed and signed in, the host's
+         *     Tailscale address and MagicDNS name, and whether it carries the `tag:hyperharbor-host` tag that clients
+         *     prefer when they look for hosts on the tailnet. `upCommand` is a suggestion for the user to run; the host
+         *     never installs, signs in, or changes Tailscale.
+         */
+        get: operations["getHostTailscale"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/tailscale/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change where the host finds its Tailscale client.
+         * @description The local API port (41112 by default) and, for Headscale and similar servers, the control server URL used in
+         *     the suggested `tailscale up` command. These decide what the host trusts as Tailscale, so the request needs
+         *     elevation.
+         */
+        put: operations["setHostTailscaleSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/host/resources": {
         parameters: {
             query?: never;
@@ -1286,6 +1331,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wake/relay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send magic packets on this host's LAN for another host.
+         * @description A client that is away from a sleeping host's LAN asks a paired host that is on that LAN to send the magic
+         *     packet. The host sends only for adapters whose address is on one of its own networks, from that network, to
+         *     that network's broadcast address; anything else is ignored. Returns 409 with `code: wakeTargetNotOnLan` when
+         *     no adapter is on a network this host is on.
+         */
+        post: operations["relayWake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backup/targets": {
         parameters: {
             query?: never;
@@ -2256,6 +2324,13 @@ export interface components {
         WakeTestRequest: {
             delaySeconds: number;
         };
+        WakeRelayRequest: {
+            adapters: components["schemas"]["WakeAdapter"][];
+        };
+        WakeRelayResult: {
+            /** @description How many datagrams the host sent. */
+            sent: number;
+        };
         WakeTestScheduled: {
             /** Format: date-time */
             sleepAt: string;
@@ -2364,6 +2439,34 @@ export interface components {
             firewallOpen: boolean;
             /** @description The Windows edition, for display, for example "Windows 11 Pro". */
             edition: string;
+        };
+        /**
+         * @description `notInstalled`: no Tailscale client was found. `unreachable`: one is installed but did not answer.
+         *     `needsLogin`: signed out. `stopped`: signed in with Tailscale turned off. `running`: connected.
+         * @enum {string}
+         */
+        TailscaleState: "notInstalled" | "unreachable" | "needsLogin" | "stopped" | "running" | "other";
+        TailscaleConfig: {
+            /** @description The loopback port of the Tailscale client's local API. 41112 by default. */
+            localApiPort: number;
+            /** @description A custom control server (Headscale), an http or https URL. Null for Tailscale's own. */
+            controlUrl?: string | null;
+        };
+        HostTailscale: {
+            state: components["schemas"]["TailscaleState"];
+            /** @description Why the state could not be read, when it could not. */
+            error?: string | null;
+            /** @description The host's Tailscale IPv4 address while Tailscale runs. */
+            ipv4?: string | null;
+            /** @description The host's MagicDNS name without the trailing dot. */
+            dnsName?: string | null;
+            /** @description The host carries `tag`, so clients prefer it when they look for hosts on the tailnet. */
+            tagged: boolean;
+            /** @description The tag clients prefer, `tag:hyperharbor-host`. */
+            tag: string;
+            /** @description The `tailscale up` command that gives the host the tag. A suggestion; the host never runs it. */
+            upCommand: string;
+            config: components["schemas"]["TailscaleConfig"];
         };
         HostResources: {
             logicalProcessorCount: number;
@@ -3402,7 +3505,12 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
-        /** @description The client certificate is missing or not paired with this host. */
+        /**
+         * @description The client certificate is missing or not paired with this host. A request that arrives over a Tailscale
+         *     address from a different node than the one the device is tied to is refused with 403 and
+         *     `code: tailscaleNodeMismatch`, or `code: tailscaleNodeUnverified` when the host's Tailscale client cannot say
+         *     which node sent it. Every route can answer this.
+         */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -3646,6 +3754,54 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["ElevationRequired"];
             409: components["responses"]["UpdatesUnsupported"];
+        };
+    };
+    getHostTailscale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The host's Tailscale state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostTailscale"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setHostTailscaleSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TailscaleConfig"];
+            };
+        };
+        responses: {
+            /** @description The settings were saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostTailscale"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
         };
     };
     getHostResources: {
@@ -5646,6 +5802,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WakeTestScheduled"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    relayWake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WakeRelayRequest"];
+            };
+        };
+        responses: {
+            /** @description Magic packets were sent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WakeRelayResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

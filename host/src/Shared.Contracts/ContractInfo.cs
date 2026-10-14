@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.22.0";
+    public const string ApiVersion = "1.23.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -53,6 +53,15 @@ public static class ContractInfo
 
         /// <summary>409: package search needs PowerShell 7 and the WinGet PowerShell module on the host (tray: Set up package search).</summary>
         public const string WingetUnavailable = "wingetUnavailable";
+
+        /// <summary>403: the request came over the tailnet from a different node than the one this device is paired from.</summary>
+        public const string TailscaleNodeMismatch = "tailscaleNodeMismatch";
+
+        /// <summary>403: this device is tied to a Tailscale node, and the host's Tailscale client cannot say which node sent the request.</summary>
+        public const string TailscaleNodeUnverified = "tailscaleNodeUnverified";
+
+        /// <summary>409: none of the adapters in a wake relay request is on a network this host is on.</summary>
+        public const string WakeTargetNotOnLan = "wakeTargetNotOnLan";
 
         /// <summary>409: the recovery key typed back, or entered for an existing target, does not match.</summary>
         public const string BadRecoveryKey = "badRecoveryKey";

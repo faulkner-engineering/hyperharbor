@@ -28,6 +28,7 @@ using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Core.Updates;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Core.VmConsole;
+using HyperHarbor.Host.Core.Tailscale;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
@@ -477,6 +478,19 @@ if (selfTest is null)
     builder.Services.AddHostedService<RestoreTestSchedulerService>();
     builder.Services.AddHostedService<BrowseCleanupService>();
 }
+
+// Tailscale: the installed client's local API first, then its command line. The host never installs or signs in Tailscale.
+var tailscaleSettings = new TailscaleSettingsStore(dataDirectory);
+builder.Services.AddSingleton(tailscaleSettings);
+builder.Services.AddSingleton(services => new TailscaleStatusProvider(
+    [
+        new TailscaleHttpLocalApi(new HttpClient(new SocketsHttpHandler { UseProxy = false }), tailscaleSettings.Load),
+        new TailscaleCliLocalApi(new TailscaleProcess(), TailscaleCliLocalApi.DefaultCandidates),
+    ],
+    services.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<TailscaleNodeVerifier>();
+builder.Services.AddSingleton<IWakeRelayNetwork, SystemWakeRelayNetwork>();
+builder.Services.AddSingleton<WakeRelayService>();
 
 // Game-aware mode: the tray reports the foreground, the monitor decides, the controller pauses and resumes VMs.
 builder.Services.AddSingleton(new GameAwareStore(dataDirectory));

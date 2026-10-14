@@ -11,6 +11,17 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Added
+- Tailscale, host side (API 1.23.0; uses the Tailscale client you already installed, nothing is installed or signed in for you):
+  the host reads its own client through the local API (port 41112 by default, changeable for other setups) and falls
+  back to `tailscale status --json`. `GET /host/tailscale` reports installed, signed in, the host's Tailscale
+  address and MagicDNS name, and whether it has the `tag:hyperharbor-host` tag, with the `tailscale up` command that
+  sets it (it includes `--login-server` when a Headscale URL is configured; `PUT /host/tailscale/settings`, elevated).
+- A device paired or first connecting over the tailnet is tied to its Tailscale node. A later request over a Tailscale
+  address from a different node is refused with 403 `tailscaleNodeMismatch`, or `tailscaleNodeUnverified` when the host
+  cannot tell which node sent it. Requests over the local network are not affected. To use a paired device from a new
+  Tailscale node, pair it again.
+- `POST /wake/relay`: a paired host on a sleeping host's LAN sends the magic packet for a client that is away. It
+  only sends from, and to the broadcast address of, its own networks.
 - Backup foundations (work in progress toward backup and restore with Kopia): backup targets (local folder, S3,
   Azure Blob) and per-VM policies are stored in `backup-config.json`; repository passphrases and cloud keys are kept
   only in a DPAPI-protected vault. A repository is created only after you confirm that you saved its recovery key by

@@ -4,6 +4,7 @@ using HyperHarbor.Host.Core.Identity;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.RemoteDesktop;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Tailscale;
 using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
@@ -25,6 +26,10 @@ public static class HostEndpoints
         endpoints.MapPost(ContractInfo.BasePath + "/host/remote-desktop/enable", EnableRemoteDesktop).WithName("enableHostRemoteDesktop")
             .Audited()
             .RequireElevation();
+        endpoints.MapGet(ContractInfo.BasePath + "/host/tailscale", GetTailscaleAsync).WithName("getHostTailscale");
+        endpoints.MapPut(ContractInfo.BasePath + "/host/tailscale/settings", SetTailscaleSettingsAsync).WithName("setHostTailscaleSettings")
+            .Audited<TailscaleConfig>(config => $"localApiPort={config.LocalApiPort}, controlUrl={config.ControlUrl}")
+            .RequireElevation();
         endpoints.MapPost(ContractInfo.BasePath + "/host/logs/bundle", DownloadLogs).WithName("downloadHostLogs")
             .Audited()
             .RequireElevation();
@@ -40,6 +45,28 @@ public static class HostEndpoints
             .RequireElevation();
         endpoints.MapGet(ContractInfo.BasePath + "/switches", ListSwitchesAsync).WithName("listSwitches");
         return endpoints;
+    }
+
+    private static async Task<Ok<HostTailscale>> GetTailscaleAsync(TailscaleStatusProvider provider, TailscaleSettingsStore settings, CancellationToken cancellationToken) =>
+        TypedResults.Ok(HostTailscaleBuilder.Build(await provider.GetStatusAsync(cancellationToken), settings.Load()));
+
+    private static async Task<Results<Ok<HostTailscale>, ProblemHttpResult>> SetTailscaleSettingsAsync(
+        TailscaleConfig config,
+        TailscaleStatusProvider provider,
+        TailscaleSettingsStore settings,
+        CancellationToken cancellationToken)
+    {
+        TailscaleSettings saved;
+        try
+        {
+            saved = settings.Save(new TailscaleSettings { LocalApiPort = config.LocalApiPort, ControlUrl = config.ControlUrl });
+        }
+        catch (ArgumentException exception)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid request", detail: exception.Message.Split(Environment.NewLine)[0]);
+        }
+
+        return TypedResults.Ok(HostTailscaleBuilder.Build(await provider.GetStatusAsync(cancellationToken, refresh: true), saved));
     }
 
     /// <summary>Host service version without build metadata.</summary>

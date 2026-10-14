@@ -23,6 +23,8 @@ public static class WakeEndpoints
         wake.MapPost("/readiness/fix", FixAsync).WithName("fixWakeReadiness")
             .Audited<WakeFixRequest>(request => $"checkIds={string.Join(",", request.CheckIds)}")
             .RequireElevation();
+        wake.MapPost("/relay", Relay).WithName("relayWake")
+            .Audited<WakeRelayRequest>(request => $"adapters={request.Adapters.Count}");
         wake.MapPost("/test", StartTest).WithName("startWakeTest")
             .Audited<WakeTestRequest>(request => $"delaySeconds={request.DelaySeconds}");
 
@@ -51,6 +53,19 @@ public static class WakeEndpoints
     {
         var sleepAt = scheduler.Schedule(TimeSpan.FromSeconds(request.DelaySeconds), DeviceName(user));
         return TypedResults.Accepted((string?)null, new WakeTestScheduled(sleepAt));
+    }
+
+    /// <summary>Sends magic packets on this host's LAN for a host that sleeps there. Clients away from that LAN use it.</summary>
+    private static Results<Ok<WakeRelayResult>, ProblemHttpResult> Relay(WakeRelayRequest request, WakeRelayService relay)
+    {
+        var sent = relay.Relay(request.Adapters);
+        return sent > 0
+            ? TypedResults.Ok(new WakeRelayResult(sent))
+            : TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Not on this network",
+                detail: "None of the adapters is on a network this host is on.",
+                extensions: new Dictionary<string, object?> { ["code"] = ContractInfo.ProblemCodes.WakeTargetNotOnLan });
     }
 
     private static string DeviceName(ClaimsPrincipal user) => user.Identity?.Name ?? "unknown device";

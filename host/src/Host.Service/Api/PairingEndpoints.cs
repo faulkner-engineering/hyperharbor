@@ -1,6 +1,7 @@
 using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Core.Pairing;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Host.Core.Tailscale;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Pairing;
@@ -43,11 +44,12 @@ public static class PairingEndpoints
         return TypedResults.NoContent();
     }
 
-    private static Ok<PairingResult> Confirm(
+    private static async Task<Ok<PairingResult>> Confirm(
         Guid pairingId,
         PairingConfirmation confirmation,
         PairingService pairing,
         PairedDeviceStore devices,
+        TailscaleNodeVerifier nodes,
         HttpContext context)
     {
         var audit = context.Audit()!;
@@ -57,6 +59,15 @@ public static class PairingEndpoints
         audit.DeviceId = result.DeviceId;
         audit.UserId = result.UserId;
         audit.DeviceName = devices.List().FirstOrDefault(device => device.DeviceId == result.DeviceId)?.Name;
+
+        // Pairing over the tailnet ties the new device to the node it came from. Over the LAN nothing is recorded,
+        // and the first later request over the tailnet records the node instead.
+        if (context.Connection.RemoteIpAddress is { } remote
+            && (await nodes.CheckAsync(remote, null, context.RequestAborted)).Node is { } node)
+        {
+            devices.SetTailscaleNode(result.DeviceId, node.NodeId, node.Name);
+        }
+
         return TypedResults.Ok(result);
     }
 

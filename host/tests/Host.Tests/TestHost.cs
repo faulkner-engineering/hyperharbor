@@ -33,6 +33,9 @@ internal sealed class TestHost : IDisposable
 {
     public const string ClientCertificateHeader = "X-Test-Client-Certificate";
 
+    /// <summary>Sets the request's remote address, for tests of requests that arrive over the tailnet.</summary>
+    public const string RemoteIpHeader = "X-Test-Remote-Ip";
+
     private readonly WebApplicationFactory<Program> _factory;
 
     /// <param name="configureServices">Replaces further services after the defaults, for example a failing audit log.</param>
@@ -106,6 +109,8 @@ internal sealed class TestHost : IDisposable
                     provider.GetRequiredService<ILogger<Core.Unattend.UnattendedSetup>>(),
                     keyInterval: TimeSpan.Zero,
                     setupProfiles: provider.GetRequiredService<Core.Profiles.SetupProfileStore>()));
+                services.AddSingleton(new Core.Tailscale.TailscaleStatusProvider([Tailscale], TimeProvider.System));
+                services.AddSingleton<Core.Wake.IWakeRelayNetwork>(RelayNetwork);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
             }));
@@ -120,6 +125,11 @@ internal sealed class TestHost : IDisposable
     public FakeTray Tray { get; } = new();
 
     public FakeWakeEnvironment Wake { get; } = new();
+
+    /// <summary>The local Tailscale client: what status and whois answer.</summary>
+    public FakeTailscaleApi Tailscale { get; } = new();
+
+    public FakeWakeRelayNetwork RelayNetwork { get; } = new();
 
     public FakeSleepController Sleep { get; } = new();
 
@@ -252,6 +262,11 @@ internal sealed class TestHost : IDisposable
         {
             app.Use(async (context, nextMiddleware) =>
             {
+                if (context.Request.Headers.TryGetValue(RemoteIpHeader, out var remote))
+                {
+                    context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(remote.ToString());
+                }
+
                 if (context.Request.Headers.TryGetValue(ClientCertificateHeader, out var value))
                 {
                     context.Connection.ClientCertificate = new X509Certificate2(Convert.FromBase64String(value.ToString()));
@@ -261,6 +276,37 @@ internal sealed class TestHost : IDisposable
             });
             next(app);
         };
+    }
+}
+
+/// <summary>A Tailscale client that answers what a test sets.</summary>
+internal sealed class FakeTailscaleApi : Core.Tailscale.ITailscaleLocalApi
+{
+    public Core.Tailscale.TailscaleReply Status { get; set; } = new(Core.Tailscale.TailscaleReplyKind.NotInstalled);
+
+    /// <summary>Answers by address; an address not listed is not a node.</summary>
+    public Dictionary<string, string> Nodes { get; } = [];
+
+    public Task<Core.Tailscale.TailscaleReply> GetStatusAsync(CancellationToken cancellationToken) => Task.FromResult(Status);
+
+    public Task<Core.Tailscale.TailscaleReply> WhoIsAsync(string address, CancellationToken cancellationToken) =>
+        Task.FromResult(Nodes.TryGetValue(address, out var nodeId)
+            ? Core.Tailscale.TailscaleReply.Ok("{\"Node\":{\"StableID\":\"" + nodeId + "\",\"Name\":\"node-" + nodeId + ".\"}}")
+            : Core.Tailscale.TailscaleReply.Failed("not a node"));
+}
+
+internal sealed class FakeWakeRelayNetwork : Core.Wake.IWakeRelayNetwork
+{
+    public List<Core.Wake.LocalNetwork> LocalNetworks { get; } = [];
+
+    public List<(System.Net.IPAddress Source, System.Net.IPAddress Target, int Length)> Sent { get; } = [];
+
+    public IReadOnlyList<Core.Wake.LocalNetwork> Networks() => LocalNetworks;
+
+    public int Send(System.Net.IPAddress source, System.Net.IPAddress target, byte[] packet)
+    {
+        Sent.Add((source, target, packet.Length));
+        return 2;
     }
 }
 

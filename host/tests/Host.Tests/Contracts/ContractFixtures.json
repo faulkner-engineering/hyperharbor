@@ -467,7 +467,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.22.0",
+    "apiVersion": "1.23.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -484,6 +484,17 @@
     "memoryReserveMb": 4096,
     "virtualHardDiskFolder": "C:\\ProgramData\\Microsoft\\Windows\\Virtual Hard Disks",
     "isoFolder": "C:\\Users\\Public\\Documents\\HyperHarbor ISOs"
+  },
+  "HostTailscale": {
+    "state": "running",
+    "ipv4": "100.64.0.1",
+    "dnsName": "gaming-pc.tail1234.ts.net",
+    "tagged": true,
+    "tag": "tag:hyperharbor-host",
+    "upCommand": "tailscale up --advertise-tags=tag:hyperharbor-host",
+    "config": {
+      "localApiPort": 41112
+    }
   },
   "HostUpdateProgress": {
     "step": "downloading",
@@ -1052,6 +1063,10 @@
       }
     }
   },
+  "TailscaleConfig": {
+    "localApiPort": 41112,
+    "controlUrl": "https://hs.example.com"
+  },
   "TweakCatalogItem": {
     "id": "explorer.showFileExtensions",
     "name": "Show file name extensions",
@@ -1360,6 +1375,19 @@
         "autoFixAvailable": true
       }
     ]
+  },
+  "WakeRelayRequest": {
+    "adapters": [
+      {
+        "name": "Ethernet",
+        "macAddress": "90-2E-16-66-C5-AE",
+        "ipv4Address": "192.168.0.235",
+        "broadcastAddress": "192.168.0.255"
+      }
+    ]
+  },
+  "WakeRelayResult": {
+    "sent": 4
   },
   "WakeTestRequest": {
     "delaySeconds": 30
