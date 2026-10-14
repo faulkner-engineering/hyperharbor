@@ -164,6 +164,12 @@ public class ContractFixtureTests
         ["BackupTargetTest"] = new BackupTargetTest(true, [new BackupTestStep("Folder", true, "The folder exists or was created.")]),
         ["BackupPolicy"] = new BackupPolicy(VmId, "3f2a9c1e5d7b4a60", true, new BackupRetention(7, 4, 6), 2000, new BackupConditions(), new BackupTriggers(true, true, 15), BackupGpuMode.AllowLive),
         ["BackupRun"] = BackupRunSample,
+        ["OpenBackupBrowseRequest"] = new OpenBackupBrowseRequest("3f2a9c1e5d7b4a60", "k4f8a1b2c3d4e5f6"),
+        ["BackupBrowseVolume"] = new BackupBrowseVolume("E:", 128_000_000_000, "Windows"),
+        ["BackupBrowseSession"] = new BackupBrowseSession(
+            "9f8e7d6c5b4a39281706f5e4d3c2b1a0", BackupBrowseState.Ready, "Ready", [new BackupBrowseVolume("E:", 128_000_000_000, "Windows")], Time.AddMinutes(30), "Ubuntu Dev"),
+        ["BackupBrowsePath"] = new BackupBrowsePath("E:", @"Usersme"),
+        ["BackupBrowseEntry"] = new BackupBrowseEntry("notes.txt", false, 1234, Time),
         ["RestoreTestSettings"] = new RestoreTestSettings(true, 30, new BackupTimeWindow("03:00", "06:00")),
         ["RestoreTestResult"] = RestoreTestResultSample,
         ["RestoreTestStatus"] = new RestoreTestStatus(

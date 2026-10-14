@@ -78,3 +78,32 @@ internal sealed class RestoreTestSchedulerService(RestoreTestService test, TimeP
         }
     }
 }
+
+/// <summary>Detaches browse disks left by an earlier run at start, then closes a browse session nobody uses every minute.</summary>
+internal sealed class BrowseCleanupService(SnapshotBrowser browser, TimeProvider time, ILogger<BrowseCleanupService> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await browser.CleanUpLeftoversAsync(stoppingToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Cleaning up browse leftovers failed.");
+        }
+
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1), time);
+        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+        {
+            try
+            {
+                await browser.CloseExpiredAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Closing an idle browse session failed.");
+            }
+        }
+    }
+}

@@ -229,6 +229,22 @@ public static class BackupMapping
         record.SnapshotId,
         record.Reason);
 
+    public static Wire.BackupBrowseSession ToContract(this BrowseSessionInfo session) => new(
+        session.Id,
+        session.State switch
+        {
+            BrowseState.Ready => Wire.BackupBrowseState.Ready,
+            BrowseState.Failed => Wire.BackupBrowseState.Failed,
+            _ => Wire.BackupBrowseState.Preparing,
+        },
+        session.Step,
+        session.Volumes.Select(v => new Wire.BackupBrowseVolume(v.Drive, v.SizeBytes, v.Label)).ToList(),
+        session.ExpiresAt,
+        session.VmName,
+        session.Error);
+
+    public static Wire.BackupBrowseEntry ToContract(this BrowseEntry entry) => new(entry.Name, entry.IsDirectory, entry.Size, entry.Modified);
+
     private static TimeOnly ParseTime(string text, string field) =>
         TimeOnly.TryParseExact(text, TimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
             ? time

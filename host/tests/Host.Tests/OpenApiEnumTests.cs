@@ -33,6 +33,7 @@ public class OpenApiEnumTests
     [InlineData("BackupRunOutcome", typeof(Shared.Contracts.Backup.BackupRunOutcome))]
     [InlineData("BackupRunTrigger", typeof(Shared.Contracts.Backup.BackupRunTrigger))]
     [InlineData("RestoreTestOutcome", typeof(Shared.Contracts.Backup.RestoreTestOutcome))]
+    [InlineData("BackupBrowseState", typeof(Shared.Contracts.Backup.BackupBrowseState))]
     [InlineData("BackupGpuMode", typeof(Shared.Contracts.Backup.BackupGpuMode))]
     [InlineData("RestoreVmOutcome", typeof(Shared.Contracts.Backup.RestoreVmOutcome))]
     [InlineData("DayOfWeek", typeof(DayOfWeek))]

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.21.0
+  version: 1.22.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -2565,6 +2565,152 @@ paths:
                 $ref: "#/components/schemas/RestoreTestStatus"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /backup/browse:
+    post:
+      tags: [Backup]
+      operationId: openBackupBrowse
+      summary: Open a snapshot to look at its files.
+      description: |
+        Restores the snapshot's files into a work folder on the host, mounts its disks read-only, and answers at once
+        with a session in state `preparing`; poll `GET /backup/browse/{sessionId}` until it is `ready` or `failed`.
+        One session at a time (409 otherwise). It closes by itself after 30 minutes without use. While it is open the
+        disk's volumes appear as drives on the host, read-only. Links inside the backup are never followed.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenBackupBrowseRequest"
+      responses:
+        "202":
+          description: The session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupBrowseSession"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /backup/browse/{sessionId}:
+    parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Backup]
+      operationId: getBackupBrowse
+      summary: The state of a browse session.
+      responses:
+        "200":
+          description: The session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupBrowseSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Backup]
+      operationId: closeBackupBrowse
+      summary: Close a browse session, detach its disks, and delete the work folder.
+      responses:
+        "204":
+          description: Closed (also when it was already closed).
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /backup/browse/{sessionId}/entries:
+    parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Backup]
+      operationId: listBackupBrowseEntries
+      summary: List a folder inside the backup, folders first.
+      description: A POST because the request is audited, and so needs the admin passphrase. At most 5000 entries.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupBrowsePath"
+      responses:
+        "200":
+          description: The entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BackupBrowseEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /backup/browse/{sessionId}/file:
+    parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Backup]
+      operationId: downloadBackupBrowseFile
+      summary: Download one file from inside the backup.
+      description: A POST because the request is audited, and so needs the admin passphrase.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupBrowsePath"
+      responses:
+        "200":
+          description: The file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
         "409":
           $ref: "#/components/responses/Conflict"
 
@@ -5268,6 +5414,84 @@ components:
           description: Newest first, at most 50.
           items:
             $ref: "#/components/schemas/RestoreTestResult"
+
+    BackupBrowseState:
+      type: string
+      enum: [preparing, ready, failed]
+
+    OpenBackupBrowseRequest:
+      type: object
+      required: [targetId, snapshotId]
+      properties:
+        targetId:
+          type: string
+        snapshotId:
+          type: string
+          description: A VM snapshot from the scan.
+
+    BackupBrowseVolume:
+      type: object
+      required: [drive, sizeBytes]
+      properties:
+        drive:
+          type: string
+          description: The drive letter the volume has on the host, for example `E:`.
+        label:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+
+    BackupBrowseSession:
+      type: object
+      required: [id, state, step, volumes, expiresAt]
+      properties:
+        id:
+          type: string
+        state:
+          $ref: "#/components/schemas/BackupBrowseState"
+        step:
+          type: string
+          description: What the host is doing while `preparing`.
+        vmName:
+          type: string
+        volumes:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackupBrowseVolume"
+        error:
+          type: string
+          description: Why the session failed.
+        expiresAt:
+          type: string
+          format: date-time
+          description: Use of the session moves this forward.
+
+    BackupBrowsePath:
+      type: object
+      required: [volume]
+      properties:
+        volume:
+          type: string
+          description: A drive from the session's volumes.
+        path:
+          type: string
+          description: A path inside the volume with slash or backslash separators. Omitted, it is the volume's root.
+
+    BackupBrowseEntry:
+      type: object
+      required: [name, isDirectory, size]
+      properties:
+        name:
+          type: string
+        isDirectory:
+          type: boolean
+        size:
+          type: integer
+          format: int64
+        modified:
+          type: string
+          format: date-time
 
     BackupItemStatus:
       type: object

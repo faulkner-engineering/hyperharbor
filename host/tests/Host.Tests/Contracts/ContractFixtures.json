@@ -36,6 +36,35 @@
     "container": "backups",
     "prefix": "pc1"
   },
+  "BackupBrowseEntry": {
+    "name": "notes.txt",
+    "isDirectory": false,
+    "size": 1234,
+    "modified": "2026-10-03T12:00:00\u002B00:00"
+  },
+  "BackupBrowsePath": {
+    "volume": "E:",
+    "path": "Usersme"
+  },
+  "BackupBrowseSession": {
+    "id": "9f8e7d6c5b4a39281706f5e4d3c2b1a0",
+    "state": "ready",
+    "step": "Ready",
+    "volumes": [
+      {
+        "drive": "E:",
+        "sizeBytes": 128000000000,
+        "label": "Windows"
+      }
+    ],
+    "expiresAt": "2026-10-03T12:30:00\u002B00:00",
+    "vmName": "Ubuntu Dev"
+  },
+  "BackupBrowseVolume": {
+    "drive": "E:",
+    "sizeBytes": 128000000000,
+    "label": "Windows"
+  },
   "BackupCatalog": {
     "vms": [
       {
@@ -438,7 +467,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.21.0",
+    "apiVersion": "1.22.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -546,6 +575,10 @@
   },
   "NotAGameResult": {
     "ignored": "powerpnt"
+  },
+  "OpenBackupBrowseRequest": {
+    "targetId": "3f2a9c1e5d7b4a60",
+    "snapshotId": "k4f8a1b2c3d4e5f6"
   },
   "PackageCatalogItem": {
     "alias": "vscode",

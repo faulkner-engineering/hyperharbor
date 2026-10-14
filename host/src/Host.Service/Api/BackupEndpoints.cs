@@ -62,6 +62,19 @@ public static class BackupEndpoints
         backup.MapPost("/restore-test/run", StartRestoreTest).WithName("startRestoreTest")
             .Audited();
 
+        backup.MapPost("/browse", OpenBrowse).WithName("openBackupBrowse")
+            .Audited<Wire.OpenBackupBrowseRequest>(request => $"target={request.TargetId}, snapshot={request.SnapshotId}")
+            .RequireElevation();
+        backup.MapGet("/browse/{sessionId}", GetBrowse).WithName("getBackupBrowse");
+        backup.MapDelete("/browse/{sessionId}", CloseBrowseAsync).WithName("closeBackupBrowse")
+            .Audited();
+        backup.MapPost("/browse/{sessionId}/entries", ListBrowse).WithName("listBackupBrowseEntries")
+            .Audited<Wire.BackupBrowsePath>(request => $"volume={request.Volume}, path={request.Path}")
+            .RequireElevation();
+        backup.MapPost("/browse/{sessionId}/file", DownloadBrowseFile).WithName("downloadBackupBrowseFile")
+            .Audited<Wire.BackupBrowsePath>(request => $"volume={request.Volume}, path={request.Path}")
+            .RequireElevation();
+
         backup.MapPost("/scan", ScanAsync).WithName("scanBackups")
             .Audited<Wire.ScanBackupsRequest>(request => $"target={request.TargetId}")
             .RequireElevation();
@@ -163,6 +176,32 @@ public static class BackupEndpoints
     {
         test.StartManual();
         return TypedResults.Accepted($"{BasePath}/restore-test", RestoreTestStatus(test, store));
+    }
+
+    private static Accepted<Wire.BackupBrowseSession> OpenBrowse(Wire.OpenBackupBrowseRequest request, BackupManagementService backups, SnapshotBrowser browser)
+    {
+        var session = browser.Open(backups.Find(request.TargetId), request.SnapshotId);
+        return TypedResults.Accepted($"{BasePath}/browse/{session.Id}", session.ToContract());
+    }
+
+    private static Results<Ok<Wire.BackupBrowseSession>, ProblemHttpResult> GetBrowse(string sessionId, SnapshotBrowser browser) =>
+        browser.Get(sessionId) is { } session
+            ? TypedResults.Ok(session.ToContract())
+            : TypedResults.Problem("That backup is not open for browsing.", statusCode: StatusCodes.Status404NotFound, title: "Browse session not found");
+
+    private static async Task<NoContent> CloseBrowseAsync(string sessionId, SnapshotBrowser browser)
+    {
+        await browser.CloseAsync(sessionId);
+        return TypedResults.NoContent();
+    }
+
+    private static Ok<List<Wire.BackupBrowseEntry>> ListBrowse(string sessionId, Wire.BackupBrowsePath request, SnapshotBrowser browser) =>
+        TypedResults.Ok(browser.List(sessionId, request.Volume, request.Path).Select(entry => entry.ToContract()).ToList());
+
+    private static FileStreamHttpResult DownloadBrowseFile(string sessionId, Wire.BackupBrowsePath request, SnapshotBrowser browser)
+    {
+        var stream = browser.OpenFile(sessionId, request.Volume, request.Path ?? string.Empty);
+        return TypedResults.File(stream, "application/octet-stream", Path.GetFileName(request.Path?.Replace('/', '\\').TrimEnd('\\')) is { Length: > 0 } name ? name : "file");
     }
 
     private static async Task<Accepted<VmJob>> StartRunAsync(
