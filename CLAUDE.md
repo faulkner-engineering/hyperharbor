@@ -158,6 +158,22 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    default. UI: client GameAwarePanel and GamingNotice, host window Game-aware page, ambient line. Not built: a Game ready
    card (the page is its own nav item), configurable launcher list, per-VM Pause through the API's VmAction.
 
+23. Tailscale, stage one (use an installed Tailscale client), added at the user's request (2026-10-14; API 1.23.0; unit and API
+   tested with the local API mocked, never run against a real tailnet): Host.Core/Tailscale (TailscaleStatusParser for
+   `status --json` and whois, TailscaleHttpLocalApi on the configurable port, TailscaleCliLocalApi fallback,
+   TailscaleStatusProvider with caches, TailscaleNodeVerifier, HostTailscaleBuilder, tailscale.json settings). The device record
+   keeps the Tailscale node it paired or first connected from (PairedDevice.TailscaleNodeId); PairedDeviceAuthenticationHandler
+   refuses a request over 100.64.0.0/10 or fd7a:115c:a1e0::/48 from another node (403 tailscaleNodeMismatch) or when whois
+   cannot answer for a tied device (tailscaleNodeUnverified). GET /host/tailscale, PUT /host/tailscale/settings (elevated),
+   POST /wake/relay (Host.Core/Wake/WakeRelay: only the host's own networks, broadcast computed locally). Tray: the Tailscale
+   card (Overview and Game ready, Copy tag command, port and control URL). Client (src-tauri/src/tailnet.rs): the same
+   status reading on this PC, TailnetService scanning peers every 30 s (tagged first, ProbeCache), merge_tailnet into the host
+   list, order_candidates (LAN first, a recent Tailscale success stays first), describe_route (Direct or Relayed and the
+   split tunneling hint), rank_wake_relays (used by wake_host when this PC is not on the host's LAN), build_reachability,
+   TailscalePanel.svelte. Discovery identifies a peer by the TLS certificate it presents (compared with the pinned one), so no
+   anonymous host route was added. Not done: Windows named-pipe local API (the command line covers it), a tailnet ACL or
+   tag setup helper, stage two (an embedded Tailscale), and a live run against a real tailnet.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
 

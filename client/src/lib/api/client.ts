@@ -112,6 +112,20 @@ export interface WakeFixOutcome {
 }
 
 /** A host known to the client. Mirrors HostEntry in src-tauri/src/hosts.rs. */
+/** How packets reach a host over Tailscale. Idle and offline hosts report "unknown". */
+export type TailnetPath = "direct" | "relayed" | "unknown";
+
+/** What Tailscale reports about a host this PC found on the tailnet (TailnetInfo in src-tauri/src/tailnet.rs). */
+export interface TailnetInfo {
+  addresses: string[];
+  dnsName: string | null;
+  nodeId: string;
+  tagged: boolean;
+  online: boolean;
+  path: TailnetPath;
+  relay: string | null;
+}
+
 export interface HostEntry {
   key: string;
   displayName: string;
@@ -121,11 +135,13 @@ export interface HostEntry {
   port: number;
   apiVersion: string | null;
   /** "remembered": a paired host that is not announcing itself, for example while asleep. */
-  source: "discovered" | "manual" | "remembered";
+  source: "discovered" | "manual" | "remembered" | "tailnet";
   isLocal: boolean;
   paired: boolean;
   /** Wake-on-LAN details are cached, so a wake signal can be sent while the host is asleep. */
   canWake: boolean;
+  /** Set when this PC found the host on the tailnet. Its Tailscale addresses are also in `addresses`. */
+  tailscale?: TailnetInfo | null;
 }
 
 /**
@@ -434,6 +450,71 @@ export const installHostUpdate = (key: string) => invoke<HostUpdateStatus>("inst
 /** Needs elevation: run it inside withElevation. */
 export const setHostUpdateSettings = (key: string, settings: HostUpdateSettings) =>
   invoke<HostUpdateStatus>("set_host_update_settings", { key, settings });
+
+// Tailscale. This PC reads the Tailscale client that is installed here; the host reads its own.
+
+/** The API version that added the host's Tailscale state, node-tied devices, and the wake relay. */
+export const TailscaleApiVersion = "1.23.0";
+
+export type TailnetState = "notInstalled" | "unreachable" | "needsLogin" | "stopped" | "running" | "other";
+
+export interface TailnetNode {
+  nodeId: string;
+  hostName: string;
+  dnsName: string;
+  addresses: string[];
+  tags: string[];
+}
+
+export interface TailnetPeer {
+  node: TailnetNode;
+  online: boolean;
+  path: TailnetPath;
+  relay: string | null;
+}
+
+/** Tailscale on this PC. */
+export interface TailnetStatus {
+  state: TailnetState;
+  self: TailnetNode | null;
+  magicDnsSuffix: string | null;
+  peers: TailnetPeer[];
+  error: string | null;
+}
+
+/** How the last request to a host reached it. */
+export interface ConnectionRoute {
+  via: "lan" | "tailscale" | "unknown";
+  address: string | null;
+  path: TailnetPath | null;
+  relay: string | null;
+  /** Set when the path is relayed: why that is slower and what to check. */
+  hint: string | null;
+}
+
+export interface ReachabilityStep {
+  id: string;
+  title: string;
+  status: "pass" | "warn" | "fail";
+  detail: string | null;
+}
+
+export type HostTailscale = components["schemas"]["HostTailscale"];
+
+export const getTailnetStatus = () => invoke<TailnetStatus>("get_tailnet_status");
+export const refreshTailnet = () => invoke<void>("refresh_tailnet");
+export const getTailnetSettings = () => invoke<{ localApiPort: number }>("get_tailnet_settings");
+export const setTailnetSettings = (localApiPort: number) =>
+  invoke<void>("set_tailnet_settings", { settings: { localApiPort } });
+export const getConnectionRoute = (key: string) => invoke<ConnectionRoute>("get_connection_route", { key });
+export const testTailscaleReachability = (key: string) =>
+  invoke<ReachabilityStep[]>("test_tailscale_reachability", { key });
+export const getHostTailscale = (key: string) =>
+  invoke<HostTailscale>("get_host_resource", { key, resource: "tailscale" });
+
+/** Needs elevation: run it inside withElevation. */
+export const setHostTailscaleSettings = (key: string, localApiPort: number, controlUrl: string | null) =>
+  invoke<HostTailscale>("set_host_tailscale_settings", { key, localApiPort, controlUrl });
 
 /** The API version that added Remote Desktop to the host. */
 export const RemoteDesktopApiVersion = "1.10.0";

@@ -26,6 +26,23 @@ note anything that needs action, such as updating the host, a new elevation requ
   Tailscale address and MagicDNS name, and whether it has the `tag:hyperharbor-host` tag, with a Copy tag command button
   and fields for the local API port and a Headscale control server URL. Tailscale stays optional: a PC without it shows
   the card as unavailable.
+- Tailscale in the client (stage one: it uses the Tailscale you already have installed). This PC reads Tailscale
+  through its local API (port 41112, changeable) and falls back to `tailscale status --json`. Every 30 seconds it
+  probes the online tailnet peers on the HyperHarbor port, tagged hosts (`tag:hyperharbor-host`) first, and keeps the
+  answers for a few minutes. A host found that way is merged with the one found on the local network, so it is listed once
+  with both addresses; a paired host that is only reachable over Tailscale is listed too, and an unknown one appears as
+  "Found on Tailscale".
+- Connections try the local network address first and the Tailscale address second. A Tailscale address that worked a
+  moment ago stays first, so away from home nothing waits for the local address to time out. The line under the host name
+  says which route the last request took, and whether Tailscale is Direct or Relayed; a relayed path explains split
+  tunneling for VPN users.
+- Host menu > Tailscale: Tailscale on this PC and on the host, the connection route, a reachability test that checks the way
+  step by step (Tailscale on this PC, host on the tailnet, online, path, HyperHarbor answering, certificate, signed-in
+  request), the tag command with a Copy button, and the local API port and Headscale control server settings (the host's
+  need the admin passphrase).
+- Waking a sleeping host from away from its network: when this PC has no address on that network, it asks another
+  paired host that is online on it to send the magic packet, choosing the best one automatically (direct paths first).
+  If none is reachable, Wake says so.
 - Backup foundations (work in progress toward backup and restore with Kopia): backup targets (local folder, S3,
   Azure Blob) and per-VM policies are stored in `backup-config.json`; repository passphrases and cloud keys are kept
   only in a DPAPI-protected vault. A repository is created only after you confirm that you saved its recovery key by

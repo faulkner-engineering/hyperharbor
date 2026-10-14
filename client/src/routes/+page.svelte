@@ -25,6 +25,9 @@
     ApplySetupProfileApiVersion,
     BackupApiVersion,
     GameAwareApiVersion,
+    TailscaleApiVersion,
+    getConnectionRoute,
+    type ConnectionRoute,
     type BackupTarget,
     type StoredSetupProfile,
     type Vm,
@@ -39,6 +42,7 @@
   import GameAwarePanel from "$lib/components/GameAwarePanel.svelte";
   import GamingNotice from "$lib/components/GamingNotice.svelte";
   import BackupPanel from "$lib/components/BackupPanel.svelte";
+  import TailscalePanel from "$lib/components/TailscalePanel.svelte";
   import ReplaceDiskDialog from "$lib/components/ReplaceDiskDialog.svelte";
   import ClientUpdate from "$lib/components/ClientUpdate.svelte";
   import ProvisionDialog from "$lib/components/ProvisionDialog.svelte";
@@ -94,6 +98,9 @@
   let capturing = $state<Vm | null>(null);
   let applyingProfile = $state<Vm | null>(null);
   let showBackups = $state(false);
+  let showTailscale = $state(false);
+  /** How the last request reached the selected host, for the line under its name. */
+  let route = $state<ConnectionRoute | null>(null);
   let showGameAware = $state(false);
   let replacingDisk = $state<Vm | null>(null);
   let backupTargets = $state<BackupTarget[]>([]);
@@ -106,6 +113,7 @@
   const hostHasLogs = $derived(selectedHost ? hostSupports(selectedHost, HostLogsApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
   const hostHasGameAware = $derived(selectedHost ? hostSupports(selectedHost, GameAwareApiVersion) : false);
+  const hostHasTailscale = $derived(selectedHost ? hostSupports(selectedHost, TailscaleApiVersion) : false);
   const hostHasBackups = $derived(selectedHost ? hostSupports(selectedHost, BackupApiVersion) : false);
   const hostAppliesProfiles = $derived(selectedHost ? hostSupports(selectedHost, ApplySetupProfileApiVersion) : false);
   // Setup profiles read provisioned packages from running Windows VMs.
@@ -121,6 +129,8 @@
     showWake = false;
     showUpdates = false;
     showBackups = false;
+    showTailscale = false;
+    route = null;
     showGameAware = false;
     replacingDisk = null;
     provisioning = null;
@@ -175,6 +185,16 @@
     }
   }
 
+  /** How the request just made reached the host (the local network or Tailscale), for the line under its name. */
+  async function updateRoute(key: string) {
+    try {
+      const result = await getConnectionRoute(key);
+      if (key === selectedKey) route = result;
+    } catch {
+      // The line is a convenience; the host list works without it.
+    }
+  }
+
   async function refreshVms(key: string) {
     loading = true;
     try {
@@ -184,6 +204,7 @@
       announceInstalls(result);
       vmError = null;
       offline = false;
+      void updateRoute(key);
     } catch (error) {
       if (key !== selectedKey) return;
       vms = null;
@@ -417,7 +438,13 @@
           <p class="subtitle">
             {selectedHost.isLocal ? "This PC" : selectedHost.addresses.join(", ")}
             · port {selectedHost.port}
+            {#if route && route.via !== "unknown"}
+              · via {route.via === "lan" ? "the local network" : `Tailscale${route.path === "direct" ? " (direct)" : route.path === "relayed" ? " (relayed)" : ""}`}
+            {/if}
           </p>
+          {#if route?.hint}
+            <p class="route-hint" role="note">{route.hint}</p>
+          {/if}
         </div>
         {#if selectedHost.paired}
           <div class="header-actions">
@@ -481,6 +508,9 @@
                   >Backups (update host)</button
                 >
               {/if}
+              <button type="button" onclick={() => (showTailscale = !showTailscale)}>
+                {showTailscale ? "Hide Tailscale" : "Tailscale"}
+              </button>
               <button type="button" onclick={() => (showUpdates = !showUpdates)}>
                 {showUpdates ? "Hide updates" : "Updates"}
               </button>
@@ -658,6 +688,12 @@
         {/key}
       {/if}
 
+      {#if selectedHost.paired && showTailscale}
+        {#key selectedHost.key}
+          <TailscalePanel host={selectedHost} hostSupportsTailscale={hostHasTailscale} />
+        {/key}
+      {/if}
+
       {#if selectedHost.paired && showUpdates}
         {#key selectedHost.key}
           <HostUpdatePanel host={selectedHost} />
@@ -768,6 +804,13 @@
 
   .subtitle {
     margin: 0.2rem 0 0;
+    color: var(--muted);
+  }
+
+  .route-hint {
+    margin: 0.3rem 0 0;
+    max-width: 44rem;
+    font-size: 0.85rem;
     color: var(--muted);
   }
 

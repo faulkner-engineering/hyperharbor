@@ -35,7 +35,8 @@
 
   function statusLabel(host: HostEntry): string {
     if (host.source === "remembered") return "Paired · Not on network";
-    if (host.paired) return "Paired";
+    if (host.paired) return host.tailscale ? "Paired · Tailscale" : "Paired";
+    if (host.source === "tailnet") return "Found on Tailscale";
     return host.source === "discovered" ? "Discovered" : "Added";
   }
 
