@@ -26,3 +26,7 @@ client/src-tauri/resources/
 
 # Third-party tool downloads (scripts/fetch-tools.ps1)
 .tools/
+
+# Playwright (tray window browser tests)
+test-results/
+playwright-report/

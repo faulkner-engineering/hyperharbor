@@ -64,6 +64,9 @@ if (-not $ClientOnly) {
     Invoke-Check 'Tray window npm ci' $trayUi { npm ci --no-audit --no-fund }
     Invoke-Check 'Tray window type check' $trayUi { npm run check }
     Invoke-Check 'Tray window tests' $trayUi { npm test }
+    # Real-browser checks of what the built window draws (theme colors, readable text, no sideways scroll).
+    Invoke-Check 'Tray window browser install' $trayUi { npx playwright install chromium }
+    Invoke-Check 'Tray window browser tests' $trayUi { npm run test:e2e }
     if (-not $SkipAudit) {
         Invoke-Check 'Tray window npm audit' $trayUi { npm audit --audit-level=high }
     }

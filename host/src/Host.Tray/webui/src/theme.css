@@ -24,6 +24,8 @@
   --busy-fg: #0550ae;
   --error-bg: #ffebe9;
   --accent: var(--hh-accent);
+  /* Text links: the amber accent is too light for small text on white (2.3:1), so light mode uses a darker amber. */
+  --link: #8a5200;
   --accent-fg: var(--hh-ink);
   --shadow: 0 1px 2px rgb(18 26 38 / 6%), 0 4px 16px rgb(18 26 38 / 6%);
   --radius: 10px;
@@ -55,6 +57,7 @@
     --busy-bg: #0c2d4b;
     --busy-fg: #79c0ff;
     --error-bg: #3c1618;
+    --link: var(--hh-accent);
     --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
     color-scheme: dark;
   }
@@ -149,7 +152,7 @@ button:disabled {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--link);
   text-decoration: underline;
 }
 

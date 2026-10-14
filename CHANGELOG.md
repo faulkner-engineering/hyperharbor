@@ -147,7 +147,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 - The host window looked half dark: a black page behind white cards, with faded headings. The ambient screensaver page
   (added with the Ambient screen card) set a black background and light text on the whole page, and it shares one bundle
   with the host window, so every tray window got it. It now applies to the ambient screen only. This is not a dark mode: the
-  tray follows the Windows app theme as before.
+  tray follows the Windows app theme as before. Text links (for example What's new on the Updates page) are darker in light
+  mode, because the amber was hard to read on white.
 
 ### Changed
 - Data format 3 (additive: new backup files). An older host that finds format 3 data will refuse to start, as with

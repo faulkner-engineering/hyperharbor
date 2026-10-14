@@ -28,6 +28,8 @@ jobs:
           npm ci --no-audit --no-fund
           npm run check
           npm test
+          npx playwright install --with-deps chromium
+          npm run test:e2e
           npm audit --audit-level=high
       - name: Build (analyzers and NuGet audit fail the build)
         run: dotnet build HyperHarbor.sln -warnaserror

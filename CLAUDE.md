@@ -309,6 +309,11 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Host logs: the console window and %ProgramData%\HyperHarbor\logs\host-yyyyMMdd.log (14 days); audit trail in
   %ProgramData%\HyperHarbor\audit.log. Both have the ProtectedFile ACL (Administrators, SYSTEM, service account).
 - Print VM inventory JSON: dotnet run --project host/src/Host.Service -- --list-vms
+- Tray window browser tests (from host/src/Host.Tray/webui, after npx playwright install chromium): npm run test:e2e. They load
+  the built UI in Chromium with a stand-in for WebView2's message channel and the first bridge.fixtures.json state, then check
+  the painted theme (light and dark), the contrast of every piece of text against what it is drawn on, and sideways scrolling,
+  on every page. Add a page to the nav and it is covered; vitest and jsdom cannot see the cascade (a global style in
+  Ambient.svelte once turned the whole window black and passed every unit test).
 - Lint contract: npx @redocly/cli lint docs/api.yaml
 - Client (from client/): npm run check | npm test (Vitest) | npm run gen:api | npm run tauri dev
 - Rust (from client/src-tauri, in PowerShell): cargo fmt --all; cargo clippy --workspace --all-targets -- -D warnings;
