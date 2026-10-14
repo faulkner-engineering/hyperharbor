@@ -49,8 +49,9 @@ export function hostTailscaleSummary(info: HostTailscale | null): string {
 export function routeText(route: ConnectionRoute | null): string {
   if (route === null || route.via === "unknown") return "No connection made yet.";
   if (route.via === "lan") return `Local network${route.address ? ` (${route.address})` : ""}`;
-  const path = route.path === "direct" ? "direct" : route.path === "relayed" ? `relayed${route.relay ? ` through ${route.relay}` : ""}` : "path not decided yet";
-  return `Tailscale, ${path}${route.address ? ` (${route.address})` : ""}`;
+  // No path means there is none to report: the host is this PC, or this PC has not seen it as a peer.
+  const path = route.path === "direct" ? ", direct" : route.path === "relayed" ? `, relayed${route.relay ? ` through ${route.relay}` : ""}` : route.path === "unknown" ? ", path not decided yet" : "";
+  return `Tailscale${path}${route.address ? ` (${route.address})` : ""}`;
 }
 
 export function stepMark(status: ReachabilityStep["status"]): string {

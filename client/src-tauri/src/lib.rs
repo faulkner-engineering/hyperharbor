@@ -1732,7 +1732,15 @@ fn get_connection_route(
     let last_good = state
         .pairing_for(&host)
         .and_then(|paired| state.api.last_good_url(&paired.host_id));
-    Ok(tailnet::describe_route(&host, last_good.as_deref()))
+    // This PC's own Tailscale addresses, from the last scan: a host on this PC has no path to report.
+    let own = state
+        .tailnet
+        .snapshot()
+        .status
+        .self_node
+        .map(|node| node.addresses)
+        .unwrap_or_default();
+    Ok(tailnet::describe_route(&host, last_good.as_deref(), &own))
 }
 
 /// Checks the way to a host over Tailscale, one step at a time, and says where it stops.

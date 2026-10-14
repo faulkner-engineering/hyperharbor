@@ -777,7 +777,13 @@ pub struct ConnectionRoute {
 
 pub const RELAYED_HINT: &str = "This connection goes through a Tailscale relay, which adds delay. If this PC uses a VPN, exclude Tailscale from it (split tunneling) or allow UDP port 41641, so Tailscale can connect directly.";
 
-pub fn describe_route(entry: &HostEntry, last_good: Option<&str>) -> ConnectionRoute {
+/// The own_addresses are this PC's own Tailscale addresses: a host reached through one of them is this PC, and the
+/// traffic never leaves it, so there is no path to report.
+pub fn describe_route(
+    entry: &HostEntry,
+    last_good: Option<&str>,
+    own_addresses: &[String],
+) -> ConnectionRoute {
     let address = last_good.map(|url| url_host(url).to_string());
     let via = match &address {
         Some(address) if is_tailnet_ip(address) => "tailscale",
@@ -785,7 +791,8 @@ pub fn describe_route(entry: &HostEntry, last_good: Option<&str>) -> ConnectionR
         None => "unknown",
     };
     let info = entry.tailscale.as_ref();
-    let (path, relay) = if via == "tailscale" {
+    let own = address.as_ref().is_some_and(|a| own_addresses.contains(a));
+    let (path, relay) = if via == "tailscale" && !own {
         info.map_or((None, None), |info| (Some(info.path), info.relay.clone()))
     } else {
         (None, None)
@@ -958,6 +965,24 @@ pub fn build_reachability(input: &ReachabilityInput<'_>) -> Vec<ReachabilityStep
         return steps;
     }
 
+    // A host on this PC is not a peer of its own tailnet node, and nothing crosses a network to reach it.
+    let own = input.address.is_some_and(|address| {
+        input
+            .status
+            .self_node
+            .as_ref()
+            .is_some_and(|node| node.addresses.iter().any(|a| a == address))
+    });
+    if own {
+        steps.push(step(
+            "peer",
+            "Host on the tailnet",
+            StepStatus::Pass,
+            Some("The host is this PC, so no network is crossed. Test from another device to check the path.".into()),
+        ));
+        return finish_reachability(steps, input);
+    }
+
     let peer = input.address.and_then(|address| {
         input
             .status
@@ -1029,6 +1054,14 @@ pub fn build_reachability(input: &ReachabilityInput<'_>) -> Vec<ReachabilityStep
         ),
     });
 
+    finish_reachability(steps, input)
+}
+
+/// The steps that follow the path: the API answers, the certificate matches, and a signed-in request works.
+fn finish_reachability(
+    mut steps: Vec<ReachabilityStep>,
+    input: &ReachabilityInput<'_>,
+) -> Vec<ReachabilityStep> {
     let answered = !matches!(input.certificate, CertCheck::NoAnswer);
     steps.push(step(
         "api",
@@ -1664,6 +1697,35 @@ mod tests {
     }
 
     #[test]
+    fn a_host_on_this_pc_has_no_path_and_passes_without_crossing_a_network() {
+        let status = status();
+        let own = status.self_node.as_ref().unwrap().addresses[0].clone();
+        let steps =
+            build_reachability(&input(&status, Some(&own), CertCheck::Pinned, ApiCheck::Ok));
+        assert_eq!(
+            ids(&steps),
+            vec![
+                ("tailscale", StepStatus::Pass),
+                ("peer", StepStatus::Pass),
+                ("api", StepStatus::Pass),
+                ("identity", StepStatus::Pass),
+                ("access", StepStatus::Pass),
+            ]
+        );
+
+        let mut entry = lan_entry("ID-1", &["192.168.0.235", &own]);
+        entry.tailscale = None;
+        let route = describe_route(
+            &entry,
+            Some(&format!("https://{own}:48443")),
+            std::slice::from_ref(&own),
+        );
+        assert_eq!(route.via, "tailscale");
+        assert_eq!(route.path, None);
+        assert_eq!(route.hint, None);
+    }
+
+    #[test]
     fn the_route_says_lan_or_tailscale_and_hints_when_relayed() {
         let mut entry = lan_entry("ID-1", &["192.168.0.235", "100.64.0.1"]);
         entry.tailscale = Some(TailnetInfo {
@@ -1676,20 +1738,20 @@ mod tests {
             relay: Some("fra".into()),
         });
 
-        let lan = describe_route(&entry, Some(LAN));
+        let lan = describe_route(&entry, Some(LAN), &[]);
         assert_eq!(lan.via, "lan");
         assert_eq!(lan.hint, None);
 
-        let tail = describe_route(&entry, Some(TAIL));
+        let tail = describe_route(&entry, Some(TAIL), &[]);
         assert_eq!(tail.via, "tailscale");
         assert_eq!(tail.path, Some(TailnetPath::Relayed));
         assert_eq!(tail.relay.as_deref(), Some("fra"));
         assert!(tail.hint.as_deref().unwrap().contains("split tunneling"));
 
-        assert_eq!(describe_route(&entry, None).via, "unknown");
+        assert_eq!(describe_route(&entry, None, &[]).via, "unknown");
 
         entry.tailscale.as_mut().unwrap().path = TailnetPath::Direct;
-        assert_eq!(describe_route(&entry, Some(TAIL)).hint, None);
+        assert_eq!(describe_route(&entry, Some(TAIL), &[]).hint, None);
     }
 
     // ---- Wake relay ----

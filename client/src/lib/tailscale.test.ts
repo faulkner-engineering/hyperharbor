@@ -53,6 +53,7 @@ describe("tailscale text", () => {
     expect(routeText(route({ via: "tailscale", address: "100.64.0.1", path: "direct" }))).toBe("Tailscale, direct (100.64.0.1)");
     expect(routeText(route({ via: "tailscale", address: "100.64.0.1", path: "relayed", relay: "fra" }))).toBe("Tailscale, relayed through fra (100.64.0.1)");
     expect(routeText(route({ via: "tailscale", path: "unknown" }))).toBe("Tailscale, path not decided yet");
+    expect(routeText(route({ via: "tailscale", address: "100.64.0.9" }))).toBe("Tailscale (100.64.0.9)");
   });
 
   it("gives a verdict from the first problem", () => {
