@@ -56,6 +56,12 @@ public static class BackupEndpoints
         backup.MapPost("/runs", StartRunAsync).WithName("startBackupRun")
             .Audited<Wire.StartBackupRunRequest>(request => $"target={request.TargetId}, vm={request.VmId?.ToString() ?? "host"}");
 
+        backup.MapGet("/restore-test", GetRestoreTest).WithName("getRestoreTest");
+        backup.MapPut("/restore-test/settings", SetRestoreTestSettings).WithName("setRestoreTestSettings")
+            .Audited<Wire.RestoreTestSettings>(request => $"enabled={request.Enabled}, intervalDays={request.IntervalDays}");
+        backup.MapPost("/restore-test/run", StartRestoreTest).WithName("startRestoreTest")
+            .Audited();
+
         backup.MapPost("/scan", ScanAsync).WithName("scanBackups")
             .Audited<Wire.ScanBackupsRequest>(request => $"target={request.TargetId}")
             .RequireElevation();
@@ -135,6 +141,29 @@ public static class BackupEndpoints
 
     private static Ok<List<Wire.BackupRun>> ListHistory(BackupHistoryStore history, int? limit) =>
         TypedResults.Ok(history.List(Math.Clamp(limit ?? 100, 1, BackupHistoryStore.MaxRecords)).Select(r => r.ToContract()).ToList());
+
+    private static Wire.RestoreTestStatus RestoreTestStatus(RestoreTestService test, RestoreTestStore store) => new(
+        store.Settings.ToContract(),
+        test.Running,
+        test.Candidates().Count,
+        store.List(50).Select(record => record.ToContract()).ToList(),
+        test.Current,
+        test.NextDue());
+
+    private static Ok<Wire.RestoreTestStatus> GetRestoreTest(RestoreTestService test, RestoreTestStore store) =>
+        TypedResults.Ok(RestoreTestStatus(test, store));
+
+    private static Ok<Wire.RestoreTestStatus> SetRestoreTestSettings(Wire.RestoreTestSettings request, RestoreTestService test, RestoreTestStore store)
+    {
+        store.SaveSettings(request.ToCore());
+        return TypedResults.Ok(RestoreTestStatus(test, store));
+    }
+
+    private static Accepted<Wire.RestoreTestStatus> StartRestoreTest(RestoreTestService test, RestoreTestStore store)
+    {
+        test.StartManual();
+        return TypedResults.Accepted($"{BasePath}/restore-test", RestoreTestStatus(test, store));
+    }
 
     private static async Task<Accepted<VmJob>> StartRunAsync(
         Wire.StartBackupRunRequest request,

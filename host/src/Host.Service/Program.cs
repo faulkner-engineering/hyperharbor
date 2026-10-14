@@ -449,10 +449,25 @@ builder.Services.AddSingleton(services => new BackupCoordinator(
     services.GetRequiredService<BackupHistoryStore>(), services.GetRequiredService<IBackupRunner>(),
     services.GetRequiredService<VmJobStore>(), () => services.GetRequiredService<HostActivity>().TryBegin(),
     services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<BackupCoordinator>>()));
+builder.Services.AddSingleton(new RestoreTestStore(dataDirectory));
+builder.Services.AddSingleton<IVmRestorer, CoordinatorVmRestorer>();
+builder.Services.AddSingleton(services => new RestoreTestService(
+    services.GetRequiredService<RestoreTestStore>(), services.GetRequiredService<BackupConfigStore>(),
+    services.GetRequiredService<BackupHistoryStore>(), services.GetRequiredService<IVmRestorer>(),
+    services.GetRequiredService<IHyperVPowerInvoker>(), services.GetRequiredService<IHyperVStorage>(),
+    vmId => services.GetRequiredService<PerformanceStore>().Find(vmId) is not null,
+    () => services.GetRequiredService<ForegroundGameTracker>().Active,
+    () => services.GetRequiredService<BackupCoordinator>().Busy,
+    () => services.GetRequiredService<HostActivity>().TryBegin(),
+    async cancellationToken => services.GetRequiredService<VmStorageLocation>().RootFolder
+        ?? (await services.GetRequiredService<IHyperVHost>().GetDefaultsAsync(cancellationToken).ConfigureAwait(false)).ConfigurationFolder,
+    root => new DriveInfo(Path.GetPathRoot(root)!).AvailableFreeSpace,
+    services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<RestoreTestService>>()));
 if (selfTest is null)
 {
-    // A self-test run on a copy of the data must not start backups.
+    // A self-test run on a copy of the data must not start backups or restore tests.
     builder.Services.AddHostedService<BackupSchedulerService>();
+    builder.Services.AddHostedService<RestoreTestSchedulerService>();
 }
 
 // Game-aware mode: the tray reports the foreground, the monitor decides, the controller pauses and resumes VMs.

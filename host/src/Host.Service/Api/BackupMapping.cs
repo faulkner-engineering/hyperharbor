@@ -183,6 +183,52 @@ public static class BackupMapping
         conditions.NotInGame,
         conditions.Window is { } window ? new TimeWindow(ParseTime(window.Start, "conditions.window.start"), ParseTime(window.End, "conditions.window.end")) : null);
 
+    public static Wire.RestoreTestSettings ToContract(this RestoreTestSettings settings) => new(
+        settings.Enabled,
+        settings.IntervalDays,
+        new Wire.BackupTimeWindow(settings.Window.Start.ToString(TimeFormat, CultureInfo.InvariantCulture), settings.Window.End.ToString(TimeFormat, CultureInfo.InvariantCulture)));
+
+    /// <exception cref="LifecycleValidationException">A time is not HH:mm, or the interval is out of range.</exception>
+    public static RestoreTestSettings ToCore(this Wire.RestoreTestSettings settings)
+    {
+        var core = new RestoreTestSettings
+        {
+            Enabled = settings.Enabled,
+            IntervalDays = settings.IntervalDays,
+            Window = new TimeWindow(ParseTime(settings.Window.Start, "window.start"), ParseTime(settings.Window.End, "window.end")),
+        };
+        var problems = core.Validate();
+        if (problems.Count > 0)
+        {
+            throw new LifecycleValidationException(problems[0], problems.Select(p => new ValidationIssue("intervalDays", p)).ToList());
+        }
+
+        return core;
+    }
+
+    public static Wire.RestoreTestResult ToContract(this RestoreTestRecord record) => new(
+        record.RunId,
+        record.VmName,
+        record.TargetId,
+        record.Trigger switch
+        {
+            BackupTrigger.Shutdown => Wire.BackupRunTrigger.Shutdown,
+            BackupTrigger.Manual => Wire.BackupRunTrigger.Manual,
+            _ => Wire.BackupRunTrigger.Schedule,
+        },
+        record.StartedAt,
+        record.FinishedAt,
+        record.Outcome switch
+        {
+            RestoreTestOutcome.Failed => Wire.RestoreTestOutcome.Failed,
+            RestoreTestOutcome.Skipped => Wire.RestoreTestOutcome.Skipped,
+            _ => Wire.RestoreTestOutcome.Passed,
+        },
+        record.Warnings,
+        record.VmId,
+        record.SnapshotId,
+        record.Reason);
+
     private static TimeOnly ParseTime(string text, string field) =>
         TimeOnly.TryParseExact(text, TimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
             ? time

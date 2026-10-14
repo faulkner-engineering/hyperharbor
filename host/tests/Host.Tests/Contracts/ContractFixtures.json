@@ -435,7 +435,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.19.0",
+    "apiVersion": "1.20.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -765,6 +765,60 @@
     "restartRequired": false,
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
     "vmName": "Ubuntu Dev (restored)"
+  },
+  "RestoreTestResult": {
+    "runId": "8d2f4a6b-1c3e-4a5b-9c7d-0e1f2a3b4c5d",
+    "vmName": "Ubuntu Dev",
+    "targetId": "3f2a9c1e5d7b4a60",
+    "trigger": "schedule",
+    "startedAt": "2026-10-03T12:00:00\u002B00:00",
+    "finishedAt": "2026-10-03T12:09:00\u002B00:00",
+    "outcome": "failed",
+    "warnings": [
+      "The test VM could not be removed."
+    ],
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "snapshotId": "k4f8a1b2c3d4e5f6",
+    "reason": "The restored VM started, but the guest did not report in within 5 minutes."
+  },
+  "RestoreTestSettings": {
+    "enabled": true,
+    "intervalDays": 30,
+    "window": {
+      "start": "03:00",
+      "end": "06:00"
+    }
+  },
+  "RestoreTestStatus": {
+    "settings": {
+      "enabled": true,
+      "intervalDays": 30,
+      "window": {
+        "start": "03:00",
+        "end": "06:00"
+      }
+    },
+    "running": true,
+    "testable": 2,
+    "results": [
+      {
+        "runId": "8d2f4a6b-1c3e-4a5b-9c7d-0e1f2a3b4c5d",
+        "vmName": "Ubuntu Dev",
+        "targetId": "3f2a9c1e5d7b4a60",
+        "trigger": "schedule",
+        "startedAt": "2026-10-03T12:00:00\u002B00:00",
+        "finishedAt": "2026-10-03T12:09:00\u002B00:00",
+        "outcome": "failed",
+        "warnings": [
+          "The test VM could not be removed."
+        ],
+        "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+        "snapshotId": "k4f8a1b2c3d4e5f6",
+        "reason": "The restored VM started, but the guest did not report in within 5 minutes."
+      }
+    ],
+    "current": "Ubuntu Dev",
+    "nextDue": "2026-11-02T12:00:00\u002B00:00"
   },
   "RestoreVmRequest": {
     "targetId": "3f2a9c1e5d7b4a60",

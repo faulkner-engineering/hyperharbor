@@ -30,6 +30,10 @@ public class ContractFixtureTests
         Guid.Parse("7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"), $"vm:{VmId:D}", "3f2a9c1e5d7b4a60", BackupRunTrigger.Schedule, Time, Time.AddMinutes(12),
         BackupRunOutcome.Partial, 64_000_000_000, ["The checkpoint could not be removed."], VmId, "Ubuntu Dev", "cleanup", "k4f8a1b2c3d4e5f6");
 
+    private static readonly RestoreTestResult RestoreTestResultSample = new(
+        Guid.Parse("8d2f4a6b-1c3e-4a5b-9c7d-0e1f2a3b4c5d"), "Ubuntu Dev", "3f2a9c1e5d7b4a60", BackupRunTrigger.Schedule, Time, Time.AddMinutes(9),
+        RestoreTestOutcome.Failed, ["The test VM could not be removed."], VmId, "k4f8a1b2c3d4e5f6", "The restored VM started, but the guest did not report in within 5 minutes.");
+
     private static readonly SetupProfileResult SetupResultSample = new(6, ["7-Zip: winget install failed (0x8A150011)."], true, new(2026, 10, 3, 12, 40, 0, TimeSpan.Zero), RestartPending: false);
 
     private static readonly VmComputeSettings ComputeSample = new(
@@ -160,6 +164,10 @@ public class ContractFixtureTests
         ["BackupTargetTest"] = new BackupTargetTest(true, [new BackupTestStep("Folder", true, "The folder exists or was created.")]),
         ["BackupPolicy"] = new BackupPolicy(VmId, "3f2a9c1e5d7b4a60", true, new BackupRetention(7, 4, 6), 2000, new BackupConditions(), new BackupTriggers(true, true, 15), BackupGpuMode.AllowLive),
         ["BackupRun"] = BackupRunSample,
+        ["RestoreTestSettings"] = new RestoreTestSettings(true, 30, new BackupTimeWindow("03:00", "06:00")),
+        ["RestoreTestResult"] = RestoreTestResultSample,
+        ["RestoreTestStatus"] = new RestoreTestStatus(
+            new RestoreTestSettings(true, 30, new BackupTimeWindow("03:00", "06:00")), true, 2, [RestoreTestResultSample], "Ubuntu Dev", Time.AddDays(30)),
         ["BackupItemStatus"] = new BackupItemStatus($"vm:{VmId:D}", "3f2a9c1e5d7b4a60", "Local", false, VmId, "Ubuntu Dev", BackupRunSample, Time),
         ["BackupStatus"] = new BackupStatus([new BackupItemStatus("host", "3f2a9c1e5d7b4a60", "Local", true)], true, 1),
         ["StartBackupRunRequest"] = new StartBackupRunRequest("3f2a9c1e5d7b4a60", VmId),

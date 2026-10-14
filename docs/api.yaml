@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.19.0
+  version: 1.20.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -2502,6 +2502,67 @@ paths:
                 $ref: "#/components/schemas/VmJob"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /backup/restore-test:
+    get:
+      tags: [Backup]
+      operationId: getRestoreTest
+      summary: The monthly restore test, its settings, and its latest results.
+      description: |
+        The restore test restores the latest backup of each VM as a throwaway VM with no network, starts it, waits for the
+        guest to report in, records the result, and always removes the throwaway VM and its files.
+      responses:
+        "200":
+          description: The settings and results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoreTestStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /backup/restore-test/settings:
+    put:
+      tags: [Backup]
+      operationId: setRestoreTestSettings
+      summary: Turn the restore test on or off, and choose how often and when it runs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreTestSettings"
+      responses:
+        "200":
+          description: The status with the new settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoreTestStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /backup/restore-test/run:
+    post:
+      tags: [Backup]
+      operationId: startRestoreTest
+      summary: Run the restore test now.
+      description: |
+        Starts the test in the background and answers at once; poll `GET /backup/restore-test` for `running` and the
+        results. Answers 409 when a test is already running or no VM has a backup yet.
+      responses:
+        "202":
+          description: The test was started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoreTestStatus"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "409":
@@ -5131,6 +5192,82 @@ components:
           description: Why a run failed or was skipped.
         snapshotId:
           type: string
+
+    RestoreTestOutcome:
+      type: string
+      enum: [passed, failed, skipped]
+
+    RestoreTestSettings:
+      type: object
+      required: [enabled, intervalDays, window]
+      properties:
+        enabled:
+          type: boolean
+        intervalDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+          description: Days between scheduled tests (30 is monthly).
+        window:
+          $ref: "#/components/schemas/BackupTimeWindow"
+
+    RestoreTestResult:
+      type: object
+      required: [runId, vmName, targetId, trigger, startedAt, finishedAt, outcome, warnings]
+      properties:
+        runId:
+          type: string
+          format: uuid
+        vmId:
+          type: string
+          format: uuid
+        vmName:
+          type: string
+        targetId:
+          type: string
+        snapshotId:
+          type: string
+        trigger:
+          $ref: "#/components/schemas/BackupRunTrigger"
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        outcome:
+          $ref: "#/components/schemas/RestoreTestOutcome"
+        reason:
+          type: string
+          description: Why a test failed or was skipped.
+        warnings:
+          type: array
+          items:
+            type: string
+
+    RestoreTestStatus:
+      type: object
+      required: [settings, running, testable, results]
+      properties:
+        settings:
+          $ref: "#/components/schemas/RestoreTestSettings"
+        running:
+          type: boolean
+        current:
+          type: string
+          description: The VM being tested, while a test runs.
+        testable:
+          type: integer
+          description: How many VMs have a backup to test.
+        nextDue:
+          type: string
+          format: date-time
+          description: When the next scheduled test is due; omitted when the test is off.
+        results:
+          type: array
+          description: Newest first, at most 50.
+          items:
+            $ref: "#/components/schemas/RestoreTestResult"
 
     BackupItemStatus:
       type: object

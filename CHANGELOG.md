@@ -67,6 +67,11 @@ note anything that needs action, such as updating the host, a new elevation requ
   (each failure once, each overdue item once a day). The Ambient screen shows one muted line about backups with the host
   status. On a new PC: set the admin passphrase in the host window, pair a client, add the target with its recovery key,
   then restore.
+- Restore test (API 1.20.0, on by default): every 30 days, between 03:00 and 06:00 and only when no game or backup is running,
+  the host restores the latest backup of each VM as a throwaway VM with no network, starts it, waits for the guest to report
+  in, records passed, failed, or skipped with the reason, and always deletes the throwaway VM and its files. VMs with a GPU
+  partition and VMs that would not fit on the disk are skipped. GET /backup/restore-test, PUT /backup/restore-test/settings,
+  and POST /backup/restore-test/run (run now).
 
 - Game-aware mode (API 1.19.0, off by default): when a game is in the foreground on the host, the running VMs are paused
   (or saved and stopped, or left running, per VM) so the game has the PC, and exactly those VMs are resumed when the game

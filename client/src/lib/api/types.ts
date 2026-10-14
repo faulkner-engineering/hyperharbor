@@ -1532,6 +1532,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backup/restore-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The monthly restore test, its settings, and its latest results.
+         * @description The restore test restores the latest backup of each VM as a throwaway VM with no network, starts it, waits for the
+         *     guest to report in, records the result, and always removes the throwaway VM and its files.
+         */
+        get: operations["getRestoreTest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/restore-test/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Turn the restore test on or off, and choose how often and when it runs. */
+        put: operations["setRestoreTestSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/restore-test/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the restore test now.
+         * @description Starts the test in the background and answers at once; poll `GET /backup/restore-test` for `running` and the
+         *     results. Answers 409 when a test is already running or no VM has a backup yet.
+         */
+        post: operations["startRestoreTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backup/scan": {
         parameters: {
             query?: never;
@@ -3004,6 +3063,47 @@ export interface components {
             /** @description Why a run failed or was skipped. */
             reason?: string;
             snapshotId?: string;
+        };
+        /** @enum {string} */
+        RestoreTestOutcome: "passed" | "failed" | "skipped";
+        RestoreTestSettings: {
+            enabled: boolean;
+            /** @description Days between scheduled tests (30 is monthly). */
+            intervalDays: number;
+            window: components["schemas"]["BackupTimeWindow"];
+        };
+        RestoreTestResult: {
+            /** Format: uuid */
+            runId: string;
+            /** Format: uuid */
+            vmId?: string;
+            vmName: string;
+            targetId: string;
+            snapshotId?: string;
+            trigger: components["schemas"]["BackupRunTrigger"];
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt: string;
+            outcome: components["schemas"]["RestoreTestOutcome"];
+            /** @description Why a test failed or was skipped. */
+            reason?: string;
+            warnings: string[];
+        };
+        RestoreTestStatus: {
+            settings: components["schemas"]["RestoreTestSettings"];
+            running: boolean;
+            /** @description The VM being tested, while a test runs. */
+            current?: string;
+            /** @description How many VMs have a backup to test. */
+            testable: number;
+            /**
+             * Format: date-time
+             * @description When the next scheduled test is due; omitted when the test is off.
+             */
+            nextDue?: string;
+            /** @description Newest first, at most 50. */
+            results: components["schemas"]["RestoreTestResult"][];
         };
         BackupItemStatus: {
             item: string;
@@ -5774,6 +5874,75 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getRestoreTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings and results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreTestStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setRestoreTestSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreTestSettings"];
+            };
+        };
+        responses: {
+            /** @description The status with the new settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreTestStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    startRestoreTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The test was started. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreTestStatus"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
         };

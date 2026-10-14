@@ -1,5 +1,6 @@
 using System.Net.NetworkInformation;
 using HyperHarbor.Host.Core.Backup;
+using HyperHarbor.Host.Core.Backup.Restore;
 using HyperHarbor.Shared.Contracts.Vms;
 
 namespace HyperHarbor.Host.Service.Backup;
@@ -50,5 +51,30 @@ internal sealed class TcpVmSessionProbe : IVmSessionProbe
             && connection.RemoteEndPoint.Port == RemoteDesktopPort
             && addresses.Contains(connection.RemoteEndPoint.Address.ToString()));
         return Task.FromResult(active);
+    }
+}
+
+/// <summary>
+/// Checks every five minutes whether the restore test is due. It waits one interval before the first check, so a host that
+/// has just started is not asked to restore a VM at once.
+/// </summary>
+internal sealed class RestoreTestSchedulerService(RestoreTestService test, TimeProvider time, ILogger<RestoreTestSchedulerService> logger) : BackgroundService
+{
+    internal static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(Interval, time);
+        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+        {
+            try
+            {
+                await test.TickAsync(stoppingToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Checking the restore test failed.");
+            }
+        }
     }
 }
