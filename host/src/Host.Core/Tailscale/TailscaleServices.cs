@@ -106,7 +106,15 @@ public static class TailscaleCommands
     public const string HostTag = "tag:hyperharbor-host";
 
     /// <summary>
-    /// Plain "tailscale up" refuses to run when other non-default flags are set and not repeated. The card says so
+    /// What the tailnet policy needs before this PC can carry the tag. Tailscale refuses a tag the policy does not allow
+    /// by signing the PC out (seen on a real tailnet), so the tag is applied only after this is in place, from the admin
+    /// console. HyperHarbor never applies it by running "tailscale up", because it cannot tell beforehand whether it is allowed.
+    /// </summary>
+    public const string PolicySnippet = "\"tagOwners\": {\n  \"tag:hyperharbor-host\": [\"autogroup:admin\"]\n}";
+
+    /// <summary>
+    /// The command that signs a new PC in with the tag. Not for a PC that is already signed in: if the policy does not
+    /// allow the tag, Tailscale signs that PC out. Plain "tailscale up" refuses to run when other non-default flags are set and not repeated. The card says so
     /// next to the command, and does not add --reset, which would also drop those other settings.
     /// </summary>
     public static string UpCommand(TailscaleSettings settings)

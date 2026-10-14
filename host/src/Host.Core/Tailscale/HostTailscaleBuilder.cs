@@ -26,6 +26,7 @@ public static class HostTailscaleBuilder
             TailscaleCommands.HasHostTag(status.Self),
             TailscaleCommands.HostTag,
             TailscaleCommands.UpCommand(settings),
+            TailscaleCommands.PolicySnippet,
             new TailscaleConfig(settings.LocalApiPort, settings.ControlUrl));
     }
 }

@@ -37,6 +37,7 @@ const hostInfo = {
   tagged: false,
   tag: "tag:hyperharbor-host",
   upCommand: "tailscale up --advertise-tags=tag:hyperharbor-host",
+  policySnippet: '"tagOwners": {\n  "tag:hyperharbor-host": ["autogroup:admin"]\n}',
   config: { localApiPort: 41112, controlUrl: null },
 };
 
@@ -77,12 +78,13 @@ describe("TailscalePanel", () => {
     expect(invoke).toHaveBeenCalledWith("get_host_resource", { key: host.key, resource: "tailscale" });
   });
 
-  it("offers the tag command when the host is not tagged", async () => {
+  it("shows the policy entry, and warns against tailscale up, when the host is not tagged", async () => {
     answer();
     render(TailscalePanel, { host, hostSupportsTailscale: true });
 
-    expect(await screen.findByText("tailscale up --advertise-tags=tag:hyperharbor-host")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Copy command" })).toBeTruthy();
+    expect(await screen.findByText(/"tag:hyperharbor-host": \["autogroup:admin"\]/)).toBeTruthy();
+    expect(screen.getByText(/signs it out/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy policy entry" })).toBeTruthy();
   });
 
   it("does not ask an older host for its Tailscale state", async () => {

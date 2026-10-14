@@ -14,8 +14,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 - Tailscale, host side (API 1.23.0; uses the Tailscale client you already installed, nothing is installed or signed in for you):
   the host reads its own client through the local API (port 41112 by default, changeable for other setups) and falls
   back to `tailscale status --json`. `GET /host/tailscale` reports installed, signed in, the host's Tailscale
-  address and MagicDNS name, and whether it has the `tag:hyperharbor-host` tag, with the `tailscale up` command that
-  sets it (it includes `--login-server` when a Headscale URL is configured; `PUT /host/tailscale/settings`, elevated).
+  address and MagicDNS name, and whether it has the `tag:hyperharbor-host` tag, with the `tagOwners` policy entry the tag needs
+  and the `tailscale up` command for signing a new PC in with it (it includes `--login-server` when a Headscale URL is
+  configured; `PUT /host/tailscale/settings`, elevated). HyperHarbor never applies the tag itself: on a PC that is signed in,
+  advertising a tag the policy does not allow makes Tailscale sign the PC out (found by trying it). Add the policy entry,
+  then add the tag under Machines, Edit ACL tags, in the Tailscale admin console.
 - A device paired or first connecting over the tailnet is tied to its Tailscale node. A later request over a Tailscale
   address from a different node is refused with 403 `tailscaleNodeMismatch`, or `tailscaleNodeUnverified` when the host
   cannot tell which node sent it. Requests over the local network are not affected. To use a paired device from a new
@@ -23,7 +26,7 @@ note anything that needs action, such as updating the host, a new elevation requ
 - `POST /wake/relay`: a paired host on a sleeping host's LAN sends the magic packet for a client that is away. It
   only sends from, and to the broadcast address of, its own networks.
 - A Tailscale card in the host window (Overview and Game ready): installed, signed in, connected, the host's
-  Tailscale address and MagicDNS name, and whether it has the `tag:hyperharbor-host` tag, with a Copy tag command button
+  Tailscale address and MagicDNS name, and whether it has the `tag:hyperharbor-host` tag, with a Copy policy entry button
   and fields for the local API port and a Headscale control server URL. Tailscale stays optional: a PC without it shows
   the card as unavailable.
 - Tailscale in the client (stage one: it uses the Tailscale you already have installed). This PC reads Tailscale
@@ -39,7 +42,7 @@ note anything that needs action, such as updating the host, a new elevation requ
   reachability test pings the host first so there is one to report.
 - Host menu > Tailscale: Tailscale on this PC and on the host, the connection route, a reachability test that checks the way
   step by step (Tailscale on this PC, host on the tailnet, online, path, HyperHarbor answering, certificate, signed-in
-  request), the tag command with a Copy button, and the local API port and Headscale control server settings (the host's
+  request), the policy entry for the tag with a Copy button, and the local API port and Headscale control server settings (the host's
   need the admin passphrase).
 - Waking a sleeping host from away from its network: when this PC has no address on that network, it asks another
   paired host that is online on it to send the magic packet, choosing the best one automatically (direct paths first).

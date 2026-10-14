@@ -215,6 +215,7 @@ export interface HostTailscale {
   tagged: boolean;
   tag: string;
   upCommand: string;
+  policySnippet: string;
   config: { localApiPort: number; controlUrl?: string | null };
 }
 

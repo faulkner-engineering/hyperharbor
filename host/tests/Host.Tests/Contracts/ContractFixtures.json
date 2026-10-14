@@ -492,6 +492,7 @@
     "tagged": true,
     "tag": "tag:hyperharbor-host",
     "upCommand": "tailscale up --advertise-tags=tag:hyperharbor-host",
+    "policySnippet": "\u0022tagOwners\u0022: {}",
     "config": {
       "localApiPort": 41112
     }

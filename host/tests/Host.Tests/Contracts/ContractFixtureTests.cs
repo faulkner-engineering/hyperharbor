@@ -115,7 +115,7 @@ public class ContractFixtureTests
         ["TailscaleConfig"] = new TailscaleConfig(41112, "https://hs.example.com"),
         ["HostTailscale"] = new HostTailscale(
             TailscaleHostState.Running, null, "100.64.0.1", "gaming-pc.tail1234.ts.net", true, "tag:hyperharbor-host",
-            "tailscale up --advertise-tags=tag:hyperharbor-host", new TailscaleConfig(41112, null)),
+            "tailscale up --advertise-tags=tag:hyperharbor-host", "\"tagOwners\": {}", new TailscaleConfig(41112, null)),
         ["ElevateRequest"] = new ElevateRequest("Fixture passphrase"),
         ["ElevationGrant"] = new ElevationGrant("Zml4dHVyZS10b2tlbi1maXh0dXJlLXRva2VuLWZpeHR1cg", Time),
         // Null on purpose: expiresAt is required but nullable.

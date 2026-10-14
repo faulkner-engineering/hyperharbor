@@ -2466,6 +2466,11 @@ export interface components {
             tag: string;
             /** @description The `tailscale up` command that gives the host the tag. A suggestion; the host never runs it. */
             upCommand: string;
+            /**
+             * @description The tagOwners entry the tailnet policy needs before the tag can be applied. Add it under Access controls in the
+             *     Tailscale admin console, then add the tag to this host under Machines, Edit ACL tags.
+             */
+            policySnippet: string;
             config: components["schemas"]["TailscaleConfig"];
         };
         HostResources: {

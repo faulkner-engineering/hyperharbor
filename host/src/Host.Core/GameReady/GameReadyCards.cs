@@ -478,7 +478,7 @@ public static class GameReadyCards
         var hints = new List<string>();
         if (running && !info.Tagged)
         {
-            hints.Add($"To tag this PC, run the command below in a terminal. Your tailnet policy must list {info.Tag} under tagOwners first. If Tailscale asks you to repeat your other options, add them to the command.");
+            hints.Add($"To tag this PC: first add {info.Tag} to tagOwners in your Tailscale policy (Access controls in the admin console; copy the entry below). Then open Machines in the admin console, choose this PC, Edit ACL tags, and add the tag. Do not run \"tailscale up --advertise-tags\" on a PC that is signed in before the policy allows the tag: Tailscale then signs the PC out.");
         }
 
         if (running)

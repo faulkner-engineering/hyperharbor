@@ -277,6 +277,7 @@ describe("tailscale card text", () => {
     tagged: true,
     tag: "tag:hyperharbor-host",
     upCommand: "tailscale up --advertise-tags=tag:hyperharbor-host",
+    policySnippet: "\"tagOwners\": {}",
     config: { localApiPort: 41112 },
     ...overrides,
   });

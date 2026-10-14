@@ -206,7 +206,7 @@
   async function copyTailscaleCommand() {
     if (!tailscale) return;
     try {
-      await navigator.clipboard.writeText(tailscale.upCommand);
+      await navigator.clipboard.writeText(tailscale.policySnippet);
       tsCopied = true;
       setTimeout(() => (tsCopied = false), 2500);
     } catch {
@@ -287,8 +287,8 @@
         {/if}
         {#if card.id === "tailscale" && tailscale}
           <p>{card.summary}</p>
-          {#if tailscale.state === "running" || tailscale.state === "stopped" || tailscale.state === "needsLogin"}
-            <p class="small"><code>{tailscale.upCommand}</code></p>
+          {#if tailscale.state === "running" && !tailscale.tagged}
+            <pre class="snippet">{tailscale.policySnippet}</pre>
           {/if}
           <div class="signin">
             <label>
@@ -519,8 +519,8 @@
             {/if}
             {#if card.id === "tailscale" && tailscale}
               <button type="button" class="btn" disabled={tsBusy || !view.connected} onclick={saveTailscale}>Save settings</button>
-              {#if tailscale.state !== "notInstalled"}
-                <button type="button" class="btn primary" onclick={copyTailscaleCommand}>{tsCopied ? "Copied" : "Copy tag command"}</button>
+              {#if tailscale.state === "running" && !tailscale.tagged}
+                <button type="button" class="btn primary" onclick={copyTailscaleCommand}>{tsCopied ? "Copied" : "Copy policy entry"}</button>
               {/if}
             {/if}
             {#if card.id === "ambientScreen" && ambient}
@@ -700,6 +700,15 @@
 
   .warn {
     color: var(--warn-fg);
+  }
+
+  .snippet {
+    margin: 0.5rem 0 0;
+    padding: 0.5rem 0.7rem;
+    border-radius: 8px;
+    background: var(--hover);
+    font-size: 0.82rem;
+    overflow-x: auto;
   }
 
   .signin {

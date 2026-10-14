@@ -21,6 +21,7 @@ const hostInfo = (overrides: Partial<HostTailscale> = {}): HostTailscale => ({
   tagged: true,
   tag: "tag:hyperharbor-host",
   upCommand: "tailscale up --advertise-tags=tag:hyperharbor-host",
+  policySnippet: '"tagOwners": {}',
   config: { localApiPort: 41112 },
   ...overrides,
 });

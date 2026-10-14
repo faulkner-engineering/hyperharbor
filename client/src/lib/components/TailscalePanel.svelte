@@ -79,7 +79,7 @@
   async function copyCommand() {
     if (!hostInfo) return;
     try {
-      await navigator.clipboard.writeText(hostInfo.upCommand);
+      await navigator.clipboard.writeText(hostInfo.policySnippet);
       copied = true;
       setTimeout(() => (copied = false), 2500);
     } catch {
@@ -151,11 +151,15 @@
   {#if hostInfo && hostInfo.state === "running" && !hostInfo.tagged}
     <div class="tag">
       <p>
-        Tag the host so clients look at it first on the tailnet. Run this on the host in a terminal. Your tailnet policy must list
-        <code>{hostInfo.tag}</code> under tagOwners first.
+        Tag the host so clients look at it first on the tailnet. First add this to your Tailscale policy (Access controls in the admin
+        console). Then, under Machines, choose the host, Edit ACL tags, and add <code>{hostInfo.tag}</code>.
       </p>
-      <p><code>{hostInfo.upCommand}</code></p>
-      <button type="button" onclick={copyCommand}>{copied ? "Copied" : "Copy command"}</button>
+      <pre>{hostInfo.policySnippet}</pre>
+      <p class="muted">
+        Do not run <code>tailscale up --advertise-tags</code> on a host that is signed in before the policy allows the tag: Tailscale
+        signs it out.
+      </p>
+      <button type="button" onclick={copyCommand}>{copied ? "Copied" : "Copy policy entry"}</button>
     </div>
   {/if}
 
@@ -254,6 +258,14 @@
 
   .error {
     color: var(--danger);
+  }
+
+  pre {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    background: var(--border);
+    overflow-x: auto;
   }
 
   .tag {

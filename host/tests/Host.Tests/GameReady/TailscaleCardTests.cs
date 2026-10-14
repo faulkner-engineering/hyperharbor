@@ -15,6 +15,7 @@ public sealed class TailscaleCardTests
         tagged,
         TailscaleCommands.HostTag,
         TailscaleCommands.UpCommand(new TailscaleSettings()),
+        TailscaleCommands.PolicySnippet,
         new TailscaleConfig(41112, null));
 
     [Fact]
@@ -47,7 +48,7 @@ public sealed class TailscaleCardTests
         Assert.Equal(GameReadyStates.Attention, untagged.State);
         Assert.Equal("100.64.0.1, pc.tail1.ts.net", untagged.Checks.Single(check => check.Id == "address").Detail);
         Assert.Equal(GameReadyCheckStatuses.Warn, untagged.Checks.Single(check => check.Id == "tag").Status);
-        Assert.Contains(untagged.Hints, hint => hint.Contains("tagOwners", StringComparison.Ordinal));
+        Assert.Contains(untagged.Hints, hint => hint.Contains("tagOwners", StringComparison.Ordinal) && hint.Contains("signs the PC out", StringComparison.Ordinal));
         Assert.Equal(GameReadyStates.Ready, tagged.State);
         Assert.DoesNotContain(tagged.Hints, hint => hint.Contains("tagOwners", StringComparison.Ordinal));
     }
