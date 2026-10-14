@@ -35,7 +35,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 - Connections try the local network address first and the Tailscale address second. A Tailscale address that worked a
   moment ago stays first, so away from home nothing waits for the local address to time out. The line under the host name
   says which route the last request took, and whether Tailscale is Direct or Relayed; a relayed path explains split
-  tunneling for VPN users.
+  tunneling for VPN users. A path is reported only once Tailscale has chosen one (an idle device has none yet), and the
+  reachability test pings the host first so there is one to report.
 - Host menu > Tailscale: Tailscale on this PC and on the host, the connection route, a reachability test that checks the way
   step by step (Tailscale on this PC, host on the tailnet, online, path, HyperHarbor answering, certificate, signed-in
   request), the tag command with a Copy button, and the local API port and Headscale control server settings (the host's

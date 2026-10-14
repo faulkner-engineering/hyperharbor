@@ -262,11 +262,14 @@ pub fn parse_status(json: &str) -> TailnetStatus {
 
 fn peer_of(value: &serde_json::Value, key: &str) -> TailnetPeer {
     let online = value.get("Online").and_then(|v| v.as_bool()) == Some(true);
+    let active = value.get("Active").and_then(|v| v.as_bool()) == Some(true);
     let current = text(value, "CurAddr");
     let relay = text(value, "Relay");
 
-    // A set CurAddr is a direct path. Without one, a set Relay means traffic goes through a DERP relay.
-    let path = if !online {
+    // Only an active peer has a path in use. Tailscale prints "-" for an idle one, although Relay still names the
+    // peer's home relay region then (seen on a real tailnet), so Relay alone does not mean DERP. For an active peer,
+    // a set CurAddr is a direct path and otherwise a set Relay is the relay in use.
+    let path = if !online || !active {
         TailnetPath::Unknown
     } else if !current.is_empty() {
         TailnetPath::Direct
@@ -399,6 +402,37 @@ fn usable(reply: &Reply) -> Option<TailnetStatus> {
     let Reply::Ok(body) = reply else { return None };
     let status = parse_status(body);
     (status.state != TailnetState::Unreachable).then_some(status)
+}
+
+/// Sends a few Tailscale pings to an address, so Tailscale settles on a path (direct or relayed) before the status is
+/// read: an idle peer reports no path at all. Best effort; the answer is not used, only the status afterwards.
+pub async fn warm_path(address: &str) {
+    let address = address.to_string();
+    let _ = tokio::time::timeout(
+        Duration::from_secs(12),
+        tokio::task::spawn_blocking(move || {
+            for candidate in CliSource::candidates() {
+                if candidate.is_absolute() && !candidate.exists() {
+                    continue;
+                }
+                let mut command = std::process::Command::new(&candidate);
+                command
+                    .args(["ping", "--c", "3", "--timeout", "3s", &address])
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+                #[cfg(windows)]
+                {
+                    use std::os::windows::process::CommandExt;
+                    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+                }
+                if command.status().is_ok() {
+                    return;
+                }
+            }
+        }),
+    )
+    .await;
 }
 
 /// Reads the status from the local API, then from the command line. "Not installed" is decided by the command line,
@@ -1137,10 +1171,10 @@ mod tests {
       "MagicDNSSuffix": "tail1234.ts.net",
       "Self": { "ID": "nSELF", "HostName": "LAPTOP", "DNSName": "laptop.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.9"] },
       "Peer": {
-        "nodekey:a": { "ID": "nDIRECT", "HostName": "gaming-pc", "DNSName": "gaming-pc.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.1", "fd7a:115c:a1e0::1"], "Tags": ["tag:hyperharbor-host"], "Online": true, "CurAddr": "203.0.113.5:41641", "Relay": "nyc" },
-        "nodekey:b": { "ID": "nRELAY", "HostName": "den-pc", "DNSName": "den-pc.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.2"], "Tags": ["tag:hyperharbor-host"], "Online": true, "CurAddr": "", "Relay": "fra" },
-        "nodekey:c": { "ID": "nPHONE", "HostName": "phone", "DNSName": "phone.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.3"], "Online": true, "CurAddr": "", "Relay": "" },
-        "nodekey:d": { "ID": "nOFF", "HostName": "old-pc", "DNSName": "old-pc.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.4"], "Tags": ["tag:hyperharbor-host"], "Online": false, "CurAddr": "198.51.100.9:41641" }
+        "nodekey:a": { "ID": "nDIRECT", "HostName": "gaming-pc", "DNSName": "gaming-pc.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.1", "fd7a:115c:a1e0::1"], "Tags": ["tag:hyperharbor-host"], "Online": true, "Active": true, "CurAddr": "203.0.113.5:41641", "Relay": "nyc" },
+        "nodekey:b": { "ID": "nRELAY", "HostName": "den-pc", "DNSName": "den-pc.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.2"], "Tags": ["tag:hyperharbor-host"], "Online": true, "Active": true, "CurAddr": "", "Relay": "fra" },
+        "nodekey:c": { "ID": "nPHONE", "HostName": "phone", "DNSName": "phone.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.3"], "Online": true, "Active": false, "CurAddr": "", "Relay": "ord" },
+        "nodekey:d": { "ID": "nOFF", "HostName": "old-pc", "DNSName": "old-pc.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.4"], "Tags": ["tag:hyperharbor-host"], "Online": false, "Active": true, "CurAddr": "198.51.100.9:41641" }
       }
     }"#;
 
@@ -1972,5 +2006,43 @@ mod tests {
         );
         assert!(store.set(TailnetSettings { local_api_port: 0 }).is_err());
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// Needs Tailscale and at least one other online device on the tailnet. Run with:
+    /// cargo test live_peer_path -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore = "needs Tailscale and another online device"]
+    async fn live_peer_path() {
+        let before = read_status(
+            &HttpSource {
+                port: DEFAULT_LOCAL_API_PORT,
+            },
+            &CliSource,
+        )
+        .await;
+        let peer = before
+            .peers
+            .iter()
+            .find(|peer| peer.online)
+            .expect("an online peer");
+        let address = peer.ipv4().expect("an IPv4 address").to_string();
+        println!("before: {:?} {:?}", peer.path, peer.relay);
+
+        warm_path(&address).await;
+
+        let after = read_status(
+            &HttpSource {
+                port: DEFAULT_LOCAL_API_PORT,
+            },
+            &CliSource,
+        )
+        .await;
+        let peer = after
+            .peers
+            .iter()
+            .find(|p| p.ipv4() == Some(address.as_str()))
+            .unwrap();
+        println!("after: {:?} {:?}", peer.path, peer.relay);
+        assert_ne!(peer.path, TailnetPath::Unknown);
     }
 }

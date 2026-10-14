@@ -1744,10 +1744,6 @@ async fn test_tailscale_reachability(
     let host = state.host(&key)?;
     let paired = state.pairing_for(&host);
     let port = state.tailnet.settings.get().local_api_port;
-    let status = state
-        .tailnet
-        .read_now(&tailnet::HttpSource { port }, &tailnet::CliSource)
-        .await;
 
     let address: Option<String> = host
         .tailscale
@@ -1762,6 +1758,15 @@ async fn test_tailscale_reachability(
                 .map(String::as_str)
         })
         .map(str::to_string);
+
+    // Ping first, so Tailscale has chosen a path (direct or relayed) when the status is read.
+    if let Some(address) = &address {
+        tailnet::warm_path(address).await;
+    }
+    let status = state
+        .tailnet
+        .read_now(&tailnet::HttpSource { port }, &tailnet::CliSource)
+        .await;
 
     let mut certificate = tailnet::CertCheck::NoAnswer;
     let mut api = tailnet::ApiCheck::NotTried;

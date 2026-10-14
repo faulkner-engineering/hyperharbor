@@ -86,11 +86,14 @@ public static class TailscaleStatusParser
     {
         var node = NodeOf(element, key);
         var online = element.TryGetProperty("Online", out var onlineElement) && onlineElement.ValueKind == JsonValueKind.True;
+        var active = element.TryGetProperty("Active", out var activeElement) && activeElement.ValueKind == JsonValueKind.True;
         var currentAddress = Text(element, "CurAddr");
         var relay = Text(element, "Relay");
 
-        // A set CurAddr is a direct path. Without one, a set Relay means traffic goes through DERP. An idle peer has neither.
-        var path = !online ? TailscalePath.Unknown
+        // Only an active peer has a path in use. Tailscale prints "-" for an idle one, although Relay still names the peer's
+        // home relay region then (seen on a real tailnet), so Relay alone does not mean traffic goes through DERP. For an
+        // active peer, a set CurAddr is a direct path and otherwise a set Relay is the relay in use.
+        var path = !online || !active ? TailscalePath.Unknown
             : currentAddress.Length > 0 ? TailscalePath.Direct
             : relay.Length > 0 ? TailscalePath.Relayed
             : TailscalePath.Unknown;

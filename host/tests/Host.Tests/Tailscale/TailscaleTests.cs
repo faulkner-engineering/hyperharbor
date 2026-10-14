@@ -14,10 +14,10 @@ public sealed class TailscaleTests
           "MagicDNSSuffix": "tail1234.ts.net",
           "Self": { "ID": "nSELF1CNTRL", "HostName": "GAMING-PC", "DNSName": "gaming-pc.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.1", "fd7a:115c:a1e0::1"], "Tags": ["tag:hyperharbor-host"], "Online": true },
           "Peer": {
-            "nodekey:aaa": { "ID": "nDIRECT1CNTRL", "HostName": "laptop", "DNSName": "laptop.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.2"], "Online": true, "CurAddr": "203.0.113.5:41641", "Relay": "nyc" },
-            "nodekey:bbb": { "ID": "nRELAY1CNTRL", "HostName": "phone", "DNSName": "phone.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.3"], "Online": true, "CurAddr": "", "Relay": "fra", "Tags": ["tag:hyperharbor-host"] },
-            "nodekey:ccc": { "ID": "nIDLE1CNTRL", "HostName": "idle", "DNSName": "idle.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.4"], "Online": true, "CurAddr": "", "Relay": "" },
-            "nodekey:ddd": { "ID": "nOFF1CNTRL", "HostName": "offline", "DNSName": "offline.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.5"], "Online": false, "CurAddr": "198.51.100.9:41641", "Relay": "" }
+            "nodekey:aaa": { "ID": "nDIRECT1CNTRL", "HostName": "laptop", "DNSName": "laptop.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.2"], "Online": true, "Active": true, "CurAddr": "203.0.113.5:41641", "Relay": "nyc" },
+            "nodekey:bbb": { "ID": "nRELAY1CNTRL", "HostName": "phone", "DNSName": "phone.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.3"], "Online": true, "Active": true, "CurAddr": "", "Relay": "fra", "Tags": ["tag:hyperharbor-host"] },
+            "nodekey:ccc": { "ID": "nIDLE1CNTRL", "HostName": "idle", "DNSName": "idle.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.4"], "Online": true, "Active": false, "CurAddr": "", "Relay": "ord" },
+            "nodekey:ddd": { "ID": "nOFF1CNTRL", "HostName": "offline", "DNSName": "offline.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.5"], "Online": false, "Active": true, "CurAddr": "198.51.100.9:41641", "Relay": "" }
           }
         }
         """;
