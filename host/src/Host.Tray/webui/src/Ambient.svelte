@@ -16,6 +16,11 @@
   const vms = $derived(data.runningVms == null ? null : vmLine(data.runningVms));
 
   onMount(() => {
+    // The black page belongs to this route only. This component is part of the same bundle as the host window, so an
+    // unscoped global style on html and body would also turn the host window black.
+    document.documentElement.classList.add("ambient");
+    document.body.classList.add("ambient");
+
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hintTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -43,6 +48,8 @@
     // The screensaver shows its window already (black); the page tells it that it has drawn.
     void tick().then(() => send({ type: "ready" }));
     return () => {
+      document.documentElement.classList.remove("ambient");
+      document.body.classList.remove("ambient");
       clearTimeout(timer);
       clearTimeout(hintTimer);
     };
@@ -69,8 +76,8 @@
 </main>
 
 <style>
-  :global(html),
-  :global(body) {
+  :global(html.ambient),
+  :global(body.ambient) {
     background: #000;
     color: #c9c5bc;
     cursor: none;

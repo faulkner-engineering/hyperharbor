@@ -24,3 +24,16 @@ describe("vmLine", () => {
   it("lists a few names", () => expect(vmLine(["A", "B"])).toBe("Running: A, B"));
   it("counts many", () => expect(vmLine(["A", "B", "C", "D"])).toBe("4 virtual machines running"));
 });
+
+describe("the ambient page styles", () => {
+  it("scope their global rules to the ambient route, so the host window keeps its theme", async () => {
+    // A rule on plain html or body in this component reaches every window, because all pages share one bundle.
+    const source = (await import("./Ambient.svelte?raw")).default as string;
+    const globals = [...source.matchAll(/:global\(([^)]*)\)/g)].map((match) => match[1]);
+
+    expect(globals.length).toBeGreaterThan(0);
+    for (const selector of globals) {
+      expect(selector, "global selector " + selector).toMatch(/\.ambient/);
+    }
+  });
+});
