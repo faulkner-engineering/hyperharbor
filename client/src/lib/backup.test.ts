@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BackupItemStatus, BackupTarget } from "$lib/api/client";
+import type { BackupItemStatus, BackupTarget, RestoreTestResult, RestoreTestStatus } from "$lib/api/client";
 import {
   ageText,
   confirmationComplete,
@@ -7,8 +7,11 @@ import {
   formProblem,
   formatBytes,
   groupKey,
+  intervalText,
   itemName,
   normalizeKey,
+  restoreTestLine,
+  restoreTestSummary,
   runSummary,
   scheduleText,
   targetLocation,
@@ -159,5 +162,51 @@ describe("targetLocation", () => {
     expect(targetLocation(target({ local: { path: "D:\\B" } }))).toBe("D:\\B");
     expect(targetLocation(target({ s3: { endpoint: "s3.example.com", bucket: "b", useTls: true } }))).toBe("s3.example.com/b");
     expect(targetLocation(target({ azure: { account: "a", container: "c" } }))).toBe("a/c");
+  });
+});
+
+describe("restore test text", () => {
+  const result = (overrides: Partial<RestoreTestResult> = {}): RestoreTestResult => ({
+    runId: "r1",
+    vmName: "Dev",
+    targetId: "t1",
+    trigger: "schedule",
+    startedAt: "2026-10-12T08:50:00Z",
+    finishedAt: "2026-10-12T09:00:00Z",
+    outcome: "passed",
+    warnings: [],
+    ...overrides,
+  });
+  const test = (overrides: Partial<RestoreTestStatus> = {}): RestoreTestStatus => ({
+    settings: { enabled: true, intervalDays: 30, window: { start: "03:00", end: "06:00" } },
+    running: false,
+    testable: 2,
+    results: [result()],
+    nextDue: "2026-11-11T09:00:00Z",
+    ...overrides,
+  });
+
+  it("says what is happening, and why nothing is", () => {
+    expect(restoreTestSummary(test({ running: true, current: "Dev" }), now)).toBe("Testing Dev…");
+    expect(restoreTestSummary(test({ running: true }), now)).toBe("Testing…");
+    expect(restoreTestSummary(test({ testable: 0 }), now)).toMatch(/no virtual machine has a backup/);
+    expect(restoreTestSummary(test({ settings: { enabled: false, intervalDays: 30, window: { start: "03:00", end: "06:00" } } }), now)).toBe("The restore test is off.");
+  });
+
+  it("gives the last test and when the next one is due", () => {
+    expect(restoreTestSummary(test(), now)).toMatch(/^Last tested 3 hours ago. Next test after /);
+    expect(restoreTestSummary(test({ results: [], nextDue: "2026-10-01T00:00:00Z" }), now)).toBe("Never tested. Next test at the next quiet time.");
+  });
+
+  it("describes a result with its reason only when it did not pass", () => {
+    expect(restoreTestLine(result(), now)).toBe("Passed: Dev, 3 hours ago.");
+    expect(restoreTestLine(result({ outcome: "failed", reason: "The guest did not report in." }), now)).toBe("Failed: Dev, 3 hours ago. The guest did not report in.");
+    expect(restoreTestLine(result({ outcome: "skipped", reason: "A game started." }), now)).toContain("Skipped: Dev");
+  });
+
+  it("words the interval", () => {
+    expect(intervalText(1)).toBe("every day");
+    expect(intervalText(30)).toBe("every month");
+    expect(intervalText(7)).toBe("every 7 days");
   });
 });

@@ -1,4 +1,14 @@
-import type { BackupItemStatus, BackupKind, BackupRun, BackupSchedule, BackupSnapshot, BackupTarget, NewBackupTarget } from "$lib/api/client";
+import type {
+  BackupItemStatus,
+  BackupKind,
+  BackupRun,
+  BackupSchedule,
+  BackupSnapshot,
+  BackupTarget,
+  NewBackupTarget,
+  RestoreTestResult,
+  RestoreTestStatus,
+} from "$lib/api/client";
 
 const GROUP = 4;
 /** The host asks for this many groups of the key to confirm it was saved. */
@@ -205,4 +215,29 @@ export function snapshotLabel(snapshot: BackupSnapshot): string {
     minute: "2-digit",
   });
   return `${when} (${formatBytes(snapshot.totalSize)})`;
+}
+
+/** One sentence about the restore test as a whole. */
+export function restoreTestSummary(status: RestoreTestStatus, now: Date = new Date()): string {
+  if (status.running) return status.current ? `Testing ${status.current}…` : "Testing…";
+  if (status.testable === 0) return "Nothing to test yet: no virtual machine has a backup.";
+  if (!status.settings.enabled) return "The restore test is off.";
+  const last = status.results[0];
+  const next = status.nextDue ? new Date(status.nextDue) : null;
+  const due = next === null || next.getTime() <= now.getTime() ? "Next test at the next quiet time." : `Next test after ${next.toLocaleDateString()}.`;
+  return last ? `Last tested ${ageText(last.finishedAt, now)}. ${due}` : `Never tested. ${due}`;
+}
+
+/** A result for a list: the VM, how it went, and why when it did not pass. */
+export function restoreTestLine(result: RestoreTestResult, now: Date = new Date()): string {
+  const verdict = { passed: "Passed", failed: "Failed", skipped: "Skipped" }[result.outcome];
+  const reason = result.reason && result.outcome !== "passed" ? ` ${result.reason}` : "";
+  return `${verdict}: ${result.vmName}, ${ageText(result.finishedAt, now)}.${reason}`;
+}
+
+/** The interval choices as words: "every day", "every 7 days", "every month". */
+export function intervalText(days: number): string {
+  if (days === 1) return "every day";
+  if (days === 30) return "every month";
+  return `every ${days} days`;
 }

@@ -1394,6 +1394,49 @@ impl ApiClient {
             .await
     }
 
+    /// GET /backup/restore-test.
+    pub async fn get_restore_test(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, "/backup/restore-test").await
+    }
+
+    /// PUT /backup/restore-test/settings.
+    pub async fn set_restore_test_settings(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        settings: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::PUT,
+            "/backup/restore-test/settings",
+            settings,
+        )
+        .await
+    }
+
+    /// POST /backup/restore-test/run. The test runs in the background; poll the status.
+    pub async fn start_restore_test(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+    ) -> Result<serde_json::Value, ClientError> {
+        let response = self
+            .send_paired(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/backup/restore-test/run",
+            )
+            .await?;
+        parse(response).await
+    }
+
     /// POST /backup/scan (needs elevation). Opens the target's repositories.
     pub async fn scan_backups(
         &self,

@@ -700,6 +700,21 @@ export const setBackupPolicy = (key: string, policy: BackupPolicy) =>
 export const deleteBackupPolicy = (key: string, targetId: string, vmId: string) =>
   invoke<void>("delete_backup_policy", { key, targetId, vmId });
 
+export type RestoreTestSettings = components["schemas"]["RestoreTestSettings"];
+export type RestoreTestResult = components["schemas"]["RestoreTestResult"];
+export type RestoreTestStatus = components["schemas"]["RestoreTestStatus"];
+
+/** The API version that added the monthly restore test. */
+export const RestoreTestApiVersion = "1.20.0";
+
+export const getRestoreTest = (key: string) => invoke<RestoreTestStatus>("get_restore_test", { key });
+
+export const setRestoreTestSettings = (key: string, settings: RestoreTestSettings) =>
+  invoke<RestoreTestStatus>("set_restore_test_settings", { key, settings });
+
+/** Starts a test in the background; poll `getRestoreTest` for `running` and the results. */
+export const startRestoreTest = (key: string) => invoke<RestoreTestStatus>("start_restore_test", { key });
+
 export const getBackupStatus = (key: string) => invoke<BackupStatus>("get_backup_status", { key });
 
 export const listBackupHistory = (key: string, limit = 50) =>

@@ -1407,6 +1407,38 @@ async fn start_backup_run(
     state.api.start_backup_run(&host, &paired, &request).await
 }
 
+#[tauri::command]
+async fn get_restore_test(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_restore_test(&host, &paired).await
+}
+
+#[tauri::command]
+async fn set_restore_test_settings(
+    state: State<'_, AppState>,
+    key: String,
+    settings: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .set_restore_test_settings(&host, &paired, &settings)
+        .await
+}
+
+/// Runs the restore test now. It continues on the host; poll the status.
+#[tauri::command]
+async fn start_restore_test(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.start_restore_test(&host, &paired).await
+}
+
 /// Lists what a target holds, grouped by VM. Needs elevation.
 #[tauri::command]
 async fn scan_backups(
@@ -1785,6 +1817,9 @@ pub fn run() {
             set_backup_policy,
             delete_backup_policy,
             get_backup_status,
+            get_restore_test,
+            set_restore_test_settings,
+            start_restore_test,
             list_backup_history,
             start_backup_run,
             scan_backups,

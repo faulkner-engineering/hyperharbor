@@ -16,6 +16,8 @@
     type BackupRun,
     type BackupStatus,
     type BackupTarget,
+    hostSupports,
+    RestoreTestApiVersion,
     type HostEntry,
     type Vm,
   } from "$lib/api/client";
@@ -25,6 +27,7 @@
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import RecoveryKeyDialog from "./RecoveryKeyDialog.svelte";
   import RestoreDialog from "./RestoreDialog.svelte";
+  import RestoreTestSection from "./RestoreTestSection.svelte";
 
   interface Props {
     host: HostEntry;
@@ -262,6 +265,8 @@
       <p class="muted">{status.waiting} waiting for a good moment (no one connected, no game running).</p>
     {/if}
   {/if}
+
+  {#if hostSupports(host, RestoreTestApiVersion)}<RestoreTestSection {host} />{/if}
 
   {#if history.length > 0}
     <h4>History</h4>
