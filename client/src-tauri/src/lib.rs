@@ -44,6 +44,8 @@ struct AppState {
     uploads: std::sync::Mutex<HashMap<String, Arc<std::sync::atomic::AtomicBool>>>,
     /// Which monitors each VM's Remote Desktop sessions use.
     monitors: MonitorChoiceStore,
+    /// Receiving hosts' transfer offers by transfer ID, so their tickets never reach the frontend.
+    transfers: std::sync::Mutex<HashMap<String, PendingTransfer>>,
     /// Remote Desktop and console windows still open, by host; those hosts get a check-in each minute.
     sessions: sessions::ActiveSessions,
     /// One physical camera shared with every open session through a virtual camera each.
@@ -723,6 +725,192 @@ async fn create_vm(
 ) -> Result<serde_json::Value, ClientError> {
     let (host, paired) = state.paired_host(&key)?;
     state.api.create_vm(&host, &paired, &request).await
+}
+
+/// A receiving host's offer, kept until the sending host is told to start. The ticket is a secret: it goes from the
+/// receiving host to the sending host through this process and nowhere else.
+struct PendingTransfer {
+    source_key: String,
+    target_key: String,
+    mode: String,
+    ticket: zeroize::Zeroizing<String>,
+    guardian: Option<String>,
+}
+
+/// GET /vms/{vmId}/transfer-preview on the sending host.
+#[tauri::command]
+async fn get_transfer_preview(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.transfer_preview(&host, &paired, &vm_id).await
+}
+
+/// Asks the receiving host to take the VM described by `preview`. The sending host's pinned certificate fingerprint
+/// goes with it, so the receiving host accepts data only from that host. Returns the offer without its ticket and
+/// guardian, which stay here for `start_transfer`.
+#[tauri::command]
+async fn offer_transfer(
+    state: State<'_, AppState>,
+    source_key: String,
+    target_key: String,
+    preview: serde_json::Value,
+    mode: String,
+    acknowledge_warnings: bool,
+) -> Result<serde_json::Value, ClientError> {
+    if mode != "move" && mode != "copy" {
+        return Err(ClientError::InvalidRequest(
+            "a transfer is a move or a copy".into(),
+        ));
+    }
+    let (_, source) = state.paired_host(&source_key)?;
+    let (target_host, target) = state.paired_host(&target_key)?;
+    if source.host_id == target.host_id {
+        return Err(ClientError::InvalidRequest(
+            "choose a different host to transfer to".into(),
+        ));
+    }
+
+    let body = serde_json::json!({
+        "preview": preview,
+        "mode": mode,
+        "sourceFingerprint": source.host_certificate_fingerprint,
+        "acknowledgeWarnings": acknowledge_warnings,
+    });
+    let mut offer = state
+        .api
+        .offer_incoming_transfer(&target_host, &target, &body)
+        .await?;
+    let transfer_id = offer
+        .get("transferId")
+        .and_then(serde_json::Value::as_str)
+        .filter(|id| crate::hosts::is_guid(id))
+        .ok_or_else(|| ClientError::InvalidResponse("the offer has no transfer ID".into()))?
+        .to_string();
+    let ticket = offer
+        .get("ticket")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| ClientError::InvalidResponse("the offer has no ticket".into()))?
+        .to_string();
+    let guardian = offer
+        .get("guardian")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    if let Some(fields) = offer.as_object_mut() {
+        fields.remove("ticket");
+        fields.remove("guardian");
+    }
+
+    state.transfers.lock().unwrap().insert(
+        transfer_id,
+        PendingTransfer {
+            source_key,
+            target_key,
+            mode,
+            ticket: zeroize::Zeroizing::new(ticket),
+            guardian,
+        },
+    );
+    Ok(offer)
+}
+
+/// Tells the sending host to push the VM to the receiving host that made the offer. Returns the transferVm job.
+#[tauri::command]
+async fn start_transfer(
+    state: State<'_, AppState>,
+    vm_id: String,
+    transfer_id: String,
+    confirm_name: Option<String>,
+) -> Result<serde_json::Value, ClientError> {
+    let (source_key, target_key, mode, ticket, guardian) = {
+        let transfers = state.transfers.lock().unwrap();
+        let pending = transfers.get(&transfer_id).ok_or_else(|| {
+            ClientError::InvalidRequest(
+                "the other host's offer is no longer here; check the transfer again".into(),
+            )
+        })?;
+        (
+            pending.source_key.clone(),
+            pending.target_key.clone(),
+            pending.mode.clone(),
+            pending.ticket.clone(),
+            pending.guardian.clone(),
+        )
+    };
+    let (source_host, source) = state.paired_host(&source_key)?;
+    let (target_host, target) = state.paired_host(&target_key)?;
+
+    let body = serde_json::json!({
+        "mode": mode,
+        "target": {
+            "hostId": target.host_id,
+            "name": target.display_name,
+            "addresses": target_host.addresses,
+            "port": target_host.port,
+            "fingerprint": target.host_certificate_fingerprint,
+        },
+        "transferId": transfer_id,
+        "ticket": ticket.as_str(),
+        "guardian": guardian,
+        "confirmName": confirm_name,
+    });
+    let job = state
+        .api
+        .start_transfer(&source_host, &source, &vm_id, &body)
+        .await?;
+    state.transfers.lock().unwrap().remove(&transfer_id);
+    Ok(job)
+}
+
+/// POST /vms/{vmId}/transfer/cancel on the sending host.
+#[tauri::command]
+async fn cancel_transfer(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.cancel_transfer(&host, &paired, &vm_id).await
+}
+
+/// Drops an offer the user did not go on with. The receiving host ends it on its own after 30 idle minutes.
+#[tauri::command]
+fn forget_transfer_offer(state: State<'_, AppState>, transfer_id: String) {
+    state.transfers.lock().unwrap().remove(&transfer_id);
+}
+
+/// Gives the transferred VM this device's monitor and camera settings of the original. A move takes them off the
+/// original (it no longer exists there); a copy leaves them on it.
+#[tauri::command]
+fn carry_vm_settings(
+    state: State<'_, AppState>,
+    source_key: String,
+    target_key: String,
+    source_vm_id: String,
+    target_vm_id: String,
+    moved: bool,
+) -> Result<(), ClientError> {
+    if !crate::hosts::is_guid(&source_vm_id) || !crate::hosts::is_guid(&target_vm_id) {
+        return Err(ClientError::InvalidVmId);
+    }
+    let (_, source) = state.paired_host(&source_key)?;
+    let (_, target) = state.paired_host(&target_key)?;
+
+    state.monitors.carry(
+        (&source.host_id, &source_vm_id),
+        (&target.host_id, &target_vm_id),
+        moved,
+    )?;
+    state
+        .camera
+        .carry_prefs(
+            &format!("{}/{}", source.host_id, source_vm_id),
+            &format!("{}/{}", target.host_id, target_vm_id),
+            moved,
+        )
+        .map_err(|e| ClientError::Storage(e.to_string()))
 }
 
 #[tauri::command]
@@ -1985,6 +2173,7 @@ pub fn run() {
                 picked_isos: std::sync::Mutex::new(HashMap::new()),
                 uploads: std::sync::Mutex::new(HashMap::new()),
                 monitors: MonitorChoiceStore::new(Some(config_dir.join("client-settings.json"))),
+                transfers: std::sync::Mutex::new(HashMap::new()),
                 sessions: sessions::ActiveSessions::default(),
                 camera: camera::service::CameraService::new(
                     Arc::new(camera::backend::WindowsBackend),
@@ -2100,6 +2289,12 @@ pub fn run() {
             get_camera_shutter,
             get_delete_preview,
             delete_vm,
+            get_transfer_preview,
+            offer_transfer,
+            start_transfer,
+            cancel_transfer,
+            forget_transfer_offer,
+            carry_vm_settings,
             create_vm,
             get_job,
             get_host_resource,

@@ -104,6 +104,8 @@ export const ProblemCodes = {
   noBackupsFound: "noBackupsFound",
   backupTargetNotFound: "backupTargetNotFound",
   backupFailed: "backupFailed",
+  transferFailed: "transferFailed",
+  transferInProgress: "transferInProgress",
 } as const;
 
 export interface WakeFixOutcome {
@@ -422,6 +424,52 @@ export const createVm = (key: string, request: CreateVmRequest) =>
   invoke<VmJob>("create_vm", { key, request });
 
 export const getJob = (key: string, jobId: string) => invoke<VmJob>("get_job", { key, jobId });
+
+/** Moving or copying a VM to another host (API 1.24.0). */
+export const TransferApiVersion = "1.24.0";
+
+export type TransferPreview = components["schemas"]["TransferPreview"];
+export type TransferMode = components["schemas"]["TransferMode"];
+export type TransferResult = components["schemas"]["TransferResult"];
+
+/** The receiving host's offer as the frontend sees it: its ticket and guardian stay in the Rust side. */
+export type TransferOfferView = Omit<components["schemas"]["TransferOffer"], "ticket" | "guardian">;
+
+/**
+ * Like hostSupports, but a host whose version is unknown does not qualify. A transfer involves two hosts calling each
+ * other, so an unknown version cannot be left to fail later with hostOutdated.
+ */
+export const hostKnownToSupport = (host: Pick<HostEntry, "apiVersion">, minimum: string): boolean =>
+  host.apiVersion !== null && hostSupports(host, minimum);
+
+export const getTransferPreview = (key: string, vmId: string) =>
+  invoke<TransferPreview>("get_transfer_preview", { key, vmId });
+
+/** Asks the receiving host (`targetKey`) to take the VM; needs elevation there. */
+export const offerTransfer = (
+  sourceKey: string,
+  targetKey: string,
+  preview: TransferPreview,
+  mode: TransferMode,
+  acknowledgeWarnings: boolean,
+) => invoke<TransferOfferView>("offer_transfer", { sourceKey, targetKey, preview, mode, acknowledgeWarnings });
+
+/** Tells the sending host to push the VM to the host that made the offer; needs elevation there. Returns the job. */
+export const startTransfer = (vmId: string, transferId: string, confirmName: string | null) =>
+  invoke<VmJob>("start_transfer", { vmId, transferId, confirmName });
+
+export const cancelTransfer = (key: string, vmId: string) => invoke<void>("cancel_transfer", { key, vmId });
+
+export const forgetTransferOffer = (transferId: string) => invoke<void>("forget_transfer_offer", { transferId });
+
+/** Gives the transferred VM this device's monitor and camera settings of the original. */
+export const carryVmSettings = (
+  sourceKey: string,
+  targetKey: string,
+  sourceVmId: string,
+  targetVmId: string,
+  moved: boolean,
+) => invoke<void>("carry_vm_settings", { sourceKey, targetKey, sourceVmId, targetVmId, moved });
 
 export const getHostResources = (key: string) =>
   invoke<HostResources>("get_host_resource", { key, resource: "resources" });

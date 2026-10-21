@@ -25,6 +25,11 @@ note anything that needs action, such as updating the host, a new elevation requ
   administrator credential for it, and its game-aware action go with it, so Connect works there without setting the VM up
   again. Performance mode (turn it on again; the GPU partition is removed on the way) and backup schedules do not; the
   transfer dialog warns about both. Both hosts need this version.
+- Client: Move or copy to another host… in an off VM's menu. Pick a paired host (hosts on an older version, or whose
+  version this device has not seen yet, are listed but not selectable), choose Move or Copy, and type the VM's name to
+  confirm a move. The client asks each host for its admin passphrase when needed, shows the other host's warnings for you
+  to accept, follows the transfer's progress (with Cancel transfer), and says where the VM ended up. The transfer ticket
+  never reaches the client's window. This device's monitor and camera settings for the VM go with it.
 
 ### Fixed
 - Backups recorded the wrong virtual switch for each network adapter, so every restored VM was connected to the

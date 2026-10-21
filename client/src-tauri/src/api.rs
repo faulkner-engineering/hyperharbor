@@ -692,6 +692,71 @@ impl ApiClient {
         .await
     }
 
+    /// GET /vms/{vmId}/transfer-preview (API 1.24.0): what the sending host reports about the VM before a transfer.
+    pub async fn transfer_preview(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "transfer-preview")?)
+            .await
+    }
+
+    /// POST /transfers/incoming on the receiving host (needs elevation). The answer holds the transfer's ticket;
+    /// the caller keeps it out of the frontend.
+    pub async fn offer_incoming_transfer(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            "/transfers/incoming",
+            body,
+        )
+        .await
+    }
+
+    /// POST /vms/{vmId}/transfer on the sending host (needs elevation). The body carries the ticket and is never
+    /// logged. Returns the transferVm job.
+    pub async fn start_transfer(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "transfer")?,
+            body,
+        )
+        .await
+    }
+
+    /// POST /vms/{vmId}/transfer/cancel on the sending host.
+    pub async fn cancel_transfer(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "transfer/cancel")?,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// GET /jobs/{jobId}.
     pub async fn get_job(
         &self,

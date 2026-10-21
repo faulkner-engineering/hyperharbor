@@ -24,6 +24,8 @@
     /** Apply a setup profile to a running Windows VM; leave unset for hosts that cannot. */
     onapplyprofile?: (vm: Vm) => void;
     onreplacedisk?: (vm: Vm) => void;
+    /** Move or copy an off VM to another host; leave unset for hosts that cannot. */
+    ontransfer?: (vm: Vm) => void;
     ondelete?: (vm: Vm) => void;
   }
 
@@ -43,6 +45,7 @@
     oncapture,
     onapplyprofile,
     onreplacedisk,
+    ontransfer,
     ondelete,
   }: Props = $props();
 
@@ -240,6 +243,9 @@
               {/if}
               {#if onreplacedisk && vm.state === "off"}
                 <button type="button" onclick={() => onreplacedisk(vm)}>Restore disk from backup…</button>
+              {/if}
+              {#if ontransfer && vm.state === "off"}
+                <button type="button" onclick={() => ontransfer(vm)}>Move or copy to another host…</button>
               {/if}
               <button type="button" class="danger" onclick={() => ondelete?.(vm)}>Delete…</button>
             </Menu>

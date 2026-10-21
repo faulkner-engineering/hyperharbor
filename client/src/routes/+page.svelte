@@ -18,6 +18,8 @@
     type HostEntry,
     type HostRemoteDesktop,
     hostSupports,
+    hostKnownToSupport,
+    TransferApiVersion,
     RemoteDesktopApiVersion,
     HostLogsApiVersion,
     downloadHostLogs,
@@ -48,6 +50,7 @@
   import ProvisionDialog from "$lib/components/ProvisionDialog.svelte";
   import ElevationDialog from "$lib/components/ElevationDialog.svelte";
   import DeleteVmDialog from "$lib/components/DeleteVmDialog.svelte";
+  import TransferVmDialog from "$lib/components/TransferVmDialog.svelte";
   import CreateVmDialog from "$lib/components/CreateVmDialog.svelte";
   import ComputeDialog from "$lib/components/ComputeDialog.svelte";
   import PerformanceDialog from "$lib/components/PerformanceDialog.svelte";
@@ -85,6 +88,7 @@
   let actionVmId = $state<string | null>(null);
   let confirmTurnOff = $state<Vm | null>(null);
   let deleting = $state<Vm | null>(null);
+  let transferring = $state<Vm | null>(null);
   let editing = $state<Vm | null>(null);
   let tuning = $state<Vm | null>(null);
   let choosingMonitors = $state<Vm | null>(null);
@@ -115,6 +119,7 @@
   const hostHasGameAware = $derived(selectedHost ? hostSupports(selectedHost, GameAwareApiVersion) : false);
   const hostHasTailscale = $derived(selectedHost ? hostSupports(selectedHost, TailscaleApiVersion) : false);
   const hostHasBackups = $derived(selectedHost ? hostSupports(selectedHost, BackupApiVersion) : false);
+  const hostHasTransfer = $derived(selectedHost ? hostKnownToSupport(selectedHost, TransferApiVersion) : false);
   const hostAppliesProfiles = $derived(selectedHost ? hostSupports(selectedHost, ApplySetupProfileApiVersion) : false);
   // Setup profiles read provisioned packages from running Windows VMs.
   const runningWindows = $derived((vms ?? []).filter((vm) => vm.state === "running" && vm.guestOs.family === "windows"));
@@ -136,6 +141,7 @@
     provisioning = null;
     confirmTurnOff = null;
     deleting = null;
+    transferring = null;
     editing = null;
     tuning = null;
     choosingMonitors = null;
@@ -339,6 +345,7 @@
   /** Closes a lifecycle dialog and refreshes the list if it changed anything. */
   function lifecycleClosed(changed: boolean) {
     deleting = null;
+    transferring = null;
     editing = null;
     tuning = null;
     creating = false;
@@ -602,6 +609,7 @@
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
             onreplacedisk={hostHasBackups ? (vm) => (replacingDisk = vm) : undefined}
             onapplyprofile={hostAppliesProfiles ? (vm) => (applyingProfile = vm) : undefined}
+            ontransfer={hostHasTransfer ? (vm) => (transferring = vm) : undefined}
             ondelete={(vm) => (deleting = vm)}
           />
         {/if}
@@ -628,6 +636,9 @@
         {/if}
         {#if deleting}
           <DeleteVmDialog host={selectedHost} vm={deleting} onclose={lifecycleClosed} />
+        {/if}
+        {#if transferring}
+          <TransferVmDialog host={selectedHost} vm={transferring} {hosts} onclose={lifecycleClosed} />
         {/if}
         {#if editing}
           <ComputeDialog host={selectedHost} vm={editing} onclose={lifecycleClosed} />

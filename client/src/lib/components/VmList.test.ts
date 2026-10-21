@@ -67,6 +67,23 @@ describe("VmList row actions", () => {
     expect((await openMenu()).queryByRole("button", { name: "Capture setup profile…" })).toBeNull();
   });
 
+  it("offers Move or copy only for off VMs, and only when the host has transfers", async () => {
+    const ontransfer = vi.fn();
+    const off = provisioned("off");
+    const first = render(VmList, { vms: [off], ontransfer });
+
+    await fireEvent.click((await openMenu()).getByRole("button", { name: "Move or copy to another host…" }));
+    expect(ontransfer).toHaveBeenCalledWith(off);
+    first.unmount();
+
+    const second = render(VmList, { vms: [provisioned("running")], ontransfer });
+    expect((await openMenu()).queryByRole("button", { name: "Move or copy to another host…" })).toBeNull();
+    second.unmount();
+
+    render(VmList, { vms: [off] });
+    expect((await openMenu()).queryByRole("button", { name: "Move or copy to another host…" })).toBeNull();
+  });
+
   it("offers Apply setup profile for running Windows VMs that are not still installing", async () => {
     const onapplyprofile = vi.fn();
     const running = provisioned("running");

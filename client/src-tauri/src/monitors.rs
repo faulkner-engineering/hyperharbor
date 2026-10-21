@@ -147,6 +147,24 @@ impl MonitorChoiceStore {
             .unwrap_or_default()
     }
 
+    /// Gives a transferred VM the choice of its original. A move clears the original's (it is gone); a copy keeps it.
+    pub fn carry(
+        &self,
+        from: (&str, &str),
+        to: (&str, &str),
+        moved: bool,
+    ) -> Result<(), ClientError> {
+        let choice = self.get(from.0, from.1);
+        if choice == MonitorChoice::default() {
+            return Ok(());
+        }
+        self.set(to.0, to.1, choice)?;
+        if moved {
+            self.set(from.0, from.1, MonitorChoice::default())?;
+        }
+        Ok(())
+    }
+
     /// Saves the VM's choice. One monitor is the default, so it removes the VM's entry.
     pub fn set(
         &self,
@@ -465,6 +483,27 @@ mod tests {
             selected(&["a", "b"])
         );
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_moved_vm_takes_its_choice_along_and_a_copy_shares_it() {
+        let store = MonitorChoiceStore::new(None);
+        let target_host = "9c8b7a65-4321-4fed-8cba-0987654321ab";
+        store.set(HOST, VM, selected(&["a"])).unwrap();
+
+        store
+            .carry((HOST, VM), (target_host, OTHER_VM), false)
+            .unwrap();
+        assert_eq!(store.get(target_host, OTHER_VM), selected(&["a"]));
+        assert_eq!(store.get(HOST, VM), selected(&["a"]));
+
+        store.carry((HOST, VM), (target_host, VM), true).unwrap();
+        assert_eq!(store.get(target_host, VM), selected(&["a"]));
+        assert_eq!(store.get(HOST, VM), MonitorChoice::default());
+
+        // Nothing chosen: nothing written.
+        store.carry((HOST, VM), (target_host, VM), true).unwrap();
+        assert_eq!(store.get(target_host, VM), selected(&["a"]));
     }
 
     #[test]

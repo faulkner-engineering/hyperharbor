@@ -275,6 +275,19 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    The sender sends them just before the import. Not sent, on purpose: Performance mode (GPU partition removed; preview warns),
    backup policies (TransferPreviewService warns when the VM has one), and a finished unattended install record.
    ProvisioningStore.ForVm; GameAwareService.ToWire/ToCore are public for the mapping (TransferRecordsWire).
+   Done: 24.9 client (2026-10-21; Vitest, Rust unit tests, svelte-check; not yet clicked through against two hosts):
+   TransferVmDialog.svelte (VM menu "Move or copy to another host…" for off VMs, page gate hostKnownToSupport(host,
+   TransferApiVersion), which unlike hostSupports refuses an unknown apiVersion). Flow: get_transfer_preview on the source,
+   offer_transfer (withElevation on the target; a resourceWarnings 409 shows the issues and "Continue anyway" asks again with
+   acknowledgeWarnings), start_transfer (withElevation on the source), waitForJob on the source, Cancel transfer
+   (cancel_transfer), then carry_vm_settings. Rust (lib.rs): offer_transfer reads both pinned fingerprints, sends the source's
+   as sourceFingerprint, keeps the offer's ticket (Zeroizing) and guardian in AppState.transfers and strips them from what
+   the webview gets; start_transfer builds TransferTarget from the target's paired record (hostId, display name, its
+   HostEntry addresses and port, pinned fingerprint) and sends the kept ticket; forget_transfer_offer drops an abandoned offer
+   (the target ends it after 30 idle minutes, since only the source can cancel it there). carry_vm_settings uses
+   MonitorChoiceStore::carry and CameraService::carry_prefs: a move moves the settings to "<target host id>/<vm id>", a
+   copy duplicates them under the copy's ID. Checkpoints are not merged from the dialog (no route merges them alone); the
+   blocker tells the user to delete them first. The svelte-autofixer MCP tool was not available in this session.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

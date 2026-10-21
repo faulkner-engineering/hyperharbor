@@ -325,6 +325,19 @@ impl CameraService {
         self.prefs.get(vm_key)
     }
 
+    /// Gives a transferred VM the preferences of its original. A move clears the original's (it is gone); a copy keeps them.
+    pub fn carry_prefs(&self, from: &str, to: &str, moved: bool) -> Result<(), CameraError> {
+        let prefs = self.prefs(from);
+        if prefs == CameraPrefs::default() {
+            return Ok(());
+        }
+        self.set_prefs(to, prefs)?;
+        if moved {
+            self.set_prefs(from, CameraPrefs::default())?;
+        }
+        Ok(())
+    }
+
     /// Saves a VM's preferences; they apply to its running session at once.
     pub fn set_prefs(&self, vm_key: &str, value: CameraPrefs) -> Result<(), CameraError> {
         self.prefs.set(vm_key, value)?;
@@ -1396,6 +1409,28 @@ mod tests {
             )
             .unwrap();
         assert_eq!(service.status().sessions[0].mode, Some("blurred"));
+    }
+
+    #[test]
+    fn a_moved_vm_takes_its_preferences_along_and_a_copy_shares_them() {
+        let (service, _backend, _log) = service(Support::Available, "carry");
+        let blurred = CameraPrefs {
+            share: false,
+            unfocused: UnfocusedBehavior::Blur,
+        };
+        service.set_prefs("desk/work", blurred).unwrap();
+
+        service
+            .carry_prefs("desk/work", "laptop/copy", false)
+            .unwrap();
+        assert_eq!(service.prefs("laptop/copy"), blurred);
+        assert_eq!(service.prefs("desk/work"), blurred);
+
+        service
+            .carry_prefs("desk/work", "laptop/work", true)
+            .unwrap();
+        assert_eq!(service.prefs("laptop/work"), blurred);
+        assert_eq!(service.prefs("desk/work"), CameraPrefs::default());
     }
 
     #[test]
