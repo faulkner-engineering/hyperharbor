@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import { elevation, ElevationCancelled, toMb, waitForJob, withElevation } from "./lifecycle.svelte";
+import { elevation, ElevationCancelled, pendingElevationHost, toMb, waitForJob, withElevation } from "./lifecycle.svelte";
 import type { VmJob } from "$lib/api/client";
 
 const elevationRequired = {
@@ -84,5 +84,20 @@ describe("toMb", () => {
     expect(toMb(768 / 1024)).toBe(768);
     expect(toMb(4)).toBe(4096);
     expect(toMb(1.001)).toBe(1026);
+  });
+});
+
+describe("pendingElevationHost", () => {
+  it("is the host that asked, not necessarily the selected one", async () => {
+    const hosts = [{ key: "mdns:laptop" }, { key: "mdns:desktop" }];
+    expect(pendingElevationHost(hosts)).toBeNull();
+
+    // A transfer from the laptop asks the desktop (the receiving host) for its passphrase.
+    const answer = elevation.request("mdns:desktop");
+    expect(pendingElevationHost(hosts)).toEqual({ key: "mdns:desktop" });
+
+    elevation.finish(false);
+    expect(await answer).toBe(false);
+    expect(pendingElevationHost(hosts)).toBeNull();
   });
 });

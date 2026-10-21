@@ -56,7 +56,7 @@
   import PerformanceDialog from "$lib/components/PerformanceDialog.svelte";
   import GpuWarnings from "$lib/components/GpuWarnings.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
-  import { elevation, ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
+  import { elevation, ElevationCancelled, pendingElevationHost, withElevation } from "$lib/lifecycle.svelte";
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
   import InstallProfiles from "$lib/components/InstallProfiles.svelte";
   import SetupProfiles from "$lib/components/SetupProfiles.svelte";
@@ -120,6 +120,8 @@
   const hostHasTailscale = $derived(selectedHost ? hostSupports(selectedHost, TailscaleApiVersion) : false);
   const hostHasBackups = $derived(selectedHost ? hostSupports(selectedHost, BackupApiVersion) : false);
   const hostHasTransfer = $derived(selectedHost ? hostKnownToSupport(selectedHost, TransferApiVersion) : false);
+  // The prompt shows for whichever host asked: a transfer also needs the receiving host's passphrase.
+  const elevationHost = $derived(pendingElevationHost(hosts));
   const hostAppliesProfiles = $derived(selectedHost ? hostSupports(selectedHost, ApplySetupProfileApiVersion) : false);
   // Setup profiles read provisioned packages from running Windows VMs.
   const runningWindows = $derived((vms ?? []).filter((vm) => vm.state === "running" && vm.guestOs.family === "windows"));
@@ -677,8 +679,8 @@
         />
       {/if}
 
-      {#if elevation.pending && elevation.pending.hostKey === selectedHost.key}
-        <ElevationDialog host={selectedHost} />
+      {#if elevationHost}
+        <ElevationDialog host={elevationHost} />
       {/if}
 
       {#if selectedHost.paired && showWake}

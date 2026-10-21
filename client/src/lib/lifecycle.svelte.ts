@@ -52,6 +52,15 @@ class ElevationState {
 
 export const elevation = new ElevationState();
 
+/**
+ * The host whose passphrase prompt is waiting, from all known hosts. It is not always the selected host: a transfer
+ * needs elevation on the receiving host too.
+ */
+export function pendingElevationHost<T extends { key: string }>(hosts: T[]): T | null {
+  const pending = elevation.pending;
+  return pending ? (hosts.find((host) => host.key === pending.hostKey) ?? null) : null;
+}
+
 /** Thrown when the user cancels the passphrase prompt. Dialogs treat it as "nothing happened". */
 export class ElevationCancelled extends Error {
   constructor() {
