@@ -1177,6 +1177,219 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/transfer-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Check whether a VM can be moved or copied to another host (API 1.24.0).
+         * @description Read on the sending host. The answer lists the VM's disks with their sizes, its configuration version, firmware,
+         *     TPM, processors, memory, and network adapters, and every `blockers` entry that stops a transfer: the VM must be
+         *     off (a saved state is refused), have no checkpoints (`checkpoints` clears once they are deleted, which merges
+         *     them), use no differencing or shared disks, and have no unattended install running. Send the answer, unchanged,
+         *     to the receiving host's `POST /transfers/incoming`.
+         */
+        get: operations["getTransferPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a VM to a host that accepted it (API 1.24.0).
+         * @description Called on the sending host with the receiving host's offer. Starts a `transferVm` job that holds the VM: it
+         *     checks the VM again, keeps it from starting, exports its definition (with a TPM, the receiving host's guardian is
+         *     granted on the VM's key protector only during the export, and the original is always put back), and sends the
+         *     definition and the disks to the receiving host over HTTPS. The sending host pins the receiving host's certificate
+         *     (`target.fingerprint`) and presents its own. Network failures are resumed. Until the receiving host reports the
+         *     VM imported, any failure or a cancel rolls the receiving host back. Then a move deletes the VM and its disks on
+         *     this host (a failure is a warning in `transferResult`, never a failed job) and the transfer completes. A move
+         *     needs `confirmName`.
+         */
+        post: operations["startTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/transfer/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel the running transfer of a VM (API 1.24.0).
+         * @description Before the receiving host has imported the VM, the job stops, the receiving host is rolled back, and the job
+         *     fails with "The job was canceled.". After that, the job finishes anyway, since the VM already exists there.
+         */
+        post: operations["cancelTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transfers/incoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a VM from another host (API 1.24.0).
+         * @description Called on the receiving host with the sending host's preview. The host checks that it can take the VM (a move's
+         *     ID must be new here; the configuration version must be one this Hyper-V supports; processors, memory, and free
+         *     space must fit; disk file names must be plain .vhdx or .vhd names). Errors are 400 with `errors`; warnings (a
+         *     renamed VM, a missing switch, a copy's identity) are 409 `code: resourceWarnings` until the request is sent again
+         *     with `acknowledgeWarnings`. The VM gets a folder of its own under the host's VM folder. The answer carries a
+         *     one-time ticket for the sending host's data requests and, for a VM with a TPM, this host's guardian with public
+         *     certificates only. A ticket unused for 30 minutes ends, and the transfer is rolled back.
+         */
+        post: operations["offerIncomingTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transfers/{transferId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        /** How much of each file the receiving host has (sending host only). */
+        get: operations["getIncomingTransfer"];
+        put?: never;
+        post?: never;
+        /**
+         * Stop a transfer (sending host only).
+         * @description Before the import the transfer is rolled back: the imported VM, if any, and the VM's own folder are deleted.
+         *     After the import the VM is kept and the transfer completes (`rolledBack: false`).
+         */
+        delete: operations["cancelIncomingTransfer"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transfers/{transferId}/files/{fileKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+                /**
+                 * @description `disk:<index>` for a disk of the preview, in its order, or `definition:<VM ID>.vmcx`, `.vmgs`, or `.VMRS` for
+                 *     the files Hyper-V's export wrote (URL-encoded).
+                 */
+                fileKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Send one block of a file (sending host only).
+         * @description The body is one block of the file: 268435456 bytes (256 MiB), or the rest of the file for its last block. It must
+         *     start where the file's verified part ends (`GET /transfers/{transferId}` says where); otherwise the answer is 409
+         *     `code: transferOffset` with `expectedOffset`. The block is written, checked against `Content-Digest`, and flushed
+         *     to disk before it counts, so after a network failure the sending host resumes from the receiving host's count. A
+         *     block whose hash does not match is discarded.
+         */
+        put: operations["receiveTransferBlock"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transfers/{transferId}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import the received VM (sending host only).
+         * @description Imports the definition as a planned VM, points it at the received disks, sets this host's switches and the MAC
+         *     addresses (static for a move, new dynamic ones for a copy), removes a GPU partition, turns automatic start off
+         *     until the transfer completes, then validates and creates the VM. On failure the planned VM is removed and the
+         *     files stay, so the request can be repeated. Repeating it after a success answers with the same VM.
+         */
+        post: operations["importTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transfers/{transferId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End an imported transfer (sending host only).
+         * @description The VM gets its automatic start action back, and the ticket ends.
+         */
+        post: operations["completeTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pairing/requests": {
         parameters: {
             query?: never;
@@ -1916,6 +2129,165 @@ export interface components {
             message: string;
         };
         /**
+         * @description `move` keeps the VM's ID and MAC addresses and deletes it from the sending host once the receiving host has it.
+         *     `copy` leaves the VM on the sending host and gives the new one a new ID and new MAC addresses.
+         * @enum {string}
+         */
+        TransferMode: "move" | "copy";
+        /**
+         * @description `checkpoints` clears once the checkpoints are deleted (they are merged into the disks).
+         * @enum {string}
+         */
+        TransferBlockerCode: "notOff" | "savedState" | "checkpoints" | "differencingDisk" | "sharedDisk" | "diskMissing" | "installInProgress";
+        TransferBlocker: {
+            code: components["schemas"]["TransferBlockerCode"];
+            message: string;
+        };
+        TransferAdapter: {
+            switchId: string | null;
+            /** @description The receiving host connects the adapter to its switch of this name, else its Default Switch. */
+            switchName: string | null;
+            /** @description Twelve hexadecimal digits. */
+            macAddress: string | null;
+        };
+        TransferDisk: {
+            /** @description The disk's path on the sending host. The receiving host uses only its file name. */
+            path: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** @enum {string} */
+            controllerType: "scsi" | "ide";
+            controllerNumber: number;
+            lun: number;
+        };
+        TransferCompute: {
+            processorCount: number;
+            /** Format: int64 */
+            startupMemoryMb: number;
+            /** Format: int64 */
+            maximumMemoryMb: number;
+            dynamicMemory: boolean;
+            nestedVirtualization: boolean;
+            macAddressSpoofing: boolean;
+        };
+        TransferPreview: {
+            /** Format: uuid */
+            vmId: string;
+            name: string;
+            state: components["schemas"]["VmState"];
+            generation: number;
+            /** @description Hyper-V's configuration version, such as "12.0"; the receiving host must support it. */
+            configurationVersion: string | null;
+            compute: components["schemas"]["TransferCompute"];
+            secureBoot: boolean;
+            secureBootTemplateId: string | null;
+            /** @description The receiving host's guardian is granted on the VM's key protector, so the TPM's contents (BitLocker keys) survive. */
+            tpmEnabled: boolean;
+            /** @description The GPU partition is removed; turn Performance mode on again on the receiving host. */
+            hasGpuPartition: boolean;
+            adapters: components["schemas"]["TransferAdapter"][];
+            disks: components["schemas"]["TransferDisk"][];
+            /**
+             * Format: int64
+             * @description The disks' total size, which crosses the network.
+             */
+            totalBytes: number;
+            checkpointCount: number;
+            /** @description Must be empty for the transfer to start. */
+            blockers: components["schemas"]["TransferBlocker"][];
+            /** @description What changes for the VM on the way. */
+            warnings: string[];
+        };
+        IncomingTransferRequest: {
+            preview: components["schemas"]["TransferPreview"];
+            mode: components["schemas"]["TransferMode"];
+            /** @description The SHA-256 fingerprint (hexadecimal) of the sending host's certificate, as the client pinned it. */
+            sourceFingerprint: string;
+            /** @default false */
+            acknowledgeWarnings: boolean;
+        };
+        TransferOffer: {
+            /** Format: uuid */
+            transferId: string;
+            /** @description One-time ticket for the sending host's data requests. A secret; pass it to the sending host only. */
+            ticket: string;
+            /** @description The VM's name on the receiving host; "(moved)" or "(copy)" is added when the name is taken. */
+            name: string;
+            vmFolder: string;
+            /**
+             * Format: uuid
+             * @description The ID the VM keeps (a move); null for a copy.
+             */
+            vmId: string | null;
+            warnings: components["schemas"]["ValidationIssue"][];
+            /**
+             * Format: byte
+             * @description The receiving host's key protector guardian (public certificates only), when the VM has a TPM.
+             */
+            guardian: string | null;
+        };
+        TransferTarget: {
+            /** Format: uuid */
+            hostId: string;
+            name: string;
+            /** @description Host names or IP addresses of the receiving host, tried in order. */
+            addresses: string[];
+            port: number;
+            /** @description The SHA-256 fingerprint (hexadecimal) of the receiving host's certificate, as the client pinned it. */
+            fingerprint: string;
+        };
+        StartTransferRequest: {
+            mode: components["schemas"]["TransferMode"];
+            target: components["schemas"]["TransferTarget"];
+            /** Format: uuid */
+            transferId: string;
+            /** @description From the receiving host's offer. Never recorded in the audit log. */
+            ticket: string;
+            /**
+             * Format: byte
+             * @description From the receiving host's offer; required when the VM has a TPM.
+             */
+            guardian?: string | null;
+            /** @description For a move, the VM's name exactly. */
+            confirmName?: string | null;
+        };
+        TransferResult: {
+            /** Format: uuid */
+            targetVmId: string;
+            targetName: string;
+            /** @description For a move, whether the VM was deleted from the sending host. Always false for a copy. */
+            sourceRemoved: boolean;
+            warnings: string[];
+        };
+        /** @enum {string} */
+        IncomingTransferState: "receiving" | "importing" | "imported";
+        IncomingTransferFile: {
+            /** @description `disk:<index>` or `definition:<file name>`. */
+            key: string;
+            /** Format: int64 */
+            size: number;
+            /**
+             * Format: int64
+             * @description Bytes received and verified; the next block starts here.
+             */
+            received: number;
+        };
+        IncomingTransferStatus: {
+            /** Format: uuid */
+            transferId: string;
+            state: components["schemas"]["IncomingTransferState"];
+            files: components["schemas"]["IncomingTransferFile"][];
+        };
+        TransferImported: {
+            /** Format: uuid */
+            vmId: string;
+            name: string;
+        };
+        IncomingTransferCanceled: {
+            /** @description False when the VM had already been imported; it is kept. */
+            rolledBack: boolean;
+        };
+        /**
          * @example {
          *       "hostId": "6f1c2b8e-3a4d-4c55-9e1f-2b7a9d0c4e11",
          *       "hostName": "GAMING-PC",
@@ -2389,7 +2761,7 @@ export interface components {
             blockers: components["schemas"]["DeleteBlocker"][];
         };
         /** @enum {string} */
-        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState";
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm";
         /** @enum {string} */
         VmJobState: "running" | "succeeded" | "failed";
         JobError: {
@@ -2418,6 +2790,8 @@ export interface components {
             setupResult?: components["schemas"]["SetupProfileResult"] | null;
             /** @description What a `restoreVm` or `restoreHostState` job did, once it succeeded (API 1.18.0). Omitted for other jobs. */
             restoreResult?: components["schemas"]["RestoreResult"] | null;
+            /** @description What a `transferVm` job did, once it succeeded (API 1.24.0). Omitted for other jobs. */
+            transferResult?: components["schemas"]["TransferResult"] | null;
         };
         ApplySetupProfileRequest: {
             /** @description An `id` from `GET /setup-profiles`. */
@@ -3524,6 +3898,18 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /**
+         * @description The transfer's ticket is missing, ended, or belongs to another transfer, or the TLS client certificate is not the
+         *     sending host's. Start the transfer again.
+         */
+        TransferTicketRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
         /** @description The resource does not exist. */
         NotFound: {
             headers: {
@@ -3629,6 +4015,8 @@ export interface components {
     parameters: {
         /** @description Hyper-V virtual machine ID. */
         VmId: string;
+        /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+        TransferId: string;
         /** @description An unattended profile ID. */
         ProfileId: string;
         /** @description A setup profile ID (its file name on the host). */
@@ -5577,6 +5965,307 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getTransferPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferPreview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    startTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartTransferRequest"];
+            };
+        };
+        responses: {
+            /** @description The transfer job started. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    cancelTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job was asked to stop. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    offerIncomingTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncomingTransferRequest"];
+            };
+        };
+        responses: {
+            /** @description The transfer is accepted. */
+            201: {
+                headers: {
+                    /** @description URL of the transfer. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferOffer"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            /**
+             * @description Warnings to acknowledge (`code: resourceWarnings`), the same VM is already being moved here
+             *     (`code: transferInProgress`), or its folder appeared meanwhile.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    getIncomingTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomingTransferStatus"];
+                };
+            };
+            401: components["responses"]["TransferTicketRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelIncomingTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfer ended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomingTransferCanceled"];
+                };
+            };
+            401: components["responses"]["TransferTicketRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    receiveTransferBlock: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description `bytes <first>-<last>/<file size>`. Anything else is 416. */
+                "Content-Range": string;
+                /** @description `sha-256=:<Base64 of the block's SHA-256>:` (RFC 9530). */
+                "Content-Digest": string;
+            };
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+                /**
+                 * @description `disk:<index>` for a disk of the preview, in its order, or `definition:<VM ID>.vmcx`, `.vmgs`, or `.VMRS` for
+                 *     the files Hyper-V's export wrote (URL-encoded).
+                 */
+                fileKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The block was verified and stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomingTransferFile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["TransferTicketRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The block starts at the wrong offset (`code: transferOffset`, `expectedOffset`), or the file, length, or hash
+             *     is wrong, or the transfer is past receiving (`code: transferFailed`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The Content-Range header is missing or malformed. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    importTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The VM exists on the receiving host. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferImported"];
+                };
+            };
+            401: components["responses"]["TransferTicketRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description Files are missing or Hyper-V refused the VM (`code` is `transferFailed`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    completeTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfer is complete. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["TransferTicketRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description The VM has not been imported yet (`code` is `transferFailed`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     createPairingRequest: {

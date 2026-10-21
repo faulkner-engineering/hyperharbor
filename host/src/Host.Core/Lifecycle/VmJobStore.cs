@@ -12,6 +12,7 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// <param name="ErrorDetail">Safe to show to the client; unexpected failures get a generic message.</param>
 /// <param name="SetupResult">What an applySetupProfile job did.</param>
 /// <param name="RestoreResult">What a restore job did.</param>
+/// <param name="TransferResult">What a transfer job did.</param>
 public sealed record VmJobSnapshot(
     Guid Id,
     VmJobKind Kind,
@@ -25,7 +26,8 @@ public sealed record VmJobSnapshot(
     string? ErrorTitle,
     string? ErrorDetail,
     Shared.Contracts.Unattend.SetupProfileResult? SetupResult = null,
-    Shared.Contracts.Backup.RestoreResult? RestoreResult = null);
+    Shared.Contracts.Backup.RestoreResult? RestoreResult = null,
+    Shared.Contracts.Transfers.TransferResult? TransferResult = null);
 
 /// <summary>Handed to a job's work so it can report progress.</summary>
 public sealed class VmJobContext
@@ -59,6 +61,9 @@ public sealed class VmJobContext
 
     /// <summary>Records what a restore job did, for the job's snapshot.</summary>
     public void ReportRestoreResult(Shared.Contracts.Backup.RestoreResult result) => _store.SetRestoreResult(_jobId, result);
+
+    /// <summary>Records what a transfer job did, for the job's snapshot.</summary>
+    public void ReportTransferResult(Shared.Contracts.Transfers.TransferResult result) => _store.SetTransferResult(_jobId, result);
 }
 
 /// <summary>
@@ -176,6 +181,17 @@ public sealed class VmJobStore : IDisposable
         }
     }
 
+    /// <summary>The User's running job of this kind on the VM, or null.</summary>
+    public VmJobSnapshot? FindRunning(Guid vmId, VmJobKind kind, Guid userId)
+    {
+        lock (_gate)
+        {
+            return _jobs.Values
+                .Select(entry => entry.Snapshot)
+                .FirstOrDefault(job => job.VmId == vmId && job.Kind == kind && job.UserId == userId && job.State == VmJobState.Running);
+        }
+    }
+
     /// <summary>Completes when the job has finished. For tests.</summary>
     internal Task WhenFinished(Guid jobId)
     {
@@ -206,6 +222,7 @@ public sealed class VmJobStore : IDisposable
         VmJobKind.RestoreVm => "restoring the virtual machine",
         VmJobKind.ReplaceDisk => "replacing the virtual machine's disk",
         VmJobKind.RestoreHostState => "restoring the host state",
+        VmJobKind.TransferVm => "transferring the virtual machine",
         _ => kind.ToString(),
     };
 
@@ -227,6 +244,17 @@ public sealed class VmJobStore : IDisposable
             if (_jobs.TryGetValue(jobId, out var entry))
             {
                 entry.Snapshot = entry.Snapshot with { SetupResult = result, UpdatedAt = _time.GetUtcNow() };
+            }
+        }
+    }
+
+    internal void SetTransferResult(Guid jobId, Shared.Contracts.Transfers.TransferResult result)
+    {
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue(jobId, out var entry))
+            {
+                entry.Snapshot = entry.Snapshot with { TransferResult = result, UpdatedAt = _time.GetUtcNow() };
             }
         }
     }

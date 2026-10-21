@@ -47,7 +47,7 @@ public sealed partial class TransferSender
     private readonly KeyProtectorHandover _handover;
     private readonly VmDeletionService _deletion;
     private readonly OutgoingTransferStore _store;
-    private readonly Func<TransferSendRequest, IPeerTransferChannel> _openChannel;
+    private readonly IPeerTransferChannelFactory _channels;
     private readonly string _stagingRoot;
     private readonly TimeProvider _time;
     private readonly ILogger<TransferSender> _logger;
@@ -62,7 +62,7 @@ public sealed partial class TransferSender
         KeyProtectorHandover handover,
         VmDeletionService deletion,
         OutgoingTransferStore store,
-        Func<TransferSendRequest, IPeerTransferChannel> openChannel,
+        IPeerTransferChannelFactory channels,
         string dataDirectory,
         TimeProvider time,
         ILogger<TransferSender> logger,
@@ -74,7 +74,7 @@ public sealed partial class TransferSender
         _handover = handover;
         _deletion = deletion;
         _store = store;
-        _openChannel = openChannel;
+        _channels = channels;
         _stagingRoot = Path.Combine(dataDirectory, StagingFolderName);
         _time = time;
         _logger = logger;
@@ -92,7 +92,7 @@ public sealed partial class TransferSender
             request.TransferId, request.VmId, request.VmId.ToString("D"), request.Mode, request.Target.HostId, OutgoingTransferState.Sending, _time.GetUtcNow());
         _store.Save(record);
         var staging = Path.Combine(_stagingRoot, request.TransferId.ToString("N"));
-        using var channel = _openChannel(request);
+        using var channel = _channels.Open(request);
         var disks = new List<FileStream>();
         TransferPreview preview;
         TransferImportResult imported;

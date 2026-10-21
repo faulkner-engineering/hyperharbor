@@ -10,6 +10,19 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- Moving or copying a VM between hosts, host side (API 1.24.0; the client's dialog comes later). A paired client checks the
+  VM on the sending host (`GET /vms/{vmId}/transfer-preview`), gets a one-time ticket from the receiving host
+  (`POST /transfers/incoming`, elevated), and starts a `transferVm` job on the sending host (`POST /vms/{vmId}/transfer`,
+  elevated; `POST /vms/{vmId}/transfer/cancel` stops it). The hosts then talk to each other directly over HTTPS: the
+  sending host pins the receiving host's certificate and presents its own, and the receiving host accepts only that
+  certificate with the ticket, on its transfer routes only. Only an off VM without checkpoints can go. A move keeps the
+  VM's ID and MAC addresses and deletes it from the sending host once the receiving host has it; a copy gets a new ID
+  and new MAC addresses. A VM's TPM goes with it: the receiving host is given access to the TPM's key only for the
+  export, so BitLocker does not ask for its recovery key, and the sending host's access is put back exactly. Disks are
+  sent in checked blocks and a broken connection resumes; until the receiving host has the VM, a failure or cancel
+  undoes everything there. Both hosts need this version.
+
 ### Fixed
 - Backups recorded the wrong virtual switch for each network adapter, so every restored VM was connected to the
   Default Switch (with a warning) instead of the switch it had. New backups record the right switch. Backups taken

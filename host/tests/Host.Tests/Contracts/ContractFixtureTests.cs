@@ -7,6 +7,7 @@ using HyperHarbor.Shared.Contracts.Backup;
 using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Pairing;
 using HyperHarbor.Shared.Contracts.Profiles;
+using HyperHarbor.Shared.Contracts.Transfers;
 using HyperHarbor.Shared.Contracts.Unattend;
 using HyperHarbor.Shared.Contracts.Vms;
 using HyperHarbor.Shared.Contracts.Wake;
@@ -284,7 +285,50 @@ public class ContractFixtureTests
 
         // Nulls on purpose: vmId and error are required but nullable.
         ["VmJob"] = new VmJob(Guid.Parse("7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d"), VmJobKind.CreateVm, null, VmJobState.Running, "Creating the disk", 10, Time, Time, null),
+
+        ["TransferBlocker"] = TransferPreviewSample.Blockers[0],
+        ["TransferAdapter"] = TransferPreviewSample.Adapters[0],
+        ["TransferDisk"] = TransferPreviewSample.Disks[0],
+        ["TransferCompute"] = TransferPreviewSample.Compute,
+        ["TransferPreview"] = TransferPreviewSample,
+        ["IncomingTransferRequest"] = new IncomingTransferRequest(TransferPreviewSample with { Blockers = [] }, TransferMode.Move, new string('A', 64), AcknowledgeWarnings: true),
+
+        // Nulls on purpose: vmId and guardian are required but nullable (a copy of a VM without a TPM).
+        ["TransferOffer"] = new TransferOffer(TransferId, "fixture-ticket", "Web (copy)", @"D:\VMs\Web (copy)", null,
+            [new ValidationIssue("identity", "The copy gets a new VM ID and new MAC addresses.")], null),
+        ["TransferTarget"] = TransferTargetSample,
+        ["StartTransferRequest"] = new StartTransferRequest(TransferMode.Move, TransferTargetSample, TransferId, "fixture-ticket", [60, 120, 109, 108, 62], "Web"),
+        ["TransferResult"] = new TransferResult(VmId, "Web", true, []),
+        ["IncomingTransferFile"] = new IncomingTransferFile("disk:0", 21474836480, 268435456),
+        ["IncomingTransferStatus"] = new IncomingTransferStatus(TransferId, IncomingTransferState.Receiving,
+            [new IncomingTransferFile("disk:0", 21474836480, 268435456), new IncomingTransferFile($"definition:{VmId:D}.vmcx", 40994, 40994)]),
+        ["TransferImported"] = new TransferImported(VmId, "Web"),
+        ["IncomingTransferCanceled"] = new IncomingTransferCanceled(true),
     };
+
+    private static readonly Guid TransferId = Guid.Parse("5a0c1d2e-3f40-4152-8364-758697a8b9ca");
+
+    private static readonly TransferTarget TransferTargetSample = new(
+        Guid.Parse("9c8b7a65-4321-4fed-8cba-0987654321ab"), "LAPTOP", ["192.168.0.20", "laptop.tail1234.ts.net"], 48443, new string('B', 64));
+
+    // Nulls on purpose: a copy's adapter that was never connected.
+    private static readonly TransferPreview TransferPreviewSample = new(
+        VmId,
+        "Web",
+        VmState.Off,
+        2,
+        "12.0",
+        new TransferCompute(4, 4096, 8192, true, false, false),
+        true,
+        "1734c6e8-3154-4dda-ba5f-a874cc483422",
+        true,
+        false,
+        [new TransferAdapter("C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", "Default Switch", "00155D010203"), new TransferAdapter(null, null, null)],
+        [new TransferDisk(@"D:\VMs\Web\Virtual Hard Disks\Web.vhdx", 21474836480, "scsi", 0, 0)],
+        21474836480,
+        1,
+        [new TransferBlocker(TransferBlockerCode.Checkpoints, "Web has 1 checkpoint(s). Delete them first; they are merged into its disks.")],
+        ["The DVD drive's image stays on this host; the drive is empty on the other host."]);
 
     [Fact]
     public void Fixtures_AreCurrent()

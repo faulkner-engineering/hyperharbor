@@ -7,6 +7,8 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Win32.SafeHandles;
 
 namespace HyperHarbor.Host.Core.Transfer;
@@ -34,18 +36,21 @@ public interface IPeerTransferChannel : IDisposable
     Task CancelAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>Opens the channel a transfer job sends through.</summary>
+public interface IPeerTransferChannelFactory
+{
+    IPeerTransferChannel Open(TransferSendRequest request);
+}
+
 /// <summary>
 /// Opens transfer channels to other hosts over HTTPS. Each request pins the receiving host's certificate by its
 /// SHA-256 fingerprint and presents this host's own certificate, which the receiving host checks against the
-/// fingerprint the authorizing client gave it, together with the transfer's ticket.
-/// Wire format (the receiving host's routes): Authorization "HyperHarbor-Transfer &lt;ticket&gt;";
-/// GET /transfers/{id}; PUT /transfers/{id}/files/{key} with Content-Range "bytes a-b/size" and Content-Digest
-/// "sha-256=:&lt;base64&gt;:" (409 code transferOffset with expectedOffset when the block starts elsewhere);
-/// POST /transfers/{id}/import; POST /transfers/{id}/complete; DELETE /transfers/{id}.
+/// fingerprint the authorizing client gave it, together with the transfer's ticket. The routes are the transferTicket
+/// operations of docs/api.yaml.
 /// </summary>
-public sealed class PeerHostClient
+public sealed class PeerHostClient : IPeerTransferChannelFactory
 {
-    public const string AuthorizationScheme = "HyperHarbor-Transfer";
+    public const string AuthorizationScheme = ContractInfo.TransferTicketScheme;
 
     private readonly Func<X509Certificate2> _certificate;
     private readonly TimeSpan _connectTimeout;
@@ -147,7 +152,7 @@ internal sealed class HttpPeerTransferChannel(HttpClient client, TransferSendReq
 
     public void Dispose() => client.Dispose();
 
-    private string Path(string suffix = "") => $"transfers/{request.TransferId:D}{suffix}";
+    private string Path(string suffix = "") => $"{ContractInfo.BasePath.TrimStart('/')}/transfers/{request.TransferId:D}{suffix}";
 
     /// <summary>
     /// Sends to the address that answered last. Before any has, or after a network failure (the client may have moved

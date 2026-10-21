@@ -2,21 +2,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Shared.Contracts.Vms;
 
 namespace HyperHarbor.Host.Core.Transfer;
-
-/// <summary>Where an incoming transfer is. Finished and rolled-back transfers leave the store.</summary>
-public enum IncomingTransferState
-{
-    /// <summary>Files are arriving. Cancel, expiry, or a restart rolls the transfer back.</summary>
-    Receiving,
-
-    /// <summary>Hyper-V is importing the VM. A restart in this state rolls the transfer back, since the source was never told it worked.</summary>
-    Importing,
-
-    /// <summary>The VM exists on this host and the source has been told. This host never deletes it from here on.</summary>
-    Imported,
-}
 
 /// <summary>One file of an incoming transfer.</summary>
 /// <param name="Key">"disk:&lt;index&gt;" for a disk in the plan, "definition:&lt;file name&gt;" for an exported definition file.</param>

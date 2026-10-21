@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.23.0";
+    public const string ApiVersion = "1.24.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -80,5 +80,17 @@ public static class ContractInfo
 
         /// <summary>409: a backup, restore, or disk replacement was refused or failed; the detail says why.</summary>
         public const string BackupFailed = "backupFailed";
+
+        /// <summary>409: a transfer block does not start where the file's verified part ends; expectedOffset says where.</summary>
+        public const string TransferOffset = "transferOffset";
+
+        /// <summary>409: the same VM is already being moved to this host.</summary>
+        public const string TransferInProgress = "transferInProgress";
+
+        /// <summary>409: a transfer was refused or failed; the detail says why.</summary>
+        public const string TransferFailed = "transferFailed";
     }
+
+    /// <summary>The Authorization scheme of the transferTicket security scheme: "HyperHarbor-Transfer &lt;ticket&gt;".</summary>
+    public const string TransferTicketScheme = "HyperHarbor-Transfer";
 }

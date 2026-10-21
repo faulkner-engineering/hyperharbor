@@ -2,6 +2,26 @@ using HyperHarbor.Host.Core.Transfer;
 
 namespace HyperHarbor.Host.Tests.Transfer;
 
+/// <summary>Hands the sender whatever channel a test set up.</summary>
+internal sealed class ChannelFactory(Func<IPeerTransferChannel> open) : IPeerTransferChannelFactory
+{
+    public IPeerTransferChannel Open(TransferSendRequest request) => open();
+}
+
+/// <summary>The API host's channel factory: whatever <see cref="Open"/> a test sets, else a failure.</summary>
+internal sealed class FakePeerChannels : IPeerTransferChannelFactory
+{
+    public Func<TransferSendRequest, IPeerTransferChannel>? OpenChannel { get; set; }
+
+    public List<TransferSendRequest> Requests { get; } = [];
+
+    public IPeerTransferChannel Open(TransferSendRequest request)
+    {
+        Requests.Add(request);
+        return OpenChannel?.Invoke(request) ?? throw new InvalidOperationException("The test set no peer channel.");
+    }
+}
+
 /// <summary>Fixed configuration versions.</summary>
 internal sealed class FakeHyperVVersions : IHyperVVersions
 {

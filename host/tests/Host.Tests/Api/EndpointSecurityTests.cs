@@ -89,6 +89,52 @@ public sealed partial class EndpointSecurityTests : IDisposable
         Assert.Equal(["performVmAction"], conditional);
     }
 
+    /// <summary>The routes the sending host of a transfer calls take its ticket and nothing else; api.yaml says which they are.</summary>
+    [Fact]
+    public void TicketEndpoints_MatchContract()
+    {
+        var ticket = Endpoints(_host)
+            .Where(endpoint => endpoint.Value.Metadata.GetOrderedMetadata<IAuthorizeData>()
+                .Any(data => data.Policy == TransferTicketAuthenticationHandler.PolicyName))
+            .Select(endpoint => OperationId(endpoint.Value))
+            .Order()
+            .ToList();
+        var contractTicket = ContractOperations()
+            .Where(operation => operation.Value.Ticket)
+            .Select(operation => operation.Value.OperationId)
+            .Order()
+            .ToList();
+
+        Assert.Equal(contractTicket, ticket);
+        Assert.Equal(5, ticket.Count);
+        Assert.DoesNotContain(ContractOperations().Values, operation => operation.Ticket && operation.Elevated);
+    }
+
+    public static TheoryData<string> TicketOperations()
+    {
+        var data = new TheoryData<string>();
+        foreach (var (key, _) in ContractOperations().Where(operation => operation.Value.Ticket))
+        {
+            data.Add(key);
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(TicketOperations))]
+    public async Task TicketEndpoint_WithAPairedDevice_Returns401(string operation)
+    {
+        using var certificate = TestHost.CreateClientCertificate("Paired");
+        _host.Pair(certificate);
+        using var client = _host.CreateClient(certificate);
+
+        var response = await client.SendAsync(Request(operation));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
     [Fact]
     public void ElevatedEndpoints_AreAudited()
     {
@@ -195,7 +241,7 @@ public sealed partial class EndpointSecurityTests : IDisposable
         endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName
         ?? throw new InvalidOperationException($"{endpoint.RoutePattern.RawText} has no name; name it after its api.yaml operationId.");
 
-    private sealed record ContractOperation(string OperationId, bool Anonymous, bool Elevated);
+    private sealed record ContractOperation(string OperationId, bool Anonymous, bool Elevated, bool Ticket);
 
     /// <summary>api.yaml operations keyed "METHOD /api/v1/path/{param}".</summary>
     private static Dictionary<string, ContractOperation> ContractOperations()
@@ -222,9 +268,13 @@ public sealed partial class EndpointSecurityTests : IDisposable
                 var anonymous = operation.Children.TryGetValue(new YamlScalarNode("security"), out var security)
                     && security is YamlSequenceNode { Children.Count: 0 };
                 var route = ContractInfo.BasePath + ((YamlScalarNode)pathNode).Value!;
-                var elevated = security is YamlSequenceNode requirements
-                    && requirements.Children.OfType<YamlMappingNode>().Any(requirement => requirement.Children.ContainsKey(new YamlScalarNode("elevation")));
-                operations.Add($"{method.ToUpperInvariant()} {route.TrimEnd('/')}", new ContractOperation(operationId, anonymous, elevated));
+                var requirements = (security as YamlSequenceNode)?.Children.OfType<YamlMappingNode>().ToList() ?? [];
+                var elevated = requirements.Any(requirement => requirement.Children.ContainsKey(new YamlScalarNode("elevation")));
+
+                // A ticket operation lists only transferTicket; any other scheme beside it would also open it to that scheme.
+                var ticket = requirements.Count > 0
+                    && requirements.All(requirement => requirement.Children.Count == 1 && requirement.Children.ContainsKey(new YamlScalarNode("transferTicket")));
+                operations.Add($"{method.ToUpperInvariant()} {route.TrimEnd('/')}", new ContractOperation(operationId, anonymous, elevated, ticket));
             }
         }
 

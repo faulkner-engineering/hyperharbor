@@ -5,6 +5,7 @@ using HyperHarbor.Host.Core.Backup.Restore;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Hosts;
+using HyperHarbor.Shared.Contracts.Vms;
 
 namespace HyperHarbor.Host.Core.Transfer;
 

@@ -31,7 +31,8 @@ public static class JobEndpoints
         job.UpdatedAt,
         job.ErrorTitle is { } title ? new JobError(title, job.ErrorDetail ?? string.Empty) : null,
         job.SetupResult,
-        job.RestoreResult);
+        job.RestoreResult,
+        job.TransferResult);
 
     /// <summary>Another User's job is reported as not found.</summary>
     private static Results<Ok<VmJob>, ProblemHttpResult> GetJob(Guid jobId, VmJobStore jobs, ClaimsPrincipal user) =>

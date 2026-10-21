@@ -250,6 +250,22 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    received}]}; PUT /transfers/{id}/files/{key} (key URL-escaped, e.g. disk:0) with Content-Range "bytes a-b/size" and
    Content-Digest "sha-256=:<base64>:"; 409 problem code transferOffset with expectedOffset; POST .../import -> {vmId,
    name}; POST .../complete; DELETE /transfers/{id}; 401 means the ticket ended; 502/503/504 are retried.
+   Done: 24.7 API 1.24.0 (2026-10-21; API tested, including a copy from a TestHost to itself through the real job, the real
+   HttpPeerTransferChannel, and the real ticket routes in memory; not yet between two hosts): Host.Service/Api/TransferEndpoints
+   (getTransferPreview; startTransfer and offerIncomingTransfer elevated and audited, the ticket never in the audit summary;
+   cancelTransfer; the ticket routes getIncomingTransfer, receiveTransferBlock (416 without Content-Range, 400 without
+   Content-Digest, body limit lifted to one block), importTransfer, completeTransfer, cancelIncomingTransfer), TransferMapping
+   (Host.Core records to Shared.Contracts.Transfers DTOs; the alias is Domain because "Core" resolves to the namespace),
+   Security/TransferTicketAuthenticationHandler (scheme and policy "TransferTicket"; only the ticket routes use the policy, so
+   a ticket opens nothing else and a paired device's certificate gets 401 there; claims carry the receiving User and the
+   transfer; the audit names the caller "peer host (transfer ticket) <id>"), Transfer/TransferMaintenanceService
+   (RecoverAsync, then ExpireIdleAsync every minute), Core TransferJobs (validation, confirmName for a move, VmJobKind.TransferVm,
+   VmJob.transferResult; JobEndpoints.ToContract must copy every result field, which the API test caught). TransferMode,
+   TransferBlockerCode, and IncomingTransferState moved to Shared.Contracts.Vms; the DTOs live in Shared.Contracts.Transfers so
+   their names do not clash with Host.Core.Transfer's. HostActivity counts TransferReceiver.AnyActive. TestHost fakes the
+   definition reader, versions, Hyper-V transfer, key protectors, and the peer channel factory; tests that offer a transfer
+   must set HostSettingsStore.SetVmFolder first, or the receiver creates folders under the fake default C:\Hyper-V\Config.
+   EndpointSecurityTests.TicketEndpoints_MatchContract keys on operations whose security lists only transferTicket.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

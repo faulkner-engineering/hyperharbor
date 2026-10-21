@@ -1,4 +1,5 @@
 using HyperHarbor.Host.Core.Lifecycle;
+using HyperHarbor.Shared.Contracts.Vms;
 
 namespace HyperHarbor.Host.Core.Transfer;
 

@@ -126,6 +126,11 @@ internal sealed class AuditEndpointFilter : IEndpointFilter
             record.DeviceId = deviceId;
             record.DeviceName = user.Identity?.Name;
         }
+        else if (user.FindFirst(TransferTicketAuthenticationHandler.TransferIdClaim) is { } transfer)
+        {
+            // A transfer's data request: the sending host, which is not a paired device.
+            record.DeviceName = $"{TransferTicketAuthenticationHandler.PeerName} {transfer.Value}";
+        }
 
         if (Guid.TryParse(user.FindFirst(PairedDeviceAuthenticationHandler.UserIdClaim)?.Value, out var userId))
         {

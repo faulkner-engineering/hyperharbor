@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Transfer;
+using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -43,7 +44,7 @@ public sealed class PeerHostClientTests : IAsyncLifetime
             https.AllowAnyClientCertificate();
         })));
         _server = builder.Build();
-        _server.Map("/transfers/{id}/{**rest}", async (HttpContext context) =>
+        _server.Map("/api/v1/transfers/{id}/{**rest}",async (HttpContext context) =>
         {
             var request = context.Request;
             using var body = new MemoryStream();
@@ -79,7 +80,7 @@ public sealed class PeerHostClientTests : IAsyncLifetime
 
         Assert.Equal(IncomingTransferState.Receiving, status.State);
         Assert.Equal(8, status.Received["disk:0"]);
-        Assert.Equal($"GET /transfers/{TransferId:D} auth=HyperHarbor-Transfer {Ticket} client={CertificateFingerprint.Of(_source)} range= digest= body=", Assert.Single(_seen));
+        Assert.Equal($"GET /api/v1/transfers/{TransferId:D} auth=HyperHarbor-Transfer {Ticket} client={CertificateFingerprint.Of(_source)} range= digest= body=", Assert.Single(_seen));
     }
 
     [Fact]
@@ -94,7 +95,7 @@ public sealed class PeerHostClientTests : IAsyncLifetime
         await channel.SendBlockAsync("definition:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b.vmcx", 4, 4, 10, SHA256.HashData(block), new MemoryStream(block), CancellationToken.None);
 
         Assert.Equal(
-            $"PUT /transfers/{TransferId:D}/files/definition:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b.vmcx auth=HyperHarbor-Transfer {Ticket} client={CertificateFingerprint.Of(_source)} "
+            $"PUT /api/v1/transfers/{TransferId:D}/files/definition:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b.vmcx auth=HyperHarbor-Transfer {Ticket} client={CertificateFingerprint.Of(_source)} "
             + $"range=bytes 4-7/10 digest=sha-256=:{Convert.ToBase64String(SHA256.HashData(block))}: body={Convert.ToHexString(block)}",
             _seen[1]);
     }
@@ -119,7 +120,7 @@ public sealed class PeerHostClientTests : IAsyncLifetime
         var result = await channel.ImportAsync(CancellationToken.None);
 
         Assert.Equal(new TransferImportResult(Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"), "Web (copy)"), result);
-        Assert.StartsWith($"POST /transfers/{TransferId:D}/import", _seen.Single(), StringComparison.Ordinal);
+        Assert.StartsWith($"POST /api/v1/transfers/{TransferId:D}/import", _seen.Single(), StringComparison.Ordinal);
     }
 
     [Theory]

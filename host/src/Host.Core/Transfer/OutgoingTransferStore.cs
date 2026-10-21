@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using HyperHarbor.Host.Core.Installation;
 using HyperHarbor.Host.Core.Security;
+using HyperHarbor.Shared.Contracts.Vms;
 
 namespace HyperHarbor.Host.Core.Transfer;
 

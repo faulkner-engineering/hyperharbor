@@ -111,6 +111,11 @@ internal sealed class TestHost : IDisposable
                     setupProfiles: provider.GetRequiredService<Core.Profiles.SetupProfileStore>()));
                 services.AddSingleton(new Core.Tailscale.TailscaleStatusProvider([Tailscale], TimeProvider.System));
                 services.AddSingleton<Core.Wake.IWakeRelayNetwork>(RelayNetwork);
+                services.AddSingleton<Core.Backup.IHyperVDefinitionReader>(Definitions);
+                services.AddSingleton<Core.Transfer.IHyperVVersions>(TransferVersions);
+                services.AddSingleton<Core.Transfer.IHyperVTransfer>(TransferHyperV);
+                services.AddSingleton<Core.Transfer.IKeyProtectorAccess>(KeyProtectors);
+                services.AddSingleton<Core.Transfer.IPeerTransferChannelFactory>(PeerChannels);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
             }));
@@ -176,6 +181,18 @@ internal sealed class TestHost : IDisposable
     public Profiles.FakePackageSearch PackageSearch { get; } = new();
 
     public Unattend.FakeRemoteAccessProbe RemoteAccess { get; } = new();
+
+    /// <summary>What the definition reader returns; set it before reading a VM's definition (backup, transfer preview).</summary>
+    public Backup.FakeDefinitions Definitions { get; } = new();
+
+    public Transfer.FakeHyperVVersions TransferVersions { get; } = new();
+
+    public Transfer.FakeHyperVTransfer TransferHyperV { get; } = new();
+
+    public Transfer.FakeKeyProtectorAccess KeyProtectors { get; } = new();
+
+    /// <summary>The channel a transfer job sends through; a test sets it before starting one.</summary>
+    public Transfer.FakePeerChannels PeerChannels { get; } = new();
 
     /// <summary>The ISO library folder, inside the data directory.</summary>
     public string IsoFolder => Path.Combine(DataDirectory, "isos");

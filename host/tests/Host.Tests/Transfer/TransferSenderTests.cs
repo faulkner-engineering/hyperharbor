@@ -65,7 +65,7 @@ public sealed class TransferSenderTests : IDisposable
             new KeyProtectorHandover(_keys, NullLogger<KeyProtectorHandover>.Instance),
             new VmDeletionService(_inventory, _storage, _files, _jobs, NullLogger<VmDeletionService>.Instance),
             _outgoing,
-            _ => _channel!,
+            new ChannelFactory(() => _channel!),
             sourceData,
             TimeProvider.System,
             NullLogger<TransferSender>.Instance,

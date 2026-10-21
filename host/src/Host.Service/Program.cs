@@ -29,6 +29,7 @@ using HyperHarbor.Host.Core.Updates;
 using HyperHarbor.Host.Core.Users;
 using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Core.Tailscale;
+using HyperHarbor.Host.Core.Transfer;
 using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service;
 using HyperHarbor.Host.Service.Api;
@@ -39,6 +40,7 @@ using HyperHarbor.Host.Service.GameReady;
 using HyperHarbor.Host.Service.Installation;
 using HyperHarbor.Host.Service.Logging;
 using HyperHarbor.Host.Service.Security;
+using HyperHarbor.Host.Service.Transfer;
 using HyperHarbor.Host.Service.Tray;
 using HyperHarbor.Host.Service.VmConsole;
 using HyperHarbor.Host.Service.Wake;
@@ -319,7 +321,8 @@ if (selfTest is null)
 
 // What an update restart would interrupt; the update gate middleware counts state-changing requests here.
 builder.Services.AddSingleton(services => new HostActivity(
-    () => services.GetRequiredService<VmJobStore>().AnyRunning || services.GetRequiredService<PairingService>().HasPendingRequest,
+    () => services.GetRequiredService<VmJobStore>().AnyRunning || services.GetRequiredService<PairingService>().HasPendingRequest
+        || services.GetRequiredService<TransferReceiver>().AnyActive,
     services.GetRequiredService<TimeProvider>()));
 
 // Keeps the PC awake while paired devices use it (after a Wake-on-LAN wake Windows would sleep again in minutes).
@@ -513,6 +516,26 @@ if (selfTest is null)
     builder.Services.AddHostedService<GameAwareWatchdogService>();
 }
 
+// VM transfer between hosts (Phase 24): this host sends (preview, job) and receives (offer, ticket routes).
+builder.Services.AddSingleton<IHyperVVersions, CimHyperVVersions>();
+builder.Services.AddSingleton<IHyperVTransfer, CimHyperVTransfer>();
+builder.Services.AddSingleton<IKeyProtectorAccess, CimKeyProtectorAccess>();
+builder.Services.AddSingleton<KeyProtectorHandover>();
+builder.Services.AddSingleton<TransferPreviewService>();
+builder.Services.AddSingleton<TransferPreflightService>();
+builder.Services.AddSingleton(new IncomingTransferStore(dataDirectory));
+builder.Services.AddSingleton(new OutgoingTransferStore(dataDirectory));
+builder.Services.AddSingleton<TransferReceiver>();
+builder.Services.AddSingleton<IPeerTransferChannelFactory>(services =>
+    new PeerHostClient(() => services.GetRequiredService<HostCertificateStore>().GetOrCreate()));
+builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<TransferSender>(services, dataDirectory));
+builder.Services.AddSingleton<TransferJobs>();
+if (selfTest is null)
+{
+    // A self-test run on a copy of the data must not end or recover the real host's transfers.
+    builder.Services.AddHostedService<TransferMaintenanceService>();
+}
+
 builder.Services.AddOptions<ApiOptions>()
     .Bind(builder.Configuration.GetSection(ApiOptions.SectionName))
     .ValidateDataAnnotations()
@@ -548,9 +571,14 @@ builder.WebHost.ConfigureKestrel((context, kestrel) =>
 
 builder.Services
     .AddAuthentication(PairedDeviceAuthenticationHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, PairedDeviceAuthenticationHandler>(PairedDeviceAuthenticationHandler.SchemeName, null);
+    .AddScheme<AuthenticationSchemeOptions, PairedDeviceAuthenticationHandler>(PairedDeviceAuthenticationHandler.SchemeName, null)
+    .AddScheme<AuthenticationSchemeOptions, TransferTicketAuthenticationHandler>(TransferTicketAuthenticationHandler.SchemeName, null);
 builder.Services.AddAuthorization(options =>
 {
+    // Only the ticket routes use this policy, and its scheme is the only one they accept.
+    options.AddPolicy(TransferTicketAuthenticationHandler.PolicyName, new AuthorizationPolicyBuilder(TransferTicketAuthenticationHandler.SchemeName)
+        .RequireAuthenticatedUser()
+        .Build());
     options.FallbackPolicy = new AuthorizationPolicyBuilder(PairedDeviceAuthenticationHandler.SchemeName)
         .RequireAuthenticatedUser()
         .Build();
@@ -585,6 +613,7 @@ app.MapPerformanceEndpoints();
 app.MapBackupEndpoints();
 app.MapGameAwareEndpoints();
 app.MapJobEndpoints();
+app.MapTransferEndpoints();
 app.MapPairingEndpoints();
 app.MapWakeEndpoints();
 app.MapUpdateEndpoints();

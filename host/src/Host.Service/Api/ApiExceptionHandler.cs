@@ -11,6 +11,7 @@ using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Host.Core.Provisioning;
 using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.RemoteDesktop;
+using HyperHarbor.Host.Core.Transfer;
 using HyperHarbor.Host.Core.Unattend;
 using HyperHarbor.Host.Core.VmConsole;
 using HyperHarbor.Host.Core.Wake;
@@ -82,6 +83,11 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             context.ProblemDetails.Extensions["warnings"] = warned.Warnings;
         }
 
+        if (exception is TransferOffsetException offset)
+        {
+            context.ProblemDetails.Extensions["expectedOffset"] = offset.Expected;
+        }
+
         return await _problemDetails.TryWriteAsync(context);
     }
 
@@ -102,6 +108,8 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         ConsoleConflictException conflict => conflict.Code,
         RemoteDesktopConflictException conflict => conflict.Code,
         PackageSearchUnavailableException => ContractInfo.ProblemCodes.WingetUnavailable,
+        TransferOffsetException => ContractInfo.ProblemCodes.TransferOffset,
+        TransferException => ContractInfo.ProblemCodes.TransferFailed,
         _ => null,
     };
 
@@ -138,7 +146,10 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             HyperVCallException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
             HyperVUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Hyper-V unavailable"),
             HyperVOperationException => (StatusCodes.Status502BadGateway, "Hyper-V operation failed"),
-            WakeTestAlreadyScheduledException => (StatusCodes.Status409Conflict, "Wake test already scheduled"),
+            TransferOffsetException => (StatusCodes.Status409Conflict, "Block out of order"),
+            TransferNotFoundException => (StatusCodes.Status404NotFound, "Transfer not found"),
+            TransferException => (StatusCodes.Status409Conflict, "Transfer failed"),
+            WakeTestAlreadyScheduledException =>(StatusCodes.Status409Conflict, "Wake test already scheduled"),
             WakeFixUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Approval unavailable"),
             InvalidWakeRequestException => (StatusCodes.Status400BadRequest, "Invalid request"),
             GuestCredentialRejectedException => (StatusCodes.Status422UnprocessableEntity, "Administrator credential rejected"),

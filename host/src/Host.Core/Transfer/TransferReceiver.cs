@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging;
 
 namespace HyperHarbor.Host.Core.Transfer;
@@ -116,7 +117,7 @@ public sealed partial class TransferReceiver
         {
             if (request.Mode == TransferMode.Move && _store.List().Any(record => record.Mode == TransferMode.Move && record.Preview.VmId == request.Preview.VmId))
             {
-                throw new LifecycleConflictException($"{request.Preview.Name} is already being moved to this host.", "transferInProgress");
+                throw new LifecycleConflictException($"{request.Preview.Name} is already being moved to this host.", ContractInfo.ProblemCodes.TransferInProgress);
             }
 
             var plan = await _preflight.CheckAsync(request.Preview, request.Mode, cancellationToken).ConfigureAwait(false);

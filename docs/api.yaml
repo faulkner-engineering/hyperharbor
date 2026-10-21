@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.23.0
+  version: 1.24.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -81,6 +81,20 @@ tags:
       Applying a profile is not part of this version.
   - name: Jobs
     description: Progress of long-running VM operations such as creation and deletion.
+  - name: Transfers
+    description: |
+      Moving or copying an off VM from one host to another (API 1.24.0). A paired client authorizes it on both hosts;
+      the data goes host to host.
+
+      1. `GET /vms/{vmId}/transfer-preview` on the sending host.
+      2. `POST /transfers/incoming` on the receiving host with that preview and the sending host's certificate
+         fingerprint. The answer has a one-time ticket.
+      3. `POST /vms/{vmId}/transfer` on the sending host with the receiving host's address, fingerprint, and offer.
+         Poll the `transferVm` job; its `transferResult` names the VM on the receiving host.
+
+      The sending host then calls the receiving host's `transferTicket` operations itself. A move keeps the VM's ID and
+      MAC addresses and deletes it from the sending host once the receiving host has it; a copy gets a new ID and new
+      MAC addresses. Both hosts must answer API 1.24.0 or later.
   - name: Auth
     description: |
       Elevation for operations that destroy data or change settings. The owner sets an admin
@@ -1998,6 +2012,317 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /vms/{vmId}/transfer-preview:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [Transfers]
+      operationId: getTransferPreview
+      summary: Check whether a VM can be moved or copied to another host (API 1.24.0).
+      description: |
+        Read on the sending host. The answer lists the VM's disks with their sizes, its configuration version, firmware,
+        TPM, processors, memory, and network adapters, and every `blockers` entry that stops a transfer: the VM must be
+        off (a saved state is refused), have no checkpoints (`checkpoints` clears once they are deleted, which merges
+        them), use no differencing or shared disks, and have no unattended install running. Send the answer, unchanged,
+        to the receiving host's `POST /transfers/incoming`.
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferPreview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
+  /vms/{vmId}/transfer:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [Transfers]
+      operationId: startTransfer
+      summary: Send a VM to a host that accepted it (API 1.24.0).
+      description: |
+        Called on the sending host with the receiving host's offer. Starts a `transferVm` job that holds the VM: it
+        checks the VM again, keeps it from starting, exports its definition (with a TPM, the receiving host's guardian is
+        granted on the VM's key protector only during the export, and the original is always put back), and sends the
+        definition and the disks to the receiving host over HTTPS. The sending host pins the receiving host's certificate
+        (`target.fingerprint`) and presents its own. Network failures are resumed. Until the receiving host reports the
+        VM imported, any failure or a cancel rolls the receiving host back. Then a move deletes the VM and its disks on
+        this host (a failure is a warning in `transferResult`, never a failed job) and the transfer completes. A move
+        needs `confirmName`.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartTransferRequest"
+      responses:
+        "202":
+          description: The transfer job started.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /vms/{vmId}/transfer/cancel:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [Transfers]
+      operationId: cancelTransfer
+      summary: Cancel the running transfer of a VM (API 1.24.0).
+      description: |
+        Before the receiving host has imported the VM, the job stops, the receiving host is rolled back, and the job
+        fails with "The job was canceled.". After that, the job finishes anyway, since the VM already exists there.
+      responses:
+        "204":
+          description: The job was asked to stop.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /transfers/incoming:
+    post:
+      tags: [Transfers]
+      operationId: offerIncomingTransfer
+      summary: Accept a VM from another host (API 1.24.0).
+      description: |
+        Called on the receiving host with the sending host's preview. The host checks that it can take the VM (a move's
+        ID must be new here; the configuration version must be one this Hyper-V supports; processors, memory, and free
+        space must fit; disk file names must be plain .vhdx or .vhd names). Errors are 400 with `errors`; warnings (a
+        renamed VM, a missing switch, a copy's identity) are 409 `code: resourceWarnings` until the request is sent again
+        with `acknowledgeWarnings`. The VM gets a folder of its own under the host's VM folder. The answer carries a
+        one-time ticket for the sending host's data requests and, for a VM with a TPM, this host's guardian with public
+        certificates only. A ticket unused for 30 minutes ends, and the transfer is rolled back.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncomingTransferRequest"
+      responses:
+        "201":
+          description: The transfer is accepted.
+          headers:
+            Location:
+              description: URL of the transfer.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferOffer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "409":
+          description: |
+            Warnings to acknowledge (`code: resourceWarnings`), the same VM is already being moved here
+            (`code: transferInProgress`), or its folder appeared meanwhile.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /transfers/{transferId}:
+    parameters:
+      - $ref: "#/components/parameters/TransferId"
+    get:
+      tags: [Transfers]
+      operationId: getIncomingTransfer
+      summary: How much of each file the receiving host has (sending host only).
+      security:
+        - transferTicket: []
+      responses:
+        "200":
+          description: The transfer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomingTransferStatus"
+        "401":
+          $ref: "#/components/responses/TransferTicketRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Transfers]
+      operationId: cancelIncomingTransfer
+      summary: Stop a transfer (sending host only).
+      description: |
+        Before the import the transfer is rolled back: the imported VM, if any, and the VM's own folder are deleted.
+        After the import the VM is kept and the transfer completes (`rolledBack: false`).
+      security:
+        - transferTicket: []
+      responses:
+        "200":
+          description: The transfer ended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomingTransferCanceled"
+        "401":
+          $ref: "#/components/responses/TransferTicketRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /transfers/{transferId}/files/{fileKey}:
+    parameters:
+      - $ref: "#/components/parameters/TransferId"
+      - name: fileKey
+        in: path
+        required: true
+        description: |
+          `disk:<index>` for a disk of the preview, in its order, or `definition:<VM ID>.vmcx`, `.vmgs`, or `.VMRS` for
+          the files Hyper-V's export wrote (URL-encoded).
+        schema:
+          type: string
+          maxLength: 64
+    put:
+      tags: [Transfers]
+      operationId: receiveTransferBlock
+      summary: Send one block of a file (sending host only).
+      description: |
+        The body is one block of the file: 268435456 bytes (256 MiB), or the rest of the file for its last block. It must
+        start where the file's verified part ends (`GET /transfers/{transferId}` says where); otherwise the answer is 409
+        `code: transferOffset` with `expectedOffset`. The block is written, checked against `Content-Digest`, and flushed
+        to disk before it counts, so after a network failure the sending host resumes from the receiving host's count. A
+        block whose hash does not match is discarded.
+      security:
+        - transferTicket: []
+      parameters:
+        - name: Content-Range
+          in: header
+          required: true
+          description: '`bytes <first>-<last>/<file size>`. Anything else is 416.'
+          schema:
+            type: string
+        - name: Content-Digest
+          in: header
+          required: true
+          description: '`sha-256=:<Base64 of the block''s SHA-256>:` (RFC 9530).'
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: The block was verified and stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomingTransferFile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/TransferTicketRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            The block starts at the wrong offset (`code: transferOffset`, `expectedOffset`), or the file, length, or hash
+            is wrong, or the transfer is past receiving (`code: transferFailed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "416":
+          description: The Content-Range header is missing or malformed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /transfers/{transferId}/import:
+    parameters:
+      - $ref: "#/components/parameters/TransferId"
+    post:
+      tags: [Transfers]
+      operationId: importTransfer
+      summary: Import the received VM (sending host only).
+      description: |
+        Imports the definition as a planned VM, points it at the received disks, sets this host's switches and the MAC
+        addresses (static for a move, new dynamic ones for a copy), removes a GPU partition, turns automatic start off
+        until the transfer completes, then validates and creates the VM. On failure the planned VM is removed and the
+        files stay, so the request can be repeated. Repeating it after a success answers with the same VM.
+      security:
+        - transferTicket: []
+      responses:
+        "200":
+          description: The VM exists on the receiving host.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferImported"
+        "401":
+          $ref: "#/components/responses/TransferTicketRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Files are missing or Hyper-V refused the VM (`code` is `transferFailed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /transfers/{transferId}/complete:
+    parameters:
+      - $ref: "#/components/parameters/TransferId"
+    post:
+      tags: [Transfers]
+      operationId: completeTransfer
+      summary: End an imported transfer (sending host only).
+      description: The VM gets its automatic start action back, and the ticket ends.
+      security:
+        - transferTicket: []
+      responses:
+        "204":
+          description: The transfer is complete.
+        "401":
+          $ref: "#/components/responses/TransferTicketRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The VM has not been imported yet (`code` is `transferFailed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
   /pairing/requests:
     post:
       tags: [Pairing]
@@ -3027,6 +3352,14 @@ components:
       description: |
         Token from `POST /auth/elevation`. Required, in addition to the client certificate,
         by operations that list this scheme.
+    transferTicket:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: |
+        `HyperHarbor-Transfer <ticket>`, where the ticket is the one in this host's `TransferOffer` (API 1.24.0). Only
+        the sending host uses it, and only on the operations that list this scheme, which accept nothing else: the TLS
+        client certificate must be the sending host's own (the `sourceFingerprint` of the offer), not a paired device's.
 
   parameters:
     VmId:
@@ -3034,6 +3367,14 @@ components:
       in: path
       required: true
       description: Hyper-V virtual machine ID.
+      schema:
+        type: string
+        format: uuid
+    TransferId:
+      name: transferId
+      in: path
+      required: true
+      description: The receiving host's ID for a transfer, from its `TransferOffer`.
       schema:
         type: string
         format: uuid
@@ -3096,6 +3437,14 @@ components:
         address from a different node than the one the device is tied to is refused with 403 and
         `code: tailscaleNodeMismatch`, or `code: tailscaleNodeUnverified` when the host's Tailscale client cannot say
         which node sent it. Every route can answer this.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    TransferTicketRequired:
+      description: |
+        The transfer's ticket is missing, ended, or belongs to another transfer, or the TLS client certificate is not the
+        sending host's. Start the transfer again.
       content:
         application/problem+json:
           schema:
@@ -3217,6 +3566,288 @@ components:
           description: The request property, for example `processorCount`.
         message:
           type: string
+
+    TransferMode:
+      type: string
+      enum: [move, copy]
+      description: |
+        `move` keeps the VM's ID and MAC addresses and deletes it from the sending host once the receiving host has it.
+        `copy` leaves the VM on the sending host and gives the new one a new ID and new MAC addresses.
+
+    TransferBlockerCode:
+      type: string
+      enum: [notOff, savedState, checkpoints, differencingDisk, sharedDisk, diskMissing, installInProgress]
+      description: '`checkpoints` clears once the checkpoints are deleted (they are merged into the disks).'
+
+    TransferBlocker:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          $ref: "#/components/schemas/TransferBlockerCode"
+        message:
+          type: string
+
+    TransferAdapter:
+      type: object
+      required: [switchId, switchName, macAddress]
+      properties:
+        switchId:
+          type: [string, "null"]
+        switchName:
+          type: [string, "null"]
+          description: The receiving host connects the adapter to its switch of this name, else its Default Switch.
+        macAddress:
+          type: [string, "null"]
+          description: Twelve hexadecimal digits.
+
+    TransferDisk:
+      type: object
+      required: [path, sizeBytes, controllerType, controllerNumber, lun]
+      properties:
+        path:
+          type: string
+          description: The disk's path on the sending host. The receiving host uses only its file name.
+        sizeBytes:
+          type: integer
+          format: int64
+        controllerType:
+          type: string
+          enum: [scsi, ide]
+        controllerNumber:
+          type: integer
+        lun:
+          type: integer
+
+    TransferCompute:
+      type: object
+      required: [processorCount, startupMemoryMb, maximumMemoryMb, dynamicMemory, nestedVirtualization, macAddressSpoofing]
+      properties:
+        processorCount:
+          type: integer
+        startupMemoryMb:
+          type: integer
+          format: int64
+        maximumMemoryMb:
+          type: integer
+          format: int64
+        dynamicMemory:
+          type: boolean
+        nestedVirtualization:
+          type: boolean
+        macAddressSpoofing:
+          type: boolean
+
+    TransferPreview:
+      type: object
+      required: [vmId, name, state, generation, configurationVersion, compute, secureBoot, secureBootTemplateId, tpmEnabled,
+        hasGpuPartition, adapters, disks, totalBytes, checkpointCount, blockers, warnings]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        state:
+          $ref: "#/components/schemas/VmState"
+        generation:
+          type: integer
+        configurationVersion:
+          type: [string, "null"]
+          description: Hyper-V's configuration version, such as "12.0"; the receiving host must support it.
+        compute:
+          $ref: "#/components/schemas/TransferCompute"
+        secureBoot:
+          type: boolean
+        secureBootTemplateId:
+          type: [string, "null"]
+        tpmEnabled:
+          type: boolean
+          description: The receiving host's guardian is granted on the VM's key protector, so the TPM's contents (BitLocker keys) survive.
+        hasGpuPartition:
+          type: boolean
+          description: The GPU partition is removed; turn Performance mode on again on the receiving host.
+        adapters:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransferAdapter"
+        disks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransferDisk"
+        totalBytes:
+          type: integer
+          format: int64
+          description: The disks' total size, which crosses the network.
+        checkpointCount:
+          type: integer
+        blockers:
+          type: array
+          description: Must be empty for the transfer to start.
+          items:
+            $ref: "#/components/schemas/TransferBlocker"
+        warnings:
+          type: array
+          description: What changes for the VM on the way.
+          items:
+            type: string
+
+    IncomingTransferRequest:
+      type: object
+      required: [preview, mode, sourceFingerprint]
+      properties:
+        preview:
+          $ref: "#/components/schemas/TransferPreview"
+        mode:
+          $ref: "#/components/schemas/TransferMode"
+        sourceFingerprint:
+          type: string
+          description: The SHA-256 fingerprint (hexadecimal) of the sending host's certificate, as the client pinned it.
+        acknowledgeWarnings:
+          type: boolean
+          default: false
+
+    TransferOffer:
+      type: object
+      required: [transferId, ticket, name, vmFolder, vmId, warnings, guardian]
+      properties:
+        transferId:
+          type: string
+          format: uuid
+        ticket:
+          type: string
+          description: One-time ticket for the sending host's data requests. A secret; pass it to the sending host only.
+        name:
+          type: string
+          description: The VM's name on the receiving host; "(moved)" or "(copy)" is added when the name is taken.
+        vmFolder:
+          type: string
+        vmId:
+          type: [string, "null"]
+          format: uuid
+          description: The ID the VM keeps (a move); null for a copy.
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+        guardian:
+          type: [string, "null"]
+          format: byte
+          description: The receiving host's key protector guardian (public certificates only), when the VM has a TPM.
+
+    TransferTarget:
+      type: object
+      required: [hostId, name, addresses, port, fingerprint]
+      properties:
+        hostId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        addresses:
+          type: array
+          minItems: 1
+          maxItems: 16
+          description: Host names or IP addresses of the receiving host, tried in order.
+          items:
+            type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        fingerprint:
+          type: string
+          description: The SHA-256 fingerprint (hexadecimal) of the receiving host's certificate, as the client pinned it.
+
+    StartTransferRequest:
+      type: object
+      required: [mode, target, transferId, ticket]
+      properties:
+        mode:
+          $ref: "#/components/schemas/TransferMode"
+        target:
+          $ref: "#/components/schemas/TransferTarget"
+        transferId:
+          type: string
+          format: uuid
+        ticket:
+          type: string
+          description: From the receiving host's offer. Never recorded in the audit log.
+        guardian:
+          type: [string, "null"]
+          format: byte
+          description: From the receiving host's offer; required when the VM has a TPM.
+        confirmName:
+          type: [string, "null"]
+          description: For a move, the VM's name exactly.
+
+    TransferResult:
+      type: object
+      required: [targetVmId, targetName, sourceRemoved, warnings]
+      properties:
+        targetVmId:
+          type: string
+          format: uuid
+        targetName:
+          type: string
+        sourceRemoved:
+          type: boolean
+          description: For a move, whether the VM was deleted from the sending host. Always false for a copy.
+        warnings:
+          type: array
+          items:
+            type: string
+
+    IncomingTransferState:
+      type: string
+      enum: [receiving, importing, imported]
+
+    IncomingTransferFile:
+      type: object
+      required: [key, size, received]
+      properties:
+        key:
+          type: string
+          description: '`disk:<index>` or `definition:<file name>`.'
+        size:
+          type: integer
+          format: int64
+        received:
+          type: integer
+          format: int64
+          description: Bytes received and verified; the next block starts here.
+
+    IncomingTransferStatus:
+      type: object
+      required: [transferId, state, files]
+      properties:
+        transferId:
+          type: string
+          format: uuid
+        state:
+          $ref: "#/components/schemas/IncomingTransferState"
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomingTransferFile"
+
+    TransferImported:
+      type: object
+      required: [vmId, name]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    IncomingTransferCanceled:
+      type: object
+      required: [rolledBack]
+      properties:
+        rolledBack:
+          type: boolean
+          description: False when the VM had already been imported; it is kept.
 
     HostInfo:
       type: object
@@ -3899,7 +4530,7 @@ components:
 
     VmJobKind:
       type: string
-      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState]
+      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState, transferVm]
 
     VmJobState:
       type: string
@@ -3955,6 +4586,11 @@ components:
           description: What a `restoreVm` or `restoreHostState` job did, once it succeeded (API 1.18.0). Omitted for other jobs.
           oneOf:
             - $ref: "#/components/schemas/RestoreResult"
+            - type: "null"
+        transferResult:
+          description: What a `transferVm` job did, once it succeeded (API 1.24.0). Omitted for other jobs.
+          oneOf:
+            - $ref: "#/components/schemas/TransferResult"
             - type: "null"
 
     ApplySetupProfileRequest:

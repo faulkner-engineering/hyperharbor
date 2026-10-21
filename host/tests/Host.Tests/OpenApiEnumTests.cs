@@ -39,6 +39,9 @@ public class OpenApiEnumTests
     [InlineData("DayOfWeek", typeof(DayOfWeek))]
     [InlineData("GameVmAction", typeof(Shared.Contracts.Hosts.GameVmAction))]
     [InlineData("TailscaleState", typeof(Shared.Contracts.Hosts.TailscaleHostState))]
+    [InlineData("TransferMode", typeof(TransferMode))]
+    [InlineData("TransferBlockerCode", typeof(TransferBlockerCode))]
+    [InlineData("IncomingTransferState", typeof(IncomingTransferState))]
     public void EnumWireValues_MatchOpenApiSchema(string schemaName, Type enumType)
     {
         var schema = (YamlMappingNode)Schemas[schemaName];

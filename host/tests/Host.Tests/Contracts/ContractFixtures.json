@@ -467,7 +467,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.23.0",
+    "apiVersion": "1.24.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -525,6 +525,81 @@
     "lastResult": null,
     "rolledBack": [
       "0.1.5"
+    ]
+  },
+  "IncomingTransferCanceled": {
+    "rolledBack": true
+  },
+  "IncomingTransferFile": {
+    "key": "disk:0",
+    "size": 21474836480,
+    "received": 268435456
+  },
+  "IncomingTransferRequest": {
+    "preview": {
+      "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+      "name": "Web",
+      "state": "off",
+      "generation": 2,
+      "configurationVersion": "12.0",
+      "compute": {
+        "processorCount": 4,
+        "startupMemoryMb": 4096,
+        "maximumMemoryMb": 8192,
+        "dynamicMemory": true,
+        "nestedVirtualization": false,
+        "macAddressSpoofing": false
+      },
+      "secureBoot": true,
+      "secureBootTemplateId": "1734c6e8-3154-4dda-ba5f-a874cc483422",
+      "tpmEnabled": true,
+      "hasGpuPartition": false,
+      "adapters": [
+        {
+          "switchId": "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444",
+          "switchName": "Default Switch",
+          "macAddress": "00155D010203"
+        },
+        {
+          "switchId": null,
+          "switchName": null,
+          "macAddress": null
+        }
+      ],
+      "disks": [
+        {
+          "path": "D:\\VMs\\Web\\Virtual Hard Disks\\Web.vhdx",
+          "sizeBytes": 21474836480,
+          "controllerType": "scsi",
+          "controllerNumber": 0,
+          "lun": 0
+        }
+      ],
+      "totalBytes": 21474836480,
+      "checkpointCount": 1,
+      "blockers": [],
+      "warnings": [
+        "The DVD drive\u0027s image stays on this host; the drive is empty on the other host."
+      ]
+    },
+    "mode": "move",
+    "sourceFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "acknowledgeWarnings": true
+  },
+  "IncomingTransferStatus": {
+    "transferId": "5a0c1d2e-3f40-4152-8364-758697a8b9ca",
+    "state": "receiving",
+    "files": [
+      {
+        "key": "disk:0",
+        "size": 21474836480,
+        "received": 268435456
+      },
+      {
+        "key": "definition:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b.vmcx",
+        "size": 40994,
+        "received": 40994
+      }
     ]
   },
   "IsoImage": {
@@ -1001,6 +1076,23 @@
     "targetId": "3f2a9c1e5d7b4a60",
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"
   },
+  "StartTransferRequest": {
+    "mode": "move",
+    "target": {
+      "hostId": "9c8b7a65-4321-4fed-8cba-0987654321ab",
+      "name": "LAPTOP",
+      "addresses": [
+        "192.168.0.20",
+        "laptop.tail1234.ts.net"
+      ],
+      "port": 48443,
+      "fingerprint": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    },
+    "transferId": "5a0c1d2e-3f40-4152-8364-758697a8b9ca",
+    "ticket": "fixture-ticket",
+    "guardian": "PHhtbD4=",
+    "confirmName": "Web"
+  },
   "StoredSetupProfile": {
     "id": "dev-workstation",
     "updatedAt": "2026-10-03T12:00:00\u002B00:00",
@@ -1067,6 +1159,115 @@
   "TailscaleConfig": {
     "localApiPort": 41112,
     "controlUrl": "https://hs.example.com"
+  },
+  "TransferAdapter": {
+    "switchId": "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444",
+    "switchName": "Default Switch",
+    "macAddress": "00155D010203"
+  },
+  "TransferBlocker": {
+    "code": "checkpoints",
+    "message": "Web has 1 checkpoint(s). Delete them first; they are merged into its disks."
+  },
+  "TransferCompute": {
+    "processorCount": 4,
+    "startupMemoryMb": 4096,
+    "maximumMemoryMb": 8192,
+    "dynamicMemory": true,
+    "nestedVirtualization": false,
+    "macAddressSpoofing": false
+  },
+  "TransferDisk": {
+    "path": "D:\\VMs\\Web\\Virtual Hard Disks\\Web.vhdx",
+    "sizeBytes": 21474836480,
+    "controllerType": "scsi",
+    "controllerNumber": 0,
+    "lun": 0
+  },
+  "TransferImported": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "name": "Web"
+  },
+  "TransferOffer": {
+    "transferId": "5a0c1d2e-3f40-4152-8364-758697a8b9ca",
+    "ticket": "fixture-ticket",
+    "name": "Web (copy)",
+    "vmFolder": "D:\\VMs\\Web (copy)",
+    "vmId": null,
+    "warnings": [
+      {
+        "field": "identity",
+        "message": "The copy gets a new VM ID and new MAC addresses."
+      }
+    ],
+    "guardian": null
+  },
+  "TransferPreview": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "name": "Web",
+    "state": "off",
+    "generation": 2,
+    "configurationVersion": "12.0",
+    "compute": {
+      "processorCount": 4,
+      "startupMemoryMb": 4096,
+      "maximumMemoryMb": 8192,
+      "dynamicMemory": true,
+      "nestedVirtualization": false,
+      "macAddressSpoofing": false
+    },
+    "secureBoot": true,
+    "secureBootTemplateId": "1734c6e8-3154-4dda-ba5f-a874cc483422",
+    "tpmEnabled": true,
+    "hasGpuPartition": false,
+    "adapters": [
+      {
+        "switchId": "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444",
+        "switchName": "Default Switch",
+        "macAddress": "00155D010203"
+      },
+      {
+        "switchId": null,
+        "switchName": null,
+        "macAddress": null
+      }
+    ],
+    "disks": [
+      {
+        "path": "D:\\VMs\\Web\\Virtual Hard Disks\\Web.vhdx",
+        "sizeBytes": 21474836480,
+        "controllerType": "scsi",
+        "controllerNumber": 0,
+        "lun": 0
+      }
+    ],
+    "totalBytes": 21474836480,
+    "checkpointCount": 1,
+    "blockers": [
+      {
+        "code": "checkpoints",
+        "message": "Web has 1 checkpoint(s). Delete them first; they are merged into its disks."
+      }
+    ],
+    "warnings": [
+      "The DVD drive\u0027s image stays on this host; the drive is empty on the other host."
+    ]
+  },
+  "TransferResult": {
+    "targetVmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "targetName": "Web",
+    "sourceRemoved": true,
+    "warnings": []
+  },
+  "TransferTarget": {
+    "hostId": "9c8b7a65-4321-4fed-8cba-0987654321ab",
+    "name": "LAPTOP",
+    "addresses": [
+      "192.168.0.20",
+      "laptop.tail1234.ts.net"
+    ],
+    "port": 48443,
+    "fingerprint": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
   },
   "TweakCatalogItem": {
     "id": "explorer.showFileExtensions",
