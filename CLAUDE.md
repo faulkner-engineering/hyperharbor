@@ -287,7 +287,7 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    (the target ends it after 30 idle minutes, since only the source can cancel it there). carry_vm_settings uses
    MonitorChoiceStore::carry and CameraService::carry_prefs: a move moves the settings to "<target host id>/<vm id>", a
    copy duplicates them under the copy's ID. Checkpoints are not merged from the dialog (no route merges them alone); the
-   blocker tells the user to delete them first. The svelte-autofixer MCP tool was not available in this session.
+   blocker tells the user to delete them first. svelte-autofixer (command-line form) found no issues in the dialog or VmList.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -538,7 +538,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     C:\ProgramData\Microsoft\Windows\Virtual Hard Disks; HyperHarbor-Linux lives in Public Documents.
   - A running VM holds its disk files open, so a delete-access check only means something once it is off.
 - ASP.NET Core 8 logs every handled exception; that category is off in appsettings.json and ApiExceptionHandler logs instead.
-- Svelte: run the svelte-autofixer MCP tool on every .svelte file you change.
+- Svelte: run the svelte-autofixer MCP tool on every .svelte file you change. Without the MCP server, the same check runs
+  from client/: `npx --yes @sveltejs/mcp@0.1.27 svelte-autofixer <path to .svelte file>`. Its suggestions about
+  setInterval and refreshVms inside $effect in routes/+page.svelte are the page's polling timers, which belong there.
 - Remote Desktop (Phase 7):
   - PowerShell Direct needs a running Windows guest; Linux guests fail fast with GuestUnavailable (503).
     Provision and connect take tens of seconds (Linux package installs take minutes), so the client uses
