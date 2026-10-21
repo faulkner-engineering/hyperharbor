@@ -204,6 +204,117 @@ public sealed class TransferPreflightTests
         Assert.Equal("12.0", capabilities.Newest);
     }
 
+    [Fact]
+    public void KeepTpm_GoingBackToTheKeysOwner_NeedsNoGrant_AndNoProbe()
+    {
+        var preview = Preview() with { TpmKeyHolders = new("AAAA", ["BBBB"]) };
+
+        var plan = TransferPreflight.Evaluate(preview, TransferMode.Move, Facts(localGuardian: "aaaa", tpm: new(false, false, null)));
+
+        Assert.True(plan.CanAccept, string.Join(" ", plan.Errors.Select(error => error.Message)));
+        Assert.False(plan.GrantNeeded);
+        Assert.Equal(TransferTpmMode.Keep, plan.TpmMode);
+        Assert.False(TransferPreflight.NeedsTpmProbe(preview, TransferTpmMode.Keep, "AAAA"));
+        Assert.True(TransferPreflight.NeedsTpmProbe(preview, TransferTpmMode.Fresh, "AAAA"));
+        Assert.True(TransferPreflight.NeedsTpmProbe(preview, TransferTpmMode.Keep, "BBBB"));
+    }
+
+    [Fact]
+    public void KeepTpm_OnAHostThatAlreadyHoldsTheKey_NeedsNoGrant()
+    {
+        var plan = TransferPreflight.Evaluate(
+            Preview() with { TpmKeyHolders = new("AAAA", ["BBBB"]) }, TransferMode.Move, Facts(localGuardian: "BBBB"));
+
+        Assert.True(plan.CanAccept, string.Join(" ", plan.Errors.Select(error => error.Message)));
+        Assert.False(plan.GrantNeeded);
+    }
+
+    [Fact]
+    public void KeepTpm_FromTheKeysOwner_AsksForAGrant()
+    {
+        var plan = TransferPreflight.Evaluate(
+            Preview() with { TpmKeyHolders = new("AAAA", []), TpmOwnedBySource = true }, TransferMode.Move, Facts(localGuardian: "BBBB"));
+
+        Assert.True(plan.CanAccept, string.Join(" ", plan.Errors.Select(error => error.Message)));
+        Assert.True(plan.GrantNeeded);
+        Assert.Equal(VmId, plan.VmId);
+    }
+
+    [Fact]
+    public void KeepTpm_FromAHostThatDoesNotOwnTheKey_IsRefused()
+    {
+        var plan = TransferPreflight.Evaluate(
+            Preview() with { TpmKeyHolders = new("AAAA", ["CCCC"]) }, TransferMode.Move, Facts(localGuardian: "BBBB"));
+
+        Assert.Equal("tpm", Assert.Single(plan.Errors).Field);
+        Assert.Contains("Only the host that created Web", plan.Errors[0].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void KeepTpm_OnAHostThatCannotOpenGrantedKeys_IsRefused_WithWhatWindowsSaid()
+    {
+        var plan = TransferPreflight.Evaluate(
+            Preview() with { TpmKeyHolders = new("AAAA", []), TpmOwnedBySource = true },
+            TransferMode.Move,
+            Facts(localGuardian: "BBBB", tpm: new(true, false, "Not implemented")));
+
+        var error = Assert.Single(plan.Errors);
+        Assert.Equal("tpm", error.Field);
+        Assert.Contains("fresh TPM", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Not implemented", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FreshTpm_OnAMove_GetsANewId_KeepsTheMac_AndWarnsAboutBitLocker()
+    {
+        var plan = TransferPreflight.Evaluate(
+            Preview() with { TpmKeyHolders = new("AAAA", ["CCCC"]) }, TransferMode.Move, Facts(localGuardian: "BBBB"), TransferTpmMode.Fresh);
+
+        Assert.True(plan.CanAccept, string.Join(" ", plan.Errors.Select(error => error.Message)));
+        Assert.True(plan.Rebuild);
+        Assert.False(plan.GrantNeeded);
+        Assert.Null(plan.VmId);
+        Assert.Equal("00155D010203", Assert.Single(plan.Adapters).StaticMacAddress);
+        Assert.Contains(plan.Warnings, warning => warning.Field == "tpm" && warning.Message.Contains("BitLocker", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FreshTpm_OnAHostThatCannotTurnOnATpm_IsRefused()
+    {
+        var plan = TransferPreflight.Evaluate(Preview(), TransferMode.Move, Facts(tpm: new(false, false, "could not be retrieved")), TransferTpmMode.Fresh);
+
+        Assert.Equal("tpm", Assert.Single(plan.Errors).Field);
+    }
+
+    [Fact]
+    public void FreshTpm_ForAVmWithoutATpm_IsAnOrdinaryTransfer()
+    {
+        var plan = TransferPreflight.Evaluate(Preview() with { TpmEnabled = false }, TransferMode.Move, Facts(tpm: new(false, false, null)), TransferTpmMode.Fresh);
+
+        Assert.True(plan.CanAccept);
+        Assert.False(plan.Rebuild);
+        Assert.Equal(VmId, plan.VmId);
+    }
+
+    [Fact]
+    public async Task Service_ProbesTheTpmOnlyWhenTheDecisionNeedsIt()
+    {
+        var hyperV = new FakeHyperVHost();
+        var options = new LifecycleOptions { VmRootFolder = Root };
+        var keys = new FakeKeyProtectorAccess();
+        var probe = new FakeTpmCapabilityProbe();
+        var service = new TransferPreflightService(
+            new FakeVmInventory(), new VmStorageLocation(null, options, hyperV), hyperV, new FakeHostCapacity(), new FakeDiskFiles(),
+            new FakeHyperVVersions(), options, _ => [], keys, probe);
+
+        await service.CheckAsync(Preview() with { TpmKeyHolders = new(FakeKeyProtectorAccess.LocalId, []) }, TransferMode.Move, CancellationToken.None);
+        Assert.Equal(0, probe.Probes);
+
+        var plan = await service.CheckAsync(Preview() with { TpmKeyHolders = new("CCCC", []), TpmOwnedBySource = true }, TransferMode.Move, CancellationToken.None);
+        Assert.Equal(1, probe.Probes);
+        Assert.True(plan.GrantNeeded);
+    }
+
     [Theory]
     [InlineData(@"F:\HyperHarbor VMs", @"F:\HyperHarbor VMs\Web")]
     [InlineData(null, @"C:\Hyper-V\Config\Web")]
@@ -213,7 +324,7 @@ public sealed class TransferPreflightTests
         var options = new LifecycleOptions { VmRootFolder = root };
         var service = new TransferPreflightService(
             new FakeVmInventory(), new VmStorageLocation(null, options, hyperV), hyperV, new FakeHostCapacity(), new FakeDiskFiles(),
-            new FakeHyperVVersions(), options, _ => []);
+            new FakeHyperVVersions(), options, _ => [], tpm: new FakeTpmCapabilityProbe());
 
         var plan = await service.CheckAsync(Preview(), TransferMode.Move, CancellationToken.None);
 
@@ -235,7 +346,9 @@ public sealed class TransferPreflightTests
         IReadOnlyList<string>? folders = null,
         long? freeMb = 500 * 1024,
         HostCapacity? capacity = null,
-        IReadOnlyList<string>? versions = null) => new(
+        IReadOnlyList<string>? versions = null,
+        TpmCapability? tpm = null,
+        string? localGuardian = null) => new(
         existing ?? [],
         Root,
         folders ?? [],
@@ -243,5 +356,7 @@ public sealed class TransferPreflightTests
         capacity ?? new FakeHostCapacity().Capacity,
         4096,
         new HostVersionCapabilities(versions ?? ["8.0", "9.0", "10.0", "11.0", "12.0"]),
-        Switches);
+        Switches,
+        localGuardian,
+        tpm ?? FakeTpmCapabilityProbe.Capable);
 }

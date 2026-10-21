@@ -10,7 +10,9 @@ namespace HyperHarbor.Host.Core.Transfer;
 
 /// <summary>A source host's proposal, as the authorizing client sends it to this (receiving) host.</summary>
 /// <param name="SourceFingerprint">The SHA-256 fingerprint of the source host's certificate, which must present it on every data request.</param>
-public sealed record IncomingTransferRequest(TransferPreview Preview, TransferMode Mode, string SourceFingerprint, bool AcknowledgeWarnings);
+/// <param name="TpmMode">For a VM with a TPM: keep it (this host is given access to its key) or give it a fresh one.</param>
+public sealed record IncomingTransferRequest(
+    TransferPreview Preview, TransferMode Mode, string SourceFingerprint, bool AcknowledgeWarnings, TransferTpmMode TpmMode = TransferTpmMode.Keep);
 
 /// <summary>This host's acceptance. ToString never includes the ticket.</summary>
 /// <param name="Ticket">The one-time ticket the source host sends with every data request for this transfer.</param>
@@ -70,6 +72,7 @@ public sealed partial class TransferReceiver
     private readonly TimeSpan _idleTimeout;
     private readonly long _blockSize;
     private readonly TransferRecordService? _records;
+    private readonly Backup.Restore.IHyperVImporter? _importer;
 
     private readonly object _gate = new();
     private readonly SemaphoreSlim _offers = new(1, 1);
@@ -86,7 +89,8 @@ public sealed partial class TransferReceiver
         ILogger<TransferReceiver> logger,
         TimeSpan? idleTimeout = null,
         long blockSize = BlockSize,
-        TransferRecordService? records = null)
+        TransferRecordService? records = null,
+        Backup.Restore.IHyperVImporter? importer = null)
     {
         _store = store;
         _preflight = preflight;
@@ -100,6 +104,7 @@ public sealed partial class TransferReceiver
         ArgumentOutOfRangeException.ThrowIfLessThan(blockSize, 1);
         _blockSize = blockSize;
         _records = records;
+        _importer = importer;
     }
 
     /// <summary>Whether any transfer is in progress here; it keeps the host awake and holds updates.</summary>
@@ -124,7 +129,7 @@ public sealed partial class TransferReceiver
                 throw new LifecycleConflictException($"{request.Preview.Name} is already being moved to this host.", ContractInfo.ProblemCodes.TransferInProgress);
             }
 
-            var plan = await _preflight.CheckAsync(request.Preview, request.Mode, cancellationToken).ConfigureAwait(false);
+            var plan = await _preflight.CheckAsync(request.Preview, request.Mode, cancellationToken, request.TpmMode).ConfigureAwait(false);
             if (!plan.CanAccept)
             {
                 throw new LifecycleValidationException(plan.Errors[0].Message, plan.Errors);
@@ -140,7 +145,8 @@ public sealed partial class TransferReceiver
                 throw new LifecycleConflictException($"The folder {plan.VmFolder} appeared while the transfer was being checked. Try again.");
             }
 
-            var guardian = request.Preview.TpmEnabled ? await _keys.ExportLocalGuardianAsync(cancellationToken).ConfigureAwait(false) : null;
+            // Only when this host still has to be given the key; the source exports without a grant otherwise.
+            var guardian = plan.GrantNeeded ? await _keys.ExportLocalGuardianAsync(cancellationToken).ConfigureAwait(false) : null;
 
             var staging = Path.Combine(plan.VmFolder, StagingFolderName);
             Directory.CreateDirectory(Path.Combine(plan.VmFolder, TransferPreflight.DiskFolderName));
@@ -308,7 +314,7 @@ public sealed partial class TransferReceiver
             }
 
             var definitions = record.Files.Where(file => file.Key.EndsWith(".vmcx", StringComparison.OrdinalIgnoreCase)).ToList();
-            if (definitions.Count != 1)
+            if (!record.Plan.Rebuild && definitions.Count != 1)
             {
                 throw new TransferException("Exactly one VM definition (.vmcx) file must be sent before the import.");
             }
@@ -319,23 +325,16 @@ public sealed partial class TransferReceiver
             // Cleanup must finish even when the request that asked for the import is gone.
             try
             {
-                var plannedId = await _hyperV.ImportPlannedAsync(definitions[0].Path, record.Mode == TransferMode.Copy, cancellationToken).ConfigureAwait(false);
-                record = record with { PlannedId = plannedId };
-                _store.Save(record);
-                if (record.Mode == TransferMode.Move && plannedId != record.Preview.VmId)
-                {
-                    throw new TransferException("The VM's definition does not belong to the VM being moved.");
-                }
-
-                var startup = await _hyperV.FixPlannedAsync(plannedId, record.Plan, cancellationToken).ConfigureAwait(false);
-                record = record with { OriginalStartupAction = startup };
-                _store.Save(record);
-                await _hyperV.ValidatePlannedAsync(plannedId, cancellationToken).ConfigureAwait(false);
-                await _hyperV.RealizePlannedAsync(plannedId, cancellationToken).ConfigureAwait(false);
+                record = record.Plan.Rebuild
+                    ? await RebuildAsync(record, cancellationToken).ConfigureAwait(false)
+                    : await ImportDefinitionAsync(record, definitions[0].Path, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Importing transfer {TransferId} ({Name}) failed; removing the imported VM.", transferId, record.Plan.Name);
+
+                // The import saves the VM's ID as soon as Hyper-V has one; the saved record is the one that knows it.
+                record = _store.Find(transferId) ?? record;
                 await RemoveImportedVmAsync(record).ConfigureAwait(false);
                 _store.Save(record with { State = IncomingTransferState.Receiving, PlannedId = null, OriginalStartupAction = null });
                 throw ex is TransferException or OperationCanceledException ? ex : new TransferException($"Hyper-V could not import the VM: {ex.Message}", ex);
@@ -352,6 +351,60 @@ public sealed partial class TransferReceiver
         {
             session.Lock.Release();
         }
+    }
+
+    /// <summary>The VM's own definition as a planned system, changed for this host, validated, and realized. Keeps its TPM.</summary>
+    private async Task<IncomingTransferRecord> ImportDefinitionAsync(IncomingTransferRecord record, string definition, CancellationToken cancellationToken)
+    {
+        var plannedId = await _hyperV.ImportPlannedAsync(definition, record.Mode == TransferMode.Copy, cancellationToken).ConfigureAwait(false);
+        record = record with { PlannedId = plannedId };
+        _store.Save(record);
+        if (record.Mode == TransferMode.Move && plannedId != record.Preview.VmId)
+        {
+            throw new TransferException("The VM's definition does not belong to the VM being moved.");
+        }
+
+        var startup = await _hyperV.FixPlannedAsync(plannedId, record.Plan, cancellationToken).ConfigureAwait(false);
+        record = record with { OriginalStartupAction = startup };
+        _store.Save(record);
+        await _hyperV.ValidatePlannedAsync(plannedId, cancellationToken).ConfigureAwait(false);
+        await _hyperV.RealizePlannedAsync(plannedId, cancellationToken).ConfigureAwait(false);
+        return record;
+    }
+
+    /// <summary>
+    /// A fresh TPM: a VM's TPM key also protects parts of its definition, so a definition whose key this host cannot open
+    /// cannot be given a new key (tried 2026-10-21). The VM is defined anew from the preview around its received disks, as
+    /// a restore does, with its adapters and MAC addresses as planned and a new TPM under this host's guardian.
+    /// </summary>
+    private async Task<IncomingTransferRecord> RebuildAsync(IncomingTransferRecord record, CancellationToken cancellationToken)
+    {
+        var importer = _importer ?? throw new TransferException("This host cannot define a VM anew.");
+        var preview = record.Preview;
+        var plan = record.Plan;
+        var compute = preview.Compute;
+        var vmId = await importer.CreateAsync(
+            new Backup.Restore.ImportPlan(
+                plan.Name,
+                plan.VmFolder,
+                null,
+                compute.ProcessorCount,
+                compute.StartupMemoryMb,
+                compute.MaximumMemoryMb,
+                compute.DynamicMemory,
+                preview.SecureBoot,
+                preview.SecureBootTemplateId,
+                plan.Disks.Select((disk, index) => new Backup.Restore.ImportDisk(disk.TargetPath, preview.Disks[index].ControllerNumber, preview.Disks[index].Lun)).ToList(),
+                plan.Adapters.Select(adapter => new Backup.Restore.ImportAdapter(adapter.SwitchId, adapter.StaticMacAddress)).ToList()),
+            cancellationToken).ConfigureAwait(false);
+        record = record with { PlannedId = vmId };
+        _store.Save(record);
+        if (preview.TpmEnabled)
+        {
+            await importer.EnableTpmAsync(vmId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return record;
     }
 
     /// <summary>Ends an imported transfer: the VM gets its automatic start action back and the ticket ends.</summary>

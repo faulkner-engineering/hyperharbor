@@ -64,6 +64,9 @@ function preview(overrides: Partial<TransferPreview> = {}): TransferPreview {
     checkpointCount: 0,
     blockers: [],
     warnings: [],
+    tpmKeyOwner: "AAAA",
+    tpmKeyGuardians: [],
+    tpmOwnedBySource: true,
     ...overrides,
   };
 }
@@ -92,6 +95,8 @@ function respond(previewValue: TransferPreview, offerResults: Array<() => Promis
         return (offerResults.shift() ?? (() => Promise.resolve(offer)))();
       case "start_transfer":
         return Promise.resolve(job);
+      case "merge_vm_checkpoints":
+        return Promise.resolve({ ...job, kind: "mergeCheckpoints", transferResult: undefined });
       case "carry_vm_settings":
       case "forget_transfer_offer":
         return Promise.resolve();
@@ -158,7 +163,7 @@ describe("TransferVmDialog", () => {
 
     expect(await screen.findByText(/Copied to LAPTOP as Web \(copy\)/)).toBeTruthy();
     expect(calls("offer_transfer")).toEqual([
-      { sourceKey: "mdns:desktop", targetKey: "mdns:laptop", preview: preview(), mode: "copy", acknowledgeWarnings: false },
+      { sourceKey: "mdns:desktop", targetKey: "mdns:laptop", preview: preview(), mode: "copy", acknowledgeWarnings: false, tpmMode: "keep" },
     ]);
     expect(calls("start_transfer")).toEqual([{ vmId: vm.id, transferId, confirmName: null }]);
     await waitFor(() =>
@@ -187,5 +192,52 @@ describe("TransferVmDialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Continue anyway" }));
     await screen.findByText(/Copied to LAPTOP/);
     expect(calls("offer_transfer").map((args) => (args as { acknowledgeWarnings: boolean }).acknowledgeWarnings)).toEqual([false, true]);
+  });
+
+  it("sends the TPM choice to both hosts", async () => {
+    respond(preview());
+    show();
+    await chooseCopy();
+    await fireEvent.click(screen.getByLabelText(/new, empty TPM/));
+
+    await fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+
+    await screen.findByText(/Copied to LAPTOP/);
+    expect(calls("offer_transfer").map((args) => (args as { tpmMode: string }).tpmMode)).toEqual(["fresh"]);
+  });
+
+  it("says when keeping the TPM works only on the way back to the host that owns its key", async () => {
+    respond(preview({ tpmOwnedBySource: false }));
+    show();
+
+    expect(await screen.findByText(/keeping it works only when Web goes back to that host/)).toBeTruthy();
+  });
+
+  it("merges checkpoints when they are all that is in the way, then checks the VM again", async () => {
+    const withCheckpoints = preview({
+      checkpointCount: 1,
+      blockers: [{ code: "checkpoints", message: "Web has 1 checkpoint(s). Delete them first; they are merged into its disks." }],
+    });
+    const previews = [withCheckpoints, preview()];
+    respond(withCheckpoints);
+    const base = invoke.getMockImplementation()!;
+    invoke.mockImplementation((command: string, args: unknown) =>
+      command === "get_transfer_preview" ? Promise.resolve(previews.shift() ?? preview()) : base(command, args),
+    );
+    show();
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Merge checkpoints" }));
+
+    await waitFor(() => expect(screen.queryByText(/checkpoint(s)/)).toBeNull());
+    expect(calls("merge_vm_checkpoints")).toEqual([{ key: "mdns:desktop", vmId: vm.id }]);
+    expect(screen.queryByRole("button", { name: "Merge checkpoints" })).toBeNull();
+  });
+
+  it("offers no merge when something other than checkpoints is in the way", async () => {
+    respond(preview({ blockers: [{ code: "notOff", message: "Web is running. Shut it down first." }] }));
+    show();
+
+    await screen.findByText(/Shut it down first/);
+    expect(screen.queryByRole("button", { name: "Merge checkpoints" })).toBeNull();
   });
 });

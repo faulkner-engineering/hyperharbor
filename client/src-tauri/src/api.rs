@@ -1665,6 +1665,23 @@ impl ApiClient {
     }
 
     /// POST /vms/{vmId}/disks/export. Without a folder the host uses the backup folder set in its tray.
+    /// POST /vms/{vmId}/checkpoints/merge (elevated). Returns the mergeCheckpoints job.
+    pub async fn merge_vm_checkpoints(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "checkpoints/merge")?,
+            &json!({}),
+        )
+        .await
+    }
+
     pub async fn export_vm_disks(
         &self,
         host: &HostEntry,

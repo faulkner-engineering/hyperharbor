@@ -28,6 +28,26 @@ public interface IKeyProtectorAccess
 
     /// <summary>Removes the guardian entry, if it exists. Certificates are never deleted: they may belong to this host's own guardian.</summary>
     Task RemoveGuardianAsync(string guardianName, CancellationToken cancellationToken);
+
+    /// <summary>Who can open a key protector: its owner (the only one who can grant others) and the guardians granted on it.</summary>
+    Task<KeyProtectorHolders> DescribeAsync(byte[] keyProtector, CancellationToken cancellationToken);
+
+    /// <summary>The ID (see <see cref="KeyProtectorHolders"/>) of this host's own guardian, or null when it has none yet.</summary>
+    Task<string?> LocalGuardianIdAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// The guardians of a key protector, each named by the SHA-256 (upper-case hexadecimal) of its encryption certificate.
+/// Only <see cref="Owner"/> can add guardians (granting re-signs the key protector with the owner's signing key); any of
+/// them can open it, on hosts whose Windows supports opening a granted key.
+/// </summary>
+public sealed record KeyProtectorHolders(string Owner, IReadOnlyList<string> Guardians)
+{
+    public bool Holds(string guardianId) =>
+        string.Equals(Owner, guardianId, StringComparison.OrdinalIgnoreCase) || Guardians.Contains(guardianId, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A guardian's ID: the SHA-256 of its encryption certificate.</summary>
+    public static string IdOf(byte[] encryptionCertificate) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(encryptionCertificate));
 }
 
 /// <summary>Grants a peer host's guardian on a VM's key protector for the length of one step, and always puts the original back.</summary>
@@ -237,6 +257,30 @@ public sealed class CimKeyProtectorAccess : IKeyProtectorAccess
                 File.Delete(file);
             }
         }, cancellationToken);
+
+    public Task<KeyProtectorHolders> DescribeAsync(byte[] keyProtector, CancellationToken cancellationToken) =>
+        HyperVCim.RunAsync(session =>
+        {
+            var convert = new CimMethodParametersCollection { CimMethodParameter.Create("Bytes", keyProtector, CimType.UInt8Array, CimFlags.In) };
+            using var converted = session.InvokeMethod(HgsGuardians.Namespace, "MSFT_HgsKeyProtector", "ConvertToByRawBytes", convert);
+            using var protector = HgsGuardians.Output(converted, "reading the VM's key protector");
+            var owner = protector.CimInstanceProperties["Owner"]?.Value as CimInstance
+                ?? throw new Power.HyperVOperationException("reading the key protector's owner", HgsGuardians.ReturnCode(converted));
+            var guardians = protector.CimInstanceProperties["Guardians"]?.Value as CimInstance[] ?? [];
+            return Task.FromResult(new KeyProtectorHolders(GuardianId(owner), guardians.Select(GuardianId).ToList()));
+        }, cancellationToken);
+
+    public Task<string?> LocalGuardianIdAsync(CancellationToken cancellationToken) =>
+        HyperVCim.RunAsync(session =>
+        {
+            using var guardian = HgsGuardians.Find(session, HgsGuardians.LocalGuardianName);
+            return Task.FromResult(guardian is null ? null : GuardianId(guardian));
+        }, cancellationToken);
+
+    private static string GuardianId(CimInstance guardian) =>
+        guardian.CimInstanceProperties["EncryptionCertificate"]?.Value is byte[] certificate
+            ? KeyProtectorHolders.IdOf(certificate)
+            : throw new Power.HyperVOperationException("reading a guardian's certificate", uint.MaxValue);
 
     public Task RemoveGuardianAsync(string guardianName, CancellationToken cancellationToken) =>
         HyperVCim.RunAsync(session =>

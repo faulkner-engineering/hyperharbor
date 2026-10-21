@@ -291,13 +291,13 @@ public class ContractFixtureTests
         ["TransferDisk"] = TransferPreviewSample.Disks[0],
         ["TransferCompute"] = TransferPreviewSample.Compute,
         ["TransferPreview"] = TransferPreviewSample,
-        ["IncomingTransferRequest"] = new IncomingTransferRequest(TransferPreviewSample with { Blockers = [] }, TransferMode.Move, new string('A', 64), AcknowledgeWarnings: true),
+        ["IncomingTransferRequest"] = new IncomingTransferRequest(TransferPreviewSample with { Blockers = [] }, TransferMode.Move, new string('A', 64), AcknowledgeWarnings: true, TransferTpmMode.Fresh),
 
         // Nulls on purpose: vmId and guardian are required but nullable (a copy of a VM without a TPM).
         ["TransferOffer"] = new TransferOffer(TransferId, "fixture-ticket", "Web (copy)", @"D:\VMs\Web (copy)", null,
             [new ValidationIssue("identity", "The copy gets a new VM ID and new MAC addresses.")], null),
         ["TransferTarget"] = TransferTargetSample,
-        ["StartTransferRequest"] = new StartTransferRequest(TransferMode.Move, TransferTargetSample, TransferId, "fixture-ticket", [60, 120, 109, 108, 62], "Web"),
+        ["StartTransferRequest"] = new StartTransferRequest(TransferMode.Move, TransferTargetSample, TransferId, "fixture-ticket", [60, 120, 109, 108, 62], "Web", TransferTpmMode.Keep),
         ["TransferResult"] = new TransferResult(VmId, "Web", true, []),
         ["IncomingTransferFile"] = new IncomingTransferFile("disk:0", 21474836480, 268435456),
         ["IncomingTransferStatus"] = new IncomingTransferStatus(TransferId, IncomingTransferState.Receiving,
@@ -338,7 +338,10 @@ public class ContractFixtureTests
         21474836480,
         1,
         [new TransferBlocker(TransferBlockerCode.Checkpoints, "Web has 1 checkpoint(s). Delete them first; they are merged into its disks.")],
-        ["The DVD drive's image stays on this host; the drive is empty on the other host."]);
+        ["The DVD drive's image stays on this host; the drive is empty on the other host."],
+        new string('C', 64),
+        [new string('D', 64)],
+        true);
 
     [Fact]
     public void Fixtures_AreCurrent()

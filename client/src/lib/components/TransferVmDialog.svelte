@@ -9,6 +9,7 @@
     hasProblemCode,
     hostKnownToSupport,
     isClientError,
+    mergeVmCheckpoints,
     offerTransfer,
     ProblemCodes,
     startTransfer,
@@ -17,6 +18,7 @@
     type TransferMode,
     type TransferOfferView,
     type TransferPreview,
+    type TransferTpmMode,
     type ValidationIssue,
     type Vm,
     type VmJob,
@@ -40,6 +42,9 @@
   let loadError = $state<string | null>(null);
   let targetKey = $state<string | null>(null);
   let mode = $state<TransferMode>("move");
+  let tpmMode = $state<TransferTpmMode>("keep");
+  let merging = $state(false);
+  let mergeJob = $state<VmJob | null>(null);
   let confirmName = $state("");
   let warnings = $state<ValidationIssue[] | null>(null);
   let offer = $state<TransferOfferView | null>(null);
@@ -59,6 +64,12 @@
   const finished = $derived(job !== null && job.state !== "running");
   const result = $derived(job?.transferResult ?? null);
   const blocked = $derived((preview?.blockers.length ?? 0) > 0);
+  /** Checkpoints are the only thing in the way, and merging them clears that. */
+  const onlyCheckpoints = $derived(
+    preview !== null && blocked && preview.blockers.every((blocker) => blocker.code === "checkpoints"),
+  );
+  /** The key belongs to another host, so keeping the TPM works only when the VM goes back to that host. */
+  const keyFromElsewhere = $derived(preview !== null && preview.tpmKeyOwner !== null && !preview.tpmOwnedBySource);
   const canSubmit = $derived(
     preview !== null &&
       !blocked &&
@@ -70,11 +81,35 @@
 
   onMount(() => {
     targetKey = targets.find((choice) => choice.ready)?.host.key ?? null;
-    getTransferPreview(host.key, vm.id).then(
-      (value) => (preview = value),
-      (e) => (loadError = errorMessage(e)),
-    );
+    void loadPreview();
   });
+
+  async function loadPreview() {
+    try {
+      preview = await getTransferPreview(host.key, vm.id);
+      loadError = null;
+    } catch (e) {
+      loadError = errorMessage(e);
+    }
+  }
+
+  /** Deletes the checkpoints (merging them into the disks), then checks the VM again. */
+  async function merge() {
+    merging = true;
+    error = null;
+    try {
+      const started = await withElevation(host.key, () => mergeVmCheckpoints(host.key, vm.id));
+      const ended = await waitForJob(host.key, started, (update) => (mergeJob = update));
+      if (ended.state === "succeeded") {
+        mergeJob = null;
+        await loadPreview();
+      }
+    } catch (e) {
+      if (!(e instanceof ElevationCancelled)) error = errorMessage(e);
+    } finally {
+      merging = false;
+    }
+  }
 
   /** A different host or mode needs a new offer; the one in hand is dropped (the other host ends it on its own). */
   function changed() {
@@ -99,7 +134,7 @@
       if (offer === null) {
         try {
           offer = await withElevation(destination.key, () =>
-            offerTransfer(host.key, destination.key, checked, mode, warnings !== null),
+            offerTransfer(host.key, destination.key, checked, mode, warnings !== null, tpmMode),
           );
         } catch (e) {
           if (hasProblemCode(e, ProblemCodes.resourceWarnings) && isClientError(e)) {
@@ -162,6 +197,12 @@
       {#each preview.blockers as blocker (blocker.message)}
         <p class="warning" role="alert">{blocker.message}</p>
       {/each}
+      {#if onlyCheckpoints}
+        <button type="button" onclick={merge} disabled={merging}>
+          {merging ? "Merging checkpoints…" : "Merge checkpoints"}
+        </button>
+        {#if mergeJob}<JobProgress job={mergeJob} />{/if}
+      {/if}
 
       {#if targets.length === 0}
         <p class="warning">Pair this device with the other host first.</p>
@@ -180,13 +221,33 @@
         <legend>What happens to {vm.name} here</legend>
         <label class="check">
           <input type="radio" name="transfer-mode" value="move" bind:group={mode} onchange={changed} />
-          Move: it keeps its identity and network addresses, and is deleted here once the other host has it
+          Move: it keeps its {tpmMode === "fresh" && preview.tpmEnabled ? "" : "identity and "}network addresses, and is deleted here
+          once the other host has it
         </label>
         <label class="check">
           <input type="radio" name="transfer-mode" value="copy" bind:group={mode} onchange={changed} />
           Copy: it stays here; the copy gets a new identity and new network addresses
         </label>
       </fieldset>
+
+      {#if preview.tpmEnabled}
+        <fieldset disabled={busy || job !== null}>
+          <legend>Its TPM</legend>
+          <label class="check">
+            <input type="radio" name="transfer-tpm" value="keep" bind:group={tpmMode} onchange={changed} />
+            Keep it, with what it holds (BitLocker keys, Windows Hello)
+          </label>
+          <label class="check">
+            <input type="radio" name="transfer-tpm" value="fresh" bind:group={tpmMode} onchange={changed} />
+            Give it a new, empty TPM: it also gets a new identity, and BitLocker asks for its recovery key once
+          </label>
+        </fieldset>
+        {#if keyFromElsewhere && tpmMode === "keep"}
+          <p class="muted">
+            Its TPM key belongs to another host, so keeping it works only when {vm.name} goes back to that host.
+          </p>
+        {/if}
+      {/if}
 
       {#each preview.warnings as warning (warning)}
         <p class="muted">{warning}</p>

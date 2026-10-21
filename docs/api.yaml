@@ -1990,6 +1990,46 @@ paths:
         "503":
           $ref: "#/components/responses/HyperVUnavailable"
 
+  /vms/{vmId}/checkpoints/merge:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [VMs]
+      operationId: mergeVmCheckpoints
+      summary: Delete every checkpoint of a VM, merging them into its disks.
+      description: |
+        Starts a `mergeCheckpoints` job. The VM keeps its current state; only the checkpoints to go back to are
+        removed. A transfer needs this first (blocker `checkpoints`).
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "202":
+          description: The merge job started.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The VM has no checkpoints, or another operation is in progress on the VM.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
   /jobs/{jobId}:
     parameters:
       - $ref: "#/components/parameters/JobId"
@@ -3610,6 +3650,15 @@ components:
         `move` keeps the VM's ID and MAC addresses and deletes it from the sending host once the receiving host has it.
         `copy` leaves the VM on the sending host and gives the new one a new ID and new MAC addresses.
 
+    TransferTpmMode:
+      type: string
+      enum: [keep, fresh]
+      description: |
+        `keep` takes the VM's virtual TPM and what it holds (BitLocker keys) along: the receiving host must own the key,
+        already hold it, or be granted it by the sending host, which can grant only a key it owns.
+        `fresh` defines the VM anew on the receiving host around its disks with a new, empty TPM, so it gets a new VM ID
+        even on a move (a move still keeps its MAC addresses). BitLocker then asks for its recovery key.
+
     TransferBlockerCode:
       type: string
       enum: [notOff, savedState, checkpoints, differencingDisk, sharedDisk, diskMissing, installInProgress]
@@ -3677,7 +3726,8 @@ components:
     TransferPreview:
       type: object
       required: [vmId, name, state, generation, configurationVersion, compute, secureBoot, secureBootTemplateId, tpmEnabled,
-        hasGpuPartition, adapters, disks, totalBytes, checkpointCount, blockers, warnings]
+        hasGpuPartition, adapters, disks, totalBytes, checkpointCount, blockers, warnings, tpmKeyOwner, tpmKeyGuardians,
+        tpmOwnedBySource]
       properties:
         vmId:
           type: string
@@ -3699,7 +3749,7 @@ components:
           type: [string, "null"]
         tpmEnabled:
           type: boolean
-          description: The receiving host's guardian is granted on the VM's key protector, so the TPM's contents (BitLocker keys) survive.
+          description: See TransferTpmMode for what can happen to the TPM.
         hasGpuPartition:
           type: boolean
           description: The GPU partition is removed; turn Performance mode on again on the receiving host.
@@ -3727,6 +3777,17 @@ components:
           description: What changes for the VM on the way.
           items:
             type: string
+        tpmKeyOwner:
+          type: [string, "null"]
+          description: The guardian that owns the VM's TPM key (SHA-256 of its encryption certificate, hexadecimal); null without a TPM or when it could not be read.
+        tpmKeyGuardians:
+          type: array
+          description: Guardians the TPM key is granted to besides its owner, in the same form.
+          items:
+            type: string
+        tpmOwnedBySource:
+          type: boolean
+          description: Whether the sending host owns the TPM key. Only the owner can grant it to another host.
 
     IncomingTransferRequest:
       type: object
@@ -3742,6 +3803,9 @@ components:
         acknowledgeWarnings:
           type: boolean
           default: false
+        tpmMode:
+          $ref: "#/components/schemas/TransferTpmMode"
+          default: keep
 
     TransferOffer:
       type: object
@@ -3769,7 +3833,7 @@ components:
         guardian:
           type: [string, "null"]
           format: byte
-          description: The receiving host's key protector guardian (public certificates only), when the VM has a TPM.
+          description: The receiving host's key protector guardian (public certificates only), when it needs the VM's TPM key granted to it.
 
     TransferTarget:
       type: object
@@ -3812,10 +3876,13 @@ components:
         guardian:
           type: [string, "null"]
           format: byte
-          description: From the receiving host's offer; required when the VM has a TPM.
+          description: From the receiving host's offer, when it sent one.
         confirmName:
           type: [string, "null"]
           description: For a move, the VM's name exactly.
+        tpmMode:
+          $ref: "#/components/schemas/TransferTpmMode"
+          default: keep
 
     TransferResult:
       type: object
@@ -4631,7 +4698,7 @@ components:
 
     VmJobKind:
       type: string
-      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState, transferVm]
+      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState, transferVm, mergeCheckpoints]
 
     VmJobState:
       type: string

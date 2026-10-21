@@ -223,6 +223,7 @@ public sealed class VmJobStore : IDisposable
         VmJobKind.ReplaceDisk => "replacing the virtual machine's disk",
         VmJobKind.RestoreHostState => "restoring the host state",
         VmJobKind.TransferVm => "transferring the virtual machine",
+        VmJobKind.MergeCheckpoints => "merging checkpoints",
         _ => kind.ToString(),
     };
 

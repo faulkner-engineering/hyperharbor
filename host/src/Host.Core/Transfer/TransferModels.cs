@@ -23,6 +23,8 @@ public sealed record TransferDisk(string Path, long SizeBytes, string Controller
 /// <param name="ConfigurationVersion">Hyper-V's configuration version, such as "12.0"; null when it could not be read.</param>
 /// <param name="CheckpointCount">Checkpoints that would have to be merged first.</param>
 /// <param name="Warnings">Things that change for the VM on the way, in sentences for the dialog.</param>
+/// <param name="TpmKeyHolders">Who can open the VM's TPM key; null without a TPM or when it could not be read.</param>
+/// <param name="TpmOwnedBySource">The source host's guardian owns the TPM key, so the source can grant it to another host.</param>
 public sealed record TransferPreview(
     Guid VmId,
     string Name,
@@ -38,7 +40,9 @@ public sealed record TransferPreview(
     IReadOnlyList<TransferDisk> Disks,
     int CheckpointCount,
     IReadOnlyList<TransferBlocker> Blockers,
-    IReadOnlyList<string> Warnings)
+    IReadOnlyList<string> Warnings,
+    KeyProtectorHolders? TpmKeyHolders = null,
+    bool TpmOwnedBySource = false)
 {
     public long TotalBytes => Disks.Sum(disk => disk.SizeBytes);
 }
@@ -62,6 +66,8 @@ public sealed record TransferDiskPlan(string SourcePath, string TargetPath, long
 /// </summary>
 /// <param name="VmId">The ID the VM keeps (a move), or null when Hyper-V assigns a new one (a copy).</param>
 /// <param name="VmFolder">The VM's own folder: configuration files here, disks in its "Virtual Hard Disks" subfolder. A rollback deletes only this folder.</param>
+/// <param name="TpmMode">Keep only for a VM with a TPM that this host can be given (or already holds); Fresh rebuilds the VM.</param>
+/// <param name="GrantNeeded">The source must grant this host's guardian on the TPM key (this host does not hold it yet).</param>
 public sealed record TransferPlan(
     TransferMode Mode,
     Guid? VmId,
@@ -70,7 +76,12 @@ public sealed record TransferPlan(
     IReadOnlyList<TransferDiskPlan> Disks,
     IReadOnlyList<TransferAdapterPlan> Adapters,
     IReadOnlyList<ValidationIssue> Errors,
-    IReadOnlyList<ValidationIssue> Warnings)
+    IReadOnlyList<ValidationIssue> Warnings,
+    TransferTpmMode TpmMode = TransferTpmMode.Keep,
+    bool GrantNeeded = false)
 {
     public bool CanAccept => Errors.Count == 0;
+
+    /// <summary>The target defines the VM anew around its disks with a new TPM, instead of importing its definition.</summary>
+    public bool Rebuild => TpmMode == TransferTpmMode.Fresh;
 }

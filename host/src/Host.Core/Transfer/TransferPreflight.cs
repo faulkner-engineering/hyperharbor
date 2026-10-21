@@ -22,7 +22,9 @@ public sealed record TransferTargetFacts(
     HostCapacity Capacity,
     long HostMemoryReserveMb,
     HostVersionCapabilities Versions,
-    IReadOnlyList<VirtualSwitch> Switches);
+    IReadOnlyList<VirtualSwitch> Switches,
+    string? LocalGuardianId = null,
+    TpmCapability? Tpm = null);
 
 /// <summary>
 /// Decides whether this host can receive a VM, and where and how it goes. Pure: the caller gathers the facts.
@@ -40,12 +42,24 @@ public static partial class TransferPreflight
 
     public const string MoveSuffix = "moved";
 
-    public static TransferPlan Evaluate(TransferPreview preview, TransferMode mode, TransferTargetFacts facts)
+    /// <summary>
+    /// Whether deciding about the VM's TPM needs <see cref="ITpmCapabilityProbe"/>: always for a fresh TPM, and for keeping
+    /// one unless this host owns its key (a VM going back to the host that created it).
+    /// </summary>
+    public static bool NeedsTpmProbe(TransferPreview preview, TransferTpmMode tpmMode, string? localGuardianId) =>
+        preview.TpmEnabled
+        && (tpmMode == TransferTpmMode.Fresh
+            || localGuardianId is null
+            || preview.TpmKeyHolders is not { } holders
+            || !string.Equals(holders.Owner, localGuardianId, StringComparison.OrdinalIgnoreCase));
+
+    public static TransferPlan Evaluate(TransferPreview preview, TransferMode mode, TransferTargetFacts facts, TransferTpmMode tpmMode = TransferTpmMode.Keep)
     {
         ArgumentNullException.ThrowIfNull(preview);
         ArgumentNullException.ThrowIfNull(facts);
         var errors = new List<ValidationIssue>();
         var warnings = new List<ValidationIssue>();
+        var (effectiveTpm, grantNeeded) = DecideTpm(preview, tpmMode, facts, errors, warnings);
 
         if (preview.Blockers.Count > 0)
         {
@@ -106,7 +120,63 @@ public static partial class TransferPreflight
 
         warnings.AddRange(preview.Warnings.Select(warning => new ValidationIssue("vm", warning)));
 
-        return new TransferPlan(mode, mode == TransferMode.Move ? preview.VmId : null, name, vmFolder, disks, adapters, errors, warnings);
+        // A rebuilt VM is a new VM, so even a move gets a new ID; its MAC addresses are kept all the same.
+        var keepsId = mode == TransferMode.Move && effectiveTpm == TransferTpmMode.Keep;
+        return new TransferPlan(mode, keepsId ? preview.VmId : null, name, vmFolder, disks, adapters, errors, warnings, effectiveTpm, grantNeeded);
+    }
+
+    /// <summary>
+    /// Keep: this host owns the key (going home), already holds it, or is granted it by the source, which must own it; the
+    /// last two need this host to open granted keys. Fresh: this host must be able to turn on a TPM. A VM without a TPM
+    /// keeps nothing and needs nothing.
+    /// </summary>
+    private static (TransferTpmMode Mode, bool GrantNeeded) DecideTpm(
+        TransferPreview preview, TransferTpmMode tpmMode, TransferTargetFacts facts, List<ValidationIssue> errors, List<ValidationIssue> warnings)
+    {
+        if (!preview.TpmEnabled)
+        {
+            return (TransferTpmMode.Keep, false);
+        }
+
+        var detail = facts.Tpm?.Detail is { Length: > 0 } said ? $" Windows says: {said}" : string.Empty;
+        if (tpmMode == TransferTpmMode.Fresh)
+        {
+            if (facts.Tpm?.CanEnableTpm != true)
+            {
+                errors.Add(new("tpm", $"This host cannot give the VM a new TPM: Hyper-V here refuses to turn one on.{detail}"));
+            }
+
+            warnings.Add(new("tpm",
+                $"{preview.Name} gets a new, empty TPM here and a new VM ID. BitLocker asks for its recovery key at the first start, and anything else kept in the TPM (Windows Hello PINs, for example) must be set up again."));
+            return (TransferTpmMode.Fresh, false);
+        }
+
+        var local = facts.LocalGuardianId;
+        var holders = preview.TpmKeyHolders;
+        if (local is not null && holders is not null && string.Equals(holders.Owner, local, StringComparison.OrdinalIgnoreCase))
+        {
+            return (TransferTpmMode.Keep, false);
+        }
+
+        if (facts.Tpm?.CanOpenGrantedKeys != true)
+        {
+            errors.Add(new("tpm", $"This host cannot open a TPM key that another host gives it. Give {preview.Name} a fresh TPM instead.{detail}"));
+            return (TransferTpmMode.Keep, false);
+        }
+
+        if (local is not null && holders is not null && holders.Holds(local))
+        {
+            return (TransferTpmMode.Keep, false);
+        }
+
+        if (holders is not null && !preview.TpmOwnedBySource)
+        {
+            errors.Add(new("tpm",
+                $"Only the host that created {preview.Name} can give its TPM key to another host. Send it from that host, or give it a fresh TPM."));
+            return (TransferTpmMode.Keep, false);
+        }
+
+        return (TransferTpmMode.Keep, true);
     }
 
     /// <summary>Twelve upper-case hexadecimal digits, or null for anything that is not a usable unicast address.</summary>

@@ -41,6 +41,9 @@ public sealed record TransferBlocker([property: JsonRequired] TransferBlockerCod
 /// <param name="TotalBytes">The disks' total size: what crosses the network.</param>
 /// <param name="Blockers">Must be empty for the transfer to start.</param>
 /// <param name="Warnings">What changes for the VM on the way, in sentences for the dialog.</param>
+/// <param name="TpmKeyOwner">The guardian ID (SHA-256 of its encryption certificate) that owns the VM's TPM key; null without a TPM or when unread.</param>
+/// <param name="TpmKeyGuardians">Guardian IDs the key is granted to besides its owner.</param>
+/// <param name="TpmOwnedBySource">Whether the sending host owns the key, which it must to grant it to another host.</param>
 public sealed record TransferPreview(
     [property: JsonRequired] Guid VmId,
     [property: JsonRequired] string Name,
@@ -57,17 +60,22 @@ public sealed record TransferPreview(
     [property: JsonRequired] long TotalBytes,
     [property: JsonRequired] int CheckpointCount,
     [property: JsonRequired] IReadOnlyList<TransferBlocker> Blockers,
-    [property: JsonRequired] IReadOnlyList<string> Warnings);
+    [property: JsonRequired] IReadOnlyList<string> Warnings,
+    [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? TpmKeyOwner,
+    [property: JsonRequired] IReadOnlyList<string> TpmKeyGuardians,
+    [property: JsonRequired] bool TpmOwnedBySource);
 
 /// <summary>Asks the receiving host to take a VM. Schema: IncomingTransferRequest.</summary>
 /// <param name="Preview">The source host's preview, as it answered.</param>
 /// <param name="SourceFingerprint">The SHA-256 fingerprint of the source host's certificate, as the client pinned it.</param>
 /// <param name="AcknowledgeWarnings">Set after the user has seen the warnings of a first attempt.</param>
+/// <param name="TpmMode">For a VM with a TPM: keep it, or give it a fresh one (and a new VM ID).</param>
 public sealed record IncomingTransferRequest(
     [property: JsonRequired] TransferPreview Preview,
     [property: JsonRequired] TransferMode Mode,
     [property: JsonRequired] string SourceFingerprint,
-    bool AcknowledgeWarnings = false);
+    bool AcknowledgeWarnings = false,
+    TransferTpmMode TpmMode = TransferTpmMode.Keep);
 
 /// <summary>The receiving host's acceptance. ToString never includes the ticket. Schema: TransferOffer.</summary>
 /// <param name="Ticket">One-time ticket for the source host's data requests. Pass it to the source host and nowhere else.</param>
@@ -99,17 +107,19 @@ public sealed record TransferTarget(
 /// <summary>Starts sending a VM to the receiving host that accepted it. ToString never includes the ticket. Schema: StartTransferRequest.</summary>
 /// <param name="TransferId">From the receiving host's offer.</param>
 /// <param name="Ticket">From the receiving host's offer.</param>
-/// <param name="Guardian">From the receiving host's offer; required when the VM has a TPM.</param>
+/// <param name="Guardian">From the receiving host's offer, when it needs the VM's TPM key granted to it.</param>
 /// <param name="ConfirmName">For a move, which deletes the VM here once the receiving host has it: the VM's name exactly.</param>
+/// <param name="TpmMode">The same as in the offer request: with a fresh TPM no definition is sent.</param>
 public sealed record StartTransferRequest(
     [property: JsonRequired] TransferMode Mode,
     [property: JsonRequired] TransferTarget Target,
     [property: JsonRequired] Guid TransferId,
     [property: JsonRequired] string Ticket,
     byte[]? Guardian = null,
-    string? ConfirmName = null)
+    string? ConfirmName = null,
+    TransferTpmMode TpmMode = TransferTpmMode.Keep)
 {
-    public override string ToString() => $"StartTransferRequest {{ Mode = {Mode}, TransferId = {TransferId}, Target = {Target.Name} }}";
+    public override string ToString() => $"StartTransferRequest {{ Mode = {Mode}, TransferId = {TransferId}, Target = {Target.Name}, TpmMode = {TpmMode} }}";
 }
 
 /// <summary>What a transferVm job did. Schema: TransferResult.</summary>

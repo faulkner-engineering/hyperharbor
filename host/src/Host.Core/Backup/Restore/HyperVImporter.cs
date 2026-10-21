@@ -7,7 +7,8 @@ namespace HyperHarbor.Host.Core.Backup.Restore;
 public sealed record ImportDisk(string Path, int Controller, int Lun);
 
 /// <param name="SwitchId">Null: the adapter is created without a connection.</param>
-public sealed record ImportAdapter(string? SwitchId);
+/// <param name="StaticMacAddress">Twelve hexadecimal digits for a static address (a moved VM keeps its own); null for a dynamic one.</param>
+public sealed record ImportAdapter(string? SwitchId, string? StaticMacAddress = null);
 
 /// <summary>Hardware of a VM to define from a backup manifest. Names and paths are already resolved.</summary>
 public sealed record ImportPlan(
@@ -87,9 +88,20 @@ public sealed class CimHyperVImporter(IHyperVBuilder builder) : IHyperVImporter
             foreach (var adapter in plan.Adapters)
             {
                 using var adapterTemplate = CimVmSettings.Default(session, "Msvm_SyntheticEthernetPortSettingData");
-                var port = await CimVmSettings.AddResourceAsync(session, settings, adapterTemplate, cancellationToken,
-                    new("ElementName", CimType.String, "Network Adapter"),
-                    new("VirtualSystemIdentifiers", CimType.StringArray, new[] { Guid.NewGuid().ToString("B") })).ConfigureAwait(false);
+                CimXml.Property[] portSettings = adapter.StaticMacAddress is { } address
+                    ?
+                    [
+                        new("ElementName", CimType.String, "Network Adapter"),
+                        new("VirtualSystemIdentifiers", CimType.StringArray, new[] { Guid.NewGuid().ToString("B") }),
+                        new("StaticMacAddress", CimType.Boolean, true),
+                        new("Address", CimType.String, address),
+                    ]
+                    :
+                    [
+                        new("ElementName", CimType.String, "Network Adapter"),
+                        new("VirtualSystemIdentifiers", CimType.StringArray, new[] { Guid.NewGuid().ToString("B") }),
+                    ];
+                var port = await CimVmSettings.AddResourceAsync(session, settings, adapterTemplate, cancellationToken, portSettings).ConfigureAwait(false);
                 if (adapter.SwitchId is { } switchId)
                 {
                     using var connectionTemplate = CimVmSettings.Default(session, "Msvm_EthernetPortAllocationSettingData");

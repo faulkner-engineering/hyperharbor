@@ -286,8 +286,26 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    HostEntry addresses and port, pinned fingerprint) and sends the kept ticket; forget_transfer_offer drops an abandoned offer
    (the target ends it after 30 idle minutes, since only the source can cancel it there). carry_vm_settings uses
    MonitorChoiceStore::carry and CameraService::carry_prefs: a move moves the settings to "<target host id>/<vm id>", a
-   copy duplicates them under the copy's ID. Checkpoints are not merged from the dialog (no route merges them alone); the
-   blocker tells the user to delete them first. svelte-autofixer (command-line form) found no issues in the dialog or VmList.
+   copy duplicates them under the copy's ID. svelte-autofixer (command-line form) found no issues in the dialog or VmList.
+   Done: 24.10 two-PC test, move laptop to TC-PC (2026-10-21): same ID, MAC, and VHDX hash, about 17 s. It found:
+   - Only a key protector's OWNER can grant (Grant re-signs with the owner's signing key; elsewhere "Unable to find the
+     signing ... certificate"). So a moved VM can go back to its owner but not on to a third host with its TPM.
+   - TC-PC (26200, after KB5127648) cannot open a GRANTED key ("Not implemented 0x80004001" from the worker) nor Enable-VMTPM
+     ("client configuration settings could not be retrieved"); it still opens keys it owns. The laptop (26300) does both.
+     Diagnosis (read-only): HGS settings, certificates, and binaries match the laptop; Hyper-V fails before calling the HGS
+     client, likely a feature-flag path in 26200. Never remove UntrustedGuardian or the Shielded VM Local Certificates there.
+   - A locked TPM cannot be reset in place (a new key protector gives "authentication tag did not match"; the config is
+     encrypted too), so a fresh TPM means defining the VM anew (new ID).
+   - Windows 11 guests leave an automatic checkpoint after a failed start, which blocks a transfer.
+   Done: 24.11 TPM modes and merge (2026-10-21; unit and API tested, not yet run live): KeyProtectorHolders (owner and
+   guardian IDs = SHA-256 hex of the encryption certificate, from ConvertToByRawBytes) in the preview; TransferPreflight
+   .DecideTpm: keep = owner here (no grant, no probe), or already a holder, or the source owns it (grant); each but the
+   first needs TpmCapability.CanOpenGrantedKeys; fresh needs CanEnableTpm. PowerShellTpmCapabilityProbe (TpmCapability.cs)
+   creates a throwaway 32 MB VM with a temporary owner guardian, Enable-VMTPM, Start-VM, and removes everything; cached per
+   process. TransferTpmMode.Fresh: the sender exports nothing (disks only) and the receiver's RebuildAsync defines the VM
+   with IHyperVImporter (ImportAdapter.StaticMacAddress for a move) and EnableTpmAsync. A null guardian from the target now
+   means "export without a grant". POST /vms/{vmId}/checkpoints/merge (CheckpointMergeService, job mergeCheckpoints); the
+   dialog shows Merge checkpoints when checkpoints are the only blocker, and an "Its TPM" choice for TPM VMs.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

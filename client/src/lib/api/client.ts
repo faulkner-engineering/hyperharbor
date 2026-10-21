@@ -430,6 +430,7 @@ export const TransferApiVersion = "1.24.0";
 
 export type TransferPreview = components["schemas"]["TransferPreview"];
 export type TransferMode = components["schemas"]["TransferMode"];
+export type TransferTpmMode = components["schemas"]["TransferTpmMode"];
 export type TransferResult = components["schemas"]["TransferResult"];
 
 /** The receiving host's offer as the frontend sees it: its ticket and guardian stay in the Rust side. */
@@ -452,11 +453,15 @@ export const offerTransfer = (
   preview: TransferPreview,
   mode: TransferMode,
   acknowledgeWarnings: boolean,
-) => invoke<TransferOfferView>("offer_transfer", { sourceKey, targetKey, preview, mode, acknowledgeWarnings });
+  tpmMode: TransferTpmMode = "keep",
+) => invoke<TransferOfferView>("offer_transfer", { sourceKey, targetKey, preview, mode, acknowledgeWarnings, tpmMode });
 
 /** Tells the sending host to push the VM to the host that made the offer; needs elevation there. Returns the job. */
 export const startTransfer = (vmId: string, transferId: string, confirmName: string | null) =>
   invoke<VmJob>("start_transfer", { vmId, transferId, confirmName });
+
+/** Deletes every checkpoint of a VM, merging them into its disks; needs elevation. Returns the mergeCheckpoints job. */
+export const mergeVmCheckpoints = (key: string, vmId: string) => invoke<VmJob>("merge_vm_checkpoints", { key, vmId });
 
 export const cancelTransfer = (key: string, vmId: string) => invoke<void>("cancel_transfer", { key, vmId });
 

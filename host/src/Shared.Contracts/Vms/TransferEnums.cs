@@ -10,6 +10,19 @@ public enum TransferMode
     Copy,
 }
 
+/// <summary>What happens to a VM's virtual TPM on a transfer. Schema: TransferTpmMode.</summary>
+public enum TransferTpmMode
+{
+    /// <summary>The TPM and what it holds (BitLocker keys, for example) go with the VM: the receiving host is given access to its key.</summary>
+    Keep,
+
+    /// <summary>
+    /// The VM gets a new, empty TPM on the receiving host, which defines it anew around its disks (so it gets a new VM ID).
+    /// BitLocker asks for its recovery key at the first start.
+    /// </summary>
+    Fresh,
+}
+
 /// <summary>Why a VM cannot be transferred as it is. Schema: TransferBlockerCode.</summary>
 public enum TransferBlockerCode
 {

@@ -175,6 +175,18 @@ internal sealed class FakeKeyProtectorAccess : IKeyProtectorAccess
         return Task.FromResult(keyProtector.Concat(System.Text.Encoding.UTF8.GetBytes(guardianName)).ToArray());
     }
 
+    /// <summary>What <see cref="DescribeAsync"/> answers for the current key protector.</summary>
+    public KeyProtectorHolders Holders { get; set; } = new(LocalId, []);
+
+    public const string LocalId = "AAAA";
+
+    /// <summary>This host's guardian ID; null: none yet.</summary>
+    public string? LocalGuardianId { get; set; } = LocalId;
+
+    public Task<KeyProtectorHolders> DescribeAsync(byte[] keyProtector, CancellationToken cancellationToken) => Task.FromResult(Holders);
+
+    public Task<string?> LocalGuardianIdAsync(CancellationToken cancellationToken) => Task.FromResult(LocalGuardianId);
+
     public Task RemoveGuardianAsync(string guardianName, CancellationToken cancellationToken)
     {
         Log.Add("remove");
@@ -189,5 +201,18 @@ internal sealed class FakeKeyProtectorAccess : IKeyProtectorAccess
         {
             throw new IOException($"{call} failed");
         }
+    }
+}
+
+internal sealed class FakeTpmCapabilityProbe(TpmCapability? capability = null) : ITpmCapabilityProbe
+{
+    public static readonly TpmCapability Capable = new(true, true, null);
+
+    public int Probes { get; private set; }
+
+    public Task<TpmCapability> ProbeAsync(CancellationToken cancellationToken)
+    {
+        Probes++;
+        return Task.FromResult(capability ?? Capable);
     }
 }

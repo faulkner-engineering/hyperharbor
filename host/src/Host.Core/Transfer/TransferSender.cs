@@ -15,10 +15,16 @@ public sealed record PeerEndpoint(Guid HostId, string Name, IReadOnlyList<string
 /// <summary>What the source host needs to push a VM to the receiving host. ToString never includes the ticket.</summary>
 /// <param name="TransferId">The receiving host's ID for the transfer, from its offer.</param>
 /// <param name="Ticket">The receiving host's one-time ticket for the transfer.</param>
-/// <param name="TargetGuardian">The receiving host's guardian (public certificates), required when the VM has a TPM.</param>
-public sealed record TransferSendRequest(Guid VmId, TransferMode Mode, Guid TransferId, string Ticket, PeerEndpoint Target, byte[]? TargetGuardian)
+/// <param name="TargetGuardian">
+/// The receiving host's guardian (public certificates) when it needs the VM's TPM key granted to it; null when it owns or
+/// already holds the key, or when the VM gets a fresh TPM.
+/// </param>
+/// <param name="TpmMode">Fresh: no definition is sent, and the receiving host defines the VM anew with a new TPM.</param>
+public sealed record TransferSendRequest(
+    Guid VmId, TransferMode Mode, Guid TransferId, string Ticket, PeerEndpoint Target, byte[]? TargetGuardian, TransferTpmMode TpmMode = TransferTpmMode.Keep)
 {
-    public override string ToString() => $"TransferSendRequest {{ VmId = {VmId}, Mode = {Mode}, TransferId = {TransferId}, Target = {Target.Name} }}";
+    public override string ToString() =>
+        $"TransferSendRequest {{ VmId = {VmId}, Mode = {Mode}, TransferId = {TransferId}, Target = {Target.Name}, TpmMode = {TpmMode} }}";
 }
 
 /// <param name="SourceRemoved">For a move: whether this host's copy was deleted. Always false for a copy.</param>
@@ -124,10 +130,14 @@ public sealed partial class TransferSender
                 }
             }
 
-            report("Exporting the virtual machine's definition", 6);
-            var exported = await ExportAsync(request, preview, staging, record, cancellationToken).ConfigureAwait(false);
+            IEnumerable<(string Key, string Path, long Size)> definitionFiles = [];
+            if (request.TpmMode == TransferTpmMode.Keep || !preview.TpmEnabled)
+            {
+                report("Exporting the virtual machine's definition", 6);
+                definitionFiles = DefinitionFiles(await ExportAsync(request, preview, staging, record, cancellationToken).ConfigureAwait(false));
+            }
 
-            var files = DefinitionFiles(exported)
+            var files = definitionFiles
                 .Concat(preview.Disks.Select((disk, index) => (Key: TransferReceiver.DiskKey(index), Path: disk.Path, Size: disk.SizeBytes)))
                 .ToList();
             await SendFilesAsync(channel, files, disks, report, cancellationToken).ConfigureAwait(false);
@@ -234,9 +244,10 @@ public sealed partial class TransferSender
             return await _hyperV.ExportAsync(request.VmId, staging, cancellationToken).ConfigureAwait(false);
         }
 
+        // No guardian: the receiving host owns the key or already holds it, so the definition goes as it is.
         if (request.TargetGuardian is not { Length: > 0 } guardian)
         {
-            throw new TransferException($"{preview.Name} has a TPM, but {request.Target.Name} sent no guardian to grant it to.");
+            return await _hyperV.ExportAsync(request.VmId, staging, cancellationToken).ConfigureAwait(false);
         }
 
         var peer = KeyProtectorHandover.PeerGuardianName(request.Target.HostId);

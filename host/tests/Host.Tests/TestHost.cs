@@ -115,6 +115,8 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<Core.Transfer.IHyperVVersions>(TransferVersions);
                 services.AddSingleton<Core.Transfer.IHyperVTransfer>(TransferHyperV);
                 services.AddSingleton<Core.Transfer.IKeyProtectorAccess>(KeyProtectors);
+                services.AddSingleton<Core.Transfer.ITpmCapabilityProbe>(TpmProbe);
+                services.AddSingleton<Core.Backup.Restore.IHyperVImporter>(Importer);
                 services.AddSingleton<Core.Transfer.IPeerTransferChannelFactory>(PeerChannels);
                 services.AddSingleton<IStartupFilter, ClientCertificateFromHeader>();
                 configureServices?.Invoke(services);
@@ -190,6 +192,10 @@ internal sealed class TestHost : IDisposable
     public Transfer.FakeHyperVTransfer TransferHyperV { get; } = new();
 
     public Transfer.FakeKeyProtectorAccess KeyProtectors { get; } = new();
+
+    public Transfer.FakeTpmCapabilityProbe TpmProbe { get; } = new();
+
+    public Backup.FakeImporter Importer { get; } = new();
 
     /// <summary>The channel a transfer job sends through; a test sets it before starting one.</summary>
     public Transfer.FakePeerChannels PeerChannels { get; } = new();

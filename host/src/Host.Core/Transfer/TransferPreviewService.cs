@@ -20,6 +20,7 @@ public sealed class TransferPreviewService
     private readonly IHyperVVersions _versions;
     private readonly UnattendedInstallStore? _installs;
     private readonly BackupConfigStore? _backups;
+    private readonly IKeyProtectorAccess? _keys;
 
     public TransferPreviewService(
         IVmInventory inventory,
@@ -28,7 +29,8 @@ public sealed class TransferPreviewService
         IDiskFiles files,
         IHyperVVersions versions,
         UnattendedInstallStore? installs = null,
-        BackupConfigStore? backups = null)
+        BackupConfigStore? backups = null,
+        IKeyProtectorAccess? keys = null)
     {
         _inventory = inventory;
         _definitions = definitions;
@@ -37,6 +39,7 @@ public sealed class TransferPreviewService
         _versions = versions;
         _installs = installs;
         _backups = backups;
+        _keys = keys;
     }
 
     /// <exception cref="VmNotFoundException">No VM has this ID.</exception>
@@ -115,6 +118,23 @@ public sealed class TransferPreviewService
             warnings.Add("The VM's backup schedule stays with this host's backup locations. Set up backups again on the other host.");
         }
 
+        KeyProtectorHolders? holders = null;
+        var ownedHere = false;
+        if (definition.TpmEnabled && _keys is not null)
+        {
+            try
+            {
+                holders = await _keys.DescribeAsync(await _keys.GetAsync(vmId, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                var local = await _keys.LocalGuardianIdAsync(cancellationToken).ConfigureAwait(false);
+                ownedHere = local is not null && string.Equals(holders.Owner, local, StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The receiving host then asks for a grant, which fails at the export if this host does not own the key.
+                warnings.Add($"This host could not read who holds the VM's TPM key ({ex.Message}).");
+            }
+        }
+
         return new TransferPreview(
             vmId,
             definition.Name,
@@ -130,6 +150,8 @@ public sealed class TransferPreviewService
             disks,
             checkpoints,
             blockers,
-            warnings);
+            warnings,
+            holders,
+            ownedHere);
     }
 }

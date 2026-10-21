@@ -254,6 +254,43 @@ public sealed class TransferReceiverTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_WithAFreshTpm_DefinesTheVmAnew_AroundItsDisks_WithItsMac_AndANewTpm()
+    {
+        var importer = new Backup.FakeImporter();
+        _receiver = CreateReceiver(importer: importer);
+        var offer = await _receiver.OfferAsync(Request() with { TpmMode = TransferTpmMode.Fresh, AcknowledgeWarnings = true }, UserId, CancellationToken.None);
+        Assert.Null(offer.Guardian);
+        Assert.Null(offer.Plan.VmId);
+        await SendFileAsync(offer.TransferId, "disk:0", DiskBytes);
+
+        var result = await _receiver.ImportAsync(offer.TransferId, CancellationToken.None);
+
+        Assert.Equal(importer.NewId, result.VmId);
+        Assert.Empty(_hyperV.Log);
+        Assert.Equal(1, importer.TpmCalls);
+        var plan = importer.Plan!;
+        Assert.Equal(("Web", VmFolder, 2), (plan.Name, plan.ConfigurationFolder, plan.ProcessorCount));
+        Assert.Equal(new Core.Backup.Restore.ImportDisk(Path.Combine(VmFolder, "Virtual Hard Disks", "Web.vhdx"), 0, 0), Assert.Single(plan.Disks));
+        Assert.Equal(new Core.Backup.Restore.ImportAdapter(CimHyperVHost.DefaultSwitchId, "00155D010203"), Assert.Single(plan.Adapters));
+        Assert.Equal(IncomingTransferState.Imported, _receiver.Status(offer.TransferId).State);
+    }
+
+    [Fact]
+    public async Task Import_WithAFreshTpm_ThatFails_RemovesTheNewVm()
+    {
+        var importer = new Backup.FakeImporter { FailAt = "tpm" };
+        _receiver = CreateReceiver(importer: importer);
+        _inventory.Vms.Add(FakeVmInventory.CreateVm(importer.NewId, "Web", VmState.Off));
+        var offer = await _receiver.OfferAsync(Request() with { Mode = TransferMode.Copy, TpmMode = TransferTpmMode.Fresh, AcknowledgeWarnings = true }, UserId, CancellationToken.None);
+        await SendFileAsync(offer.TransferId, "disk:0", DiskBytes);
+
+        await Assert.ThrowsAsync<TransferException>(() => _receiver.ImportAsync(offer.TransferId, CancellationToken.None));
+
+        Assert.Equal([importer.NewId], _storage.DeletedVms);
+        Assert.Equal(IncomingTransferState.Receiving, _receiver.Status(offer.TransferId).State);
+    }
+
+    [Fact]
     public async Task FailedRealize_RemovesTheImportedVm_KeepsTheFiles_AndCanBeRetried()
     {
         var offer = await ReceiveAllAsync();
@@ -440,15 +477,15 @@ public sealed class TransferReceiverTests : IDisposable
         await Assert.ThrowsAsync<TransferException>(() => _receiver.ReceiveRecordsAsync(offer.TransferId, records, CancellationToken.None));
     }
 
-    private TransferReceiver CreateReceiver(IncomingTransferStore? store = null, TransferRecordService? records = null)
+    private TransferReceiver CreateReceiver(IncomingTransferStore? store = null, TransferRecordService? records = null, Backup.FakeImporter? importer = null)
     {
         var hyperV = new FakeHyperVHost();
         var options = new LifecycleOptions { VmRootFolder = Path.Combine(_root, "vms"), HostMemoryReserveMb = 0 };
         var preflight = new TransferPreflightService(
             _inventory, new VmStorageLocation(null, options, hyperV), hyperV, new FakeHostCapacity(), new FakeDiskFiles(),
-            new FakeHyperVVersions(), options);
+            new FakeHyperVVersions(), options, keys: _keys, tpm: new FakeTpmCapabilityProbe());
         return new TransferReceiver(
-            store ?? _store, preflight, _hyperV, _keys, _inventory, _storage, _time, NullLogger<TransferReceiver>.Instance, blockSize: Block, records: records);
+            store ?? _store, preflight, _hyperV, _keys, _inventory, _storage, _time, NullLogger<TransferReceiver>.Instance, blockSize: Block, records: records, importer: importer);
     }
 
     private Task<IncomingTransferOffer> OfferAsync() => _receiver.OfferAsync(Request(), UserId, CancellationToken.None);

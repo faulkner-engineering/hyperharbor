@@ -733,6 +733,7 @@ struct PendingTransfer {
     source_key: String,
     target_key: String,
     mode: String,
+    tpm_mode: String,
     ticket: zeroize::Zeroizing<String>,
     guardian: Option<String>,
 }
@@ -759,10 +760,17 @@ async fn offer_transfer(
     preview: serde_json::Value,
     mode: String,
     acknowledge_warnings: bool,
+    tpm_mode: Option<String>,
 ) -> Result<serde_json::Value, ClientError> {
     if mode != "move" && mode != "copy" {
         return Err(ClientError::InvalidRequest(
             "a transfer is a move or a copy".into(),
+        ));
+    }
+    let tpm_mode = tpm_mode.unwrap_or_else(|| "keep".into());
+    if tpm_mode != "keep" && tpm_mode != "fresh" {
+        return Err(ClientError::InvalidRequest(
+            "a VM's TPM is kept or made fresh".into(),
         ));
     }
     let (_, source) = state.paired_host(&source_key)?;
@@ -778,6 +786,7 @@ async fn offer_transfer(
         "mode": mode,
         "sourceFingerprint": source.host_certificate_fingerprint,
         "acknowledgeWarnings": acknowledge_warnings,
+        "tpmMode": tpm_mode,
     });
     let mut offer = state
         .api
@@ -809,6 +818,7 @@ async fn offer_transfer(
             source_key,
             target_key,
             mode,
+            tpm_mode,
             ticket: zeroize::Zeroizing::new(ticket),
             guardian,
         },
@@ -824,7 +834,7 @@ async fn start_transfer(
     transfer_id: String,
     confirm_name: Option<String>,
 ) -> Result<serde_json::Value, ClientError> {
-    let (source_key, target_key, mode, ticket, guardian) = {
+    let (source_key, target_key, mode, tpm_mode, ticket, guardian) = {
         let transfers = state.transfers.lock().unwrap();
         let pending = transfers.get(&transfer_id).ok_or_else(|| {
             ClientError::InvalidRequest(
@@ -835,6 +845,7 @@ async fn start_transfer(
             pending.source_key.clone(),
             pending.target_key.clone(),
             pending.mode.clone(),
+            pending.tpm_mode.clone(),
             pending.ticket.clone(),
             pending.guardian.clone(),
         )
@@ -855,6 +866,7 @@ async fn start_transfer(
         "ticket": ticket.as_str(),
         "guardian": guardian,
         "confirmName": confirm_name,
+        "tpmMode": tpm_mode,
     });
     let job = state
         .api
@@ -1809,6 +1821,17 @@ async fn replace_vm_disk(
         .await
 }
 
+/// Deletes every checkpoint of a VM, merging them into its disks (a transfer needs that first).
+#[tauri::command]
+async fn merge_vm_checkpoints(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.merge_vm_checkpoints(&host, &paired, &vm_id).await
+}
+
 #[tauri::command]
 async fn export_vm_disks(
     state: State<'_, AppState>,
@@ -2292,6 +2315,7 @@ pub fn run() {
             get_transfer_preview,
             offer_transfer,
             start_transfer,
+            merge_vm_checkpoints,
             cancel_transfer,
             forget_transfer_offer,
             carry_vm_settings,

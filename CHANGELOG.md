@@ -30,6 +30,17 @@ note anything that needs action, such as updating the host, a new elevation requ
   confirm a move. The client asks each host for its admin passphrase when needed, shows the other host's warnings for you
   to accept, follows the transfer's progress (with Cancel transfer), and says where the VM ended up. The transfer ticket
   never reaches the client's window. This device's monitor and camera settings for the VM go with it.
+- Transfers and VM TPMs: only the host that created a VM's TPM key can give another host access to it, so a moved VM
+  can go back to that host but not on to a third one with its TPM. The transfer preview now says which host owns the key
+  (`tpmKeyOwner`, `tpmKeyGuardians`, `tpmOwnedBySource`), and the receiving host refuses early, with the reason, when
+  keeping the TPM cannot work: the sending host does not own the key, or Windows on the receiving host cannot open a key
+  another host gave it (it tries this once on a throwaway VM). A VM going back to the host that owns its key needs no
+  grant. The transfer dialog adds "Its TPM": Keep it, or Give it a new, empty TPM (`tpmMode: fresh`). With a new TPM the
+  receiving host defines the VM anew around its disks, so it gets a new VM ID even on a move (a move still keeps its MAC
+  addresses), and BitLocker asks for its recovery key once.
+- Merge checkpoints: `POST /vms/{vmId}/checkpoints/merge` (elevated, audited) deletes every checkpoint of a VM as a
+  `mergeCheckpoints` job, merging them into its disks. The transfer dialog offers Merge checkpoints when checkpoints are
+  the only thing in the way.
 
 ### Fixed
 - Backups recorded the wrong virtual switch for each network adapter, so every restored VM was connected to the

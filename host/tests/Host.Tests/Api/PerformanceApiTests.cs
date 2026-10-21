@@ -146,6 +146,23 @@ public sealed class PerformanceApiTests : IDisposable
     }
 
     [Fact]
+    public async Task MergeCheckpoints_NeedsElevation_AndCheckpoints_ThenMergesThemAsAJob()
+    {
+        Assert.Equal(HttpStatusCode.Forbidden, (await _client.PostAsync($"/api/v1/vms/{VmId}/checkpoints/merge", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await SendElevated(HttpMethod.Post, $"/api/v1/vms/{VmId}/checkpoints/merge", new { })).StatusCode);
+
+        _host.Storage.Checkpoints[VmId] = 1;
+        var started = await SendElevated(HttpMethod.Post, $"/api/v1/vms/{VmId}/checkpoints/merge", new { });
+
+        Assert.Equal(HttpStatusCode.Accepted, started.StatusCode);
+        var job = (await started.Content.ReadFromJsonAsync<JsonObject>())!;
+        Assert.Equal("mergeCheckpoints", (string?)job["kind"]);
+        await WaitUntil(async () => (string?)(await _client.GetFromJsonAsync<JsonObject>($"/api/v1/jobs/{job["id"]}"))!["state"] == "succeeded");
+        Assert.Equal([VmId], _host.Storage.CheckpointsDeleted);
+        Assert.Contains(_host.AuditEntries(), entry => (string?)entry["action"] == "mergeVmCheckpoints");
+    }
+
+    [Fact]
     public async Task ExportDisks_NeedsElevation_RefusesARunningVm_AndCopiesAnOffOne()
     {
         var destination = Path.Combine(Path.GetTempPath(), "hh-export-api-" + Guid.NewGuid().ToString("N"));

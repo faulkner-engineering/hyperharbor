@@ -18,6 +18,7 @@ public enum VmJobKind
     ReplaceDisk,
     RestoreHostState,
     TransferVm,
+    MergeCheckpoints,
 }
 
 /// <summary>Schema: VmJobState.</summary>

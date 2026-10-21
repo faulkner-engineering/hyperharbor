@@ -59,6 +59,21 @@ public sealed class TransferPreviewServiceTests : IDisposable
     }
 
     [Theory]
+    [InlineData(FakeKeyProtectorAccess.LocalId, true)]
+    [InlineData("CCCC", false)]
+    public async Task ATpm_ReportsWhoHoldsItsKey_AndWhetherThisHostOwnsIt(string owner, bool ownedHere)
+    {
+        var keys = new FakeKeyProtectorAccess { Holders = new(owner, ["DDDD"]) };
+        var service = new TransferPreviewService(_inventory, _definitions, _storage, _files, _versions, _installs, keys: keys);
+
+        var preview = await service.PreviewAsync(VmId, CancellationToken.None);
+
+        Assert.Equal(new KeyProtectorHolders(owner, ["DDDD"]).Owner, preview.TpmKeyHolders!.Owner);
+        Assert.Equal(["DDDD"], preview.TpmKeyHolders.Guardians);
+        Assert.Equal(ownedHere, preview.TpmOwnedBySource);
+    }
+
+    [Theory]
     [InlineData(VmState.Running, TransferBlockerCode.NotOff)]
     [InlineData(VmState.Paused, TransferBlockerCode.NotOff)]
     [InlineData(VmState.Saved, TransferBlockerCode.SavedState)]

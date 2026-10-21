@@ -580,11 +580,17 @@
       "blockers": [],
       "warnings": [
         "The DVD drive\u0027s image stays on this host; the drive is empty on the other host."
-      ]
+      ],
+      "tpmKeyOwner": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "tpmKeyGuardians": [
+        "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+      ],
+      "tpmOwnedBySource": true
     },
     "mode": "move",
     "sourceFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-    "acknowledgeWarnings": true
+    "acknowledgeWarnings": true,
+    "tpmMode": "fresh"
   },
   "IncomingTransferStatus": {
     "transferId": "5a0c1d2e-3f40-4152-8364-758697a8b9ca",
@@ -1091,7 +1097,8 @@
     "transferId": "5a0c1d2e-3f40-4152-8364-758697a8b9ca",
     "ticket": "fixture-ticket",
     "guardian": "PHhtbD4=",
-    "confirmName": "Web"
+    "confirmName": "Web",
+    "tpmMode": "keep"
   },
   "StoredSetupProfile": {
     "id": "dev-workstation",
@@ -1269,7 +1276,12 @@
     ],
     "warnings": [
       "The DVD drive\u0027s image stays on this host; the drive is empty on the other host."
-    ]
+    ],
+    "tpmKeyOwner": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+    "tpmKeyGuardians": [
+      "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+    ],
+    "tpmOwnedBySource": true
   },
   "TransferRecords": {
     "accounts": [

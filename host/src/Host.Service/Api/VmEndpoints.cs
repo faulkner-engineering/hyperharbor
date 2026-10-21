@@ -63,6 +63,10 @@ public static class VmEndpoints
             .Audited<ExportDisksRequest>(request => $"destination={request.DestinationFolder ?? "backup folder"}")
             .RequireElevation();
 
+        vms.MapPost("/{vmId:guid}/checkpoints/merge", MergeCheckpointsAsync).WithName("mergeVmCheckpoints")
+            .Audited()
+            .RequireElevation();
+
         return endpoints;
     }
 
@@ -185,6 +189,17 @@ public static class VmEndpoints
         CancellationToken cancellationToken)
     {
         var job = await export.StartAsync(vmId, context.User.UserId(), request.DestinationFolder, context.CompletionAuditor(), cancellationToken);
+        context.Audit()!.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
+    }
+
+    private static async Task<Accepted<VmJob>> MergeCheckpointsAsync(
+        Guid vmId,
+        CheckpointMergeService merge,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var job = await merge.StartAsync(vmId, context.User.UserId(), context.CompletionAuditor(), cancellationToken);
         context.Audit()!.JobId = job.Id;
         return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }

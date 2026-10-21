@@ -1153,6 +1153,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/checkpoints/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete every checkpoint of a VM, merging them into its disks.
+         * @description Starts a `mergeCheckpoints` job. The VM keeps its current state; only the checkpoints to go back to are
+         *     removed. A transfer needs this first (blocker `checkpoints`).
+         */
+        post: operations["mergeVmCheckpoints"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{jobId}": {
         parameters: {
             query?: never;
@@ -2161,6 +2185,14 @@ export interface components {
          */
         TransferMode: "move" | "copy";
         /**
+         * @description `keep` takes the VM's virtual TPM and what it holds (BitLocker keys) along: the receiving host must own the key,
+         *     already hold it, or be granted it by the sending host, which can grant only a key it owns.
+         *     `fresh` defines the VM anew on the receiving host around its disks with a new, empty TPM, so it gets a new VM ID
+         *     even on a move (a move still keeps its MAC addresses). BitLocker then asks for its recovery key.
+         * @enum {string}
+         */
+        TransferTpmMode: "keep" | "fresh";
+        /**
          * @description `checkpoints` clears once the checkpoints are deleted (they are merged into the disks).
          * @enum {string}
          */
@@ -2207,7 +2239,7 @@ export interface components {
             compute: components["schemas"]["TransferCompute"];
             secureBoot: boolean;
             secureBootTemplateId: string | null;
-            /** @description The receiving host's guardian is granted on the VM's key protector, so the TPM's contents (BitLocker keys) survive. */
+            /** @description See TransferTpmMode for what can happen to the TPM. */
             tpmEnabled: boolean;
             /** @description The GPU partition is removed; turn Performance mode on again on the receiving host. */
             hasGpuPartition: boolean;
@@ -2223,6 +2255,12 @@ export interface components {
             blockers: components["schemas"]["TransferBlocker"][];
             /** @description What changes for the VM on the way. */
             warnings: string[];
+            /** @description The guardian that owns the VM's TPM key (SHA-256 of its encryption certificate, hexadecimal); null without a TPM or when it could not be read. */
+            tpmKeyOwner: string | null;
+            /** @description Guardians the TPM key is granted to besides its owner, in the same form. */
+            tpmKeyGuardians: string[];
+            /** @description Whether the sending host owns the TPM key. Only the owner can grant it to another host. */
+            tpmOwnedBySource: boolean;
         };
         IncomingTransferRequest: {
             preview: components["schemas"]["TransferPreview"];
@@ -2231,6 +2269,8 @@ export interface components {
             sourceFingerprint: string;
             /** @default false */
             acknowledgeWarnings: boolean;
+            /** @default keep */
+            tpmMode: components["schemas"]["TransferTpmMode"];
         };
         TransferOffer: {
             /** Format: uuid */
@@ -2248,7 +2288,7 @@ export interface components {
             warnings: components["schemas"]["ValidationIssue"][];
             /**
              * Format: byte
-             * @description The receiving host's key protector guardian (public certificates only), when the VM has a TPM.
+             * @description The receiving host's key protector guardian (public certificates only), when it needs the VM's TPM key granted to it.
              */
             guardian: string | null;
         };
@@ -2271,11 +2311,13 @@ export interface components {
             ticket: string;
             /**
              * Format: byte
-             * @description From the receiving host's offer; required when the VM has a TPM.
+             * @description From the receiving host's offer, when it sent one.
              */
             guardian?: string | null;
             /** @description For a move, the VM's name exactly. */
             confirmName?: string | null;
+            /** @default keep */
+            tpmMode: components["schemas"]["TransferTpmMode"];
         };
         TransferResult: {
             /** Format: uuid */
@@ -2815,7 +2857,7 @@ export interface components {
             blockers: components["schemas"]["DeleteBlocker"][];
         };
         /** @enum {string} */
-        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm";
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm" | "mergeCheckpoints";
         /** @enum {string} */
         VmJobState: "running" | "succeeded" | "failed";
         JobError: {
@@ -5985,6 +6027,44 @@ export interface operations {
              * @description The VM is not off, has no virtual hard disks, the destination lacks free space, or
              *     another operation is in progress on the VM.
              */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    mergeVmCheckpoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The merge job started. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description The VM has no checkpoints, or another operation is in progress on the VM. */
             409: {
                 headers: {
                     [name: string]: unknown;

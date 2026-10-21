@@ -124,7 +124,13 @@ public sealed class TransferApiTests : IDisposable
     [Fact]
     public async Task Offer_ReturnsATicket_TheGuardian_AndMakesTheHostBusy()
     {
-        var offer = await OfferAsync();
+        // A key that the (sending) host owns and this host does not hold, so this host asks for a grant.
+        var request = await IncomingRequestAsync("copy");
+        request["preview"]!["tpmKeyOwner"] = "BBBB";
+        request["preview"]!["tpmOwnedBySource"] = true;
+        var response = await SendElevatedAsync(HttpMethod.Post, "/api/v1/transfers/incoming", request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var offer = (await response.Content.ReadFromJsonAsync<JsonObject>())!;
 
         Assert.Equal(43, ((string)offer["ticket"]!).Length);
         Assert.Equal("Web (copy)", (string?)offer["name"]);

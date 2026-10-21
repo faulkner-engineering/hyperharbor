@@ -37,6 +37,7 @@ public sealed class TransferSenderTests : IDisposable
     // The receiving host.
     private readonly FakeVmInventory _targetInventory = new();
     private readonly FakeHyperVTransfer _targetHyperV = new() { MoveId = VmId };
+    private readonly Backup.FakeImporter _targetImporter = new();
     private readonly TransferReceiver _receiver;
 
     private readonly List<string> _steps = [];
@@ -83,10 +84,11 @@ public sealed class TransferSenderTests : IDisposable
         var hostV = new FakeHyperVHost();
         var options = new LifecycleOptions { VmRootFolder = Path.Combine(_root, "target"), HostMemoryReserveMb = 0 };
         var preflight = new TransferPreflightService(
-            _targetInventory, new VmStorageLocation(null, options, hostV), hostV, new FakeHostCapacity(), new FakeDiskFiles(), new FakeHyperVVersions(), options);
+            _targetInventory, new VmStorageLocation(null, options, hostV), hostV, new FakeHostCapacity(), new FakeDiskFiles(), new FakeHyperVVersions(), options,
+            keys: new FakeKeyProtectorAccess(), tpm: new FakeTpmCapabilityProbe());
         _receiver = new TransferReceiver(
             new IncomingTransferStore(Path.Combine(_root, "target-data")), preflight, _targetHyperV, new FakeKeyProtectorAccess(), _targetInventory,
-            new FakeHyperVStorage(), new FakeTimeProvider(DateTimeOffset.UtcNow), NullLogger<TransferReceiver>.Instance, blockSize: Block);
+            new FakeHyperVStorage(), new FakeTimeProvider(DateTimeOffset.UtcNow), NullLogger<TransferReceiver>.Instance, blockSize: Block, importer: _targetImporter);
     }
 
     private string TargetDisk => Path.Combine(_root, "target", "Web", "Virtual Hard Disks", "Web.vhdx");
@@ -117,6 +119,22 @@ public sealed class TransferSenderTests : IDisposable
         Assert.False(_receiver.AnyActive);
         Assert.Empty(_outgoing.List());
         Assert.False(Directory.Exists(Path.Combine(_root, "source-data", TransferSender.StagingFolderName, request.TransferId.ToString("N"))));
+    }
+
+    [Fact]
+    public async Task AFreshTpm_SendsOnlyTheDisks_TouchesNoKey_AndTheVmGetsANewId()
+    {
+        var request = await OfferAsync(TransferMode.Move, TransferTpmMode.Fresh);
+
+        var result = await RunAsync(request);
+
+        Assert.Equal(_targetImporter.NewId, result.TargetVmId);
+        Assert.True(result.SourceRemoved);
+        Assert.Empty(_keys.Log);
+        Assert.Empty(_hyperV.Log);
+        Assert.DoesNotContain(_targetHyperV.Log, entry => entry.StartsWith("import", StringComparison.Ordinal));
+        Assert.Equal(1, _targetImporter.TpmCalls);
+        Assert.Equal(_diskBytes, await File.ReadAllBytesAsync(TargetDisk));
     }
 
     [Fact]
@@ -201,14 +219,15 @@ public sealed class TransferSenderTests : IDisposable
     }
 
     [Fact]
-    public async Task ATpmWithoutTheReceiversGuardian_IsRefused()
+    public async Task ATpmWithoutTheReceiversGuardian_IsExportedWithoutAGrant()
     {
+        // The receiving host sends no guardian when it owns or already holds the key.
         var request = await OfferAsync(TransferMode.Move) with { TargetGuardian = null };
 
-        await Assert.ThrowsAsync<TransferException>(() => RunAsync(request));
+        await RunAsync(request);
 
         Assert.Empty(_keys.Log);
-        AssertRolledBack();
+        Assert.True(File.Exists(TargetDisk));
     }
 
     [Fact]
@@ -301,12 +320,12 @@ public sealed class TransferSenderTests : IDisposable
         _sender.RunAsync(request, (step, _) => _steps.Add(step), CancellationToken.None);
 
     /// <summary>What the authorizing client does: the source's preview, then the receiver's offer.</summary>
-    private async Task<TransferSendRequest> OfferAsync(TransferMode mode)
+    private async Task<TransferSendRequest> OfferAsync(TransferMode mode, TransferTpmMode tpmMode = TransferTpmMode.Keep)
     {
         var preview = await Preview().PreviewAsync(VmId, CancellationToken.None);
-        var offer = await _receiver.OfferAsync(new IncomingTransferRequest(preview, mode, SourceFingerprint, AcknowledgeWarnings: true), UserId, CancellationToken.None);
+        var offer = await _receiver.OfferAsync(new IncomingTransferRequest(preview, mode, SourceFingerprint, AcknowledgeWarnings: true, tpmMode), UserId, CancellationToken.None);
         _channel = new ReceiverChannel(_receiver, offer.TransferId);
-        return new TransferSendRequest(VmId, mode, offer.TransferId, offer.Ticket, Target(), offer.Guardian);
+        return new TransferSendRequest(VmId, mode, offer.TransferId, offer.Ticket, Target(), offer.Guardian, tpmMode);
     }
 
     private TransferPreviewService Preview() => new(_inventory, _definitions, _storage, _files, new FakeHyperVVersions());
