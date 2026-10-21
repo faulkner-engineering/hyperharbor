@@ -279,7 +279,84 @@ public sealed class VmDeletionServiceTests : IDisposable
         await Assert.ThrowsAsync<VmNotFoundException>(() => _deletion.PreviewAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
-    private async Task<VmJobSnapshot> StartAsync(bool deleteDisks, bool deleteCheckpoints = false, Action? beforeJob = null)
+    [Fact]
+    public async Task Delete_ForgetsTheVmsAccountsGameAwarePolicyAndBackupPolicies_AndKeepsOtherVms()
+    {
+        var data = Path.Combine(Path.GetTempPath(), "hyperharbor-delete-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(data);
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var provisioning = new Core.Provisioning.ProvisioningStore(data);
+            provisioning.Save(new Core.Provisioning.ProvisionedAccount(VmId, UserId, "hh-owner", now, now));
+            provisioning.Save(new Core.Provisioning.ProvisionedAccount(VmId, Guid.NewGuid(), "hh-other", now, now));
+            provisioning.Save(new Core.Provisioning.ProvisionedAccount(OtherVmId, UserId, "hh-owner", now, now));
+
+            var gameAware = new Core.GameAware.GameAwareStore(data);
+            gameAware.Update(settings => settings with
+            {
+                VmPolicies = new Dictionary<string, Core.GameAware.GameVmPolicy>
+                {
+                    [VmId.ToString("D")] = new(Core.GameAware.GamePolicy.Keep),
+                    [OtherVmId.ToString("D")] = new(Core.GameAware.GamePolicy.Save),
+                },
+            });
+
+            var backups = new Core.Backup.BackupConfigStore(data);
+            backups.Update(config => config with
+            {
+                Policies =
+                [
+                    new Core.Backup.BackupPolicy { VmId = VmId.ToString("D"), TargetId = "t1" },
+                    new Core.Backup.BackupPolicy { VmId = VmId.ToString("D").ToUpperInvariant(), TargetId = "t2" },
+                    new Core.Backup.BackupPolicy { VmId = OtherVmId.ToString("D"), TargetId = "t1" },
+                ],
+            });
+
+            var deletion = new VmDeletionService(
+                _inventory, _storage, _files, _jobs, NullLogger<VmDeletionService>.Instance,
+                provisioning: provisioning, gameAware: gameAware, backups: backups);
+            var job = await deletion.StartAsync(VmId, UserId, new VmDeleteRequest(false, false, "Dev"), null, CancellationToken.None);
+            await _jobs.WhenFinished(job.Id);
+            Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+
+            // Read back through new stores, so the files themselves are checked.
+            var accounts = new Core.Provisioning.ProvisioningStore(data);
+            Assert.False(accounts.AnyAccount(VmId));
+            Assert.NotNull(accounts.Find(OtherVmId, UserId));
+            Assert.Equal([OtherVmId.ToString("D")], new Core.GameAware.GameAwareStore(data).Load().VmPolicies.Keys);
+            Assert.Equal([OtherVmId.ToString("D")], new Core.Backup.BackupConfigStore(data).Load().Policies.Select(policy => policy.VmId));
+        }
+        finally
+        {
+            Directory.Delete(data, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_WithNothingRecorded_WritesNoRecordFiles()
+    {
+        var data = Path.Combine(Path.GetTempPath(), "hyperharbor-delete-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(data);
+        try
+        {
+            var deletion = new VmDeletionService(
+                _inventory, _storage, _files, _jobs, NullLogger<VmDeletionService>.Instance,
+                provisioning: new Core.Provisioning.ProvisioningStore(data), gameAware: new Core.GameAware.GameAwareStore(data),
+                backups: new Core.Backup.BackupConfigStore(data));
+            var job = await deletion.StartAsync(VmId, UserId, new VmDeleteRequest(false, false, "Dev"), null, CancellationToken.None);
+            await _jobs.WhenFinished(job.Id);
+
+            Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+            Assert.Empty(Directory.EnumerateFileSystemEntries(data));
+        }
+        finally
+        {
+            Directory.Delete(data, recursive: true);
+        }
+    }
+
+    private async Task<VmJobSnapshot> StartAsync(bool deleteDisks,bool deleteCheckpoints = false, Action? beforeJob = null)
     {
         if (beforeJob is null)
         {

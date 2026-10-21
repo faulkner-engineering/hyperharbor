@@ -70,6 +70,23 @@ public sealed class ProvisioningStore
         }
     }
 
+    /// <summary>Forgets every User's account on a deleted VM.</summary>
+    /// <returns>Whether any account was recorded.</returns>
+    public bool Remove(Guid vmId)
+    {
+        lock (_gate)
+        {
+            var accounts = Accounts();
+            if (accounts.RemoveAll(account => account.VmId == vmId) == 0)
+            {
+                return false;
+            }
+
+            ProtectedFile.WriteAllBytes(_path, JsonSerializer.SerializeToUtf8Bytes(accounts, JsonOptions));
+            return true;
+        }
+    }
+
     private List<ProvisionedAccount> Accounts()
     {
         _accounts ??= File.Exists(_path)

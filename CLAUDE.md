@@ -195,6 +195,8 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
      with GetKeyProtector, never from what was set. Supported config versions: Msvm_VirtualSystemSettingData with InstanceID
      LIKE 'Microsoft:Definition\\VirtualSystem\\Version\\%' (8.0 to 12.0 on the laptop). Hyper-V will not start a VM whose
      DVD holds a file that is not a real image (0x80070570); the spike builds one with SeedIso.
+   Done: 24.2 delete cleanup (2026-10-21): VmDeletionService.ForgetRecords also removes the VM's provisioned accounts
+   (ProvisioningStore.Remove), game-aware policy, and backup policies; a record that cannot be removed is logged only.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

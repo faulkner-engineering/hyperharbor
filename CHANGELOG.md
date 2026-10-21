@@ -10,6 +10,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- Deleting a VM now also removes what the host kept about it: the Users' set-up accounts (Connect and the VM list
+  no longer remember them), its game-aware policy, and its backup policies, so scheduled and "Back up now" runs no
+  longer try to back up a VM that is gone. Backups already taken stay in their backup locations and can still be
+  restored. A record that cannot be removed is logged and no longer fails a deletion that already removed the VM.
+
 ## [0.1.7-beta.5] - 2026-10-14 (API 1.23.0)
 
 ### Added

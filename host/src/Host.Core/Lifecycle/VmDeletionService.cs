@@ -28,11 +28,27 @@ public sealed class VmDeletionService
     /// <summary>Forgets an unattended install, its answer file, and the stored administrator credential of a deleted VM.</summary>
     private readonly Unattend.UnattendedSetup? _unattended;
     private readonly Performance.PerformanceStore? _performance;
+    private readonly Provisioning.ProvisioningStore? _provisioning;
+    private readonly GameAware.GameAwareStore? _gameAware;
+    private readonly Backup.BackupConfigStore? _backups;
 
-    public VmDeletionService(IVmInventory inventory, IHyperVStorage storage, IDiskFiles files, VmJobStore jobs, ILogger<VmDeletionService> logger, Unattend.UnattendedSetup? unattended = null, Performance.PerformanceStore? performance = null)
+    public VmDeletionService(
+        IVmInventory inventory,
+        IHyperVStorage storage,
+        IDiskFiles files,
+        VmJobStore jobs,
+        ILogger<VmDeletionService> logger,
+        Unattend.UnattendedSetup? unattended = null,
+        Performance.PerformanceStore? performance = null,
+        Provisioning.ProvisioningStore? provisioning = null,
+        GameAware.GameAwareStore? gameAware = null,
+        Backup.BackupConfigStore? backups = null)
     {
         _unattended = unattended;
         _performance = performance;
+        _provisioning = provisioning;
+        _gameAware = gameAware;
+        _backups = backups;
         _inventory = inventory;
         _storage = storage;
         _files = files;
@@ -130,8 +146,7 @@ public sealed class VmDeletionService
         context.Report("Deleting the virtual machine", 65);
         await _storage.DeleteVmAsync(vmId, context.Stopping).ConfigureAwait(false);
         _logger.LogInformation("Deleted virtual machine {Name} ({VmId}).", preview.VmName, vmId);
-        _unattended?.Forget(vmId);
-        _performance?.Remove(vmId);
+        ForgetRecords(vmId, preview.VmName);
 
         if (!request.DeleteDisks)
         {
@@ -159,6 +174,50 @@ public sealed class VmDeletionService
             throw new DiskDeletionException(
                 $"The virtual machine was deleted, but these disk files could not be: {string.Join(", ", failed)}. Delete them on the host.");
         }
+    }
+
+    /// <summary>
+    /// Removes what the host keeps about a deleted VM: its install record and credential, Performance mode record,
+    /// provisioned accounts, game-aware policy, and backup policies. Backups already taken stay in their repositories.
+    /// The VM is gone by now, so a record that cannot be removed is logged and does not fail the deletion.
+    /// </summary>
+    private void ForgetRecords(Guid vmId, string vmName)
+    {
+        var key = vmId.ToString("D");
+        Forget("install record", () => _unattended?.Forget(vmId));
+        Forget("Performance mode record", () => _performance?.Remove(vmId));
+        Forget("provisioned accounts", () => _provisioning?.Remove(vmId));
+        Forget("game-aware policy", () =>
+        {
+            if (_gameAware is not null && _gameAware.Load().VmPolicies.ContainsKey(key))
+            {
+                _gameAware.Update(settings => settings with
+                {
+                    VmPolicies = settings.VmPolicies.Where(policy => policy.Key != key).ToDictionary(policy => policy.Key, policy => policy.Value),
+                });
+            }
+        });
+        Forget("backup policies", () =>
+        {
+            if (_backups is not null && _backups.Load().Policies.Any(policy => IsFor(policy, vmId)))
+            {
+                _backups.Update(config => config with { Policies = config.Policies.Where(policy => !IsFor(policy, vmId)).ToList() });
+            }
+        });
+
+        void Forget(string what, Action remove)
+        {
+            try
+            {
+                remove();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+            {
+                _logger.LogWarning(ex, "Could not remove the {What} of deleted virtual machine {Name} ({VmId}).", what, vmName, vmId);
+            }
+        }
+
+        static bool IsFor(Backup.BackupPolicy policy, Guid vmId) => Guid.TryParse(policy.VmId, out var id) && id == vmId;
     }
 
     private static void EnsureAllowed(VmDeletePreview preview, VmDeleteRequest request)
