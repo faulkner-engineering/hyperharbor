@@ -166,14 +166,3 @@ public sealed class TransferPreviewServiceTests : IDisposable
         disks.Select((disk, i) => new VmDiskDefinition(disk, "scsi", 0, i)).ToList(),
         null, 128, 512);
 }
-
-internal sealed class FakeHyperVVersions : IHyperVVersions
-{
-    public string? VmVersion { get; set; } = "12.0";
-
-    public HostVersionCapabilities Capabilities { get; set; } = new(["8.0", "9.0", "10.0", "11.0", "12.0"]);
-
-    public Task<string?> VmVersionAsync(Guid vmId, CancellationToken cancellationToken) => Task.FromResult(VmVersion);
-
-    public Task<HostVersionCapabilities> ReadCapabilitiesAsync(CancellationToken cancellationToken) => Task.FromResult(Capabilities);
-}

@@ -207,6 +207,17 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    SwitchMapper, and static MACs for a move. TransferPreflightService gathers the facts. CimHyperVVersions reads a VM's
    Version and the host's supported versions (HostVersionCapabilities); IDiskFiles gained SizeBytes. Secure Boot templates
    are not checked (not queryable through CIM); ValidatePlannedSystem is the backstop.
+   Done: 24.4 CIM wrappers (2026-10-21; verified live on the laptop with TransferCimLiveTests, HH_TRANSFER_CIM_LIVE=1, elevated):
+   IHyperVTransfer/CimHyperVTransfer (ExportAsync, ImportPlannedAsync, FixPlannedAsync, Validate, Realize, DeletePlanned,
+   SetAutomaticStartupActionAsync; Fix returns the original AutomaticStartupAction and sets None until the transfer
+   completes; adapters are matched in Hyper-V's order because a copy's planned adapters read 000000000000; an unplaced or
+   unknown disk is a TransferException). IKeyProtectorAccess/CimKeyProtectorAccess call the HGS classes directly
+   (MSFT_HgsGuardian Export, Import, Remove; MSFT_HgsKeyProtector ConvertToByRawBytes, Grant; CmdletOutput holds the
+   result, ReturnValue is signed), and HyperV/HgsGuardians holds the shared lookup that CimHyperVBuilder now uses.
+   KeyProtectorHandover grants the peer ("HyperHarbor peer <hostId>") around one step and always sets the original back
+   (not cancelable), reads it back, and removes the guardian entry. Remove-HgsGuardian never deletes certificates (seen in
+   the spike), which is why removing a peer is safe on one PC; the code refuses to remove UntrustedGuardian. The live test
+   found CimHyperVDefinitionReader.SwitchIdOf matching CreationClassName (fixed in its own commit).
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

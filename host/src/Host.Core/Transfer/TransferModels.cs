@@ -82,7 +82,11 @@ public sealed record TransferPreview(
 public sealed record TransferAdapterPlan(string? SwitchId, string? StaticMacAddress);
 
 /// <summary>Where one received disk goes on the target.</summary>
-public sealed record TransferDiskPlan(string SourceFileName, string TargetPath, long SizeBytes);
+/// <param name="SourcePath">The disk's path on the source host, as the exported definition still names it.</param>
+public sealed record TransferDiskPlan(string SourcePath, string TargetPath, long SizeBytes)
+{
+    public string SourceFileName => Path.GetFileName(SourcePath);
+}
 
 /// <summary>
 /// The target host's answer to a proposed transfer: the name and folders it will use, how it maps the network,

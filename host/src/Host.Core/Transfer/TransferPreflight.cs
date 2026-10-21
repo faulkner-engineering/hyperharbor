@@ -173,7 +173,7 @@ public static partial class TransferPreflight
                 target = $"{stem} ({n.ToString(CultureInfo.InvariantCulture)}){extension}";
             }
 
-            plans.Add(new TransferDiskPlan(file, Path.Combine(diskFolder, target), disk.SizeBytes));
+            plans.Add(new TransferDiskPlan(disk.Path, Path.Combine(diskFolder, target), disk.SizeBytes));
         }
 
         return plans;

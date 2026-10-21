@@ -50,9 +50,6 @@ public sealed class CimHyperVBuilder : IHyperVBuilder
     /// <summary>Secure Boot template "MicrosoftWindows".</summary>
     public const string MicrosoftWindowsTemplateId = "1734c6e8-3154-4dda-ba5f-a874cc483422";
 
-    private const string HgsNamespace = @"root\Microsoft\Windows\Hgs";
-    private const string LocalGuardianName = "UntrustedGuardian";
-
     // Msvm_VirtualHardDiskSettingData.Type and Format.
     private const ushort DynamicDisk = 3;
     private const ushort VhdxFormat = 3;
@@ -249,27 +246,14 @@ public sealed class CimHyperVBuilder : IHyperVBuilder
     /// </summary>
     private static byte[] CreateKeyProtector(CimSession session)
     {
-        var guardian = session.QueryInstances(HgsNamespace, HyperVCim.QueryDialect, $"SELECT * FROM MSFT_HgsGuardian WHERE Name = '{LocalGuardianName}'").FirstOrDefault();
-        if (guardian is null)
-        {
-            var create = new CimMethodParametersCollection
-            {
-                CimMethodParameter.Create("Name", LocalGuardianName, CimType.String, CimFlags.In),
-                CimMethodParameter.Create("GenerateCertificates", true, CimType.Boolean, CimFlags.In),
-            };
-            using var created = session.InvokeMethod(HgsNamespace, "MSFT_HgsGuardian", "NewByGenerateCertificates", create);
-            guardian = created.OutParameters["cmdletOutput"]?.Value as CimInstance
-                ?? throw new HyperVOperationException("creating the local key protector guardian", HyperVCim.ReturnCode(created));
-        }
-
-        using (guardian)
+        using (var guardian = HgsGuardians.LocalGuardian(session))
         {
             var parameters = new CimMethodParametersCollection
             {
                 CimMethodParameter.Create("Owner", guardian, CimType.Instance, CimFlags.In),
                 CimMethodParameter.Create("AllowUntrustedRoot", true, CimType.Boolean, CimFlags.In),
             };
-            using var result = session.InvokeMethod(HgsNamespace, "MSFT_HgsKeyProtector", "NewByGuardians", parameters);
+            using var result = session.InvokeMethod(HgsGuardians.Namespace, "MSFT_HgsKeyProtector", "NewByGuardians", parameters);
             var protector = result.OutParameters["cmdletOutput"]?.Value as CimInstance;
             return protector?.CimInstanceProperties["RawData"]?.Value as byte[]
                 ?? throw new HyperVOperationException("creating the TPM key protector", HyperVCim.ReturnCode(result));
