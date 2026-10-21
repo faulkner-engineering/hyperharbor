@@ -218,6 +218,20 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    (not cancelable), reads it back, and removes the guardian entry. Remove-HgsGuardian never deletes certificates (seen in
    the spike), which is why removing a peer is safe on one PC; the code refuses to remove UntrustedGuardian. The live test
    found CimHyperVDefinitionReader.SwitchIdOf matching CreationClassName (fixed in its own commit).
+   Done: 24.5 receive side (2026-10-21; unit tested with fakes, not wired into the API yet): TransferReceiver and
+   IncomingTransferStore (transfers.json through ProtectedFile; no ticket in it). OfferAsync runs the preflight (errors 400,
+   unacknowledged warnings 409, a second move of the same VM 409), creates the VM's own folder with its staging folder
+   inside (.hh-transfer), exports the local guardian when the VM has a TPM, and issues a 256-bit ticket kept only as a
+   SHA-256 hash in memory. Authenticate needs that ticket plus the source certificate's fingerprint (fixed-time
+   comparisons) and slides a 30-minute idle timeout. Files are "disk:<index>" (sizes fixed by the preview) or
+   "definition:<VM GUID>.vmcx|vmgs|vmrs" (declared by their first block; at most 8, 1 GB each, never empty). Each block is
+   exactly BlockSize (256 MiB) or the file's rest, starts at the verified offset (else TransferOffsetException with the
+   expected offset), and is hashed while written to <file>.partial, flushed to disk, and only then counted; a bad block
+   is truncated away. ImportAsync: Importing is saved first, then the planned ID, then the original startup action; any
+   failure removes the planned or realized VM and returns to Receiving with the files kept. Rules: before Imported,
+   cancel, expiry, or a restart rolls back (VM removed, then only the VM's own folder deleted); after Imported, cancel and
+   expiry complete instead (startup action restored), so this host never deletes an imported VM. ExpireIdleAsync also
+   ends transfers whose ticket a restart lost, so the service must call it at startup and periodically (phase 7).
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

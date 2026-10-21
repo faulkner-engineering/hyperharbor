@@ -159,7 +159,7 @@ public static partial class TransferPreflight
         foreach (var disk in disks)
         {
             var file = disk.FileName;
-            if (!IsPlainDiskFileName(file) || disk.SizeBytes < 0)
+            if (!IsPlainDiskFileName(file) || disk.SizeBytes <= 0)
             {
                 errors.Add(new("disks", $"The disk name \"{file}\" cannot be used on this host."));
                 continue;

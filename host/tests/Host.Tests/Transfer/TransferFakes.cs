@@ -14,6 +14,88 @@ internal sealed class FakeHyperVVersions : IHyperVVersions
     public Task<HostVersionCapabilities> ReadCapabilitiesAsync(CancellationToken cancellationToken) => Task.FromResult(Capabilities);
 }
 
+/// <summary>Records the transfer's Hyper-V calls; <see cref="FailOn"/> makes one of them throw.</summary>
+internal sealed class FakeHyperVTransfer : IHyperVTransfer
+{
+    public List<string> Log { get; } = [];
+
+    /// <summary>The ID an import gives; null: a new ID for a copy, <see cref="MoveId"/> for a move.</summary>
+    public Guid? ImportedId { get; set; }
+
+    public Guid MoveId { get; set; }
+
+    public ushort OriginalStartupAction { get; set; } = 3;
+
+    public Dictionary<Guid, ushort> StartupActions { get; } = [];
+
+    /// <summary>"export", "import", "fix", "validate", "realize", "delete", or "startup".</summary>
+    public string? FailOn { get; set; }
+
+    /// <summary>Runs when the realize step is called, before it fails or succeeds.</summary>
+    public Action<Guid>? OnRealize { get; set; }
+
+    public Task<ExportedDefinition> ExportAsync(Guid vmId, string folder, CancellationToken cancellationToken)
+    {
+        Call("export");
+        var file = Path.Combine(folder, "VM", "Virtual Machines", $"{vmId:D}.vmcx");
+        return Task.FromResult(new ExportedDefinition(file, [file]));
+    }
+
+    public Task<Guid> ImportPlannedAsync(string definitionFile, bool newIdentity, CancellationToken cancellationToken)
+    {
+        Call($"import {(newIdentity ? "new" : "same")} {Path.GetFileName(definitionFile)}");
+        Fail("import");
+        return Task.FromResult(ImportedId ?? (newIdentity ? Guid.NewGuid() : MoveId));
+    }
+
+    public Task<ushort> FixPlannedAsync(Guid plannedId, TransferPlan plan, CancellationToken cancellationToken)
+    {
+        Call("fix");
+        Fail("fix");
+        return Task.FromResult(OriginalStartupAction);
+    }
+
+    public Task ValidatePlannedAsync(Guid plannedId, CancellationToken cancellationToken)
+    {
+        Call("validate");
+        Fail("validate");
+        return Task.CompletedTask;
+    }
+
+    public Task RealizePlannedAsync(Guid plannedId, CancellationToken cancellationToken)
+    {
+        Call("realize");
+        OnRealize?.Invoke(plannedId);
+        Fail("realize");
+        return Task.CompletedTask;
+    }
+
+    public Task DeletePlannedAsync(Guid plannedId, CancellationToken cancellationToken)
+    {
+        Call("delete-planned");
+        Fail("delete");
+        return Task.CompletedTask;
+    }
+
+    public Task SetAutomaticStartupActionAsync(Guid vmId, ushort action, CancellationToken cancellationToken)
+    {
+        Call($"startup {action}");
+        Fail("startup");
+        StartupActions[vmId] = action;
+        return Task.CompletedTask;
+    }
+
+    private void Call(string entry) => Log.Add(entry);
+
+    private void Fail(string step)
+    {
+        if (FailOn == step)
+        {
+            throw new InvalidOperationException($"{step} failed");
+        }
+    }
+}
+
 /// <summary>
 /// One VM's key protector in memory. A grant appends the guardian's name to the bytes, so tests can tell the
 /// original from a granted one. Every call is recorded in <see cref="Log"/>.
