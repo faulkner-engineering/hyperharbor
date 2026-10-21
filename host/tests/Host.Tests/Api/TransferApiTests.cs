@@ -193,6 +193,18 @@ public sealed class TransferApiTests : IDisposable
     [Fact]
     public async Task Copy_ToItself_RunsTheWholeTransfer_OverTheTicketRoutes()
     {
+        const string adminPassword = "Admin-Secret1!";
+        var owner = _host.Services.GetRequiredService<Core.Users.UserStore>().GetOrCreateDefault();
+        var accounts = _host.Services.GetRequiredService<Core.Provisioning.ProvisioningStore>();
+        var credentials = _host.Services.GetRequiredService<Core.Provisioning.VmCredentialStore>();
+        var gameAware = _host.Services.GetRequiredService<Core.GameAware.GameAwareStore>();
+        accounts.Save(new Core.Provisioning.ProvisionedAccount(VmId, owner.UserId, owner.VmAccountName, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        credentials.Save(VmId, new Core.Provisioning.GuestCredential("hhadmin", adminPassword));
+        gameAware.Update(settings => settings with
+        {
+            VmPolicies = new Dictionary<string, Core.GameAware.GameVmPolicy> { [VmId.ToString("D")] = new(Core.GameAware.GamePolicy.Keep) },
+        });
+
         var offer = await OfferAsync();
         var ticket = (string)offer["ticket"]!;
         UseThisHostAsTheReceiver(ticket);
@@ -212,6 +224,15 @@ public sealed class TransferApiTests : IDisposable
         Assert.Equal(FakeKeyProtectorAccess.Original, _host.KeyProtectors.Current);
         Assert.False(_host.Services.GetRequiredService<TransferReceiver>().AnyActive);
         Assert.Empty(_host.Storage.DeletedVms);
+
+        // The records went with it, under the copy's new ID.
+        var copyId = Guid.Parse((string)result["targetVmId"]!);
+        Assert.NotNull(accounts.Find(copyId, owner.UserId));
+        Assert.Equal(adminPassword, credentials.Find(copyId)!.Password);
+        Assert.Equal(Core.GameAware.GamePolicy.Keep, gameAware.Load().VmPolicies[copyId.ToString("D")].Policy);
+        Assert.NotNull(accounts.Find(VmId, owner.UserId));
+        _host.Logs.AssertNoneContain(adminPassword);
+        Assert.All(_host.AuditEntries(), entry => Assert.DoesNotContain(adminPassword, entry.ToJsonString(), StringComparison.Ordinal));
 
         // The sending host is audited as a peer; the ticket is in no log or audit entry.
         var blocks = _host.AuditEntries().Where(entry => (string?)entry["action"] == "receiveTransferBlock").ToList();
@@ -366,6 +387,8 @@ public sealed class TransferApiTests : IDisposable
             throw new InvalidOperationException("Not reached.");
 
         public Task<TransferImportResult> ImportAsync(CancellationToken cancellationToken) => throw new InvalidOperationException("Not reached.");
+
+        public Task SendRecordsAsync(TransferRecords records, CancellationToken cancellationToken) => throw new InvalidOperationException("Not reached.");
 
         public Task CompleteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 

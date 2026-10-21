@@ -106,7 +106,7 @@ public sealed partial class EndpointSecurityTests : IDisposable
             .ToList();
 
         Assert.Equal(contractTicket, ticket);
-        Assert.Equal(5, ticket.Count);
+        Assert.Equal(6, ticket.Count);
         Assert.DoesNotContain(ContractOperations().Values, operation => operation.Ticket && operation.Elevated);
     }
 

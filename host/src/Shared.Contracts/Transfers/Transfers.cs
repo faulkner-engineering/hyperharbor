@@ -126,7 +126,35 @@ public sealed record IncomingTransferFile(string Key, long Size, long Received);
 public sealed record IncomingTransferStatus(Guid TransferId, IncomingTransferState State, IReadOnlyList<IncomingTransferFile> Files);
 
 /// <summary>The VM the receiving host imported. Schema: TransferImported.</summary>
-public sealed record TransferImported(Guid VmId, string Name);
+/// <param name="Warnings">What the user must know, such as an account whose User the receiving host does not have.</param>
+public sealed record TransferImported(Guid VmId, string Name, IReadOnlyList<string> Warnings);
+
+/// <summary>A User's account in the guest, matched on the receiving host by account name. Schema: TransferAccount.</summary>
+public sealed record TransferAccount(
+    [property: JsonRequired] string AccountName,
+    [property: JsonRequired] GuestOsFamily GuestOs,
+    [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SshHostKey,
+    [property: JsonRequired] DateTimeOffset ProvisionedAt,
+    [property: JsonRequired] DateTimeOffset VerifiedAt);
+
+/// <summary>HyperHarbor's administrator account in the guest. ToString never includes the password. Schema: TransferCredential.</summary>
+public sealed record TransferCredential([property: JsonRequired] string UserName, [property: JsonRequired] string Password)
+{
+    public override string ToString() => $"TransferCredential {{ UserName = {UserName} }}";
+}
+
+/// <summary>The VM's own game-aware action. Schema: TransferGamePolicy.</summary>
+public sealed record TransferGamePolicy([property: JsonRequired] Hosts.GameVmAction Action, [property: JsonRequired] bool AlwaysPause);
+
+/// <summary>What the sending host knows about the VM beyond its files. ToString never includes the credential. Schema: TransferRecords.</summary>
+public sealed record TransferRecords(
+    [property: JsonRequired] IReadOnlyList<TransferAccount> Accounts,
+    [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] TransferCredential? AdminCredential,
+    [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] TransferGamePolicy? GamePolicy)
+{
+    public override string ToString() =>
+        $"TransferRecords {{ Accounts = {Accounts.Count}, AdminCredential = {(AdminCredential is null ? "none" : "set")}, GamePolicy = {GamePolicy?.Action.ToString() ?? "none"} }}";
+}
 
 /// <summary>Schema: IncomingTransferCanceled.</summary>
 /// <param name="RolledBack">True when the transfer was undone; false when the VM had already been imported and was kept.</param>

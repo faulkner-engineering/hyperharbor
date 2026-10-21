@@ -232,7 +232,8 @@ public sealed class TransferReceiverTests : IDisposable
 
         var result = await _receiver.ImportAsync(offer.TransferId, CancellationToken.None);
 
-        Assert.Equal(new TransferImportResult(VmId, "Web"), result);
+        Assert.Equal((VmId, "Web"), (result.VmId, result.Name));
+        Assert.Empty(result.Warnings);
         Assert.Equal([$"import same {VmId:D}.vmcx", "fix", "validate", "realize"], _hyperV.Log);
         Assert.Equal(IncomingTransferState.Imported, _receiver.Status(offer.TransferId).State);
         Assert.False(Directory.Exists(Path.Combine(VmFolder, TransferReceiver.StagingFolderName)));
@@ -399,7 +400,47 @@ public sealed class TransferReceiverTests : IDisposable
         Assert.True(File.Exists(Path.Combine(VmFolder, "Virtual Hard Disks", "Web.vhdx")));
     }
 
-    private TransferReceiver CreateReceiver(IncomingTransferStore? store = null)
+    [Fact]
+    public async Task Records_AreStoredUnderTheImportedVm_AndTheirWarningsComeBack()
+    {
+        var data = Path.Combine(_root, "data");
+        var users = new Core.Users.UserStore(data);
+        var owner = users.GetOrCreateDefault();
+        var credentials = new Core.Provisioning.VmCredentialStore(data);
+        var accounts = new Core.Provisioning.ProvisioningStore(data);
+        _receiver = CreateReceiver(records: new TransferRecordService(
+            accounts, credentials, new Core.GameAware.GameAwareStore(data), users, NullLogger<TransferRecordService>.Instance));
+        var offer = await ReceiveAllAsync();
+        var now = DateTimeOffset.UtcNow;
+
+        await _receiver.ReceiveRecordsAsync(offer.TransferId, new TransferRecords(
+            [
+                new TransferAccountRecord(owner.VmAccountName, GuestOsFamily.Windows, null, now, now),
+                new TransferAccountRecord("hh-stranger", GuestOsFamily.Windows, null, now, now),
+            ],
+            new Core.Provisioning.GuestCredential("hhadmin", "Admin-Secret1!"),
+            null), CancellationToken.None);
+        var result = await _receiver.ImportAsync(offer.TransferId, CancellationToken.None);
+        var again = await _receiver.ImportAsync(offer.TransferId, CancellationToken.None);
+
+        Assert.NotNull(accounts.Find(VmId, owner.UserId));
+        Assert.Equal("hhadmin", credentials.Find(VmId)!.UserName);
+        Assert.Contains("hh-stranger", Assert.Single(result.Warnings), StringComparison.Ordinal);
+        Assert.Equal(result.Warnings, again.Warnings);
+        await Assert.ThrowsAsync<TransferException>(() =>
+            _receiver.ReceiveRecordsAsync(offer.TransferId, TransferRecords.None, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task MalformedRecords_AreRefused()
+    {
+        var offer = await OfferAsync();
+        var records = new TransferRecords([], new Core.Provisioning.GuestCredential("hhadmin", ""), null);
+
+        await Assert.ThrowsAsync<TransferException>(() => _receiver.ReceiveRecordsAsync(offer.TransferId, records, CancellationToken.None));
+    }
+
+    private TransferReceiver CreateReceiver(IncomingTransferStore? store = null, TransferRecordService? records = null)
     {
         var hyperV = new FakeHyperVHost();
         var options = new LifecycleOptions { VmRootFolder = Path.Combine(_root, "vms"), HostMemoryReserveMb = 0 };
@@ -407,7 +448,7 @@ public sealed class TransferReceiverTests : IDisposable
             _inventory, new VmStorageLocation(null, options, hyperV), hyperV, new FakeHostCapacity(), new FakeDiskFiles(),
             new FakeHyperVVersions(), options);
         return new TransferReceiver(
-            store ?? _store, preflight, _hyperV, _keys, _inventory, _storage, _time, NullLogger<TransferReceiver>.Instance, blockSize: Block);
+            store ?? _store, preflight, _hyperV, _keys, _inventory, _storage, _time, NullLogger<TransferReceiver>.Instance, blockSize: Block, records: records);
     }
 
     private Task<IncomingTransferOffer> OfferAsync() => _receiver.OfferAsync(Request(), UserId, CancellationToken.None);

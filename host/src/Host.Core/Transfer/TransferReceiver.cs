@@ -23,7 +23,8 @@ public sealed record IncomingTransferOffer(Guid TransferId, string Ticket, Trans
 public sealed record IncomingTransferStatus(Guid TransferId, IncomingTransferState State, IReadOnlyList<IncomingFile> Files);
 
 /// <summary>The imported VM.</summary>
-public sealed record TransferImportResult(Guid VmId, string Name);
+/// <param name="Warnings">What the user must know, such as an account whose User this host does not have.</param>
+public sealed record TransferImportResult(Guid VmId, string Name, IReadOnlyList<string> Warnings);
 
 /// <summary>Who an authenticated data request comes from: the transfer and the User who authorized it here.</summary>
 public sealed record TransferPrincipal(Guid TransferId, Guid UserId);
@@ -68,6 +69,7 @@ public sealed partial class TransferReceiver
     private readonly ILogger<TransferReceiver> _logger;
     private readonly TimeSpan _idleTimeout;
     private readonly long _blockSize;
+    private readonly TransferRecordService? _records;
 
     private readonly object _gate = new();
     private readonly SemaphoreSlim _offers = new(1, 1);
@@ -83,7 +85,8 @@ public sealed partial class TransferReceiver
         TimeProvider time,
         ILogger<TransferReceiver> logger,
         TimeSpan? idleTimeout = null,
-        long blockSize = BlockSize)
+        long blockSize = BlockSize,
+        TransferRecordService? records = null)
     {
         _store = store;
         _preflight = preflight;
@@ -96,6 +99,7 @@ public sealed partial class TransferReceiver
         _idleTimeout = idleTimeout ?? DefaultIdleTimeout;
         ArgumentOutOfRangeException.ThrowIfLessThan(blockSize, 1);
         _blockSize = blockSize;
+        _records = records;
     }
 
     /// <summary>Whether any transfer is in progress here; it keeps the host awake and holds updates.</summary>
@@ -250,6 +254,40 @@ public sealed partial class TransferReceiver
         }
     }
 
+    /// <summary>
+    /// Keeps the VM's records until the import, which stores them under the VM's ID on this host. They stay in memory only
+    /// (they can hold the VM's administrator credential), so a restart, which rolls the transfer back anyway, drops them.
+    /// Sending them again replaces them.
+    /// </summary>
+    /// <exception cref="TransferException">The records are malformed, or the transfer is past receiving.</exception>
+    public async Task ReceiveRecordsAsync(Guid transferId, TransferRecords records, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        if (records.Accounts.Count > TransferRecords.MaxAccounts
+            || records.Accounts.Any(account => account.AccountName is not { Length: > 0 and <= 64 } || account.SshHostKey is { Length: > 256 })
+            || records.AdminCredential is { UserName: not { Length: > 0 and <= 256 } } or { Password: not { Length: > 0 and <= 256 } })
+        {
+            throw new TransferException("The VM's records are not valid.");
+        }
+
+        var session = SessionOf(transferId);
+        await session.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var record = _store.Find(transferId) ?? throw new TransferNotFoundException(transferId);
+            if (record.State != IncomingTransferState.Receiving)
+            {
+                throw new TransferException("The VM's records must be sent before the import.");
+            }
+
+            session.Records = records;
+        }
+        finally
+        {
+            session.Lock.Release();
+        }
+    }
+
     /// <summary>Imports the received VM. On failure the planned VM is removed and the files stay, so the source can retry or cancel.</summary>
     /// <exception cref="TransferException">Files are missing or Hyper-V refused the VM.</exception>
     public async Task<TransferImportResult> ImportAsync(Guid transferId, CancellationToken cancellationToken)
@@ -261,7 +299,7 @@ public sealed partial class TransferReceiver
             var record = _store.Find(transferId) ?? throw new TransferNotFoundException(transferId);
             if (record.State == IncomingTransferState.Imported)
             {
-                return new TransferImportResult(record.PlannedId!.Value, record.Plan.Name);
+                return new TransferImportResult(record.PlannedId!.Value, record.Plan.Name, session.ImportWarnings);
             }
 
             if (record.Files.FirstOrDefault(file => !file.IsComplete) is { } missing)
@@ -307,7 +345,8 @@ public sealed partial class TransferReceiver
             _store.Save(record);
             TryDelete(record.StagingFolder);
             _logger.LogInformation("Imported transfer {TransferId} as {Name} ({VmId}).", transferId, record.Plan.Name, record.PlannedId);
-            return new TransferImportResult(record.PlannedId!.Value, record.Plan.Name);
+            session.ImportWarnings = ApplyRecords(record.PlannedId!.Value, session.Records);
+            return new TransferImportResult(record.PlannedId!.Value, record.Plan.Name, session.ImportWarnings);
         }
         finally
         {
@@ -400,6 +439,25 @@ public sealed partial class TransferReceiver
             {
                 session.Lock.Release();
             }
+        }
+    }
+
+    /// <summary>The VM exists by now and the source will be told so; records that cannot be stored are a warning, never a failure.</summary>
+    private IReadOnlyList<string> ApplyRecords(Guid vmId, TransferRecords? records)
+    {
+        if (records is null || _records is null)
+        {
+            return [];
+        }
+
+        try
+        {
+            return _records.Apply(vmId, records);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            _logger.LogWarning(ex, "Could not store the records of transferred VM {VmId}.", vmId);
+            return ["The VM's accounts and settings could not be stored on this host. Set the VM up again on this host to connect."];
         }
     }
 
@@ -594,5 +652,11 @@ public sealed partial class TransferReceiver
         public DateTimeOffset LastActivity { get; set; } = lastActivity;
 
         public SemaphoreSlim Lock { get; } = new(1, 1);
+
+        /// <summary>The VM's records until the import stores them. In memory only: they can hold a credential.</summary>
+        public TransferRecords? Records { get; set; }
+
+        /// <summary>What storing the records reported, for a repeated import request.</summary>
+        public IReadOnlyList<string> ImportWarnings { get; set; } = [];
     }
 }

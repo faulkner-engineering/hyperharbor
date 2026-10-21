@@ -19,6 +19,7 @@ public sealed class TransferPreviewService
     private readonly IDiskFiles _files;
     private readonly IHyperVVersions _versions;
     private readonly UnattendedInstallStore? _installs;
+    private readonly BackupConfigStore? _backups;
 
     public TransferPreviewService(
         IVmInventory inventory,
@@ -26,7 +27,8 @@ public sealed class TransferPreviewService
         IHyperVStorage storage,
         IDiskFiles files,
         IHyperVVersions versions,
-        UnattendedInstallStore? installs = null)
+        UnattendedInstallStore? installs = null,
+        BackupConfigStore? backups = null)
     {
         _inventory = inventory;
         _definitions = definitions;
@@ -34,6 +36,7 @@ public sealed class TransferPreviewService
         _files = files;
         _versions = versions;
         _installs = installs;
+        _backups = backups;
     }
 
     /// <exception cref="VmNotFoundException">No VM has this ID.</exception>
@@ -105,6 +108,11 @@ public sealed class TransferPreviewService
         if (storage.AttachedImages.Any(image => image.VmId == vmId))
         {
             warnings.Add("The DVD drive's image stays on this host; the drive is empty on the other host.");
+        }
+
+        if (_backups?.Load().Policies.Any(policy => Guid.TryParse(policy.VmId, out var id) && id == vmId) == true)
+        {
+            warnings.Add("The VM's backup schedule stays with this host's backup locations. Set up backups again on the other host.");
         }
 
         return new TransferPreview(

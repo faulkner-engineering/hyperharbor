@@ -1160,6 +1160,13 @@
     "localApiPort": 41112,
     "controlUrl": "https://hs.example.com"
   },
+  "TransferAccount": {
+    "accountName": "hh-owner",
+    "guestOs": "windows",
+    "sshHostKey": null,
+    "provisionedAt": "2026-10-03T12:00:00\u002B00:00",
+    "verifiedAt": "2026-10-04T12:00:00\u002B00:00"
+  },
   "TransferAdapter": {
     "switchId": "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444",
     "switchName": "Default Switch",
@@ -1177,6 +1184,10 @@
     "nestedVirtualization": false,
     "macAddressSpoofing": false
   },
+  "TransferCredential": {
+    "userName": "hhadmin",
+    "password": "Fixture-Admin1!"
+  },
   "TransferDisk": {
     "path": "D:\\VMs\\Web\\Virtual Hard Disks\\Web.vhdx",
     "sizeBytes": 21474836480,
@@ -1184,9 +1195,16 @@
     "controllerNumber": 0,
     "lun": 0
   },
+  "TransferGamePolicy": {
+    "action": "save",
+    "alwaysPause": false
+  },
   "TransferImported": {
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
-    "name": "Web"
+    "name": "Web",
+    "warnings": [
+      "The VM\u0027s account hh-tyler belongs to a User this host does not have. Set the VM up again on this host to connect."
+    ]
   },
   "TransferOffer": {
     "transferId": "5a0c1d2e-3f40-4152-8364-758697a8b9ca",
@@ -1252,6 +1270,25 @@
     "warnings": [
       "The DVD drive\u0027s image stays on this host; the drive is empty on the other host."
     ]
+  },
+  "TransferRecords": {
+    "accounts": [
+      {
+        "accountName": "hh-owner",
+        "guestOs": "windows",
+        "sshHostKey": null,
+        "provisionedAt": "2026-10-03T12:00:00\u002B00:00",
+        "verifiedAt": "2026-10-04T12:00:00\u002B00:00"
+      }
+    ],
+    "adminCredential": {
+      "userName": "hhadmin",
+      "password": "Fixture-Admin1!"
+    },
+    "gamePolicy": {
+      "action": "save",
+      "alwaysPause": false
+    }
   },
   "TransferResult": {
     "targetVmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",

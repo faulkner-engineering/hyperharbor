@@ -266,6 +266,15 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    definition reader, versions, Hyper-V transfer, key protectors, and the peer channel factory; tests that offer a transfer
    must set HostSettingsStore.SetVmFolder first, or the receiver creates folders under the fake default C:\Hyper-V\Config.
    EndpointSecurityTests.TicketEndpoints_MatchContract keys on operations whose security lists only transferTicket.
+   Done: 24.8 records (2026-10-21; unit and API tested): Core TransferRecords (accounts, admin GuestCredential, GameVmPolicy;
+   ToString hides the credential) and TransferRecordService (Collect on the sender; Apply on the receiver, matching each
+   account to the User whose VmAccountName equals it, else a warning). POST /transfers/{id}/records (sendTransferRecords,
+   ticket; audit summary counts only) keeps them in the receiver's Session, in memory only (they hold a credential; a restart
+   rolls the transfer back anyway); ImportAsync applies them under the final VM ID (a copy's new one) right after realize, a
+   failure there is a warning, and TransferImportResult/TransferImported carry the warnings into the job's transferResult.
+   The sender sends them just before the import. Not sent, on purpose: Performance mode (GPU partition removed; preview warns),
+   backup policies (TransferPreviewService warns when the VM has one), and a finished unattended install record.
+   ProvisioningStore.ForVm; GameAwareService.ToWire/ToCore are public for the mapping (TransferRecordsWire).
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
@@ -433,6 +442,10 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   (IsoUpload_Throughput with HH_BENCHMARK=1; upload_throughput with HH_E2E_SERVICE_EXE).
 - Version comes from Directory.Build.props (host) and client/src-tauri/tauri.conf.json (client); keep them equal.
 - The script refuses to run while anything is running from dist/ (Windows locks the exe).
+- After `HyperHarbor.Host.exe uninstall` (data kept), %ProgramData%\HyperHarbor keeps the installed service's ACL
+  (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts dies on data-format.json
+  (UnauthorizedAccessException, in the Application event log only). Start dist\host\HyperHarbor.Host.exe run elevated
+  instead (seen on the laptop 2026-10-21); the tray from Start-HyperHarbor.ps1 connects to it.
 - dist\host\Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
   Hyper-V Administrators membership), then starts "HyperHarbor.Host.exe run" and "--tray". Builds are unsigned.
 - Verified on 2026-10-02: packaged host plus client paired and listed VMs across machines.

@@ -49,6 +49,15 @@ public sealed class ProvisioningStore
         }
     }
 
+    /// <summary>Every User's account on the VM (sent with it when it moves to another host).</summary>
+    public IReadOnlyList<ProvisionedAccount> ForVm(Guid vmId)
+    {
+        lock (_gate)
+        {
+            return Accounts().Where(account => account.VmId == vmId).ToList();
+        }
+    }
+
     /// <summary>Whether any User has an account on the VM (recorded in a backup's manifest).</summary>
     public bool AnyAccount(Guid vmId)
     {

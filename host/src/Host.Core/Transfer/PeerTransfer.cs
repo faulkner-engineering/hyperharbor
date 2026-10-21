@@ -31,6 +31,9 @@ public interface IPeerTransferChannel : IDisposable
     /// <summary>Safe to repeat: the receiving host answers with the same VM once it is imported.</summary>
     Task<TransferImportResult> ImportAsync(CancellationToken cancellationToken);
 
+    /// <summary>Safe to repeat: the receiving host keeps the last records it got before the import.</summary>
+    Task SendRecordsAsync(TransferRecords records, CancellationToken cancellationToken);
+
     Task CompleteAsync(CancellationToken cancellationToken);
 
     Task CancelAsync(CancellationToken cancellationToken);
@@ -137,7 +140,15 @@ internal sealed class HttpPeerTransferChannel(HttpClient client, TransferSendReq
     {
         using var response = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, Path("/import")), ShortRequest, cancellationToken).ConfigureAwait(false);
         var body = await ReadAsync<ImportBody>(response, cancellationToken).ConfigureAwait(false);
-        return new TransferImportResult(body.VmId, body.Name);
+        return new TransferImportResult(body.VmId, body.Name, body.Warnings ?? []);
+    }
+
+    public async Task SendRecordsAsync(TransferRecords records, CancellationToken cancellationToken)
+    {
+        using var response = await SendAsync(
+            () => new HttpRequestMessage(HttpMethod.Post, Path("/records")) { Content = JsonContent.Create(records.ToWire(), options: ContractJson.Options) },
+            ShortRequest,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task CompleteAsync(CancellationToken cancellationToken)
@@ -240,7 +251,7 @@ internal sealed class HttpPeerTransferChannel(HttpClient client, TransferSendReq
 
     private sealed record FileBody(string Key, long Size, long Received);
 
-    private sealed record ImportBody(Guid VmId, string Name);
+    private sealed record ImportBody(Guid VmId, string Name, List<string>? Warnings);
 
     private sealed record Problem(string? Title, string? Detail, string? Code, long? ExpectedOffset);
 }

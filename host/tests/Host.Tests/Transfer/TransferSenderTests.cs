@@ -59,6 +59,13 @@ public sealed class TransferSenderTests : IDisposable
 
         var sourceData = Path.Combine(_root, "source-data");
         _outgoing = new OutgoingTransferStore(sourceData);
+        var users = new Core.Users.UserStore(sourceData);
+        var owner = users.GetOrCreateDefault();
+        var accounts = new Core.Provisioning.ProvisioningStore(sourceData);
+        accounts.Save(new Core.Provisioning.ProvisionedAccount(VmId, owner.UserId, owner.VmAccountName, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var records = new TransferRecordService(
+            accounts, new Core.Provisioning.VmCredentialStore(sourceData), new Core.GameAware.GameAwareStore(sourceData), users,
+            NullLogger<TransferRecordService>.Instance);
         _sender = new TransferSender(
             Preview(),
             _hyperV,
@@ -70,7 +77,8 @@ public sealed class TransferSenderTests : IDisposable
             TimeProvider.System,
             NullLogger<TransferSender>.Instance,
             Block,
-            (_, _) => Task.CompletedTask);
+            (_, _) => Task.CompletedTask,
+            records);
 
         var hostV = new FakeHyperVHost();
         var options = new LifecycleOptions { VmRootFolder = Path.Combine(_root, "target"), HostMemoryReserveMb = 0 };
@@ -105,6 +113,7 @@ public sealed class TransferSenderTests : IDisposable
         Assert.Equal([$"import same {VmId:D}.vmcx", "fix", "validate", "realize", "startup 3"], _targetHyperV.Log);
         Assert.Equal([VmId], _storage.DeletedVms);
         Assert.Equal([_disk], _files.Deleted);
+        Assert.Equal("hh-owner", Assert.Single(Assert.Single(_channel!.Records).Accounts).AccountName);
         Assert.False(_receiver.AnyActive);
         Assert.Empty(_outgoing.List());
         Assert.False(Directory.Exists(Path.Combine(_root, "source-data", TransferSender.StagingFolderName, request.TransferId.ToString("N"))));
@@ -349,6 +358,14 @@ public sealed class TransferSenderTests : IDisposable
             }
 
             return result;
+        }
+
+        public List<TransferRecords> Records { get; } = [];
+
+        public Task SendRecordsAsync(TransferRecords records, CancellationToken cancellationToken)
+        {
+            Records.Add(records);
+            return receiver.ReceiveRecordsAsync(transferId, records, cancellationToken);
         }
 
         public Task CompleteAsync(CancellationToken cancellationToken) => receiver.CompleteAsync(transferId, cancellationToken);

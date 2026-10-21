@@ -76,5 +76,5 @@ public static class TransferMapping
 
     public static Wire.IncomingTransferFile ToContract(this Domain.IncomingFile file) => new(file.Key, file.Size, file.Received);
 
-    public static Wire.TransferImported ToContract(this Domain.TransferImportResult result) => new(result.VmId, result.Name);
+    public static Wire.TransferImported ToContract(this Domain.TransferImportResult result) => new(result.VmId, result.Name, result.Warnings);
 }

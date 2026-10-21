@@ -525,6 +525,7 @@ builder.Services.AddSingleton<TransferPreviewService>();
 builder.Services.AddSingleton<TransferPreflightService>();
 builder.Services.AddSingleton(new IncomingTransferStore(dataDirectory));
 builder.Services.AddSingleton(new OutgoingTransferStore(dataDirectory));
+builder.Services.AddSingleton<TransferRecordService>();
 builder.Services.AddSingleton<TransferReceiver>();
 builder.Services.AddSingleton<IPeerTransferChannelFactory>(services =>
     new PeerHostClient(() => services.GetRequiredService<HostCertificateStore>().GetOrCreate()));

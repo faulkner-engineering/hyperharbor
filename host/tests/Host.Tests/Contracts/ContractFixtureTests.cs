@@ -302,11 +302,21 @@ public class ContractFixtureTests
         ["IncomingTransferFile"] = new IncomingTransferFile("disk:0", 21474836480, 268435456),
         ["IncomingTransferStatus"] = new IncomingTransferStatus(TransferId, IncomingTransferState.Receiving,
             [new IncomingTransferFile("disk:0", 21474836480, 268435456), new IncomingTransferFile($"definition:{VmId:D}.vmcx", 40994, 40994)]),
-        ["TransferImported"] = new TransferImported(VmId, "Web"),
+        ["TransferImported"] = new TransferImported(VmId, "Web", ["The VM's account hh-tyler belongs to a User this host does not have. Set the VM up again on this host to connect."]),
+        ["TransferAccount"] = TransferRecordsSample.Accounts[0],
+        ["TransferCredential"] = TransferRecordsSample.AdminCredential!,
+        ["TransferGamePolicy"] = TransferRecordsSample.GamePolicy!,
+        ["TransferRecords"] = TransferRecordsSample,
         ["IncomingTransferCanceled"] = new IncomingTransferCanceled(true),
     };
 
     private static readonly Guid TransferId = Guid.Parse("5a0c1d2e-3f40-4152-8364-758697a8b9ca");
+
+    // Null on purpose: sshHostKey is required but nullable (a Windows guest).
+    private static readonly TransferRecords TransferRecordsSample = new(
+        [new TransferAccount("hh-owner", GuestOsFamily.Windows, null, Time, Time.AddDays(1))],
+        new TransferCredential("hhadmin", "Fixture-Admin1!"),
+        new TransferGamePolicy(GameVmAction.Save, false));
 
     private static readonly TransferTarget TransferTargetSample = new(
         Guid.Parse("9c8b7a65-4321-4fed-8cba-0987654321ab"), "LAPTOP", ["192.168.0.20", "laptop.tail1234.ts.net"], 48443, new string('B', 64));

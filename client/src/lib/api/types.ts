@@ -1341,6 +1341,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transfers/{transferId}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send what the sending host knows about the VM besides its files (sending host only).
+         * @description The Users' accounts in the guest (matched by account name to this host's Users), HyperHarbor's administrator
+         *     credential for the guest, and the VM's own game-aware action. Sent before the import, which stores them under
+         *     the VM's ID on this host (a copy's new ID). They are kept in memory until then, never on disk, and sending them
+         *     again replaces them. Performance mode, backup schedules, and a finished install record are not sent.
+         */
+        post: operations["sendTransferRecords"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transfers/{transferId}/import": {
         parameters: {
             query?: never;
@@ -2282,6 +2308,34 @@ export interface components {
             /** Format: uuid */
             vmId: string;
             name: string;
+            /** @description What storing the VM's records reported, such as an account whose User this host does not have. */
+            warnings: string[];
+        };
+        TransferAccount: {
+            /** @description The account in the guest (hh-<user>); the receiving host gives it to its User with this account name. */
+            accountName: string;
+            guestOs: components["schemas"]["GuestOsFamily"];
+            /** @description Linux guests, the pinned SHA-256 fingerprint of the SSH host key. */
+            sshHostKey: string | null;
+            /** Format: date-time */
+            provisionedAt: string;
+            /** Format: date-time */
+            verifiedAt: string;
+        };
+        /** @description HyperHarbor's administrator account in the guest. A secret; stored with DPAPI on the receiving host. */
+        TransferCredential: {
+            userName: string;
+            password: string;
+        };
+        TransferGamePolicy: {
+            action: components["schemas"]["GameVmAction"];
+            alwaysPause: boolean;
+        };
+        TransferRecords: {
+            accounts: components["schemas"]["TransferAccount"][];
+            adminCredential: components["schemas"]["TransferCredential"] | null;
+            /** @description The VM's own game-aware action; null when it uses the default. */
+            gamePolicy: components["schemas"]["TransferGamePolicy"] | null;
         };
         IncomingTransferCanceled: {
             /** @description False when the VM had already been imported; it is kept. */
@@ -6193,6 +6247,43 @@ export interface operations {
             };
             /** @description The Content-Range header is missing or malformed. */
             416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    sendTransferRecords: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receiving host's ID for a transfer, from its `TransferOffer`. */
+                transferId: components["parameters"]["TransferId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRecords"];
+            };
+        };
+        responses: {
+            /** @description The records are kept for the import. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["TransferTicketRequired"];
+            404: components["responses"]["NotFound"];
+            /** @description The records are malformed, or the VM was already imported (`code` is `transferFailed`). */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

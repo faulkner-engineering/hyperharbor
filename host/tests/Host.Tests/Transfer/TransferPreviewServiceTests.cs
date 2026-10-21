@@ -155,6 +155,19 @@ public sealed class TransferPreviewServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ABackupSchedule_IsAWarning()
+    {
+        var backups = new BackupConfigStore(_data);
+        backups.Update(config => config with { Policies = [new BackupPolicy { VmId = VmId.ToString("D"), TargetId = "t1" }] });
+        var service = new TransferPreviewService(_inventory, _definitions, _storage, _files, _versions, _installs, backups);
+
+        var preview = await service.PreviewAsync(VmId, CancellationToken.None);
+
+        Assert.Empty(preview.Blockers);
+        Assert.Contains("backup", Assert.Single(preview.Warnings), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task UnknownVm_ThrowsNotFound()
     {
         await Assert.ThrowsAsync<VmNotFoundException>(() => _service.PreviewAsync(Guid.NewGuid(), CancellationToken.None));

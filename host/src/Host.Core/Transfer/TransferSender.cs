@@ -31,6 +31,7 @@ public sealed record TransferSendResult(Guid TargetVmId, string TargetName, bool
 /// <item>Checks the VM again and opens its disks for reading with no write sharing, so nothing can start it meanwhile.</item>
 /// <item>Exports its definition; with a TPM, the receiving host's guardian is granted only for the export.</item>
 /// <item>Sends the definition files and the disks in verified blocks, resuming from the receiving host's count after a network error.</item>
+/// <item>Sends the VM's records (accounts, administrator credential, game-aware policy; see <see cref="TransferRecordService"/>).</item>
 /// <item>Asks the receiving host to import the VM. Until it says it did, any failure or cancel rolls its side back.</item>
 /// <item>For a move, deletes this host's copy and its disks; then completes the transfer. These last steps are not canceled.</item>
 /// </list>
@@ -51,6 +52,7 @@ public sealed partial class TransferSender
     private readonly string _stagingRoot;
     private readonly TimeProvider _time;
     private readonly ILogger<TransferSender> _logger;
+    private readonly TransferRecordService? _records;
     private readonly long _blockSize;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
@@ -67,7 +69,8 @@ public sealed partial class TransferSender
         TimeProvider time,
         ILogger<TransferSender> logger,
         long blockSize = TransferReceiver.BlockSize,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null,
+        TransferRecordService? records = null)
     {
         _preview = preview;
         _hyperV = hyperV;
@@ -78,6 +81,7 @@ public sealed partial class TransferSender
         _stagingRoot = Path.Combine(dataDirectory, StagingFolderName);
         _time = time;
         _logger = logger;
+        _records = records;
         _blockSize = blockSize;
         _delay = delay ?? Task.Delay;
     }
@@ -128,6 +132,12 @@ public sealed partial class TransferSender
                 .ToList();
             await SendFilesAsync(channel, files, disks, report, cancellationToken).ConfigureAwait(false);
 
+            if (_records?.Collect(request.VmId) is { } records)
+            {
+                report("Sending the virtual machine's settings", 90);
+                await RetryAsync(token => channel.SendRecordsAsync(records, token), cancellationToken).ConfigureAwait(false);
+            }
+
             report($"Importing on {request.Target.Name}", 91);
             imported = await RetryAsync(channel.ImportAsync, cancellationToken).ConfigureAwait(false);
             record = record with { State = OutgoingTransferState.Imported };
@@ -148,7 +158,7 @@ public sealed partial class TransferSender
         }
 
         // The receiving host has the VM from here on: nothing is canceled or rolled back any more.
-        var warnings = new List<string>();
+        var warnings = imported.Warnings.ToList();
         var removed = false;
         if (request.Mode == TransferMode.Move)
         {

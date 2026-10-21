@@ -21,7 +21,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   and new MAC addresses. A VM's TPM goes with it: the receiving host is given access to the TPM's key only for the
   export, so BitLocker does not ask for its recovery key, and the sending host's access is put back exactly. Disks are
   sent in checked blocks and a broken connection resumes; until the receiving host has the VM, a failure or cancel
-  undoes everything there. Both hosts need this version.
+  undoes everything there. The VM's set-up accounts (for the User with the same account on the other host), HyperHarbor's
+  administrator credential for it, and its game-aware action go with it, so Connect works there without setting the VM up
+  again. Performance mode (turn it on again; the GPU partition is removed on the way) and backup schedules do not; the
+  transfer dialog warns about both. Both hosts need this version.
 
 ### Fixed
 - Backups recorded the wrong virtual switch for each network adapter, so every restored VM was connected to the

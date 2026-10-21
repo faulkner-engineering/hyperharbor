@@ -115,11 +115,12 @@ public sealed class PeerHostClientTests : IAsyncLifetime
     public async Task Import_ReadsTheImportedVm()
     {
         using var channel = Open(["127.0.0.1"]);
-        _next = (200, """{"vmId":"0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b","name":"Web (copy)"}""");
+        _next = (200, """{"vmId":"0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b","name":"Web (copy)","warnings":["Set it up again."]}""");
 
         var result = await channel.ImportAsync(CancellationToken.None);
 
-        Assert.Equal(new TransferImportResult(Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"), "Web (copy)"), result);
+        Assert.Equal((Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"), "Web (copy)"), (result.VmId, result.Name));
+        Assert.Equal(["Set it up again."], result.Warnings);
         Assert.StartsWith($"POST /api/v1/transfers/{TransferId:D}/import", _seen.Single(), StringComparison.Ordinal);
     }
 

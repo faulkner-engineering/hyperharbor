@@ -68,14 +68,14 @@ public sealed class GameAwareService(
             .ToList(),
         settings.ExtraLaunchers);
 
-    private static Wire.GameVmAction ToWire(GamePolicy policy) => policy switch
+    public static Wire.GameVmAction ToWire(GamePolicy policy) => policy switch
     {
         GamePolicy.Save => Wire.GameVmAction.Save,
         GamePolicy.Keep => Wire.GameVmAction.Keep,
         _ => Wire.GameVmAction.Pause,
     };
 
-    private static GamePolicy ToCore(Wire.GameVmAction action) => action switch
+    public static GamePolicy ToCore(Wire.GameVmAction action) => action switch
     {
         Wire.GameVmAction.Save => GamePolicy.Save,
         Wire.GameVmAction.Keep => GamePolicy.Keep,

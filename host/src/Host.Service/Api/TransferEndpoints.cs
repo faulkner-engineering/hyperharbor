@@ -40,6 +40,9 @@ public static partial class TransferEndpoints
         var ticket = transfers.MapGroup("/{transferId:guid}").RequireAuthorization(TransferTicketAuthenticationHandler.PolicyName);
         ticket.MapGet(string.Empty, Status).WithName("getIncomingTransfer");
         ticket.MapPut("/files/{fileKey}", ReceiveBlockAsync).WithName("receiveTransferBlock").Audited();
+        ticket.MapPost("/records", ReceiveRecordsAsync).WithName("sendTransferRecords")
+            .Audited<Wire.TransferRecords>(records =>
+                $"accounts={records.Accounts.Count}, adminCredential={(records.AdminCredential is null ? "no" : "yes")}, gamePolicy={records.GamePolicy?.Action.ToString() ?? "none"}");
         ticket.MapPost("/import", ImportAsync).WithName("importTransfer").Audited();
         ticket.MapPost("/complete", CompleteAsync).WithName("completeTransfer").Audited();
         ticket.MapDelete(string.Empty, CancelIncomingAsync).WithName("cancelIncomingTransfer").Audited();
@@ -111,6 +114,13 @@ public static partial class TransferEndpoints
         context.Audit()!.Detail = $"file={fileKey}, bytes={from}-{to}/{size}";
         var file = await receiver.ReceiveBlockAsync(transferId, fileKey, from, length, size, sha256, context.Request.Body, cancellationToken);
         return TypedResults.Ok(file.ToContract());
+    }
+
+    private static async Task<NoContent> ReceiveRecordsAsync(
+        Guid transferId, Wire.TransferRecords records, TransferReceiver receiver, CancellationToken cancellationToken)
+    {
+        await receiver.ReceiveRecordsAsync(transferId, records.ToCore(), cancellationToken);
+        return TypedResults.NoContent();
     }
 
     private static async Task<Ok<Wire.TransferImported>> ImportAsync(Guid transferId, TransferReceiver receiver, CancellationToken cancellationToken) =>
