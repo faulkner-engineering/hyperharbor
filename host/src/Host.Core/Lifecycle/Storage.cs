@@ -50,6 +50,9 @@ public interface IDiskFiles
     /// <summary>Free space in megabytes on the volume that holds <paramref name="path"/>, or null when unknown.</summary>
     long? AvailableSpaceMb(string path);
 
+    /// <summary>The file's size in bytes, or null when it does not exist or cannot be read.</summary>
+    long? SizeBytes(string path);
+
     /// <summary>Virtual hard disk files (.vhd, .vhdx, .avhd, .avhdx) directly in <paramref name="directory"/>.</summary>
     IEnumerable<string> ListDiskFiles(string directory);
 }
@@ -107,6 +110,19 @@ public sealed class WindowsDiskFiles : IDiskFiles
             return Path.GetPathRoot(Path.GetFullPath(path)) is { Length: > 0 } root ? new DriveInfo(root).AvailableFreeSpace / (1024 * 1024) : null;
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    public long? SizeBytes(string path)
+    {
+        try
+        {
+            var file = new FileInfo(path);
+            return file.Exists ? file.Length : null;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException or NotSupportedException)
         {
             return null;
         }

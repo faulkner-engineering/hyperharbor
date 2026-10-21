@@ -317,7 +317,8 @@ public sealed class VmCreationService
         return (folders.ConfigurationFolder, folders.DiskPath);
     }
 
-    private static void CheckName(string name, List<ValidationIssue> errors)
+    /// <summary>Checks a VM name that is also used as a folder name. Also used for VMs received from another host.</summary>
+    internal static void CheckName(string name, List<ValidationIssue> errors)
     {
         if (name.Length == 0 || name.Length > MaxNameLength)
         {

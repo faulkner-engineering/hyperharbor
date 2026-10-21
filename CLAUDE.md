@@ -197,6 +197,16 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
      DVD holds a file that is not a real image (0x80070570); the spike builds one with SeedIso.
    Done: 24.2 delete cleanup (2026-10-21): VmDeletionService.ForgetRecords also removes the VM's provisioned accounts
    (ProvisioningStore.Remove), game-aware policy, and backup policies; a record that cannot be removed is logged only.
+   Done: 24.3 core read and preflight (2026-10-21; unit tested only, not wired into the API yet): Host.Core/Transfer.
+   TransferPreviewService (source) reads the VM and lists TransferBlockers (NotOff, SavedState, Checkpoints, DifferencingDisk,
+   SharedDisk, DiskMissing, InstallInProgress) and warnings (GPU partition, attached image). TransferPreflight (target, pure)
+   turns a preview plus TransferTargetFacts into a TransferPlan: errors (existing ID on a move, unsupported config version,
+   compute through VmSettingsValidator, free space with a 1 GB margin, name via VmCreationService.CheckName, disk file names
+   that are not plain .vhdx/.vhd), the name ("(moved)" or "(copy)" through RestoreNaming), the VM's own folder under
+   VmStorageLocation.RootFolder or Hyper-V's default configuration folder, disk targets (numbered on clashes), switches via
+   SwitchMapper, and static MACs for a move. TransferPreflightService gathers the facts. CimHyperVVersions reads a VM's
+   Version and the host's supported versions (HostVersionCapabilities); IDiskFiles gained SizeBytes. Secure Boot templates
+   are not checked (not queryable through CIM); ValidatePlannedSystem is the backstop.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

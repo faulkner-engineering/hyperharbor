@@ -13,7 +13,8 @@ public static class RestoreNaming
     public const string Suffix = "restored";
 
     /// <param name="taken">Names of existing VMs and existing folders in the destination; compared without regard to case.</param>
-    public static string UniqueName(string desired, IEnumerable<string> taken)
+    /// <param name="suffix">The word added in parentheses when the name is taken.</param>
+    public static string UniqueName(string desired, IEnumerable<string> taken, string suffix = Suffix)
     {
         var used = new HashSet<string>(taken, StringComparer.OrdinalIgnoreCase);
         if (!used.Contains(desired))
@@ -21,10 +22,10 @@ public static class RestoreNaming
             return desired;
         }
 
-        var candidate = $"{desired} ({Suffix})";
+        var candidate = $"{desired} ({suffix})";
         for (var n = 2; used.Contains(candidate); n++)
         {
-            candidate = $"{desired} ({Suffix} {n.ToString(CultureInfo.InvariantCulture)})";
+            candidate = $"{desired} ({suffix} {n.ToString(CultureInfo.InvariantCulture)})";
         }
 
         return candidate;

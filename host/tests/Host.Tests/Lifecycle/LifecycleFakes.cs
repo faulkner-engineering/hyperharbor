@@ -75,6 +75,11 @@ internal sealed class FakeDiskFiles : IDiskFiles
 
     public long? AvailableSpaceMb(string path) => FreeSpaceMb;
 
+    /// <summary>File sizes; an existing file not listed here is 1 GB.</summary>
+    public Dictionary<string, long> Sizes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public long? SizeBytes(string path) => Files.Contains(path) ? Sizes.GetValueOrDefault(path, 1L << 30) : null;
+
     public bool CanDelete(string path) => Files.Contains(path) && !Undeletable.Contains(path);
 
     public void Delete(string path)
