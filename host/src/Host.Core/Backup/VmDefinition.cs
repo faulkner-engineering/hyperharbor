@@ -150,6 +150,8 @@ public sealed partial class CimHyperVDefinitionReader(IHyperVCompute compute) : 
     private static ulong Unsigned(CimInstance instance, string property) =>
         instance.CimInstanceProperties[property]?.Value is { } value ? Convert.ToUInt64(value, CultureInfo.InvariantCulture) : 0;
 
-    [GeneratedRegex("Name=\"([^\"]+)\"", RegexOptions.IgnoreCase)]
+    // The key is preceded by "." or ",": a bare Name= would also match inside CreationClassName="Msvm_VirtualEthernetSwitch",
+    // which Hyper-V writes first (seen live in TransferCimLiveTests).
+    [GeneratedRegex("[.,]Name=\"([^\"]+)\"", RegexOptions.IgnoreCase)]
     private static partial Regex SwitchName();
 }

@@ -11,6 +11,9 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Fixed
+- Backups recorded the wrong virtual switch for each network adapter, so every restored VM was connected to the
+  Default Switch (with a warning) instead of the switch it had. New backups record the right switch. Backups taken
+  before this fix still restore to the Default Switch; reconnect the adapter afterwards if it needs another switch.
 - Deleting a VM now also removes what the host kept about it: the Users' set-up accounts (Connect and the VM list
   no longer remember them), its game-aware policy, and its backup policies, so scheduled and "Back up now" runs no
   longer try to back up a VM that is gone. Backups already taken stay in their backup locations and can still be
