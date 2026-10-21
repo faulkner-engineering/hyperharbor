@@ -232,6 +232,24 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    cancel, expiry, or a restart rolls back (VM removed, then only the VM's own folder deleted); after Imported, cancel and
    expiry complete instead (startup action restored), so this host never deletes an imported VM. ExpireIdleAsync also
    ends transfers whose ticket a restart lost, so the service must call it at startup and periodically (phase 7).
+   Done: 24.6 send side (2026-10-21; unit tested, the sender end to end against a real TransferReceiver in process; not wired
+   into the API yet): TransferSender.RunAsync(TransferSendRequest, report, token) is the work of the transfer job (the
+   TransferVm job kind waits for the contract change in phase 7). It re-previews, opens each disk FileShare.Read (keeps the
+   VM from starting), exports (inside KeyProtectorHandover when the VM has a TPM; the original key protector is saved to
+   OutgoingTransferStore, outgoing-transfers.json through ProtectedFile, before the grant, and RecoverAsync takes a grant
+   back after a crash), sends definition files then disks in blocks hashed with RandomAccess (two reads per block, no 256 MiB
+   buffer), resumes from the receiver's count after PeerTransportException (5 in a row give up), imports with retries (the
+   receiver answers a repeated import with the same VM), then, no longer cancelable, deletes a moved VM through
+   VmDeletionService.DeleteAsync (the in-job form of a delete; a failure is a result warning, never a failed job) and
+   completes. Any failure before the import cancels the receiver. VmJobStore.Cancel(jobId, userId) signals a job's
+   Stopping token; a canceled job ends Failed with ErrorTitle "<step> canceled" and VmJobStore.CanceledDetail.
+   PeerHostClient opens IPeerTransferChannel over HTTPS/1.1: pins the target by SHA-256 of its certificate (a mismatch is a
+   TransferException, never retried), presents the host certificate through LocalCertificateSelectionCallback, tries each
+   address (re-probing after a network failure; a block goes only to an address that just answered). Wire format for the
+   phase 7 routes: Authorization "HyperHarbor-Transfer <ticket>"; GET /transfers/{id} -> {state, files[{key, size,
+   received}]}; PUT /transfers/{id}/files/{key} (key URL-escaped, e.g. disk:0) with Content-Range "bytes a-b/size" and
+   Content-Digest "sha-256=:<base64>:"; 409 problem code transferOffset with expectedOffset; POST .../import -> {vmId,
+   name}; POST .../complete; DELETE /transfers/{id}; 401 means the ticket ended; 502/503/504 are retried.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

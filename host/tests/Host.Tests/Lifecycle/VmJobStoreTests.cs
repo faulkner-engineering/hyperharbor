@@ -47,6 +47,42 @@ public sealed class VmJobStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancel_SignalsTheJob_WhichEndsCanceled_AndReleasesTheLock()
+    {
+        var started = new TaskCompletionSource();
+        var job = _jobs.Start(VmJobKind.ExportDisks, VmId, UserId, "Sending", async context =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, context.Stopping);
+        });
+        await started.Task;
+
+        Assert.False(_jobs.Cancel(job.Id, Guid.NewGuid()));
+        Assert.True(_jobs.Cancel(job.Id, UserId));
+        await _jobs.WhenFinished(job.Id);
+
+        var ended = _jobs.Get(job.Id, UserId)!;
+        Assert.Equal(VmJobState.Failed, ended.State);
+        Assert.Equal("Sending canceled", ended.ErrorTitle);
+        Assert.Equal(VmJobStore.CanceledDetail, ended.ErrorDetail);
+        Assert.False(_jobs.Cancel(job.Id, UserId));
+        _locks.Acquire(VmId, "test").Dispose();
+    }
+
+    [Fact]
+    public async Task Cancel_OfAJobThatIgnoresIt_LetsItFinish()
+    {
+        var release = new TaskCompletionSource();
+        var job = _jobs.Start(VmJobKind.ExportDisks, VmId, UserId, "Removing", async _ => await release.Task);
+
+        Assert.True(_jobs.Cancel(job.Id, UserId));
+        release.SetResult();
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+    }
+
+    [Fact]
     public async Task Job_HoldsTheVmLock_UntilItEnds()
     {
         var release = new TaskCompletionSource();

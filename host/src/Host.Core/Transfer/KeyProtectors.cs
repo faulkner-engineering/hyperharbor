@@ -53,13 +53,15 @@ public sealed class KeyProtectorHandover
     /// Afterwards, whether it succeeded, failed, or was canceled, the original key protector is set again and
     /// checked, and the peer's guardian entry is removed.
     /// </summary>
+    /// <param name="beforeGrant">Receives the original key protector before anything changes, so a caller can keep it for recovery after a crash.</param>
     /// <exception cref="TransferException">The original key protector could not be put back.</exception>
     public async Task<T> WithPeerGrantedAsync<T>(
         Guid vmId,
         byte[] peerGuardianExport,
         string peerGuardianName,
         Func<CancellationToken, Task<T>> whileGranted,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<byte[]>? beforeGrant = null)
     {
         ArgumentNullException.ThrowIfNull(peerGuardianExport);
         if (peerGuardianExport.Length is 0 or > MaxGuardianExportBytes)
@@ -76,6 +78,7 @@ public sealed class KeyProtectorHandover
         Exception? failure = null;
         try
         {
+            beforeGrant?.Invoke(original);
             var granted = await _access.GrantAsync(original, peerGuardianExport, peerGuardianName, cancellationToken).ConfigureAwait(false);
             await _access.SetAsync(vmId, granted, cancellationToken).ConfigureAwait(false);
             return await whileGranted(cancellationToken).ConfigureAwait(false);
@@ -90,6 +93,10 @@ public sealed class KeyProtectorHandover
             await RestoreAsync(vmId, original, peerGuardianName, failure).ConfigureAwait(false);
         }
     }
+
+    /// <summary>After a restart in the middle of <see cref="WithPeerGrantedAsync"/>: sets the saved original back and removes the peer's guardian.</summary>
+    /// <exception cref="TransferException">The original key protector could not be put back.</exception>
+    public Task PutBackAsync(Guid vmId, byte[] original, string peerGuardianName) => RestoreAsync(vmId, original, peerGuardianName, failure: null);
 
     /// <summary>Not cancelable: a canceled transfer must still take the peer's access away.</summary>
     private async Task RestoreAsync(Guid vmId, byte[] original, string peerGuardianName, Exception? failure)

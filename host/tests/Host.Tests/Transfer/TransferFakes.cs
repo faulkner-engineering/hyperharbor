@@ -34,11 +34,22 @@ internal sealed class FakeHyperVTransfer : IHyperVTransfer
     /// <summary>Runs when the realize step is called, before it fails or succeeds.</summary>
     public Action<Guid>? OnRealize { get; set; }
 
-    public Task<ExportedDefinition> ExportAsync(Guid vmId, string folder, CancellationToken cancellationToken)
+    /// <summary>Runs inside the export, for example to look at the key protector while it is granted.</summary>
+    public Action? OnExport { get; set; }
+
+    /// <summary>Writes a small .vmcx and .vmgs, as Hyper-V's export does (it adds a .VMRS too).</summary>
+    public async Task<ExportedDefinition> ExportAsync(Guid vmId, string folder, CancellationToken cancellationToken)
     {
         Call("export");
-        var file = Path.Combine(folder, "VM", "Virtual Machines", $"{vmId:D}.vmcx");
-        return Task.FromResult(new ExportedDefinition(file, [file]));
+        OnExport?.Invoke();
+        Fail("export");
+        var machines = Path.Combine(folder, "VM", "Virtual Machines");
+        Directory.CreateDirectory(machines);
+        var definition = Path.Combine(machines, $"{vmId:D}.vmcx");
+        var state = Path.Combine(machines, $"{vmId:D}.vmgs");
+        await File.WriteAllBytesAsync(definition, "<vmcx definition/>"u8.ToArray(), cancellationToken);
+        await File.WriteAllBytesAsync(state, "guest state"u8.ToArray(), cancellationToken);
+        return new ExportedDefinition(definition, [definition, state]);
     }
 
     public Task<Guid> ImportPlannedAsync(string definitionFile, bool newIdentity, CancellationToken cancellationToken)

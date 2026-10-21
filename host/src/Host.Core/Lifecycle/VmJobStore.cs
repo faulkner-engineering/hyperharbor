@@ -40,7 +40,7 @@ public sealed class VmJobContext
         Stopping = stopping;
     }
 
-    /// <summary>Signalled when the host service is stopping.</summary>
+    /// <summary>Signalled when the host service is stopping or the job is canceled (<see cref="VmJobStore.Cancel"/>).</summary>
     public CancellationToken Stopping { get; }
 
     public Guid JobId => _jobId;
@@ -72,6 +72,7 @@ public sealed class VmJobStore : IDisposable
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromHours(1);
     public const int DefaultMaxFinishedJobs = 100;
     private const string UnexpectedFailure = "The operation failed unexpectedly. The host log has details.";
+    public const string CanceledDetail = "The job was canceled.";
 
     private readonly VmOperationLocks _locks;
     private readonly TimeProvider _time;
@@ -114,7 +115,9 @@ public sealed class VmJobStore : IDisposable
     {
         var hold = vmId is { } id ? _locks.Acquire(id, Describe(kind)) : null;
         var now = _time.GetUtcNow();
-        var entry = new Entry(new VmJobSnapshot(Guid.NewGuid(), kind, vmId, userId, VmJobState.Running, firstStep, 0, now, now, null, null));
+        var entry = new Entry(
+            new VmJobSnapshot(Guid.NewGuid(), kind, vmId, userId, VmJobState.Running, firstStep, 0, now, now, null, null),
+            CancellationTokenSource.CreateLinkedTokenSource(_stopping.Token));
         if (hold is not null)
         {
             entry.Holds.Add(hold);
@@ -126,7 +129,7 @@ public sealed class VmJobStore : IDisposable
             _jobs[entry.Snapshot.Id] = entry;
         }
 
-        var context = new VmJobContext(this, entry.Snapshot.Id, _stopping.Token);
+        var context = new VmJobContext(this, entry.Snapshot.Id, entry.Cancellation.Token);
         entry.Completion = Task.Run(() => RunAsync(entry, context, work, onFinished));
         return entry.Snapshot;
     }
@@ -150,6 +153,26 @@ public sealed class VmJobStore : IDisposable
         {
             Prune(_time.GetUtcNow());
             return _jobs.TryGetValue(jobId, out var entry) && entry.Snapshot.UserId == userId ? entry.Snapshot : null;
+        }
+    }
+
+    /// <summary>
+    /// Asks a running job to stop: its <see cref="VmJobContext.Stopping"/> token is signalled. The job decides what
+    /// stopping means at the step it is in, and ends Failed with "canceled" if it stops.
+    /// </summary>
+    /// <returns>False when the job does not exist, belongs to another User, or has already ended.</returns>
+    public bool Cancel(Guid jobId, Guid userId)
+    {
+        lock (_gate)
+        {
+            if (!_jobs.TryGetValue(jobId, out var entry) || entry.Snapshot.UserId != userId || entry.Snapshot.State != VmJobState.Running)
+            {
+                return false;
+            }
+
+            entry.Canceled = true;
+            entry.Cancellation.Cancel();
+            return true;
         }
     }
 
@@ -242,6 +265,16 @@ public sealed class VmJobStore : IDisposable
             await work(context).ConfigureAwait(false);
             final = Finish(entry, snapshot => snapshot with { State = VmJobState.Succeeded, PercentComplete = 100 });
         }
+        catch (OperationCanceledException) when (entry.Canceled)
+        {
+            _logger.LogInformation("Job {JobId} ({Kind}) was canceled at \"{Step}\".", entry.Snapshot.Id, entry.Snapshot.Kind, entry.Snapshot.Step);
+            final = Finish(entry, snapshot => snapshot with
+            {
+                State = VmJobState.Failed,
+                ErrorTitle = $"{snapshot.Step} canceled",
+                ErrorDetail = CanceledDetail,
+            });
+        }
         catch (Exception ex)
         {
             // HyperHarbor exceptions carry messages written for the client, and file errors name the file and
@@ -269,6 +302,11 @@ public sealed class VmJobStore : IDisposable
             foreach (var hold in entry.Holds)
             {
                 hold.Dispose();
+            }
+
+            lock (_gate)
+            {
+                entry.Cancellation.Dispose();
             }
         }
 
@@ -309,9 +347,14 @@ public sealed class VmJobStore : IDisposable
         }
     }
 
-    private sealed class Entry(VmJobSnapshot snapshot)
+    private sealed class Entry(VmJobSnapshot snapshot, CancellationTokenSource cancellation)
     {
         public VmJobSnapshot Snapshot { get; set; } = snapshot;
+
+        /// <summary>Linked to the service's stopping token; disposed (under the store's lock) when the job ends.</summary>
+        public CancellationTokenSource Cancellation { get; } = cancellation;
+
+        public bool Canceled { get; set; }
 
         public List<IDisposable> Holds { get; } = [];
 

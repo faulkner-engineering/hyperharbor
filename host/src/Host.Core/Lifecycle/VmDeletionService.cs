@@ -131,20 +131,32 @@ public sealed class VmDeletionService
         return _jobs.Start(VmJobKind.DeleteVm, vmId, userId, "Checking the virtual machine", context => RunAsync(vmId, request, context), onFinished);
     }
 
-    private async Task RunAsync(Guid vmId, VmDeleteRequest request, VmJobContext context)
+    private Task RunAsync(Guid vmId, VmDeleteRequest request, VmJobContext context) =>
+        DeleteAsync(vmId, request, context.Report, context.Stopping);
+
+    /// <summary>
+    /// Deletes the VM as a step of a job that already holds its lock; a moved VM leaves its source host this way. The
+    /// same rules apply as for <see cref="StartAsync"/>, checked again here.
+    /// </summary>
+    /// <param name="report">Receives each step and a percentage from 0 to 99.</param>
+    /// <exception cref="LifecycleConflictException">The VM may not be deleted as requested.</exception>
+    /// <exception cref="DiskDeletionException">The VM is gone, but some of its disk files are not.</exception>
+    public async Task DeleteAsync(Guid vmId, VmDeleteRequest request, Action<string, int> report, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         // The VM is locked now, but it may have changed since the request was checked.
-        var preview = await PreviewAsync(vmId, context.Stopping).ConfigureAwait(false);
+        var preview = await PreviewAsync(vmId, cancellationToken).ConfigureAwait(false);
         EnsureAllowed(preview, request);
 
         if (preview.CheckpointCount > 0)
         {
-            context.Report("Merging checkpoints", 5);
-            await _storage.DeleteCheckpointsAsync(vmId, percent => context.Report("Merging checkpoints", 5 + percent * 55 / 100), context.Stopping).ConfigureAwait(false);
+            report("Merging checkpoints", 5);
+            await _storage.DeleteCheckpointsAsync(vmId, percent => report("Merging checkpoints", 5 + percent * 55 / 100), cancellationToken).ConfigureAwait(false);
         }
 
-        context.Report("Deleting the virtual machine", 65);
-        await _storage.DeleteVmAsync(vmId, context.Stopping).ConfigureAwait(false);
+        report("Deleting the virtual machine", 65);
+        await _storage.DeleteVmAsync(vmId, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Deleted virtual machine {Name} ({VmId}).", preview.VmName, vmId);
         ForgetRecords(vmId, preview.VmName);
 
@@ -153,7 +165,7 @@ public sealed class VmDeletionService
             return;
         }
 
-        context.Report("Deleting disks", 80);
+        report("Deleting disks", 80);
         var failed = new List<string>();
         foreach (var disk in preview.Disks)
         {
