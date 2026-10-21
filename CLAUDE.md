@@ -290,10 +290,13 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    Done: 24.10 two-PC test, move laptop to TC-PC (2026-10-21): same ID, MAC, and VHDX hash, about 17 s. It found:
    - Only a key protector's OWNER can grant (Grant re-signs with the owner's signing key; elsewhere "Unable to find the
      signing ... certificate"). So a moved VM can go back to its owner but not on to a third host with its TPM.
-   - TC-PC (26200, after KB5127648) cannot open a GRANTED key ("Not implemented 0x80004001" from the worker) nor Enable-VMTPM
-     ("client configuration settings could not be retrieved"); it still opens keys it owns. The laptop (26300) does both.
-     Diagnosis (read-only): HGS settings, certificates, and binaries match the laptop; Hyper-V fails before calling the HGS
-     client, likely a feature-flag path in 26200. Never remove UntrustedGuardian or the Shielded VM Local Certificates there.
+   - TC-PC failed Enable-VMTPM ("client configuration settings could not be retrieved") and opening a granted key ("Not
+     implemented 0x80004001"). NOT a Windows limitation: loader snaps (IFEO GlobalFlag 0x2 on a renamed rundll32 under a tiny
+     debugger) showed vmhgs.dll importing "EventUnregkster", a single flipped bit in the cached in-memory image (the file on
+     disk was intact), so the ext-ms-win-hyperv-hgs API set never loaded and vmms reported E_NOTIMPL from
+     hostguardianserviceextensionwrapper.cpp. After a reboot the product's TPM probe passed both checks on 26200. Owners could
+     still open keys because that path did not need the failing load in the same way. Never remove UntrustedGuardian or the
+     Shielded VM Local Certificates there.
    - A locked TPM cannot be reset in place (a new key protector gives "authentication tag did not match"; the config is
      encrypted too), so a fresh TPM means defining the VM anew (new ID).
    - Windows 11 guests leave an automatic checkpoint after a failed start, which blocks a transfer.
