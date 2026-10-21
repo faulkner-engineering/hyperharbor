@@ -174,6 +174,28 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    anonymous host route was added. Not done: Windows named-pipe local API (the command line covers it), a tailnet ACL or
    tag setup helper, stage two (an embedded Tailscale), and a live run against a real tailnet.
 
+24. VM transfer between hosts, added at the user's request (2026-10-21; in progress; plan in
+   ~/.claude/plans/i-got-my-laptop-whimsical-owl.md): move or copy an off VM host to host (the source pushes over mTLS with a
+   one-time ticket the target issues; the client only authorizes). A move keeps the VM ID and MACs; a copy gets a new ID and
+   new dynamic MACs. Done: 24.1 spike (Host.Tests/Transfer; verified on LAPTOP-63M2UH3H, Windows 11 Pro, 2026-10-21):
+   - PeerHostCertificateSpikeTests: a host certificate with only the Server Authentication purpose reaches a peer Kestrel
+     (AllowCertificate) as the client certificate, both through LocalCertificateSelectionCallback and through
+     SslOptions.ClientCertificates.
+   - TransferSpikeLiveTests (HH_TRANSFER_SPIKE_LIVE=1, elevated): ExportSystemDefinition with CopyVmStorage=false,
+     CopyVmRuntimeInformation=false, CopySnapshotConfiguration=1 writes only .vmcx, .vmgs, and .VMRS. ImportSystemDefinition
+     copies them into Hyper-V's default folder as a planned system ("Planned Virtual Machines"), so the staging folder can be
+     deleted right after RealizePlannedSystem. On the planned system, ModifySystemSettings accepts ElementName,
+     AutomaticStartupAction, and the Configuration, Snapshot, SwapFile, Suspend, and Log data roots, but REFUSES
+     GuestStateDataRoot (0x80041008); the .vmgs follows ConfigurationDataRoot on realize. Disk HostResource, DVD removal, and
+     StaticMacAddress plus Address are changed with ModifyResourceSettings/RemoveResourceSettings before ValidatePlannedSystem.
+   - vTPM: Grant-HgsKeyProtectorAccess with a guardian imported from Export-HgsGuardian (public certificates only, imported
+     with -AllowUntrustedRoot), then SetKeyProtector, works on a VM that already has TPM state; the VM then starts with only the
+     granted guardian's private keys present (the owner's were deleted). SetKeyProtector with the saved bytes restores the
+     original exactly. GetKeyProtector after the first start differs from the bytes set (Hyper-V rewrites it), so save it
+     with GetKeyProtector, never from what was set. Supported config versions: Msvm_VirtualSystemSettingData with InstanceID
+     LIKE 'Microsoft:Definition\\VirtualSystem\\Version\\%' (8.0 to 12.0 on the laptop). Hyper-V will not start a VM whose
+     DVD holds a file that is not a real image (0x80070570); the spike builds one with SeedIso.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
 
