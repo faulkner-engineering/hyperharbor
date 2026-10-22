@@ -12,7 +12,7 @@ public interface IVmKeyboard
 }
 
 /// <summary>
-/// Msvm_Keyboard.TypeKey. One key per call: Msvm_Keyboard.TypeText can drop characters (see CLAUDE.md).
+/// Msvm_Keyboard.TypeKey. One key per call: Msvm_Keyboard.TypeText can drop characters (see docs/development.md).
 /// </summary>
 public sealed class CimVmKeyboard : IVmKeyboard
 {

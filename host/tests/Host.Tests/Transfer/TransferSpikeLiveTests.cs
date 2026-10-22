@@ -493,7 +493,7 @@ public sealed class TransferSpikeLiveTests(ITestOutputHelper output)
             UseShellExecute = false,
         };
 
-        // A PowerShell 7 module path breaks Windows PowerShell's own modules (see Live testing in CLAUDE.md).
+        // A PowerShell 7 module path breaks Windows PowerShell's own modules (see Live testing in docs/development.md).
         start.Environment.Remove("PSModulePath");
         using var process = Process.Start(start)!;
         var stdout = process.StandardOutput.ReadToEndAsync();

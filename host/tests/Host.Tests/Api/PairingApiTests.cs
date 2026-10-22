@@ -82,7 +82,7 @@ public sealed class PairingApiTests : IDisposable
     /// After the attempt limit, guessing continues only with a new request and a new PIN, and the old
     /// request stays closed. This bounds online guessing to 5 attempts per 1,000,000-PIN request; each
     /// new request also shows a new PIN in the tray. There is no rate limit across requests yet
-    /// (an open issue in CLAUDE.md).
+    /// (a known limitation in docs/architecture.md).
     /// </summary>
     [Fact]
     public async Task AfterAttemptLimit_ANewRequestIsNeeded_AndTheOldOneStaysGone()

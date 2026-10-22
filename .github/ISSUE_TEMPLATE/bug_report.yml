@@ -1,0 +1,72 @@
+name: Bug report
+description: Something in the host or the client does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Search the [existing issues](https://github.com/faulkner-engineering/hyperharbor/issues) first.
+        **Security problems go through the Security tab, not here.**
+  - type: input
+    id: host-version
+    attributes:
+      label: Host version
+      description: In the HyperHarbor Host window, or the client's Host menu > Updates.
+      placeholder: 0.2.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: client-version
+    attributes:
+      label: Client version
+      description: At the bottom of the client's sidebar.
+      placeholder: 0.2.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows edition and build
+      description: Run `winver` on the PC where it happens (the host, the client, or both).
+      placeholder: Windows 11 Pro 24H2, build 26100.8875
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installing or updating
+        - Discovery or pairing
+        - Connecting (Remote Desktop or console)
+        - Creating, changing, or deleting VMs
+        - Moving or copying VMs between hosts
+        - Backups
+        - Wake-on-LAN
+        - Camera sharing
+        - Performance mode (GPU)
+        - Host window or tray
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, step by step, what you expected, and what happened instead. Include error messages word for word.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        The client can save the host's logs from **Host menu > Download host logs**. Attach the zip or paste the relevant lines.
+        Check them first: they can contain VM names, host names, and addresses.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I am on the newest release of the host and the client, or I said above which ones I use.
+          required: true

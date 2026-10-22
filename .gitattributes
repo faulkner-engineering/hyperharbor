@@ -1,0 +1,17 @@
+# Line endings follow .editorconfig: LF everywhere, CRLF for Visual Studio's own files. Fixing them here stops Git's
+# "LF will be replaced by CRLF" warnings and gives every checkout, including CI's, the same bytes.
+* text=auto eol=lf
+*.sln text eol=crlf
+*.csproj text eol=crlf
+*.props text eol=crlf
+*.targets text eol=crlf
+
+*.png binary
+*.ico binary
+*.icns binary
+
+# Generated files: collapsed in pull request diffs and left out of the language statistics.
+client/src/lib/api/types.ts linguist-generated
+host/tests/Host.Tests/Contracts/ContractFixtures.json linguist-generated
+host/tests/Host.Tests/Pairing/Spake2Vectors.json linguist-generated
+host/src/Host.Tray/webui/src/bridge.fixtures.json linguist-generated

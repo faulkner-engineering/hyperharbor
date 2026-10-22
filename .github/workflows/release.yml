@@ -54,6 +54,11 @@ jobs:
             throw "Tag $tag does not match the host ($hostVersion), tauri.conf.json ($clientVersion), Cargo.toml ($cargoVersion), and package.json ($packageVersion) versions."
           }
 
+      # Before packaging, so a tag without its changelog section fails in seconds instead of after the build.
+      - name: Release notes from CHANGELOG.md
+        shell: pwsh
+        run: ./scripts/release-notes.ps1 -Version ('${{ github.ref_name }}'.TrimStart('v')) -OutFile "$env:RUNNER_TEMP/release-notes.md"
+
       - name: Install client dependencies
         working-directory: client
         run: npm ci --no-audit --no-fund
@@ -103,7 +108,9 @@ jobs:
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
           $assets = @("dist/HyperHarbor-Host-$version.exe", 'dist/latest.json', 'dist/client-latest.json') + (Get-ChildItem dist/*-setup.exe).FullName + (Get-ChildItem dist/*-setup.exe.sig).FullName
-          $arguments = @('release', 'create', '${{ github.ref_name }}') + $assets + @('--draft', '--title', "HyperHarbor $version", '--generate-notes')
+          # The body is the version's CHANGELOG.md section; --generate-notes appends GitHub's list of pull requests and
+          # the compare link.
+          $arguments = @('release', 'create', '${{ github.ref_name }}') + $assets + @('--draft', '--title', "HyperHarbor $version", '--notes-file', "$env:RUNNER_TEMP/release-notes.md", '--generate-notes')
           if ($version.Contains('-')) { $arguments += '--prerelease' }
           gh @arguments
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)." }

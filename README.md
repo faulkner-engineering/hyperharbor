@@ -6,6 +6,11 @@
 
 # HyperHarbor
 
+[![CI](https://github.com/faulkner-engineering/hyperharbor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/faulkner-engineering/hyperharbor/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/faulkner-engineering/hyperharbor?include_prereleases&sort=semver)](https://github.com/faulkner-engineering/hyperharbor/releases)
+[![License: Apache 2.0](https://img.shields.io/github/license/faulkner-engineering/hyperharbor)](LICENSE)
+![Platform: Windows 10 and 11](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)
+
 Manage Hyper-V virtual machines on a home PC and connect to them in one click from any device.
 
 ![The HyperHarbor client listing the virtual machines on a host](docs/images/client-vms.png)
@@ -76,7 +81,9 @@ npm run tauri dev
 ```
 
 `scripts\test-all.ps1` runs everything CI runs. `scripts\package.ps1` builds the host executable and the client
-installer into `dist\`.
+installer into `dist\`. [docs/development.md](docs/development.md) has every command, the live tests, and the release
+steps. [docs/architecture.md](docs/architecture.md) explains how the parts fit together, and
+[docs/platform-notes.md](docs/platform-notes.md) records Windows and Hyper-V behavior to know before changing an area.
 
 | Path | Contents |
 | --- | --- |
@@ -90,12 +97,13 @@ installer into `dist\`.
 
 ## Contributing
 
-Bug reports, ideas, and pull requests are welcome.
+Bug reports, ideas, and pull requests are welcome. Everyone taking part follows the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 - **Issues**: search the [issue tracker](https://github.com/faulkner-engineering/hyperharbor/issues) first, and include
   the host and client versions, your Windows edition and build, and what you expected. The host can save its logs from
-  the client's **Host** menu > **Download host logs**. Report security problems privately through the repository's
-  Security tab, not in an issue.
+  the client's **Host** menu > **Download host logs**. Report security problems privately as described in
+  [SECURITY.md](SECURITY.md), not in an issue.
 - **Pull requests**: keep each one to a single change, add or update tests, run `scripts\test-all.ps1`, and add a line
   to [CHANGELOG.md](CHANGELOG.md) under [Unreleased] for anything a user would notice. Changes to the API start in
   `docs/api.yaml`. For a larger change, open an issue first so the approach can be agreed.

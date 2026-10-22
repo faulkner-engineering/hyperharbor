@@ -14,6 +14,9 @@ note anything that needs action, such as updating the host, a new elevation requ
 - HyperHarbor is now licensed under the Apache License 2.0 (LICENSE, NOTICE). Before, the public repository had no
   license, so nothing in it could be reused. WARRANTY.md explains that it comes with no warranty and what it changes on
   your PCs; the README has install steps, screenshots, and how to contribute (pull requests with a DCO sign-off).
+- A security policy (SECURITY.md: report vulnerabilities privately through the repository's Security tab), a code of
+  conduct, and issue forms that ask for the host and client versions and the Windows build. Each GitHub release now
+  shows that version's section of this changelog.
 - "Trust HyperHarbor connections" at the bottom of the client's sidebar. Since the April 2026 Windows security update,
   Remote Desktop shows a security warning for every connection file it cannot trust, with the clipboard, microphone,
   camera, and other sharing switched off until ticked, every time. With one administrator approval, the client now
@@ -540,7 +543,7 @@ Version bump used to verify the self-update path (0.1.0 to 0.1.1, and the rollba
 
 ## [0.1.0] - 2026-10-04 (API 1.9.0)
 
-First packaged version, covering roadmap phases 1 to 11.7 (see CLAUDE.md):
+First packaged version, covering roadmap phases 1 to 11.7 (see docs/history.md):
 - Hyper-V VM inventory, power actions, and a Kestrel API with mutual TLS.
 - mDNS discovery, PIN pairing (SPAKE2) with certificate pinning, Wake-on-LAN with readiness checks and fixes.
 - One-click Remote Desktop to VMs with a rotated per-User account (Windows via PowerShell Direct, Linux via SSH

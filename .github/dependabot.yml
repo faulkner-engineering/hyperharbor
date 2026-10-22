@@ -1,0 +1,44 @@
+# Weekly dependency updates. Minor and patch updates arrive as one pull request per ecosystem; major updates come one
+# at a time, because they can need code changes. CI runs on every pull request, so a broken update shows as a failed check.
+# Not covered: Kopia (pinned with its hashes in tools/tools.json) and the .NET SDK (global.json).
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      nuget-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /client/src-tauri
+    schedule:
+      interval: weekly
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /client
+    schedule:
+      interval: weekly
+    groups:
+      client-npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /host/src/Host.Tray/webui
+    schedule:
+      interval: weekly
+    groups:
+      tray-npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
