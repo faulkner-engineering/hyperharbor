@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using HyperHarbor.Host.Core.HostProfiles;
 using Microsoft.Extensions.Logging;
 
@@ -99,42 +100,59 @@ public sealed class PowerShellTpmCapabilityProbe(ILogger<PowerShellTpmCapability
         @{ ok = $true; result = $result } | ConvertTo-Json -Compress
         """);
 
-    private readonly SemaphoreSlim _gate = new(1, 1);
-    private TpmCapability? _known;
+    private readonly Func<Task<JsonNode?>> _run = () => HostPowerShell.RunAsync(Script, new { }, Timeout, CancellationToken.None);
+    private readonly object _sync = new();
+    private Task<TpmCapability>? _probe;
 
-    public async Task<TpmCapability> ProbeAsync(CancellationToken cancellationToken)
+    /// <summary>Runs <paramref name="run"/> instead of the PowerShell script (tests).</summary>
+    internal PowerShellTpmCapabilityProbe(ILogger<PowerShellTpmCapabilityProbe> logger, Func<Task<JsonNode?>> run)
+        : this(logger)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _run = run;
+    }
+
+    /// <summary>
+    /// One probe runs at a time and every caller shares it. A caller that stops waiting (a client's request timing out
+    /// while the throwaway VM starts) does not stop the probe: stopped halfway, it left its VM running and learned nothing,
+    /// so each retry started another probe whose sweep removed the first one's VM. The probe ends only at its own time
+    /// limit. A probe that failed is run again by the next caller.
+    /// </summary>
+    public Task<TpmCapability> ProbeAsync(CancellationToken cancellationToken)
+    {
+        Task<TpmCapability> probe;
+        lock (_sync)
+        {
+            if (_probe is null || _probe.IsFaulted || _probe.IsCanceled)
+            {
+                _probe = Task.Run(RunAsync, CancellationToken.None);
+            }
+
+            probe = _probe;
+        }
+
+        return probe.WaitAsync(cancellationToken);
+    }
+
+    private async Task<TpmCapability> RunAsync()
+    {
+        JsonNode? answer;
         try
         {
-            if (_known is { } known)
-            {
-                return known;
-            }
-
-            System.Text.Json.Nodes.JsonNode? answer;
-            try
-            {
-                answer = await HostPowerShell.RunAsync(Script, new { }, Timeout, cancellationToken).ConfigureAwait(false);
-            }
-            catch (HostLeanException ex)
-            {
-                throw new TransferException($"This host could not check what its Hyper-V can do with virtual TPMs: {ex.Message}", ex);
-            }
-
-            _known = new TpmCapability((bool?)answer?["canEnableTpm"] == true, (bool?)answer?["canOpenGrantedKeys"] == true, (string?)answer?["detail"]);
-            logger.LogInformation("Virtual TPM capability: turn on {CanEnableTpm}, open granted keys {CanOpenGrantedKeys}. {Detail}",
-                _known.CanEnableTpm, _known.CanOpenGrantedKeys, _known.Detail);
-            if ((string?)answer?["leftover"] is { Length: > 0 } leftover)
-            {
-                logger.LogWarning("The virtual TPM check could not clean up after itself: {Leftover}. The next check removes it.", leftover);
-            }
-
-            return _known;
+            answer = await _run().ConfigureAwait(false);
         }
-        finally
+        catch (HostLeanException ex)
         {
-            _gate.Release();
+            throw new TransferException($"This host could not check what its Hyper-V can do with virtual TPMs: {ex.Message}", ex);
         }
+
+        var known = new TpmCapability((bool?)answer?["canEnableTpm"] == true, (bool?)answer?["canOpenGrantedKeys"] == true, (string?)answer?["detail"]);
+        logger.LogInformation("Virtual TPM capability: turn on {CanEnableTpm}, open granted keys {CanOpenGrantedKeys}. {Detail}",
+            known.CanEnableTpm, known.CanOpenGrantedKeys, known.Detail);
+        if ((string?)answer?["leftover"] is { Length: > 0 } leftover)
+        {
+            logger.LogWarning("The virtual TPM check could not clean up after itself: {Leftover}. The next check removes it.", leftover);
+        }
+
+        return known;
     }
 }

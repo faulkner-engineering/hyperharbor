@@ -36,6 +36,9 @@ const GUEST_READ_TIMEOUT: Duration = Duration::from_secs(4 * 60);
 /// Capture runs three guest reads, including winget export.
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(12 * 60 * 60);
+/// Offering a transfer: keeping a VM's TPM can make the receiving host first check its Hyper-V with a throwaway VM,
+/// which it allows two minutes.
+const TRANSFER_OFFER_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 /// Opening a backup repository, or testing remote storage, waits on the storage provider.
 const BACKUP_STORAGE_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 /// Bytes read from disk per chunk of an upload.
@@ -711,14 +714,17 @@ impl ApiClient {
         paired: &PairedHost,
         body: &serde_json::Value,
     ) -> Result<serde_json::Value, ClientError> {
-        self.send_json(
-            host,
-            paired,
-            reqwest::Method::POST,
-            "/transfers/incoming",
-            body,
-        )
-        .await
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                "/transfers/incoming",
+                Some(body),
+                Some(TRANSFER_OFFER_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
     }
 
     /// POST /vms/{vmId}/transfer on the sending host (needs elevation). The body carries the ticket and is never

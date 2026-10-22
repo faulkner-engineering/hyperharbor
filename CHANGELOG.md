@@ -10,6 +10,14 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- Moving or copying a VM that keeps its TPM failed with "The host could not be reached: ... operation timed out" when the
+  receiving host had not yet checked its Hyper-V since it started. The check starts a throwaway VM, which takes longer
+  than the client waited, and the client giving up stopped the check halfway, so every retry timed out again and the
+  throwaway "HyperHarbor TPM probe" VMs were left running. The receiving host now always finishes the check and keeps its
+  answer, whoever stops waiting, and the client waits up to three minutes for the receiving host's answer. Update the
+  receiving host and the client.
+
 ## [0.1.7-beta.6] - 2026-10-21 (API 1.24.0)
 
 ### Added
