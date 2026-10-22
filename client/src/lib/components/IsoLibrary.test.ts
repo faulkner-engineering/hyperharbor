@@ -31,9 +31,10 @@ interface Overrides {
   picked?: unknown;
   upload?: () => Promise<unknown>;
   active?: boolean;
+  configured?: boolean;
 }
 
-function respond({ picked = null, upload, active = true }: Overrides = {}) {
+function respond({ picked = null, upload, active = true, configured = true }: Overrides = {}) {
   invoke.mockImplementation((command: string, args: { resource?: string }) => {
     switch (command) {
       case "get_host_resource":
@@ -41,7 +42,7 @@ function respond({ picked = null, upload, active = true }: Overrides = {}) {
       case "pick_iso_file":
         return Promise.resolve(picked);
       case "get_elevation":
-        return Promise.resolve({ configured: true, active, expiresAt: null });
+        return Promise.resolve({ configured, active, expiresAt: null });
       case "upload_iso":
         return upload ? upload() : Promise.resolve(images[0]);
       case "rename_iso":
@@ -99,6 +100,20 @@ describe("IsoLibrary", () => {
 
     elevation.finish(true, "2026-10-03T12:05:00Z");
     await screen.findByText("Added debian.iso.");
+  });
+
+  it("keeps the no-passphrase message after the list refreshes", async () => {
+    respond({ picked: { pickId: "pick-1", fileName: "debian.iso", sizeBytes: 1024 }, active: false, configured: false });
+    render(IsoLibrary, { host });
+    await screen.findByText("ubuntu.iso");
+    const listed = () => calls("get_host_resource").filter((args) => (args as { resource: string }).resource === "isos").length;
+
+    await fireEvent.click(screen.getByRole("button", { name: "+ Add ISO" }));
+
+    await vi.waitFor(() => expect(listed()).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByRole("alert").textContent).toContain("No admin passphrase is set");
+    expect(calls("upload_iso")).toHaveLength(0);
   });
 
   it("refuses a file whose name is already in the library without uploading", async () => {

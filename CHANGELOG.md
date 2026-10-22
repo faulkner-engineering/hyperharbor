@@ -19,6 +19,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   receiving host and the client; with an older receiving host, transfers work as before.
 - Transfers send faster: the sending host now reads and checks the next block of a disk while the current one is on the
   network, instead of between blocks.
+- The host and client executables, the client installer, and the host's entry in Installed apps now name Faulkner
+  Engineering LLC as the publisher, instead of "HyperHarbor" and "hyperharbor". The builds are still not code signed, so
+  Windows still shows "Unknown publisher" when it asks for permission. The host's Installed apps entry changes the next
+  time the host is installed.
 
 ### Fixed
 - Moving or copying a VM that keeps its TPM failed with "The host could not be reached: ... operation timed out" when the
@@ -27,6 +31,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   throwaway "HyperHarbor TPM probe" VMs were left running. The receiving host now always finishes the check and keeps its
   answer, whoever stops waiting, and the client waits up to three minutes for the receiving host's answer. Update the
   receiving host and the client.
+- Adding an ISO to a host with no admin passphrase set showed the reason for a moment and then cleared it, because the
+  image list refreshed after the attempt. The message now stays.
 
 ## [0.1.7-beta.6] - 2026-10-21 (API 1.24.0)
 

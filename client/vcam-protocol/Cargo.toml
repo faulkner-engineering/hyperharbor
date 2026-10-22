@@ -2,7 +2,7 @@
 name = "hyperharbor-vcam-protocol"
 version = "0.1.7-beta.6"
 description = "Frame messages between the HyperHarbor client and its virtual camera source"
-authors = ["HyperHarbor"]
+authors = ["Faulkner Engineering LLC"]
 edition = "2021"
 publish = false
 workspace = "../src-tauri"

@@ -8,6 +8,7 @@ namespace HyperHarbor.Host.Service.Installation;
 internal static class UninstallEntry
 {
     private const string Key = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + HostService.Name;
+    private const string Publisher = "Faulkner Engineering LLC";
 
     public static void Write(InstallLayout layout, SemanticVersion version)
     {
@@ -15,7 +16,7 @@ internal static class UninstallEntry
         var executable = $"\"{layout.CurrentExecutable}\"";
         key.SetValue("DisplayName", HostService.DisplayName);
         key.SetValue("DisplayVersion", version.ToString());
-        key.SetValue("Publisher", "HyperHarbor");
+        key.SetValue("Publisher", Publisher);
         key.SetValue("InstallLocation", layout.Root);
         key.SetValue("DisplayIcon", layout.CurrentExecutable + ",0");
         key.SetValue("UninstallString", $"{executable} {HostCommandLine.UninstallVerb}");

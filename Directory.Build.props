@@ -5,8 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Company>HyperHarbor</Company>
+    <Company>Faulkner Engineering LLC</Company>
     <Product>HyperHarbor</Product>
+    <Copyright>Copyright © 2026 Faulkner Engineering LLC</Copyright>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Fail restore on known vulnerable packages, including transitive ones. -->

@@ -37,6 +37,8 @@
   let images = $state<IsoImage[] | null>(cached?.images ?? null);
   let folder = $state<string | null>(cached?.folder ?? null);
   let error = $state<string | null>(null);
+  // Kept apart from `error`, so the refresh after a failed action does not clear that action's message.
+  let loadError = $state<string | null>(null);
   let status = $state<string | null>(null);
   let upload = $state<{ picked: PickedIso; sent: number; cancelling: boolean } | null>(null);
   let renaming = $state<{ name: string; value: string } | null>(null);
@@ -58,9 +60,9 @@
       images = list;
       folder = resources?.isoFolder ?? folder;
       libraryCache.set(key, { images: list, folder });
-      error = null;
+      loadError = null;
     } catch (e) {
-      error = errorMessage(e);
+      loadError = errorMessage(e);
       images ??= [];
     }
   }
@@ -184,7 +186,7 @@
   {/if}
 
   {#if status}<p class="status" role="status">{status}</p>{/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if error ?? loadError}<p class="error" role="alert">{error ?? loadError}</p>{/if}
 
   {#if images === null}
     <!-- Holds the table's space while loading, so nothing below jumps when it arrives. -->

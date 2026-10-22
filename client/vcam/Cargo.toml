@@ -2,7 +2,7 @@
 name = "hyperharbor-vcam"
 version = "0.1.7-beta.6"
 description = "HyperHarbor virtual camera source, loaded by the Windows Frame Server"
-authors = ["HyperHarbor"]
+authors = ["Faulkner Engineering LLC"]
 edition = "2021"
 publish = false
 workspace = "../src-tauri"
