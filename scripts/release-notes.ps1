@@ -30,7 +30,14 @@ for ($i = $start + 1; $i -lt $lines.Count; $i++) {
     if ($lines[$i] -match '^## \[') { $end = $i; break }
 }
 $body = @($lines[($start + 1)..($end - 1)])
-$text = ($body -join "`n").Trim()
+# The changelog wraps long entries, but GitHub shows every line break in release text, so join each wrapped line onto
+# the line it continues. A continuation is indented and is not itself a list item.
+$joined = New-Object System.Collections.Generic.List[string]
+foreach ($line in $body) {
+    $isContinuation = $line -match '^\s+\S' -and $line -notmatch '^\s*([-*]|\d+\.)\s' -and $joined.Count -gt 0 -and $joined[$joined.Count - 1].Trim()
+    if ($isContinuation) { $joined[$joined.Count - 1] += ' ' + $line.Trim() } else { $joined.Add($line) }
+}
+$text = ($joined -join "`n").Trim()
 if (-not $text) { throw "The CHANGELOG.md section for $Version is empty." }
 
 $notes = @()
