@@ -15,14 +15,25 @@ namespace HyperHarbor.Host.Tests.Api;
 /// Checks every mapped endpoint, so a new route is covered without anyone remembering to add a test:
 /// the routes match api.yaml, only the operations api.yaml marks with "security: []" are anonymous,
 /// and every other route rejects a request without a paired client certificate.
+/// The cases share one host (starting one per case made this the slowest class by far); each sends requests only, and
+/// the cases that pair a device pair their own certificate.
 /// </summary>
-public sealed partial class EndpointSecurityTests : IDisposable
+public sealed partial class EndpointSecurityTests(EndpointSecurityTests.SharedHost shared) : IClassFixture<EndpointSecurityTests.SharedHost>
 {
     private static readonly string[] AnonymousOperations = ["createPairingRequest", "cancelPairingRequest", "confirmPairing"];
 
-    private readonly TestHost _host = new();
+    /// <summary>api.yaml, read once for the whole class and for building the theory data.</summary>
+    private static readonly Lazy<Dictionary<string, ContractOperation>> Contract = new(ReadContractOperations);
 
-    public void Dispose() => _host.Dispose();
+    private readonly TestHost _host = shared.Host;
+
+    /// <summary>The one host every case in the class uses.</summary>
+    public sealed class SharedHost : IDisposable
+    {
+        internal TestHost Host { get; } = new();
+
+        public void Dispose() => Host.Dispose();
+    }
 
     [Fact]
     public void MappedRoutes_MatchContract()
@@ -244,7 +255,9 @@ public sealed partial class EndpointSecurityTests : IDisposable
     private sealed record ContractOperation(string OperationId, bool Anonymous, bool Elevated, bool Ticket);
 
     /// <summary>api.yaml operations keyed "METHOD /api/v1/path/{param}".</summary>
-    private static Dictionary<string, ContractOperation> ContractOperations()
+    private static Dictionary<string, ContractOperation> ContractOperations() => Contract.Value;
+
+    private static Dictionary<string, ContractOperation> ReadContractOperations()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "api.yaml");
         using var reader = new StreamReader(path);

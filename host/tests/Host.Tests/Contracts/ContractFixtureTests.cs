@@ -70,7 +70,14 @@ public class ContractFixtureTests
     private static readonly AppxBaselineInfo AppxBaselineSample = new(
         "10.0.26100/Professional", "10.0.26100.2033", "Professional", Time, AppxBaselineSource.UnattendedInstall, "TESTWINDOWSINSTALL", false);
 
-    private static Dictionary<string, object> Samples() => new()
+    /// <summary>The samples and api.yaml's schemas are built once: every case and every $ref reads them.</summary>
+    private static readonly Lazy<Dictionary<string, object>> SampleSet = new(BuildSamples);
+
+    private static readonly Lazy<YamlMappingNode> SchemaSet = new(ReadSchemas);
+
+    private static Dictionary<string, object> Samples() => SampleSet.Value;
+
+    private static Dictionary<string, object> BuildSamples() => new()
     {
         ["HostInfo"] = new HostInfo(Guid.Parse("6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f"), "TC-PC", "0.1.0", ContractInfo.ApiVersion, new string('A', 64)),
         ["Vm"] = new Vm(
@@ -498,7 +505,9 @@ public class ContractFixtureTests
         && type is YamlSequenceNode types
         && types.Children.Any(item => ((YamlScalarNode)item).Value == "null");
 
-    private static YamlMappingNode Schemas()
+    private static YamlMappingNode Schemas() => SchemaSet.Value;
+
+    private static YamlMappingNode ReadSchemas()
     {
         using var reader = new StreamReader(Path.Combine(AppContext.BaseDirectory, "api.yaml"));
         var stream = new YamlStream();
