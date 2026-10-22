@@ -10,6 +10,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.0-beta.2] - 2026-10-22 (API 1.25.0)
+
 ### Fixed
 - A VM with a network adapter that is connected to no switch could not be moved or copied: the receiving host refused
   the import with "The VM's definition has 1 network adapter(s) where 0 were expected". The host listed a VM's adapters

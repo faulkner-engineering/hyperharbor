@@ -1,6 +1,6 @@
 [package]
 name = "hyperharbor-vcam-protocol"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 description = "Frame messages between the HyperHarbor client and its virtual camera source"
 authors = ["Faulkner Engineering LLC"]
 license = "Apache-2.0"
