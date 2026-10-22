@@ -75,6 +75,7 @@ public sealed partial class CimHyperVDefinitionReader(IHyperVCompute compute) : 
         var storage = CimVmSettings.Associated(session, settings, "Msvm_StorageAllocationSettingData");
         var connections = CimVmSettings.Associated(session, settings, "Msvm_EthernetPortAllocationSettingData");
         var synthetic = CimVmSettings.Associated(session, settings, "Msvm_SyntheticEthernetPortSettingData");
+        var emulated = CimVmSettings.Associated(session, settings, "Msvm_EmulatedEthernetPortSettingData");
         var gpus = CimVmSettings.Associated(session, settings, GpuClass);
         try
         {
@@ -83,14 +84,16 @@ public sealed partial class CimHyperVDefinitionReader(IHyperVCompute compute) : 
                 .ToDictionary(item => (string)item.CimInstanceProperties["Name"].Value, item => (string)item.CimInstanceProperties["ElementName"].Value,
                     StringComparer.OrdinalIgnoreCase);
 
-            var adapters = connections
-                .Select(connection => connection.CimInstanceProperties["HostResource"]?.Value is string[] { Length: > 0 } hosts ? hosts[0] : null)
-                .Select(path => path is null ? null : SwitchIdOf(path))
-                .Select((id, index) => new VmAdapterDefinition(
-                    id,
-                    id is not null && switchNames.TryGetValue(id, out var name) ? name : null,
-                    synthetic.ElementAtOrDefault(index)?.CimInstanceProperties["Address"]?.Value as string))
-                .ToList();
+            var adapters = Adapters(
+                synthetic.Concat(emulated)
+                    .Select(port => new AdapterPort((string)port.CimInstanceProperties["InstanceID"].Value, port.CimInstanceProperties["Address"]?.Value as string))
+                    .ToList(),
+                connections
+                    .Select(connection => new AdapterConnection(
+                        connection.CimInstanceProperties["Parent"]?.Value as string,
+                        connection.CimInstanceProperties["HostResource"]?.Value is string[] { Length: > 0 } hosts ? hosts[0] : null))
+                    .ToList(),
+                switchNames);
 
             var disks = new List<VmDiskDefinition>();
             foreach (var disk in storage.Where(item => item.CimInstanceProperties["ResourceSubType"]?.Value as string == DiskSubType))
@@ -138,12 +141,35 @@ public sealed partial class CimHyperVDefinitionReader(IHyperVCompute compute) : 
         }
         finally
         {
-            foreach (var instance in devices.Concat(storage).Concat(connections).Concat(synthetic).Concat(gpus))
+            foreach (var instance in devices.Concat(storage).Concat(connections).Concat(synthetic).Concat(emulated).Concat(gpus))
             {
                 instance.Dispose();
             }
         }
     }
+
+    internal sealed record AdapterPort(string InstanceId, string? Address);
+
+    /// <param name="Parent">The object path of the adapter the connection belongs to.</param>
+    /// <param name="HostResource">The switch's object path, or null when the connection names none.</param>
+    internal sealed record AdapterConnection(string? Parent, string? HostResource);
+
+    /// <summary>
+    /// One entry per network adapter, in the order given (synthetic adapters first, in Hyper-V's order, which a transfer
+    /// matches by position). An adapter's switch comes from the connection whose Parent names it; an adapter connected to
+    /// nothing has no connection object at all, so it was dropped when the list was built from the connections (seen
+    /// live: a VM copied with an unconnected adapter could not be moved on, because its preview listed no adapters).
+    /// </summary>
+    internal static IReadOnlyList<VmAdapterDefinition> Adapters(
+        IReadOnlyList<AdapterPort> ports,
+        IReadOnlyList<AdapterConnection> connections,
+        IReadOnlyDictionary<string, string> switchNames) =>
+        ports.Select(port =>
+        {
+            var host = connections.FirstOrDefault(connection => ParentMatches(connection.Parent, port.InstanceId))?.HostResource;
+            var id = host is null ? null : SwitchIdOf(host);
+            return new VmAdapterDefinition(id, id is not null && switchNames.TryGetValue(id, out var name) ? name : null, port.Address);
+        }).ToList();
 
     private static int Number(object? value) => value is null ? 0 : int.Parse(Convert.ToString(value, CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
 

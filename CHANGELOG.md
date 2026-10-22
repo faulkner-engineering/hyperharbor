@@ -11,6 +11,10 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Fixed
+- A VM with a network adapter that is connected to no switch could not be moved or copied: the receiving host refused
+  the import with "The VM's definition has 1 network adapter(s) where 0 were expected". The host listed a VM's adapters
+  from their switch connections, so an unconnected adapter was missed. This also left such adapters out of VM backups,
+  so a restored VM came back without them. Every adapter is now listed, connected or not. Update the sending host.
 - The host's update helper (hh-update.exe) crashed at the end of every run, after the update had already succeeded, which
   left an "Application Error" event in Windows and a failed last result on the "HyperHarbor\Update" scheduled task. Updates
   themselves were not affected. It now ends cleanly.
