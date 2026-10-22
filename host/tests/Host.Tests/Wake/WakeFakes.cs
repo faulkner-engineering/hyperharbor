@@ -3,12 +3,15 @@ using HyperHarbor.Host.Core.Wake;
 
 namespace HyperHarbor.Host.Tests;
 
-/// <summary>Returns a configurable <see cref="WakeEnvironment"/>.</summary>
-internal sealed class FakeWakeEnvironment : IWakeEnvironmentReader
+/// <summary>Returns a configurable <see cref="WakeEnvironment"/>, and its adapters.</summary>
+internal sealed class FakeWakeEnvironment : IWakeEnvironmentReader, INetworkAdapterReader
 {
     public WakeEnvironment Environment { get; set; } = WakeScenarios.ReadyDesktop();
 
     public Task<WakeEnvironment> ReadAsync(CancellationToken cancellationToken) => Task.FromResult(Environment);
+
+    public Task<IReadOnlyList<NetworkAdapterState>> ReadAdaptersAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(Environment.Adapters);
 }
 
 internal sealed class FakeSleepController : ISleepController

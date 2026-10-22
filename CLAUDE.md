@@ -238,7 +238,7 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    VM from starting), exports (inside KeyProtectorHandover when the VM has a TPM; the original key protector is saved to
    OutgoingTransferStore, outgoing-transfers.json through ProtectedFile, before the grant, and RecoverAsync takes a grant
    back after a crash), sends definition files then disks in blocks hashed with RandomAccess (two reads per block, no 256 MiB
-   buffer), resumes from the receiver's count after PeerTransportException (5 in a row give up), imports with retries (the
+   buffer; since 2026-10-22 the next block is hashed while the current one is sent), resumes from the receiver's count after PeerTransportException (5 in a row give up), imports with retries (the
    receiver answers a repeated import with the same VM), then, no longer cancelable, deletes a moved VM through
    VmDeletionService.DeleteAsync (the in-job form of a delete; a failure is a result warning, never a failed job) and
    completes. Any failure before the import cancels the receiver. VmJobStore.Cancel(jobId, userId) signals a job's
@@ -311,6 +311,13 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    with IHyperVImporter (ImportAdapter.StaticMacAddress for a move) and EnableTpmAsync. A null guardian from the target now
    means "export without a grant". POST /vms/{vmId}/checkpoints/merge (CheckpointMergeService, job mergeCheckpoints); the
    dialog shows Merge checkpoints when checkpoints are the only blocker, and an "Its TPM" choice for TPM VMs.
+   Done: 24.12 transfer speed and the TPM check (2026-10-22): the first real copy (WBMI-Good, 57 GB, TC-PC to the laptop)
+   went to the laptop's Wi-Fi address at under 68 MB/s and broke when the Wi-Fi dropped. The offer now carries the
+   receiving host's own addresses (TransferAddresses.Rank over INetworkAdapterReader: connected with a default route, wired
+   before wireless, then link speed; Wi-Fi reported 2.4 Gbps against Ethernet's 1 Gbps there, and vEthernet adapters report
+   NdisPhysicalMedium 0), API 1.25.0, and the client's transfer_addresses puts them before its own. The TPM check
+   (PowerShellTpmCapabilityProbe) runs detached from its callers: the client's 10 s request timeout canceled it halfway,
+   leaving its VM running and nothing cached; the client now allows the offer 3 minutes.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

@@ -302,7 +302,7 @@ public class ContractFixtureTests
 
         // Nulls on purpose: vmId and guardian are required but nullable (a copy of a VM without a TPM).
         ["TransferOffer"] = new TransferOffer(TransferId, "fixture-ticket", "Web (copy)", @"D:\VMs\Web (copy)", null,
-            [new ValidationIssue("identity", "The copy gets a new VM ID and new MAC addresses.")], null),
+            [new ValidationIssue("identity", "The copy gets a new VM ID and new MAC addresses.")], null, ["192.168.0.246", "192.168.0.42"]),
         ["TransferTarget"] = TransferTargetSample,
         ["StartTransferRequest"] = new StartTransferRequest(TransferMode.Move, TransferTargetSample, TransferId, "fixture-ticket", [60, 120, 109, 108, 62], "Web", TransferTpmMode.Keep),
         ["TransferResult"] = new TransferResult(VmId, "Web", true, []),

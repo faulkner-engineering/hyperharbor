@@ -284,6 +284,10 @@ public sealed partial class TransferSender
         {
             var disk = disks.FirstOrDefault(stream => string.Equals(stream.Name, file.Path, StringComparison.OrdinalIgnoreCase));
             var owned = disk is null ? new FileStream(file.Path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous) : null;
+
+            // The next block is read and hashed while this one is on the network, so the disk read does not pause sending.
+            Task<byte[]>? ahead = null;
+            long aheadOffset = -1;
             try
             {
                 var handle = (disk ?? owned)!.SafeFileHandle;
@@ -297,7 +301,26 @@ public sealed partial class TransferSender
                     var length = Math.Min(_blockSize, file.Size - offset);
                     try
                     {
-                        var hash = await HashAsync(handle, offset, length, cancellationToken).ConfigureAwait(false);
+                        byte[] hash;
+                        if (ahead is not null && aheadOffset == offset)
+                        {
+                            hash = await ahead.ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            // A retry resumed somewhere else.
+                            await SettleAsync(ahead).ConfigureAwait(false);
+                            hash = await HashAsync(handle, offset, length, cancellationToken).ConfigureAwait(false);
+                        }
+
+                        ahead = null;
+                        var next = offset + length;
+                        if (next < file.Size)
+                        {
+                            aheadOffset = next;
+                            ahead = HashAsync(handle, next, Math.Min(_blockSize, file.Size - next), cancellationToken);
+                        }
+
                         await using var block = new FileSegmentStream(handle, offset, length);
                         await channel.SendBlockAsync(file.Key, offset, length, file.Size, hash, block, cancellationToken).ConfigureAwait(false);
                         offset += length;
@@ -323,8 +346,19 @@ public sealed partial class TransferSender
             }
             finally
             {
+                // The read ahead must end before its file is closed.
+                await SettleAsync(ahead).ConfigureAwait(false);
                 owned?.Dispose();
             }
+        }
+    }
+
+    /// <summary>Waits for a read ahead that will not be used, ignoring how it ended.</summary>
+    private static async Task SettleAsync(Task? readAhead)
+    {
+        if (readAhead is not null)
+        {
+            await readAhead.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         }
     }
 

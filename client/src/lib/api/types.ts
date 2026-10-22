@@ -2291,6 +2291,12 @@ export interface components {
              * @description The receiving host's key protector guardian (public certificates only), when it needs the VM's TPM key granted to it.
              */
             guardian: string | null;
+            /**
+             * @description The receiving host's own IPv4 addresses on networks with a default route, best first: wired before wireless,
+             *     then the faster link (API 1.25.0). Put them first in the transfer target's addresses, followed by the ones the
+             *     client knows, so the data does not go over Wi-Fi when the host also has Ethernet. Hosts before 1.25.0 omit it.
+             */
+            addresses: string[];
         };
         TransferTarget: {
             /** Format: uuid */

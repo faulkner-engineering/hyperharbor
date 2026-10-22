@@ -136,6 +136,7 @@ public sealed class TransferApiTests : IDisposable
         Assert.Equal("Web (copy)", (string?)offer["name"]);
         Assert.Null(offer["vmId"]);
         Assert.Equal(Convert.ToBase64String(_host.KeyProtectors.LocalGuardianExport), (string?)offer["guardian"]);
+        Assert.Equal(["192.168.1.20"], offer["addresses"]!.AsArray().Select(address => (string?)address));
         Assert.True(_host.Services.GetRequiredService<HostActivity>().InProgress);
     }
 

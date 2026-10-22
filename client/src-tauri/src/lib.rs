@@ -736,6 +736,21 @@ struct PendingTransfer {
     tpm_mode: String,
     ticket: zeroize::Zeroizing<String>,
     guardian: Option<String>,
+    /// The receiving host's own addresses, best first (API 1.25.0; empty from older hosts).
+    addresses: Vec<String>,
+}
+
+/// The addresses the sending host tries, in order: the receiving host's own ranking first (its Ethernet before its
+/// Wi-Fi), then the ones this device knows, which may include a Tailscale address. At most 16, as the API allows.
+fn transfer_addresses(offered: &[String], known: &[String]) -> Vec<String> {
+    let mut addresses: Vec<String> = Vec::new();
+    for address in offered.iter().chain(known) {
+        if !address.is_empty() && !addresses.contains(address) {
+            addresses.push(address.clone());
+        }
+    }
+    addresses.truncate(16);
+    addresses
 }
 
 /// GET /vms/{vmId}/transfer-preview on the sending host.
@@ -807,6 +822,17 @@ async fn offer_transfer(
         .get("guardian")
         .and_then(serde_json::Value::as_str)
         .map(str::to_string);
+    let addresses = offer
+        .get("addresses")
+        .and_then(serde_json::Value::as_array)
+        .map(|addresses| {
+            addresses
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
     if let Some(fields) = offer.as_object_mut() {
         fields.remove("ticket");
         fields.remove("guardian");
@@ -821,6 +847,7 @@ async fn offer_transfer(
             tpm_mode,
             ticket: zeroize::Zeroizing::new(ticket),
             guardian,
+            addresses,
         },
     );
     Ok(offer)
@@ -834,7 +861,7 @@ async fn start_transfer(
     transfer_id: String,
     confirm_name: Option<String>,
 ) -> Result<serde_json::Value, ClientError> {
-    let (source_key, target_key, mode, tpm_mode, ticket, guardian) = {
+    let (source_key, target_key, mode, tpm_mode, ticket, guardian, offered) = {
         let transfers = state.transfers.lock().unwrap();
         let pending = transfers.get(&transfer_id).ok_or_else(|| {
             ClientError::InvalidRequest(
@@ -848,6 +875,7 @@ async fn start_transfer(
             pending.tpm_mode.clone(),
             pending.ticket.clone(),
             pending.guardian.clone(),
+            pending.addresses.clone(),
         )
     };
     let (source_host, source) = state.paired_host(&source_key)?;
@@ -858,7 +886,7 @@ async fn start_transfer(
         "target": {
             "hostId": target.host_id,
             "name": target.display_name,
-            "addresses": target_host.addresses,
+            "addresses": transfer_addresses(&offered, &target_host.addresses),
             "port": target_host.port,
             "fingerprint": target.host_certificate_fingerprint,
         },
@@ -2398,4 +2426,41 @@ pub fn run() {
                 app.state::<AppState>().camera.shutdown();
             }
         });
+}
+
+#[cfg(test)]
+mod transfer_tests {
+    use super::transfer_addresses;
+
+    fn list(addresses: &[&str]) -> Vec<String> {
+        addresses
+            .iter()
+            .map(|address| address.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn the_receiving_hosts_ranking_comes_first_then_the_known_addresses() {
+        // The laptop ranks its Ethernet first; this device knew it by its Wi-Fi address and its Tailscale address.
+        let addresses = transfer_addresses(
+            &list(&["192.168.0.246", "192.168.0.42"]),
+            &list(&["192.168.0.42", "100.101.102.103"]),
+        );
+        assert_eq!(
+            addresses,
+            list(&["192.168.0.246", "192.168.0.42", "100.101.102.103"])
+        );
+    }
+
+    #[test]
+    fn an_older_host_without_a_ranking_keeps_the_known_order() {
+        let known = list(&["192.168.0.42", "LAPTOP.local"]);
+        assert_eq!(transfer_addresses(&[], &known), known);
+    }
+
+    #[test]
+    fn at_most_sixteen_addresses_are_sent() {
+        let offered: Vec<String> = (1..=20).map(|n| format!("10.0.0.{n}")).collect();
+        assert_eq!(transfer_addresses(&offered, &list(&["10.0.1.1"])).len(), 16);
+    }
 }

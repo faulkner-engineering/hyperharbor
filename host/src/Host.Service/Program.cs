@@ -201,6 +201,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<PairingService>();
 
 builder.Services.AddSingleton<IWakeEnvironmentReader, WindowsWakeEnvironmentReader>();
+builder.Services.AddSingleton<INetworkAdapterReader, WindowsWakeEnvironmentReader>();
 builder.Services.AddSingleton<ISleepController, WindowsSleepController>();
 builder.Services.AddSingleton<WakeTestScheduler>();
 builder.Services.AddSingleton<IWakeFixApprover>(services => services.GetRequiredService<TrayPipeServer>());

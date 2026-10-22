@@ -65,8 +65,8 @@ public static class TransferMapping
     public static Domain.IncomingTransferRequest ToCore(this Wire.IncomingTransferRequest request) =>
         new(request.Preview.ToCore(), request.Mode, request.SourceFingerprint, request.AcknowledgeWarnings, request.TpmMode);
 
-    public static Wire.TransferOffer ToContract(this Domain.IncomingTransferOffer offer) =>
-        new(offer.TransferId, offer.Ticket, offer.Plan.Name, offer.Plan.VmFolder, offer.Plan.VmId, offer.Plan.Warnings, offer.Guardian);
+    public static Wire.TransferOffer ToContract(this Domain.IncomingTransferOffer offer, IReadOnlyList<string> addresses) =>
+        new(offer.TransferId, offer.Ticket, offer.Plan.Name, offer.Plan.VmFolder, offer.Plan.VmId, offer.Plan.Warnings, offer.Guardian, addresses);
 
     public static Domain.TransferSendRequest ToCore(this Wire.StartTransferRequest request, Guid vmId) => new(
         vmId,

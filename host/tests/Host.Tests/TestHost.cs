@@ -59,6 +59,7 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IPairingNotifier>(Tray);
                 services.AddSingleton<IWakeFixApprover>(Tray);
                 services.AddSingleton<IWakeEnvironmentReader>(Wake);
+                services.AddSingleton<INetworkAdapterReader>(Wake);
                 services.AddSingleton<ISleepController>(Sleep);
 
                 // The real coordinator applies fixes itself in an elevated process; tests run elevated or not,

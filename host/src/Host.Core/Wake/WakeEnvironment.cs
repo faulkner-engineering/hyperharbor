@@ -23,6 +23,9 @@ public sealed record WakeEnvironment(
 /// <param name="Category">The Windows network category of the network it is connected to, or null when it has none.</param>
 /// <param name="HasDefaultGateway">It has an IPv4 default route, so it carries the PC's connection to the LAN (the Hyper-V
 /// Default Switch's adapter has none).</param>
+/// <param name="IsWireless">Wi-Fi or mobile broadband media. A Hyper-V vEthernet adapter reports no medium, so it is not
+/// wireless even when its switch is bound to a Wi-Fi adapter.</param>
+/// <param name="LinkSpeed">Receive link speed in bits per second, 0 when unknown.</param>
 public sealed record NetworkAdapterState(
     string Name,
     string Description,
@@ -33,7 +36,9 @@ public sealed record NetworkAdapterState(
     IReadOnlyList<Ipv4Assignment> Ipv4Addresses,
     bool? WakeOnMagicPacket,
     NetworkCategory? Category = null,
-    bool HasDefaultGateway = false);
+    bool HasDefaultGateway = false,
+    bool IsWireless = false,
+    ulong LinkSpeed = 0);
 
 /// <summary>The Windows network category, which picks the firewall profile (MSFT_NetConnectionProfile.NetworkCategory).</summary>
 public enum NetworkCategory

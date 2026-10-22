@@ -10,6 +10,16 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Changed
+- VM transfers go over the receiving host's wired connection when it has one (API 1.25.0). The receiving host now lists
+  its own addresses in its answer to the offer (`addresses` in `TransferOffer`), wired before Wi-Fi and then the faster
+  link, and the client puts them first for the sending host, followed by the addresses it knows (such as Tailscale).
+  Before, the sending host used whichever address the client listed first: a laptop with both received a copy over
+  Wi-Fi at under 68 MB/s, and the copy failed when the Wi-Fi dropped, while its 1 Gbps Ethernet sat idle. Update the
+  receiving host and the client; with an older receiving host, transfers work as before.
+- Transfers send faster: the sending host now reads and checks the next block of a disk while the current one is on the
+  network, instead of between blocks.
+
 ### Fixed
 - Moving or copying a VM that keeps its TPM failed with "The host could not be reached: ... operation timed out" when the
   receiving host had not yet checked its Hyper-V since it started. The check starts a throwaway VM, which takes longer

@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using HyperHarbor.Host.Core.Transfer;
+using HyperHarbor.Host.Core.Wake;
 using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
@@ -70,10 +71,27 @@ public static partial class TransferEndpoints
             : TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: "No transfer running", detail: $"No transfer of VM {vmId} is running for this User.");
 
     private static async Task<Created<Wire.TransferOffer>> OfferAsync(
-        Wire.IncomingTransferRequest request, TransferReceiver receiver, ClaimsPrincipal user, CancellationToken cancellationToken)
+        Wire.IncomingTransferRequest request,
+        TransferReceiver receiver,
+        INetworkAdapterReader adapters,
+        ClaimsPrincipal user,
+        ILoggerFactory loggers,
+        CancellationToken cancellationToken)
     {
         var offer = await receiver.OfferAsync(request.ToCore(), user.UserId(), cancellationToken);
-        return TypedResults.Created($"{TransfersPath}/{offer.TransferId:D}", offer.ToContract());
+        IReadOnlyList<string> addresses;
+        try
+        {
+            addresses = TransferAddresses.Rank(await adapters.ReadAdaptersAsync(cancellationToken)).Take(16).ToList();
+        }
+        catch (Exception ex) when (ex is Microsoft.Management.Infrastructure.CimException or UnauthorizedAccessException)
+        {
+            // The client's own addresses for this host still work; they are only not ordered by link.
+            loggers.CreateLogger(typeof(TransferEndpoints)).LogWarning(ex, "Could not read this host's network adapters for transfer {TransferId}.", offer.TransferId);
+            addresses = [];
+        }
+
+        return TypedResults.Created($"{TransfersPath}/{offer.TransferId:D}", offer.ToContract(addresses));
     }
 
     private static Ok<Wire.IncomingTransferStatus> Status(Guid transferId, TransferReceiver receiver) =>

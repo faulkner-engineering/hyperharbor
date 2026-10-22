@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.24.0
+  version: 1.25.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -89,7 +89,8 @@ tags:
       1. `GET /vms/{vmId}/transfer-preview` on the sending host.
       2. `POST /transfers/incoming` on the receiving host with that preview and the sending host's certificate
          fingerprint. The answer has a one-time ticket.
-      3. `POST /vms/{vmId}/transfer` on the sending host with the receiving host's address, fingerprint, and offer.
+      3. `POST /vms/{vmId}/transfer` on the sending host with the receiving host's addresses (the offer's `addresses`
+         first, API 1.25.0), fingerprint, and offer.
          Poll the `transferVm` job; its `transferResult` names the VM on the receiving host.
 
       The sending host then calls the receiving host's `transferTicket` operations itself. A move keeps the VM's ID and
@@ -3809,7 +3810,7 @@ components:
 
     TransferOffer:
       type: object
-      required: [transferId, ticket, name, vmFolder, vmId, warnings, guardian]
+      required: [transferId, ticket, name, vmFolder, vmId, warnings, guardian, addresses]
       properties:
         transferId:
           type: string
@@ -3834,6 +3835,15 @@ components:
           type: [string, "null"]
           format: byte
           description: The receiving host's key protector guardian (public certificates only), when it needs the VM's TPM key granted to it.
+        addresses:
+          type: array
+          maxItems: 16
+          description: |
+            The receiving host's own IPv4 addresses on networks with a default route, best first: wired before wireless,
+            then the faster link (API 1.25.0). Put them first in the transfer target's addresses, followed by the ones the
+            client knows, so the data does not go over Wi-Fi when the host also has Ethernet. Hosts before 1.25.0 omit it.
+          items:
+            type: string
 
     TransferTarget:
       type: object

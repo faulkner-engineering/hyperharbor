@@ -12,12 +12,18 @@ public interface IWakeEnvironmentReader
     Task<WakeEnvironment> ReadAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>This PC's network adapters, without the wake and power state.</summary>
+public interface INetworkAdapterReader
+{
+    Task<IReadOnlyList<NetworkAdapterState>> ReadAdaptersAsync(CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// Reads Wake-on-LAN state without administrator rights: adapters and addresses from CIM
 /// (root\StandardCimv2; network categories from MSFT_NetConnectionProfile, default routes from MSFT_NetRoute), driver keywords from the registry, wake-armed devices from powercfg,
 /// and sleep capabilities from the power management API.
 /// </summary>
-public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
+public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader, INetworkAdapterReader
 {
     private const string NetworkNamespace = @"root\StandardCimv2";
     private const string NetworkClassKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}";
@@ -25,12 +31,18 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
 
     // NDIS_PHYSICAL_MEDIUM values.
     private const uint Medium802_3 = 14;
+    private const uint MediumWirelessLan = 1;
+    private const uint MediumWirelessWan = 8;
+    private const uint MediumNative802_11 = 9;
 
     // NET_IF_MEDIA_CONNECT_STATE.
     private const uint MediaConnected = 1;
 
     public Task<WakeEnvironment> ReadAsync(CancellationToken cancellationToken) =>
         Task.Run(Read, cancellationToken);
+
+    public Task<IReadOnlyList<NetworkAdapterState>> ReadAdaptersAsync(CancellationToken cancellationToken) =>
+        Task.Run<IReadOnlyList<NetworkAdapterState>>(ReadAdapters, cancellationToken);
 
     private static WakeEnvironment Read() =>
         new(ReadAdapters(), QueryDevices("wake_armed"), QueryDevices("wake_programmable"), PowerSettings.Read());
@@ -106,7 +118,9 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
                     addresses[index].ToList(),
                     wakeKeywords.GetValueOrDefault(interfaceGuid.ToUpperInvariant()),
                     categories.TryGetValue(index, out var category) ? category : null,
-                    gateways.Contains(index)));
+                    gateways.Contains(index),
+                    IsWireless: medium is MediumWirelessLan or MediumWirelessWan or MediumNative802_11,
+                    LinkSpeed: Convert.ToUInt64(instance.CimInstanceProperties["ReceiveLinkSpeed"]?.Value ?? 0ul)));
             }
         }
 

@@ -82,6 +82,7 @@ public sealed record IncomingTransferRequest(
 /// <param name="VmId">The ID the VM keeps (a move); null for a copy, which gets a new one.</param>
 /// <param name="VmFolder">Where the VM goes on the receiving host.</param>
 /// <param name="Guardian">The receiving host's key protector guardian (public certificates), when the VM has a TPM.</param>
+/// <param name="Addresses">The receiving host's own addresses, best first (wired before wireless), for the transfer target.</param>
 public sealed record TransferOffer(
     Guid TransferId,
     string Ticket,
@@ -89,7 +90,8 @@ public sealed record TransferOffer(
     string VmFolder,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] Guid? VmId,
     IReadOnlyList<ValidationIssue> Warnings,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] byte[]? Guardian)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] byte[]? Guardian,
+    IReadOnlyList<string> Addresses)
 {
     public override string ToString() => $"TransferOffer {{ TransferId = {TransferId}, Name = {Name} }}";
 }
