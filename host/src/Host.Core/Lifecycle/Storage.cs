@@ -55,6 +55,14 @@ public interface IDiskFiles
 
     /// <summary>Virtual hard disk files (.vhd, .vhdx, .avhd, .avhdx) directly in <paramref name="directory"/>.</summary>
     IEnumerable<string> ListDiskFiles(string directory);
+
+    /// <summary>
+    /// Deletes a VM's own folder when nothing is left in it but empty folders Hyper-V made ("Virtual Hard Disks",
+    /// "Virtual Machines", "Snapshots"). Returns false, and deletes nothing, when it holds anything else.
+    /// </summary>
+    /// <exception cref="IOException">The folder could not be deleted.</exception>
+    /// <exception cref="UnauthorizedAccessException">The service lacks the right to delete it.</exception>
+    bool DeleteEmptyVmFolder(string folder);
 }
 
 /// <summary>Path rules for virtual hard disk files.</summary>
@@ -91,6 +99,9 @@ public sealed class WindowsDiskFiles : IDiskFiles
     private const uint DeleteAccess = 0x00010000;
     private const uint ShareAll = 0x7;
     private const uint OpenExisting = 3;
+
+    /// <summary>The folders Hyper-V creates inside a VM's own folder.</summary>
+    private static readonly string[] VmFolderNames = ["Virtual Hard Disks", "Virtual Machines", "Snapshots"];
 
     public bool Exists(string path) => File.Exists(path);
 
@@ -132,6 +143,54 @@ public sealed class WindowsDiskFiles : IDiskFiles
         Directory.Exists(directory)
             ? Directory.EnumerateFiles(directory).Where(DiskPaths.IsDisk)
             : [];
+
+    public bool DeleteEmptyVmFolder(string folder)
+    {
+        var root = new DirectoryInfo(folder);
+        if (!root.Exists || root.Attributes.HasFlag(FileAttributes.ReparsePoint) || !HoldsOnlyEmptyFolders(root, VmFolderNames))
+        {
+            return false;
+        }
+
+        // Children first and never recursively, so nothing written in the meantime is deleted with it.
+        foreach (var child in root.EnumerateDirectories())
+        {
+            DeleteEmptyTree(child);
+        }
+
+        root.Delete();
+        return true;
+    }
+
+    private static bool HoldsOnlyEmptyFolders(DirectoryInfo directory, string[]? allowedNames)
+    {
+        if (directory.EnumerateFiles().Any())
+        {
+            return false;
+        }
+
+        foreach (var child in directory.EnumerateDirectories())
+        {
+            if (child.Attributes.HasFlag(FileAttributes.ReparsePoint)
+                || (allowedNames is not null && !allowedNames.Contains(child.Name, StringComparer.OrdinalIgnoreCase))
+                || !HoldsOnlyEmptyFolders(child, null))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void DeleteEmptyTree(DirectoryInfo directory)
+    {
+        foreach (var child in directory.EnumerateDirectories())
+        {
+            DeleteEmptyTree(child);
+        }
+
+        directory.Delete();
+    }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern SafeFileHandle CreateFileW(

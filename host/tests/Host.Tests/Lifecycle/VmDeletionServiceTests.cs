@@ -243,6 +243,90 @@ public sealed class VmDeletionServiceTests : IDisposable
         Assert.Equal([VmId], _storage.DeletedVms);
     }
 
+    [Theory]
+    [InlineData(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", @"D:\VMs\Dev")]
+    [InlineData(@"C:\ProgramData\Microsoft\Windows\Hyper-V\dev\Virtual Hard Disks\Dev.vhdx", @"C:\ProgramData\Microsoft\Windows\Hyper-V\dev")]
+    public async Task DeletingDisks_AlsoRemovesTheVmsOwnFolder(string disk, string folder)
+    {
+        UseDisk(disk);
+
+        var job = await StartAsync(deleteDisks: true);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+        Assert.Equal([folder], _files.DeletedFolders);
+    }
+
+    [Theory]
+    [InlineData(BaseDisk)]
+    [InlineData(@"C:\ProgramData\Microsoft\Windows\Virtual Hard Disks\Dev.vhdx")]
+    [InlineData(@"D:\VMs\Other\Virtual Hard Disks\Dev.vhdx")]
+    [InlineData(@"D:\Virtual Hard Disks\Dev.vhdx")]
+    public async Task AFolderThatIsNotTheVmsOwn_IsNeverTouched(string disk)
+    {
+        if (disk != BaseDisk)
+        {
+            UseDisk(disk);
+        }
+
+        var job = await StartAsync(deleteDisks: true);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+        Assert.Empty(_files.FolderRequests);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task TheVmsFolder_StaysWhenItsDisksStayOrFailToDelete(bool deleteDisks, bool failOnDelete)
+    {
+        const string disk = @"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx";
+        UseDisk(disk);
+        if (failOnDelete)
+        {
+            _files.FailOnDelete.Add(disk);
+        }
+
+        var job = await StartAsync(deleteDisks);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(failOnDelete ? VmJobState.Failed : VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+        Assert.Empty(_files.FolderRequests);
+    }
+
+    [Fact]
+    public void WindowsDiskFiles_DeletesOnlyAFolderOfEmptyHyperVFolders()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "hh-folder-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var files = new WindowsDiskFiles();
+            var empty = Path.Combine(root, "Empty");
+            Directory.CreateDirectory(Path.Combine(empty, "Virtual Hard Disks"));
+            Directory.CreateDirectory(Path.Combine(empty, "Virtual Machines", "nested"));
+            Assert.True(files.DeleteEmptyVmFolder(empty));
+            Assert.False(Directory.Exists(empty));
+
+            var withFile = Path.Combine(root, "WithFile");
+            Directory.CreateDirectory(Path.Combine(withFile, "Virtual Machines"));
+            File.WriteAllText(Path.Combine(withFile, "Virtual Machines", "notes.txt"), "keep");
+            Assert.False(files.DeleteEmptyVmFolder(withFile));
+            Assert.True(File.Exists(Path.Combine(withFile, "Virtual Machines", "notes.txt")));
+
+            var otherFolder = Path.Combine(root, "OtherFolder");
+            Directory.CreateDirectory(Path.Combine(otherFolder, "Documents"));
+            Assert.False(files.DeleteEmptyVmFolder(otherFolder));
+            Assert.True(Directory.Exists(Path.Combine(otherFolder, "Documents")));
+
+            Assert.False(files.DeleteEmptyVmFolder(Path.Combine(root, "Missing")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task VmStartedAfterTheRequest_FailsTheJob_WithoutDeleting()
     {
@@ -354,6 +438,15 @@ public sealed class VmDeletionServiceTests : IDisposable
         {
             Directory.Delete(data, recursive: true);
         }
+    }
+
+    /// <summary>Gives the VM this disk in place of <see cref="BaseDisk"/>.</summary>
+    private void UseDisk(string disk)
+    {
+        _storage.Disks.Clear();
+        _files.Files.Clear();
+        _storage.Attach(VmId, "Dev", disk);
+        _files.Files.Add(disk);
     }
 
     private async Task<VmJobSnapshot> StartAsync(bool deleteDisks,bool deleteCheckpoints = false, Action? beforeJob = null)

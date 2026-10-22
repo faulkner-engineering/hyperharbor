@@ -95,6 +95,23 @@ internal sealed class FakeDiskFiles : IDiskFiles
 
     public IEnumerable<string> ListDiskFiles(string directory) =>
         Files.Where(file => string.Equals(Path.GetDirectoryName(file), directory.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>Folders asked to be deleted; a folder still holding a file in <see cref="Files"/> is kept.</summary>
+    public List<string> FolderRequests { get; } = [];
+
+    public List<string> DeletedFolders { get; } = [];
+
+    public bool DeleteEmptyVmFolder(string folder)
+    {
+        FolderRequests.Add(folder);
+        if (Files.Any(file => file.StartsWith(folder.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        DeletedFolders.Add(folder);
+        return true;
+    }
 }
 
 /// <summary>Fixed host capacity.</summary>

@@ -186,6 +186,39 @@ public sealed class VmDeletionService
             throw new DiskDeletionException(
                 $"The virtual machine was deleted, but these disk files could not be: {string.Join(", ", failed)}. Delete them on the host.");
         }
+
+        DeleteOwnFolders(preview);
+    }
+
+    /// <summary>
+    /// Removes the VM's own folder once its disks are gone, so a later VM of the same name (a move back, for one) gets
+    /// it again. Only a folder named after the VM that holds a disk's "Virtual Hard Disks" folder counts as its own, and
+    /// only when nothing but empty Hyper-V folders is left in it. A folder that stays is logged, never an error.
+    /// </summary>
+    private void DeleteOwnFolders(VmDeletePreview preview)
+    {
+        var folders = preview.Disks
+            .Select(Path.GetDirectoryName)
+            .Where(directory => directory is not null && string.Equals(Path.GetFileName(directory), "Virtual Hard Disks", StringComparison.OrdinalIgnoreCase))
+            .Select(directory => Path.GetDirectoryName(directory!))
+            .Where(folder => folder is not null
+                && Path.GetDirectoryName(folder) is not null
+                && string.Equals(Path.GetFileName(folder), preview.VmName, StringComparison.OrdinalIgnoreCase))
+            .Distinct(DiskPaths.Comparer);
+        foreach (var folder in folders)
+        {
+            try
+            {
+                if (_files.DeleteEmptyVmFolder(folder!))
+                {
+                    _logger.LogInformation("Deleted the empty folder {Folder} of {Name}.", folder, preview.VmName);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Could not delete the empty folder {Folder} of {Name}.", folder, preview.VmName);
+            }
+        }
     }
 
     /// <summary>

@@ -43,6 +43,9 @@ note anything that needs action, such as updating the host, a new elevation requ
   the only thing in the way.
 
 ### Fixed
+- Deleting a VM with its disks, or moving it to another host, left its folder behind with empty "Virtual Hard Disks" and
+  "Virtual Machines" folders, so a VM of the same name coming back later was renamed "(moved)". The VM's own folder (named
+  after it, holding its disks' folder) is now removed too, but only when nothing else is left in it.
 - Backups recorded the wrong virtual switch for each network adapter, so every restored VM was connected to the
   Default Switch (with a warning) instead of the switch it had. New backups record the right switch. Backups taken
   before this fix still restore to the Default Switch; reconnect the adapter afterwards if it needs another switch.
