@@ -1,0 +1,55 @@
+name: Release build cache
+
+# Keeps the client's release-profile Rust dependencies compiled in a cache on main. A tag run (the Release workflow)
+# can read caches only from main and from its own tag, so without this every release compiled them from scratch.
+# The Release workflow reads this cache with the same shared key. It runs when the Rust dependencies change, and
+# weekly so that GitHub does not evict the cache (caches unused for 7 days are removed); a run that finds the cache
+# for the current lockfile builds nothing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - client/src-tauri/Cargo.lock
+      - client/src-tauri/Cargo.toml
+      - client/vcam/Cargo.toml
+      - client/vcam-protocol/Cargo.toml
+      - .github/workflows/release-cache.yml
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - id: cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/src-tauri
+          shared-key: release
+
+      # The same release builds as scripts/package.ps1, so the cached dependencies match what a release compiles
+      # (the Tauri CLI adds its own features to the tauri crate). No installer is bundled or signed.
+      - name: Install client dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: client
+        run: npm ci --no-audit --no-fund
+      - name: Build camera source DLL
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: client/src-tauri
+        run: cargo build -p hyperharbor-vcam --release
+      - name: Build client
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: client
+        run: npm run tauri build -- --no-bundle

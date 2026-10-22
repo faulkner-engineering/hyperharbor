@@ -1,7 +1,8 @@
 name: Release
 
-# Pushing a tag vX.Y.Z (or vX.Y.Z-beta.N) builds, tests, and packages a release and attaches it to a DRAFT
-# GitHub release. Nothing reaches hosts until someone publishes the draft:
+# Pushing a tag vX.Y.Z (or vX.Y.Z-beta.N) packages a release and attaches it to a DRAFT GitHub release. The tests
+# are not run again here: the draft is created only after the CI workflow has passed for the tagged commit, so
+# tag a commit that was pushed to main. Nothing reaches hosts until someone publishes the draft:
 #   - stable: hosts read releases/latest/download/latest.json, which follows the newest published,
 #     non-prerelease release.
 #   - beta: publishing a prerelease copies its latest.json to the fixed "channel-beta" release, which beta
@@ -15,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   draft:
@@ -31,9 +33,13 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      # A tag run can read caches only from main and from its own tag, so the release-profile dependencies come
+      # from the cache the Release build cache workflow keeps on main. Saving here would help no later tag.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: client/src-tauri
+          shared-key: release
+          save-if: false
 
       - name: The tag matches the host and client versions
         shell: pwsh
@@ -52,13 +58,13 @@ jobs:
         working-directory: client
         run: npm ci --no-audit --no-fund
 
-      - name: Test and package (full build)
+      - name: Package (full build)
         shell: pwsh
         env:
           # Signs the client installer for the client's updater (the public key is in tauri.conf.json).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: ./scripts/package.ps1
+        run: ./scripts/package.ps1 -SkipTests
 
       - name: The client update files exist
         shell: pwsh
@@ -67,6 +73,28 @@ jobs:
             if (-not (Test-Path $file)) { throw "$file is missing: check the TAURI_SIGNING_PRIVATE_KEY secrets." }
           }
           if (-not (Get-ChildItem dist/*-setup.exe.sig)) { throw 'The installer signature is missing.' }
+
+      # CI runs for the same commit (pushed to main with the tag) while this job packages; wait for its result.
+      - name: CI passed for the tagged commit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $sha = '${{ github.sha }}'
+          $start = Get-Date
+          while ($true) {
+            $json = gh run list --repo '${{ github.repository }}' --workflow ci.yml --commit $sha --event push --json 'status,conclusion,url'
+            if ($LASTEXITCODE -ne 0) { throw "gh run list failed ($LASTEXITCODE)." }
+            # Newest first. ForEach-Object unrolls the array, which Windows PowerShell's ConvertFrom-Json does not.
+            $runs = @($json | ConvertFrom-Json | ForEach-Object { $_ })
+            if (@($runs | Where-Object conclusion -eq 'success').Count -gt 0) { Write-Host 'CI passed.'; break }
+            $latest = $runs | Select-Object -First 1
+            if ($latest -and $latest.status -eq 'completed') { throw "CI did not pass for $sha ($($latest.conclusion)): $($latest.url)" }
+            $waited = (Get-Date) - $start
+            if (-not $latest -and $waited.TotalMinutes -gt 5) { throw "No CI run for $sha. Push the commit to main, then push the tag." }
+            if ($waited.TotalMinutes -gt 60) { throw "CI for $sha did not finish within an hour." }
+            Start-Sleep -Seconds 30
+          }
 
       - name: Create the draft release
         shell: pwsh

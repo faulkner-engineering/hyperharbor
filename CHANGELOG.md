@@ -10,6 +10,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Security
+- The client no longer includes the zip archive library its updater used only for the old archive update format
+  (RUSTSEC-2026-0367 to 0369: extracting an archive could write outside its folder through symbolic links). Client
+  updates are the signed installer itself and never an archive, so nothing changes for updates. The client's
+  certificate checking library (rustls-webpki) is updated to 0.103.16 and its root certificates (webpki-root-certs) to
+  1.0.10 (RUSTSEC-2026-0382 and 0383). Update the client on every PC.
+
 ## [0.1.7-beta.6] - 2026-10-21 (API 1.24.0)
 
 ### Added

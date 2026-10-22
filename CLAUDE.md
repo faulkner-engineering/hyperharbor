@@ -487,8 +487,13 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Verified on 2026-10-02: packaged host plus client paired and listed VMs across machines.
 - package.ps1 also writes dist\latest.json with "HyperHarbor.Host.exe write-update-manifest" (the code that
   reads manifests writes it; a prerelease version goes to the beta channel).
-- Releases (.github/workflows/release.yml): push tag vX.Y.Z (must equal both versions); the workflow tests,
-  runs package.ps1, and creates a DRAFT release with the host exe, latest.json, and the client installer.
+- Releases (.github/workflows/release.yml): push the commit to main, then tag vX.Y.Z (must equal both versions); the
+  workflow runs package.ps1 -SkipTests, waits for the CI workflow to pass for that commit, and creates a DRAFT release
+  with the host exe, latest.json, and the client installer (about 25 minutes when it also ran the tests and compiled
+  every Rust dependency, 2026-10-21). Its Rust cache (shared key "release") comes from main, because a tag run cannot
+  read another tag's caches: release-cache.yml builds the release profile on main when the Rust dependencies change
+  and weekly, and builds nothing when the cache already matches. Run scripts\test-all.ps1 with cargo-audit installed
+  (cargo install cargo-audit --locked) before tagging; without it the script skips the audit CI runs.
   Publishing the draft is the owner's step: stable hosts read releases/latest/download/latest.json (newest
   published non-prerelease); publishing a prerelease copies its latest.json to the fixed "channel-beta"
   release that beta hosts read.
