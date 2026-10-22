@@ -73,6 +73,43 @@ public sealed class FileLoggerProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateHelper_WritesItsOwnFile_WhileTheHostHoldsItsFile()
+    {
+        // Seen live: the service keeps today's host file open for writing, so every line the update helper wrote to
+        // that file was lost, including the exception that ended a run.
+        using var host = new FileLoggerProvider(_directory, _time);
+        host.CreateLogger("Host").LogInformation("The service is running.");
+        await host.FlushAsync();
+
+        using var helper = new FileLoggerProvider(_directory, _time, prefix: FileLoggerProvider.UpdatePrefix);
+        helper.CreateLogger("HyperHarbor.Update").LogInformation("Updated HyperHarbor.");
+        await helper.FlushAsync();
+
+        Assert.EndsWith("update-" + _time.GetLocalNow().ToString("yyyyMMdd") + ".log", helper.CurrentPath, StringComparison.Ordinal);
+        Assert.Contains("Updated HyperHarbor.", await ReadSharedAsync(helper.CurrentPath), StringComparison.Ordinal);
+        Assert.DoesNotContain("Updated HyperHarbor.", await ReadSharedAsync(host.CurrentPath), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OldFiles_AreDeletedOnlyForTheProvidersOwnPrefix()
+    {
+        var folder = Path.Combine(_directory, FileLoggerProvider.FolderName);
+        Directory.CreateDirectory(folder);
+        var hostOld = Path.Combine(folder, "host-20260901.log");
+        var updateOld = Path.Combine(folder, "update-20260901.log");
+        foreach (var file in new[] { hostOld, updateOld })
+        {
+            File.WriteAllText(file, "old");
+            File.SetLastWriteTimeUtc(file, _time.GetUtcNow().UtcDateTime.AddDays(-(FileLoggerProvider.RetentionDays + 1)));
+        }
+
+        using var provider = new FileLoggerProvider(_directory, _time, prefix: FileLoggerProvider.UpdatePrefix);
+
+        Assert.False(File.Exists(updateOld));
+        Assert.True(File.Exists(hostOld));
+    }
+
+    [Fact]
     public async Task LogFile_HasTheRestrictedAcl()
     {
         using var provider = new FileLoggerProvider(_directory, _time);

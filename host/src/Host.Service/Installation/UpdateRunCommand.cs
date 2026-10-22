@@ -6,7 +6,8 @@ namespace HyperHarbor.Host.Service.Installation;
 
 /// <summary>
 /// hh-update.exe update-run, started by the "HyperHarbor\Update" task as SYSTEM: applies a handed-off update or
-/// finishes an interrupted one (<see cref="UpdateApplier"/>). Its log lines go to the host's daily log file.
+/// finishes an interrupted one (<see cref="UpdateApplier"/>). Its log lines go to logs\update-yyyyMMdd.log: the
+/// service holds the host's own file open while the helper starts, so lines written there were lost.
 /// Exit code 0, except 1 when the update ended Failed and 2 when it was not run elevated.
 /// </summary>
 internal static class UpdateRunCommand
@@ -64,7 +65,7 @@ internal static class UpdateRunCommand
         var trayUser = TrayUser.Resolve(new ConfigurationBuilder().Build(), isWindowsService: true);
         using var logging = LoggerFactory.Create(builder => builder
             .SetMinimumLevel(LogLevel.Information)
-            .AddProvider(new FileLoggerProvider(dataDirectory, readers: trayUser is null ? [] : [trayUser])));
+            .AddProvider(new FileLoggerProvider(dataDirectory, readers: trayUser is null ? [] : [trayUser], prefix: FileLoggerProvider.UpdatePrefix)));
         var logger = logging.CreateLogger("HyperHarbor.Update");
         var service = new WindowsServiceControl();
         var applier = new UpdateApplier(

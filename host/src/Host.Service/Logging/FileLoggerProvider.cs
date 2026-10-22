@@ -18,7 +18,14 @@ public sealed class FileLoggerProvider : ILoggerProvider
     public const string FolderName = "logs";
     public const int RetentionDays = 14;
 
+    /// <summary>The host's own files. The service keeps today's open for writing, which shuts out other processes.</summary>
+    public const string HostPrefix = "host";
+
+    /// <summary>The update helper's files: it runs while the service holds the host's file, so it needs its own.</summary>
+    public const string UpdatePrefix = "update";
+
     private readonly string _folder;
+    private readonly string _prefix;
     private readonly TimeProvider _time;
     /// <summary>Lines to write, and flush markers (a TaskCompletionSource) completed once every line before them is written.</summary>
     private readonly Channel<object> _lines = Channel.CreateUnbounded<object>(new UnboundedChannelOptions { SingleReader = true });
@@ -26,9 +33,15 @@ public sealed class FileLoggerProvider : ILoggerProvider
     private readonly IReadOnlyCollection<SecurityIdentifier> _readers;
 
     /// <param name="readers">Accounts that may also read new log files (see <see cref="ProtectedFile.OpenAppend"/>).</param>
-    public FileLoggerProvider(string dataDirectory, TimeProvider? time = null, IReadOnlyCollection<SecurityIdentifier>? readers = null)
+    /// <param name="prefix">The file name before the date: <see cref="HostPrefix"/> or <see cref="UpdatePrefix"/>.</param>
+    public FileLoggerProvider(
+        string dataDirectory,
+        TimeProvider? time = null,
+        IReadOnlyCollection<SecurityIdentifier>? readers = null,
+        string prefix = HostPrefix)
     {
         _readers = readers ?? [];
+        _prefix = prefix;
         _folder = Path.Combine(dataDirectory, FolderName);
         _time = time ?? TimeProvider.System;
         DeleteOldFiles();
@@ -68,7 +81,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
     private void Enqueue(string line) => _lines.Writer.TryWrite(line);
 
     private string PathFor(DateTimeOffset day) =>
-        Path.Combine(_folder, $"host-{day.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}.log");
+        Path.Combine(_folder, $"{_prefix}-{day.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}.log");
 
     private async Task WriteAsync()
     {
@@ -128,7 +141,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
             }
 
             var cutoff = _time.GetUtcNow().UtcDateTime.AddDays(-RetentionDays);
-            foreach (var file in new DirectoryInfo(_folder).EnumerateFiles("host-*.log"))
+            foreach (var file in new DirectoryInfo(_folder).EnumerateFiles($"{_prefix}-*.log"))
             {
                 if (file.LastWriteTimeUtc < cutoff)
                 {

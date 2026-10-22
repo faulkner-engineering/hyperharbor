@@ -10,6 +10,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- The update helper's own log lines were lost: it wrote to the host's daily log file, which the running service keeps
+  open, so nothing it logged during an update (including why a run failed) reached the disk. It now writes
+  logs\update-yyyyMMdd.log, which Download host logs includes.
+
 ## [0.2.0-beta.2] - 2026-10-22 (API 1.25.0)
 
 ### Fixed
@@ -19,7 +24,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   so a restored VM came back without them. Every adapter is now listed, connected or not. Update the sending host.
 - The host's update helper (hh-update.exe) crashed at the end of every run, after the update had already succeeded, which
   left an "Application Error" event in Windows and a failed last result on the "HyperHarbor\Update" scheduled task. Updates
-  themselves were not affected. It now ends cleanly.
+  themselves were not affected. Each update is run by the helper of the version installed before it, so the update to
+  this version still ends that way; updates from this version on end cleanly.
 
 ## [0.2.0-beta.1] - 2026-10-22 (API 1.25.0)
 
