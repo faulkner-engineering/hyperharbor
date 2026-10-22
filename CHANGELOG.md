@@ -10,6 +10,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.0-beta.1] - 2026-10-22 (API 1.25.0)
+
 ### Added
 - HyperHarbor is now licensed under the Apache License 2.0 (LICENSE, NOTICE). Before, the public repository had no
   license, so nothing in it could be reused. WARRANTY.md explains that it comes with no warranty and what it changes on
