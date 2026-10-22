@@ -10,13 +10,15 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.1.7-beta.6] - 2026-10-21 (API 1.24.0)
+
 ### Added
 - A readiness check, "Network is private", in the client's Wake-on-LAN panel and the host window's Wake-on-LAN card. It
   warns when the host's network connection is on a Public network (or a domain network), where Windows Firewall blocks
   HyperHarbor (TCP 48443) and other devices cannot reach the host, and says how to make the network Private. It is never
   changed automatically, because that loosens the firewall on that network. Seen on a host whose Hyper-V external switch
   adapter Windows had made Public.
-- Moving or copying a VM between hosts, host side (API 1.24.0; the client's dialog comes later). A paired client checks the
+- Moving or copying a VM between hosts (API 1.24.0). A paired client checks the
   VM on the sending host (`GET /vms/{vmId}/transfer-preview`), gets a one-time ticket from the receiving host
   (`POST /transfers/incoming`, elevated), and starts a `transferVm` job on the sending host (`POST /vms/{vmId}/transfer`,
   elevated; `POST /vms/{vmId}/transfer/cancel` stops it). The hosts then talk to each other directly over HTTPS: the
