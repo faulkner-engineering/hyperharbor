@@ -300,7 +300,9 @@ Host/client app that manages Hyper-V VMs on a home PC and connects to them in on
    - A locked TPM cannot be reset in place (a new key protector gives "authentication tag did not match"; the config is
      encrypted too), so a fresh TPM means defining the VM anew (new ID).
    - Windows 11 guests leave an automatic checkpoint after a failed start, which blocks a transfer.
-   Done: 24.11 TPM modes and merge (2026-10-21; unit and API tested, not yet run live): KeyProtectorHolders (owner and
+   Done: 24.11 TPM modes and merge (2026-10-21; verified live between the laptop and TC-PC: merge then move keeping the TPM,
+   the move back to the owner, a move with a fresh TPM (new ID, same static MAC), the owner TC-PC granting on the way back,
+   and a copy with a fresh TPM; each VM started on arrival): KeyProtectorHolders (owner and
    guardian IDs = SHA-256 hex of the encryption certificate, from ConvertToByRawBytes) in the preview; TransferPreflight
    .DecideTpm: keep = owner here (no grant, no probe), or already a holder, or the source owns it (grant); each but the
    first needs TpmCapability.CanOpenGrantedKeys; fresh needs CanEnableTpm. PowerShellTpmCapabilityProbe (TpmCapability.cs)
