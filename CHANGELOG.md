@@ -43,6 +43,9 @@ note anything that needs action, such as updating the host, a new elevation requ
   the only thing in the way.
 
 ### Fixed
+- The receiving host's virtual TPM check could leave its throwaway VM ("HyperHarbor TPM probe ...") running when the host
+  was busy, because turning off a VM that is still starting fails. The check now waits and retries until the VM is gone,
+  logs a warning if anything is left, and removes any earlier check's VM before it starts.
 - Deleting a VM with its disks, or moving it to another host, left its folder behind with empty "Virtual Hard Disks" and
   "Virtual Machines" folders, so a VM of the same name coming back later was renamed "(moved)". The VM's own folder (named
   after it, holding its disks' folder) is now removed too, but only when nothing else is left in it.
