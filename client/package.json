@@ -3,7 +3,7 @@
   "version": "0.1.7-beta.6",
   "description": "HyperHarbor desktop client",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

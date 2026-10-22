@@ -11,6 +11,9 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Added
+- HyperHarbor is now licensed under the Apache License 2.0 (LICENSE, NOTICE). Before, the public repository had no
+  license, so nothing in it could be reused. WARRANTY.md explains that it comes with no warranty and what it changes on
+  your PCs; the README has install steps, screenshots, and how to contribute (pull requests with a DCO sign-off).
 - "Trust HyperHarbor connections" at the bottom of the client's sidebar. Since the April 2026 Windows security update,
   Remote Desktop shows a security warning for every connection file it cannot trust, with the clipboard, microphone,
   camera, and other sharing switched off until ticked, every time. With one administrator approval, the client now
