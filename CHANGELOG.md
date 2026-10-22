@@ -10,6 +10,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- The host's update helper (hh-update.exe) crashed at the end of every run, after the update had already succeeded, which
+  left an "Application Error" event in Windows and a failed last result on the "HyperHarbor\Update" scheduled task. Updates
+  themselves were not affected. It now ends cleanly.
+
 ## [0.2.0-beta.1] - 2026-10-22 (API 1.25.0)
 
 ### Added

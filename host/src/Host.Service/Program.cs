@@ -99,7 +99,7 @@ if (!isWindowsService)
         case HostMode.ScheduledSleep:
             return await ScheduledSleepCommand.RunAsync();
         case HostMode.UpdateRun:
-            return await UpdateRunCommand.RunAsync();
+            return UpdateRunCommand.Run();
         case HostMode.SelfTest:
             // The gate a new version passes before it is installed: the real host against a copy of the data.
             (selfTest, args) = SelfTestRun.Prepare(args);

@@ -13,14 +13,24 @@ internal static class UpdateRunCommand
 {
     private const string MutexName = @"Global\HyperHarbor.Update";
 
-    public static async Task<int> RunAsync()
+    public static int Run()
     {
         if (!Environment.IsPrivilegedProcess)
         {
             return 2;
         }
 
-        using var single = new Mutex(initiallyOwned: false, MutexName);
+        return RunExclusive(MutexName, ApplyAsync);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> while holding the named mutex, or returns 0 at once when another helper holds it.
+    /// A mutex belongs to the thread that took it and only that thread can release it, so this blocks on the work
+    /// instead of awaiting it: an await resumes on another thread, and releasing there threw after every update.
+    /// </summary>
+    internal static int RunExclusive(string mutexName, Func<Task<int>> work)
+    {
+        using var single = new Mutex(initiallyOwned: false, mutexName);
         bool acquired;
         try
         {
@@ -39,38 +49,43 @@ internal static class UpdateRunCommand
 
         try
         {
-            var dataDirectory = HostIdentityStore.DefaultDataDirectory;
-            var layout = UninstallEntry.FindInstalled() ?? new InstallLayout(InstallLayout.DefaultRoot);
-            var trayUser = TrayUser.Resolve(new ConfigurationBuilder().Build(), isWindowsService: true);
-            using var logging = LoggerFactory.Create(builder => builder
-                .SetMinimumLevel(LogLevel.Information)
-                .AddProvider(new FileLoggerProvider(dataDirectory, readers: trayUser is null ? [] : [trayUser])));
-            var logger = logging.CreateLogger("HyperHarbor.Update");
-            var service = new WindowsServiceControl();
-            var applier = new UpdateApplier(
-                layout,
-                dataDirectory,
-                new UpdateStateStore(dataDirectory),
-                service,
-                new HostHealthProbe(dataDirectory, service),
-                TimeProvider.System,
-                logger);
-
-            try
-            {
-                var state = await applier.RunAsync(CancellationToken.None);
-                return state.Phase == UpdatePhase.Failed ? 1 : 0;
-            }
-            catch (Exception ex)
-            {
-                // The state stays as saved, so the next run (or the next startup) resumes from it.
-                logger.LogCritical(ex, "The update helper stopped unexpectedly.");
-                return 3;
-            }
+            return work().GetAwaiter().GetResult();
         }
         finally
         {
             single.ReleaseMutex();
+        }
+    }
+
+    private static async Task<int> ApplyAsync()
+    {
+        var dataDirectory = HostIdentityStore.DefaultDataDirectory;
+        var layout = UninstallEntry.FindInstalled() ?? new InstallLayout(InstallLayout.DefaultRoot);
+        var trayUser = TrayUser.Resolve(new ConfigurationBuilder().Build(), isWindowsService: true);
+        using var logging = LoggerFactory.Create(builder => builder
+            .SetMinimumLevel(LogLevel.Information)
+            .AddProvider(new FileLoggerProvider(dataDirectory, readers: trayUser is null ? [] : [trayUser])));
+        var logger = logging.CreateLogger("HyperHarbor.Update");
+        var service = new WindowsServiceControl();
+        var applier = new UpdateApplier(
+            layout,
+            dataDirectory,
+            new UpdateStateStore(dataDirectory),
+            service,
+            new HostHealthProbe(dataDirectory, service),
+            TimeProvider.System,
+            logger);
+
+        try
+        {
+            var state = await applier.RunAsync(CancellationToken.None);
+            return state.Phase == UpdatePhase.Failed ? 1 : 0;
+        }
+        catch (Exception ex)
+        {
+            // The state stays as saved, so the next run (or the next startup) resumes from it.
+            logger.LogCritical(ex, "The update helper stopped unexpectedly.");
+            return 3;
         }
     }
 }
