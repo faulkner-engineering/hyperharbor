@@ -1,5 +1,5 @@
-//! The Windows side of camera setup: the machine-changing steps, the registry check, and running an
-//! elevated copy of this program.
+//! The Windows side of camera setup: the machine-changing steps and the registry check. The elevated
+//! copy of this program runs through `crate::elevated`.
 #![allow(unsafe_code)]
 
 use super::setup::{self, SetupCommand, SetupSystem, DLL_NAME};
@@ -9,16 +9,10 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
-use windows::core::{w, HSTRING, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
+use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
-use windows::Win32::System::Threading::WaitForSingleObject;
-use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
-use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-/// How long to wait for the elevated copy: setup includes stopping and restarting a service.
-const SETUP_TIMEOUT_MS: u32 = 120_000;
 
 /// The path the class is registered with, if it is registered.
 pub fn registered_server_path() -> Option<PathBuf> {
@@ -173,49 +167,8 @@ pub fn run_helper(command: &SetupCommand) -> i32 {
         SetupCommand::Install { source, result } => (install_trusted(source, &dir), result),
         SetupCommand::Remove { result } => (setup::remove(&WindowsSetup, &dir), result),
     };
-    setup::write_result(result, &outcome);
+    crate::elevated::write_result(result, &outcome);
     i32::from(outcome.is_err())
-}
-
-/// Runs this program again with administrator rights (the user answers a UAC prompt) and returns
-/// what it reported. `result` is the file the elevated copy writes.
-pub fn run_elevated(args: &[String], result: &Path) -> Result<(), String> {
-    let _ = std::fs::remove_file(result);
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let parameters = args
-        .iter()
-        .map(|arg| format!("\"{arg}\""))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let (file, parameters) = (HSTRING::from(exe.as_os_str()), HSTRING::from(parameters));
-    let mut info = SHELLEXECUTEINFOW {
-        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
-        fMask: SEE_MASK_NOCLOSEPROCESS,
-        lpVerb: w!("runas"),
-        lpFile: PCWSTR(file.as_ptr()),
-        lpParameters: PCWSTR(parameters.as_ptr()),
-        nShow: SW_HIDE.0,
-        ..Default::default()
-    };
-    // SAFETY: `info` is fully initialised and its strings outlive the call; the process handle it
-    // returns is waited on and closed once.
-    unsafe {
-        if let Err(error) = ShellExecuteExW(&mut info) {
-            return Err(if error.code() == ERROR_CANCELLED.to_hresult() {
-                "Setup was cancelled.".to_string()
-            } else {
-                format!("Setup could not be started: {}", error.message().trim())
-            });
-        }
-        if !info.hProcess.is_invalid() {
-            let wait = WaitForSingleObject(info.hProcess, SETUP_TIMEOUT_MS);
-            let _ = CloseHandle(info.hProcess);
-            if wait.0 != 0 {
-                return Err("Setup did not finish in time.".to_string());
-            }
-        }
-    }
-    setup::read_result(result)
 }
 
 /// The command for the elevated copy to install the DLL at `source`.

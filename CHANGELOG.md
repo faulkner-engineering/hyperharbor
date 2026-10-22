@@ -10,6 +10,16 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- "Trust HyperHarbor connections" at the bottom of the client's sidebar. Since the April 2026 Windows security update,
+  Remote Desktop shows a security warning for every connection file it cannot trust, with the clipboard, microphone,
+  camera, and other sharing switched off until ticked, every time. With one administrator approval, the client now
+  makes a signing certificate for this PC's user, has Windows trust it, and signs every Remote Desktop file it opens
+  (VMs, the host, and the console), so they open without the warning and with their sharing as set. The certificate's
+  key cannot be exported, and the certificate cannot vouch for anything else: it is not a certificate authority and
+  names no server. "Stop trusting them" undoes it with one more approval. Uninstalling the client does not remove the
+  trust; use "Stop trusting them" first.
+
 ### Changed
 - VM transfers go over the receiving host's wired connection when it has one (API 1.25.0). The receiving host now lists
   its own addresses in its answer to the offer (`addresses` in `TransferOffer`), wired before Wi-Fi and then the faster

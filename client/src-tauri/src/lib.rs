@@ -2,12 +2,14 @@ mod api;
 mod camera;
 mod console;
 mod discovery;
+mod elevated;
 mod error;
 mod hosts;
 mod identity;
 mod monitors;
 mod paired;
 mod rdp;
+mod rdp_trust;
 mod sessions;
 mod spake2;
 mod tailnet;
@@ -357,16 +359,8 @@ async fn setup_camera_sharing(app: tauri::AppHandle) -> Result<(), ClientError> 
         ));
     }
     tauri::async_runtime::spawn_blocking(move || {
-        let result = std::env::temp_dir().join(format!(
-            "hyperharbor-camera-setup-{}.txt",
-            std::process::id()
-        ));
-        let outcome = camera::setup_windows::run_elevated(
-            &camera::setup_windows::install_args(&dll, &result),
-            &result,
-        );
-        let _ = std::fs::remove_file(&result);
-        outcome
+        let result = elevated::result_file("camera-setup");
+        elevated::run(&camera::setup_windows::install_args(&dll, &result), &result)
     })
     .await
     .map_err(|e| ClientError::RdpFailed(e.to_string()))?
@@ -390,20 +384,49 @@ fn camera_source_outdated(app: tauri::AppHandle) -> bool {
     ) == Some(false)
 }
 
+/// Runs the elevated .rdp signer setup when this process was started for it (see `rdp_trust`);
+/// returns the exit code, or None for a normal start.
+pub fn run_rdp_trust_helper() -> Option<i32> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    rdp_trust::parse_args(&args).map(|command| rdp_trust::system::run_helper(&command))
+}
+
+/// Whether this device signs its .rdp files so Remote Desktop opens them without its security
+/// dialog.
+#[tauri::command]
+async fn rdp_trust_status() -> Result<rdp_trust::TrustStatus, ClientError> {
+    tauri::async_runtime::spawn_blocking(rdp_trust::system::status)
+        .await
+        .map_err(|e| ClientError::RdpFailed(e.to_string()))
+}
+
+/// Makes this device's .rdp signing certificate if needed and trusts it (one UAC prompt).
+#[tauri::command]
+async fn set_up_rdp_trust() -> Result<rdp_trust::TrustStatus, ClientError> {
+    tauri::async_runtime::spawn_blocking(rdp_trust::system::set_up)
+        .await
+        .map_err(|e| ClientError::RdpFailed(e.to_string()))?
+        .map_err(ClientError::RdpFailed)
+}
+
+/// Stops trusting this device's .rdp signing certificate (one UAC prompt) and deletes it.
+#[tauri::command]
+async fn remove_rdp_trust() -> Result<rdp_trust::TrustStatus, ClientError> {
+    tauri::async_runtime::spawn_blocking(rdp_trust::system::remove)
+        .await
+        .map_err(|e| ClientError::RdpFailed(e.to_string()))?
+        .map_err(ClientError::RdpFailed)
+}
+
 /// Removes the camera source again (one UAC prompt): unregisters it and deletes its folder under
 /// Program Files. Uninstalling HyperHarbor cannot do this itself, because that uninstaller is not
 /// elevated. Open sessions lose their virtual camera, since the Windows camera service is stopped.
 #[tauri::command]
 async fn remove_camera_sharing() -> Result<(), ClientError> {
     tauri::async_runtime::spawn_blocking(|| {
-        let result = std::env::temp_dir().join(format!(
-            "hyperharbor-camera-remove-{}.txt",
-            std::process::id()
-        ));
+        let result = elevated::result_file("camera-remove");
         let args = vec!["--remove-camera".to_string(), result.display().to_string()];
-        let outcome = camera::setup_windows::run_elevated(&args, &result);
-        let _ = std::fs::remove_file(&result);
-        outcome
+        elevated::run(&args, &result)
     })
     .await
     .map_err(|e| ClientError::RdpFailed(e.to_string()))?
@@ -2334,6 +2357,9 @@ pub fn run() {
             camera_source_outdated,
             setup_camera_sharing,
             remove_camera_sharing,
+            rdp_trust_status,
+            set_up_rdp_trust,
+            remove_rdp_trust,
             get_camera_prefs,
             set_camera_prefs,
             set_camera_shutter,

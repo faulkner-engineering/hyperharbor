@@ -772,6 +772,25 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   - The User's account hive: loaded under HKU\<SID> while it is signed in, otherwise its NTUSER.DAT loaded under
     HKU\HyperHarborUser. An account that never signed in has no profile, so only the Default hive changes. The live
     test gives the account a profile with userenv CreateProfile, which needs no sign-in.
+- Signed .rdp files (client src-tauri/src/rdp_trust, added at the user's request 2026-10-22; found on build 26100.8875):
+  - Since the April 2026 update (CVE-2026-26151), mstsc shows "Remote Desktop Connection security warning" for any .rdp
+    file it cannot trust, every redirection unticked, every launch. A file skips it only when signed by a certificate that
+    is BOTH on the trusted publishers list (TrustedCertThumbprints under Software\Policies\Microsoft\Windows NT\Terminal
+    Services, HKCU or HKLM, entries "sha256:<HEX>", comma-separated) AND chains to a trusted root. The list alone still
+    showed "Unknown publisher" for a self-signed certificate. HKCU\Software\Policies is writable only by administrators.
+  - rdpsign.exe: only option "/sha256 <hash>", but it finds a CurrentUser\My certificate only by its SHA-1 thumbprint
+    (0x80092004 for the SHA-256); no administrator rights needed. It refuses a Document Signing certificate (0x8007000d);
+    Server Authentication and Code Signing work. It writes UTF-16 with "\r\r\n" line ends, which mstsc reads. It signs
+    only the "secure" settings (signscope); camerastoredirect, audiocapturemode, and monitor lines stay outside it.
+  - Adding to or removing from CurrentUser\Root always asks the user (a Windows dialog, even elevated; Import-Certificate
+    fails with "UI is not allowed"), so the elevated copy (--trust-rdp-signer, --untrust-rdp-signer) uses
+    LocalMachine\Root and writes HKEY_USERS\<sid> of the requesting user. It checks the certificate (rdp_trust::check_signer:
+    self-issued "HyperHarbor connection signing", critical basic constraints not a CA, Server Authentication only, no
+    other extensions) because an unelevated process wrote the file.
+  - HH_RDP_TRUST_LIVE=1 cargo test --lib rdp_trust::system::live -- --ignored: makes a real signer, signs with rdpsign,
+    deletes it (no elevation).
+  - Verified by the user on the laptop 2026-10-22: "Trust HyperHarbor connections" (one UAC prompt, no other dialog), then
+    Connect opened without the security dialog.
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 - Audit and elevation (Phase 8):

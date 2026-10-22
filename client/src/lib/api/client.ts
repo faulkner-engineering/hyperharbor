@@ -341,6 +341,23 @@ export const isCameraSourceOutdated = () => invoke<boolean>("camera_source_outda
  */
 export const removeCameraSharing = () => invoke<void>("remove_camera_sharing");
 
+/**
+ * Whether this device signs the Remote Desktop files it opens with a certificate Windows trusts, so
+ * Remote Desktop opens them without its security dialog. "unsupported" when rdpsign.exe is missing.
+ */
+export type RdpTrustStatus = { state: "unsupported" | "notSetUp" | "ready" };
+
+export const getRdpTrustStatus = () => invoke<RdpTrustStatus>("rdp_trust_status");
+
+/**
+ * Makes this device's signing certificate if needed and trusts it (one UAC prompt). Rejects when the
+ * prompt is declined or setup fails.
+ */
+export const setUpRdpTrust = () => invoke<RdpTrustStatus>("set_up_rdp_trust");
+
+/** Stops trusting this device's signing certificate and deletes it (one UAC prompt). */
+export const removeRdpTrust = () => invoke<RdpTrustStatus>("remove_rdp_trust");
+
 export const getCameraStatus = () => invoke<CameraStatus>("get_camera_status");
 
 export const getCameraPrefs = (key: string, vmId: string) => invoke<CameraPrefs>("get_camera_prefs", { key, vmId });

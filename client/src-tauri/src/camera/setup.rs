@@ -3,7 +3,7 @@
 //! per-user install folder is not. So the client runs a copy of itself elevated:
 //! `hyperharbor-client.exe --setup-camera <dll> <result file>` copies the DLL under Program Files
 //! and registers it; `--remove-camera <result file>` undoes that. The elevated copy reports back
-//! through the result file, because an elevated process cannot return output to its caller.
+//! through the result file (see `crate::elevated`).
 
 use std::path::{Path, PathBuf};
 
@@ -107,24 +107,6 @@ pub fn is_trusted_source(source: &Path, exe_dir: &Path) -> bool {
 fn same_path(a: &Path, b: &Path) -> bool {
     a.to_string_lossy()
         .eq_ignore_ascii_case(&b.to_string_lossy())
-}
-
-/// Writes the outcome where the caller (not elevated) reads it.
-pub fn write_result(path: &Path, outcome: &Result<(), String>) {
-    let text = match outcome {
-        Ok(()) => "ok".to_string(),
-        Err(message) => format!("error: {message}"),
-    };
-    let _ = std::fs::write(path, text);
-}
-
-/// The outcome the elevated copy wrote. A missing file means it never ran to the end.
-pub fn read_result(path: &Path) -> Result<(), String> {
-    match std::fs::read_to_string(path) {
-        Ok(text) if text.trim() == "ok" => Ok(()),
-        Ok(text) => Err(text.trim().trim_start_matches("error: ").to_string()),
-        Err(_) => Err("Setup did not finish.".to_string()),
-    }
 }
 
 #[cfg(test)]
@@ -346,20 +328,5 @@ mod tests {
         ] {
             assert_eq!(parse_args(&args(other)), None, "{other:?}");
         }
-    }
-
-    #[test]
-    fn the_outcome_round_trips_through_the_result_file() {
-        let dir = std::env::temp_dir().join(format!("hh-camsetup-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let ok = dir.join("ok.txt");
-        write_result(&ok, &Ok(()));
-        assert_eq!(read_result(&ok), Ok(()));
-        let failed = dir.join("failed.txt");
-        write_result(&failed, &Err("copy failed".into()));
-        assert_eq!(read_result(&failed), Err("copy failed".to_string()));
-        assert!(read_result(&dir.join("missing.txt"))
-            .unwrap_err()
-            .contains("did not finish"));
     }
 }

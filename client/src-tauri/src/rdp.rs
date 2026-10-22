@@ -306,6 +306,11 @@ pub fn start(
     let started = std::fs::write(&file, &launch.contents)
         .map_err(|e| ClientError::RdpFailed(e.to_string()))
         .and_then(|_| {
+            // Signed with a trusted certificate, the file opens without Windows' security dialog
+            // (see rdp_trust). Unsigned, it still opens, with the dialog.
+            if let Err(error) = crate::rdp_trust::system::sign(&file) {
+                eprintln!("{error}");
+            }
             Command::new("mstsc.exe")
                 .arg(&file)
                 .spawn()

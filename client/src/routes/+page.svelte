@@ -47,6 +47,7 @@
   import TailscalePanel from "$lib/components/TailscalePanel.svelte";
   import ReplaceDiskDialog from "$lib/components/ReplaceDiskDialog.svelte";
   import ClientUpdate from "$lib/components/ClientUpdate.svelte";
+  import RdpTrust from "$lib/components/RdpTrust.svelte";
   import ProvisionDialog from "$lib/components/ProvisionDialog.svelte";
   import ElevationDialog from "$lib/components/ElevationDialog.svelte";
   import DeleteVmDialog from "$lib/components/DeleteVmDialog.svelte";
@@ -435,6 +436,7 @@
     <h1><BrandMark size="1.4em" decorative />HyperHarbor</h1>
     <HostList {hosts} {selectedKey} onselect={selectHost} />
     <ClientUpdate />
+    <RdpTrust />
   </aside>
 
   <main>
