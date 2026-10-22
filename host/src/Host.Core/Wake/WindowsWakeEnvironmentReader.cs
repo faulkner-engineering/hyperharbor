@@ -14,7 +14,7 @@ public interface IWakeEnvironmentReader
 
 /// <summary>
 /// Reads Wake-on-LAN state without administrator rights: adapters and addresses from CIM
-/// (root\StandardCimv2), driver keywords from the registry, wake-armed devices from powercfg,
+/// (root\StandardCimv2; network categories from MSFT_NetConnectionProfile, default routes from MSFT_NetRoute), driver keywords from the registry, wake-armed devices from powercfg,
 /// and sleep capabilities from the power management API.
 /// </summary>
 public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
@@ -53,6 +53,28 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
             .Where(entry => entry.Assignment is not null && entry.Assignment.Address.AddressFamily == AddressFamily.InterNetwork)
             .ToLookup(entry => entry.Index, entry => entry.Assignment!);
 
+        var categories = new Dictionary<uint, NetworkCategory>();
+        foreach (var instance in session.QueryInstances(NetworkNamespace, "WQL", "SELECT InterfaceIndex, NetworkCategory FROM MSFT_NetConnectionProfile"))
+        {
+            using (instance)
+            {
+                var category = Convert.ToInt32(instance.CimInstanceProperties["NetworkCategory"].Value ?? -1);
+                if (Enum.IsDefined(typeof(NetworkCategory), category))
+                {
+                    categories[Convert.ToUInt32(instance.CimInstanceProperties["InterfaceIndex"].Value)] = (NetworkCategory)category;
+                }
+            }
+        }
+
+        var gateways = new HashSet<uint>();
+        foreach (var instance in session.QueryInstances(NetworkNamespace, "WQL", "SELECT InterfaceIndex FROM MSFT_NetRoute WHERE DestinationPrefix = '0.0.0.0/0'"))
+        {
+            using (instance)
+            {
+                gateways.Add(Convert.ToUInt32(instance.CimInstanceProperties["InterfaceIndex"].Value));
+            }
+        }
+
         var wakeKeywords = ReadWakeKeywords();
         var adapters = new List<NetworkAdapterState>();
         foreach (var instance in session.QueryInstances(NetworkNamespace, "WQL", "SELECT * FROM MSFT_NetAdapter"))
@@ -72,6 +94,7 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
                 var interfaceGuid = Text("InterfaceGuid") ?? string.Empty;
                 var medium = Number("NdisPhysicalMedium");
                 var isPhysical = Flag("HardwareInterface") && !Flag("Virtual");
+                var index = Number("InterfaceIndex");
 
                 adapters.Add(new NetworkAdapterState(
                     Text("Name") ?? string.Empty,
@@ -80,8 +103,10 @@ public sealed class WindowsWakeEnvironmentReader : IWakeEnvironmentReader
                     isPhysical,
                     IsWired: medium == Medium802_3,
                     IsConnected: Number("MediaConnectState") == MediaConnected,
-                    addresses[Number("InterfaceIndex")].ToList(),
-                    wakeKeywords.GetValueOrDefault(interfaceGuid.ToUpperInvariant())));
+                    addresses[index].ToList(),
+                    wakeKeywords.GetValueOrDefault(interfaceGuid.ToUpperInvariant()),
+                    categories.TryGetValue(index, out var category) ? category : null,
+                    gateways.Contains(index)));
             }
         }
 

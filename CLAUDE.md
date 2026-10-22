@@ -814,6 +814,10 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
 - Readiness checks can all pass while waking fails. Seen on TC-PC (2026-10-02): BIOS "PCI-E wake" was
   disabled. Firmware settings are not readable from Windows; the client shows a firmware checklist instead.
 - A Hyper-V external switch bound to the wired NIC is a known Wake-on-LAN breaker, not yet a readiness check.
+- Seen on TC-PC (2026-10-21): Windows made the external switch's adapter (vEthernet (External), which carries the LAN
+  address) a Public network, so the Private-only firewall rules for 48443 and SSH stopped applying and the host vanished
+  from the LAN. The privateNetwork readiness check warns about it (adapters with a default route only, since the Default
+  Switch's adapter is often Public; never fixed automatically).
 - Group Policy can force "connectivity in standby" off, and NICs missing from powercfg wake_programmable
   cannot be armed; both are reported as not fixable.
 - Windows sends 255.255.255.255 out of the lowest-metric interface (often a virtual adapter); the client

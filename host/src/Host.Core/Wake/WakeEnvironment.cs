@@ -20,6 +20,9 @@ public sealed record WakeEnvironment(
 /// <param name="IsPhysical">A hardware adapter (not Hyper-V vEthernet, VPN, or loopback).</param>
 /// <param name="IsWired">IEEE 802.3 media.</param>
 /// <param name="WakeOnMagicPacket">The *WakeOnMagicPacket driver keyword, or null when the driver does not expose it.</param>
+/// <param name="Category">The Windows network category of the network it is connected to, or null when it has none.</param>
+/// <param name="HasDefaultGateway">It has an IPv4 default route, so it carries the PC's connection to the LAN (the Hyper-V
+/// Default Switch's adapter has none).</param>
 public sealed record NetworkAdapterState(
     string Name,
     string Description,
@@ -28,7 +31,17 @@ public sealed record NetworkAdapterState(
     bool IsWired,
     bool IsConnected,
     IReadOnlyList<Ipv4Assignment> Ipv4Addresses,
-    bool? WakeOnMagicPacket);
+    bool? WakeOnMagicPacket,
+    NetworkCategory? Category = null,
+    bool HasDefaultGateway = false);
+
+/// <summary>The Windows network category, which picks the firewall profile (MSFT_NetConnectionProfile.NetworkCategory).</summary>
+public enum NetworkCategory
+{
+    Public = 0,
+    Private = 1,
+    DomainAuthenticated = 2,
+}
 
 public sealed record Ipv4Assignment(IPAddress Address, int PrefixLength)
 {

@@ -26,7 +26,7 @@ internal static class WakeScenarios
     /// <summary>A desktop on Ethernet with classic sleep and everything enabled.</summary>
     public static WakeEnvironment ReadyDesktop() => new(
         [
-            Ethernet(connected: true, address: "192.168.1.20", wakeOnMagicPacket: true),
+            Ethernet(connected: true, address: "192.168.1.20", wakeOnMagicPacket: true) with { Category = NetworkCategory.Private, HasDefaultGateway = true },
         ],
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { EthernetDescription },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { EthernetDescription },

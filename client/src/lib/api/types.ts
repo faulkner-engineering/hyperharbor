@@ -2758,8 +2758,10 @@ export interface components {
         WakeCheck: {
             /**
              * @description Stable check identifier: `wiredAdapter`, `nicWakeOnMagicPacket`,
-             *     `nicAllowWake`, `sleepKeepsNetwork`, or `fastStartupDisabled`. Clients should
-             *     show unknown identifiers using `title` and `detail`.
+             *     `nicAllowWake`, `sleepKeepsNetwork`, `fastStartupDisabled`, or `privateNetwork`
+             *     (warns when the connection with the default gateway is on a Public or domain
+             *     network, where the firewall rule for the API does not apply; never fixed
+             *     automatically). Clients should show unknown identifiers using `title` and `detail`.
              */
             id: string;
             title: string;

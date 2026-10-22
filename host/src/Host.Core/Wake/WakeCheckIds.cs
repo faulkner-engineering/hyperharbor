@@ -8,6 +8,7 @@ public static class WakeCheckIds
     public const string NicAllowWake = "nicAllowWake";
     public const string SleepKeepsNetwork = "sleepKeepsNetwork";
     public const string FastStartupDisabled = "fastStartupDisabled";
+    public const string PrivateNetwork = "privateNetwork";
 
     /// <summary>Checks that <see cref="WakeFixer"/> can change.</summary>
     public static IReadOnlySet<string> Fixable { get; } = new HashSet<string>(StringComparer.Ordinal)

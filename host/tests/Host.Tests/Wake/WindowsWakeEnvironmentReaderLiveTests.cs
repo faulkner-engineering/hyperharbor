@@ -14,11 +14,12 @@ public class WindowsWakeEnvironmentReaderLiveTests(ITestOutputHelper output)
     {
         var environment = await new WindowsWakeEnvironmentReader().ReadAsync(CancellationToken.None);
 
-        foreach (var adapter in environment.Adapters.Where(a => a.IsPhysical))
+        foreach (var adapter in environment.Adapters.Where(a => a.IsPhysical || a.Ipv4Addresses.Count > 0))
         {
             output.WriteLine(
-                $"{adapter.Name} ({adapter.Description}) mac={adapter.MacAddress} wired={adapter.IsWired} connected={adapter.IsConnected} " +
-                $"magicPacket={adapter.WakeOnMagicPacket?.ToString() ?? "unknown"} ipv4=[{string.Join(", ", adapter.Ipv4Addresses.Select(a => $"{a.Address}/{a.PrefixLength}"))}]");
+                $"{adapter.Name} ({adapter.Description}) mac={adapter.MacAddress} physical={adapter.IsPhysical} wired={adapter.IsWired} connected={adapter.IsConnected} " +
+                $"magicPacket={adapter.WakeOnMagicPacket?.ToString() ?? "unknown"} ipv4=[{string.Join(", ", adapter.Ipv4Addresses.Select(a => $"{a.Address}/{a.PrefixLength}"))}] " +
+                $"category={adapter.Category?.ToString() ?? "none"} gateway={adapter.HasDefaultGateway}");
         }
 
         output.WriteLine($"Power: {environment.Power}");

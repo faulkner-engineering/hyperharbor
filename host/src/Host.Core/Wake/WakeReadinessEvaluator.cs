@@ -20,6 +20,7 @@ public static class WakeReadinessEvaluator
             AllowWake(environment, wired),
             SleepKeepsNetwork(environment.Power),
             FastStartup(environment.Power),
+            PrivateNetwork(environment),
         };
 
         return new WakeReadiness(checks.All(check => check.Status != WakeCheckStatus.Fail), checks);
@@ -168,6 +169,53 @@ public static class WakeReadinessEvaluator
                 "Fast startup is on. Waking from sleep works, but waking a shut-down PC usually does not.",
                 true)
             : new WakeCheck(WakeCheckIds.FastStartupDisabled, title, WakeCheckStatus.Pass, "Fast startup is off.", false);
+    }
+
+    /// <summary>
+    /// Windows Firewall picks its profile from the network category, and HyperHarbor's rule allows only Private networks, so
+    /// other devices cannot reach the host on a Public or domain network. Only adapters with a default gateway count: the Hyper-V Default
+    /// Switch's adapter is often an unidentified Public network that nothing connects through. Not fixed automatically,
+    /// because making a network Private loosens the firewall on it; the person decides.
+    /// </summary>
+    private static WakeCheck PrivateNetwork(WakeEnvironment environment)
+    {
+        const string title = "Network is private";
+        var lan = environment.Adapters
+            .Where(adapter => adapter.IsConnected && adapter.HasDefaultGateway && adapter.Ipv4Addresses.Any(address => !address.IsLinkLocal))
+            .ToList();
+        var exposed = lan.Where(adapter => adapter.Category == NetworkCategory.Public).ToList();
+        if (exposed.Count > 0)
+        {
+            return new WakeCheck(
+                WakeCheckIds.PrivateNetwork,
+                title,
+                WakeCheckStatus.Warn,
+                $"{Names(exposed)} {(exposed.Count == 1 ? "is" : "are")} on a Public network, where Windows Firewall blocks HyperHarbor " +
+                "(TCP 48443), so other devices on this network cannot reach this host. If this is your home or office network, open " +
+                "Settings > Network & internet, select the connection, and choose Private network; or run, as administrator, " +
+                $"Set-NetConnectionProfile -InterfaceAlias '{exposed[0].Name}' -NetworkCategory Private.",
+                false);
+        }
+
+        var domain = lan.Where(adapter => adapter.Category == NetworkCategory.DomainAuthenticated).ToList();
+        if (domain.Count > 0)
+        {
+            return new WakeCheck(
+                WakeCheckIds.PrivateNetwork,
+                title,
+                WakeCheckStatus.Warn,
+                $"{Names(domain)} {(domain.Count == 1 ? "is" : "are")} on a domain network, and HyperHarbor's firewall rule (TCP 48443) " +
+                "allows Private networks only, so other devices on this network cannot reach this host. In Windows Defender Firewall, " +
+                "add the Domain profile to the inbound rule \"HyperHarbor Host API\".",
+                false);
+        }
+
+        return new WakeCheck(
+            WakeCheckIds.PrivateNetwork,
+            title,
+            WakeCheckStatus.Pass,
+            lan.Count == 0 ? "No network connection with a gateway was found." : $"{Names(lan)} {(lan.Count == 1 ? "is" : "are")} on a private network.",
+            false);
     }
 
     private static string Names(IEnumerable<NetworkAdapterState> adapters) =>

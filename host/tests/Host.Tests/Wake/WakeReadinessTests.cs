@@ -14,8 +14,52 @@ public class WakeReadinessTests
         Assert.True(readiness.Ready);
         Assert.All(readiness.Checks, check => Assert.Equal(WakeCheckStatus.Pass, check.Status));
         Assert.Equal(
-            [WakeCheckIds.WiredAdapter, WakeCheckIds.NicWakeOnMagicPacket, WakeCheckIds.NicAllowWake, WakeCheckIds.SleepKeepsNetwork, WakeCheckIds.FastStartupDisabled],
+            [WakeCheckIds.WiredAdapter, WakeCheckIds.NicWakeOnMagicPacket, WakeCheckIds.NicAllowWake, WakeCheckIds.SleepKeepsNetwork, WakeCheckIds.FastStartupDisabled, WakeCheckIds.PrivateNetwork],
             readiness.Checks.Select(check => check.Id));
+    }
+
+    [Fact]
+    public void PublicLanNetwork_Warns_WithTheCommandForThatConnection_AndNoAutomaticFix()
+    {
+        // TC-PC on 2026-10-21: its LAN address was on the external switch's vEthernet adapter, which Windows made Public.
+        var environment = WakeScenarios.ReadyDesktop();
+        var external = new NetworkAdapterState("vEthernet (External)", "Hyper-V Virtual Ethernet Adapter", "902E1666C5AF", IsPhysical: false,
+            IsWired: true, IsConnected: true, [new Ipv4Assignment(IPAddress.Parse("192.168.0.236"), 24)], null, NetworkCategory.Public, HasDefaultGateway: true);
+        var readiness = WakeReadinessEvaluator.Evaluate(environment with { Adapters = [.. environment.Adapters, external] });
+
+        var check = Assert.Single(readiness.Checks, check => check.Id == WakeCheckIds.PrivateNetwork);
+        Assert.Equal(WakeCheckStatus.Warn, check.Status);
+        Assert.False(check.AutoFixAvailable);
+        Assert.StartsWith("vEthernet (External) is on a Public network", check.Detail, StringComparison.Ordinal);
+        Assert.Contains("Set-NetConnectionProfile -InterfaceAlias 'vEthernet (External)' -NetworkCategory Private", check.Detail, StringComparison.Ordinal);
+        Assert.True(readiness.Ready);
+    }
+
+    [Fact]
+    public void PublicNetworkWithoutAGateway_LikeTheDefaultSwitch_DoesNotCount()
+    {
+        var environment = WakeScenarios.ReadyDesktop();
+        var defaultSwitch = new NetworkAdapterState("vEthernet (Default Switch)", "Hyper-V Virtual Ethernet Adapter", "00155D000001", IsPhysical: false,
+            IsWired: true, IsConnected: true, [new Ipv4Assignment(IPAddress.Parse("172.20.240.1"), 20)], null, NetworkCategory.Public, HasDefaultGateway: false);
+        var readiness = WakeReadinessEvaluator.Evaluate(environment with { Adapters = [.. environment.Adapters, defaultSwitch] });
+
+        var check = Assert.Single(readiness.Checks, check => check.Id == WakeCheckIds.PrivateNetwork);
+        Assert.Equal(WakeCheckStatus.Pass, check.Status);
+        Assert.Equal("Ethernet is on a private network.", check.Detail);
+    }
+
+    [Fact]
+    public void DomainNetwork_Warns_ThatTheFirewallRuleNeedsTheDomainProfile()
+    {
+        var environment = WakeScenarios.ReadyDesktop();
+        var readiness = WakeReadinessEvaluator.Evaluate(environment with
+        {
+            Adapters = [environment.Adapters[0] with { Category = NetworkCategory.DomainAuthenticated }],
+        });
+
+        var check = Assert.Single(readiness.Checks, check => check.Id == WakeCheckIds.PrivateNetwork);
+        Assert.Equal(WakeCheckStatus.Warn, check.Status);
+        Assert.Contains("add the Domain profile", check.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
