@@ -37,6 +37,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   filled from an unattended install profile and the software sections from a setup profile, and Convert on a setup
   profile makes a machine profile from it. Creating VMs from machine profiles comes next.
 
+### Security
+- The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
+  (RUSTSEC-2026-0385).
+
 ### Changed
 - API 1.27.0: machine profiles on the host (/machine-profiles: list, create, import, export, update, delete, and
   the JSON Schema). The account section follows the unattended install profile rules and the software sections the
