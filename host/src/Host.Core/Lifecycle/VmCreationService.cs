@@ -6,6 +6,27 @@ using Microsoft.Extensions.Logging;
 
 namespace HyperHarbor.Host.Core.Lifecycle;
 
+/// <summary>What the creation planner knows when an unattended install is planned for it.</summary>
+public sealed record InstallContext(
+    string IsoPath,
+    IsoInspection Inspection,
+    string VmName,
+    string SeedPath,
+    bool EnableTpm,
+    List<ValidationIssue> Errors,
+    List<ValidationIssue> Warnings);
+
+/// <summary>
+/// Additions to a plain create request, for creating a VM from a machine profile: an install planned from the
+/// profile instead of from profile IDs, Secure Boot off, warnings found while reading the profile, and steps that
+/// run while the new VM is still off (after its TPM, before the install starts it).
+/// </summary>
+public sealed record CreationExtras(
+    Func<InstallContext, InstallPlan?>? PlanInstall = null,
+    bool SecureBoot = true,
+    IReadOnlyList<ValidationIssue>? Warnings = null,
+    Func<Guid, VmJobContext, Task>? Configure = null);
+
 /// <summary>
 /// Creates Generation 2 VMs that boot from an ISO in the library. The request is validated against
 /// the host first; the Hyper-V steps run as a job. If a step fails, the job removes the VM and the
@@ -69,10 +90,19 @@ public sealed class VmCreationService
     /// <exception cref="LifecycleValidationException">The request is invalid; Errors lists each problem.</exception>
     /// <exception cref="ResourceWarningsException">Warnings were not acknowledged.</exception>
     /// <exception cref="LifecycleConflictException">A VM with this name is already being created.</exception>
-    public async Task<VmJobSnapshot> StartAsync(Guid userId, CreateVmRequest request, Action<VmJobSnapshot>? onFinished, CancellationToken cancellationToken)
+    public Task<VmJobSnapshot> StartAsync(Guid userId, CreateVmRequest request, Action<VmJobSnapshot>? onFinished, CancellationToken cancellationToken) =>
+        StartAsync(userId, request, null, onFinished, cancellationToken);
+
+    /// <inheritdoc cref="StartAsync(Guid, CreateVmRequest, Action{VmJobSnapshot}?, CancellationToken)"/>
+    public async Task<VmJobSnapshot> StartAsync(
+        Guid userId,
+        CreateVmRequest request,
+        CreationExtras? extras,
+        Action<VmJobSnapshot>? onFinished,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var (blueprint, install) = await PlanAsync(userId, request, cancellationToken).ConfigureAwait(false);
+        var (blueprint, install) = await PlanAsync(userId, request, extras, cancellationToken).ConfigureAwait(false);
 
         lock (_namesInProgress)
         {
@@ -84,7 +114,7 @@ public sealed class VmCreationService
 
         try
         {
-            return _jobs.Start(VmJobKind.CreateVm, null, userId, "Creating the virtual hard disk", context => RunAsync(blueprint, request, install, userId, context), job =>
+            return _jobs.Start(VmJobKind.CreateVm, null, userId, "Creating the virtual hard disk", context => RunAsync(blueprint, request, install, userId, extras, context), job =>
             {
                 lock (_namesInProgress)
                 {
@@ -107,16 +137,16 @@ public sealed class VmCreationService
 
     /// <summary>Validates a request without an unattended install, for tests.</summary>
     internal async Task<VmBlueprint> PlanAsync(CreateVmRequest request, CancellationToken cancellationToken) =>
-        (await PlanAsync(Guid.Empty, request, cancellationToken).ConfigureAwait(false)).Blueprint;
+        (await PlanAsync(Guid.Empty, request, null, cancellationToken).ConfigureAwait(false)).Blueprint;
 
     /// <summary>
     /// Validates the request and works out the folders, ISO path, switch, Secure Boot template, and the
     /// unattended install, if any.
     /// </summary>
-    internal async Task<(VmBlueprint Blueprint, InstallPlan? Install)> PlanAsync(Guid userId, CreateVmRequest request, CancellationToken cancellationToken)
+    internal async Task<(VmBlueprint Blueprint, InstallPlan? Install)> PlanAsync(Guid userId, CreateVmRequest request, CreationExtras? extras, CancellationToken cancellationToken)
     {
         var errors = new List<ValidationIssue>();
-        var warnings = new List<ValidationIssue>();
+        var warnings = new List<ValidationIssue>(extras?.Warnings ?? []);
         var name = (request.Name ?? string.Empty).Trim();
 
         CheckName(name, errors);
@@ -193,7 +223,18 @@ public sealed class VmCreationService
         var template = inspection?.Os == InstallOs.Linux ? UnattendedSetup.MicrosoftUefiCaTemplateId : CimHyperVBuilder.MicrosoftWindowsTemplateId;
 
         InstallPlan? install = null;
-        if (request.Install is { } installRequest)
+        if (extras?.PlanInstall is { } planInstall)
+        {
+            if (_unattended is null)
+            {
+                errors.Add(new("install", "Unattended installs are not available on this host."));
+            }
+            else if (inspection is not null && diskPath.Length > 0)
+            {
+                install = planInstall(new InstallContext(isoPath!, inspection, name, SeedIso.PathFor(diskPath), request.EnableTpm, errors, warnings));
+            }
+        }
+        else if (request.Install is { } installRequest)
         {
             if (_unattended is null)
             {
@@ -226,11 +267,12 @@ public sealed class VmCreationService
             request.DynamicMemory,
             switchId,
             template,
-            install?.SeedPath);
+            install?.SeedPath,
+            extras?.SecureBoot ?? true);
         return (blueprint, install);
     }
 
-    private async Task RunAsync(VmBlueprint blueprint, CreateVmRequest request, InstallPlan? install, Guid userId, VmJobContext context)
+    private async Task RunAsync(VmBlueprint blueprint, CreateVmRequest request, InstallPlan? install, Guid userId, CreationExtras? extras, VmJobContext context)
     {
         var diskCreated = false;
         Guid? vmId = null;
@@ -259,6 +301,11 @@ public sealed class VmCreationService
             {
                 context.Report("Adding a virtual TPM", 80);
                 await _builder.EnableTpmAsync(vmId.Value, context.Stopping).ConfigureAwait(false);
+            }
+
+            if (extras?.Configure is { } configure)
+            {
+                await configure(vmId.Value, context).ConfigureAwait(false);
             }
 
             context.Report("Finishing", 95);

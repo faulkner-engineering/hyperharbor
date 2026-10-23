@@ -1214,6 +1214,21 @@ async fn delete_iso(
     state.api.delete_iso(&host, &paired, &name).await
 }
 
+/// Creates a VM from a machine profile (needs elevation); returns the createVm job.
+#[tauri::command]
+async fn create_vm_from_profile(
+    state: State<'_, AppState>,
+    key: String,
+    profile_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .create_vm_from_profile(&host, &paired, &profile_id, &request)
+        .await
+}
+
 /// A saved setup or machine profile (StoredSetupProfile or StoredMachineProfile).
 #[tauri::command]
 async fn get_profile(
@@ -2413,6 +2428,7 @@ pub fn run() {
             set_monitor_choice,
             inspect_iso,
             get_profile,
+            create_vm_from_profile,
             save_profile,
             delete_profile,
             export_profile,

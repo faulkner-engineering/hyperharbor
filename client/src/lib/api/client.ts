@@ -45,6 +45,7 @@ export type StoredSetupProfile = components["schemas"]["StoredSetupProfile"];
 export type MachineProfile = components["schemas"]["MachineProfile"];
 export type MachineProfileSummary = components["schemas"]["MachineProfileSummary"];
 export type StoredMachineProfile = components["schemas"]["StoredMachineProfile"];
+export type CreateVmFromProfileRequest = components["schemas"]["CreateVmFromProfileRequest"];
 export type SetupProfileCatalog = components["schemas"]["SetupProfileCatalog"];
 export type VmAppxInventory = components["schemas"]["VmAppxInventory"];
 export type AppxPackage = components["schemas"]["AppxPackage"];
@@ -668,6 +669,13 @@ export const exportMachineProfile = (key: string, profileId: string) =>
 
 /** Picks a YAML file and saves it as a new machine profile; null when cancelled. Needs elevation. */
 export const importMachineProfile = (key: string) => invoke<StoredMachineProfile | null>("import_profile", { key, kind: "machine" });
+
+/** The API version that creates VMs from machine profiles. */
+export const MachineProfileVmsApiVersion = "1.28.0";
+
+/** Creates a VM from a machine profile; returns the createVm job. Needs elevation: run it inside withElevation. */
+export const createVmFromMachineProfile = (key: string, profileId: string, request: CreateVmFromProfileRequest) =>
+  invoke<VmJob>("create_vm_from_profile", { key, profileId, request });
 
 export const getSetupProfileCatalog = (key: string) =>
   invoke<SetupProfileCatalog>("get_host_resource", { key, resource: "setupProfileCatalog" });

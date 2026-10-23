@@ -308,6 +308,9 @@ public class ContractFixtureTests
         ["ProfileBrowser"] = SetupProfileSample.Browser!,
         ["StoredSetupProfile"] = new StoredSetupProfile("dev-workstation", Time, SetupProfileSample),
         ["MachineProfile"] = MachineProfileSample,
+
+        // Null on purpose: windowsEdition is nullable.
+        ["CreateVmFromProfileRequest"] = new CreateVmFromProfileRequest("Rig", "win11.iso", null, true),
         ["StoredMachineProfile"] = new StoredMachineProfile("gaming-rig", Time, MachineProfileSample),
         ["MachineAccount"] = MachineProfileSample.Account!,
         ["MachineDisplay"] = MachineProfileSample.Display!,

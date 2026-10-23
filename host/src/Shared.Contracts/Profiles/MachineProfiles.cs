@@ -110,6 +110,15 @@ public sealed record MachineBackup(
     BackupConditions? Conditions = null,
     BackupGpuMode? GpuMode = null);
 
+/// <summary>Creates a VM from a machine profile. Schema: CreateVmFromProfileRequest.</summary>
+/// <param name="IsoName">An image in the ISO library.</param>
+/// <param name="WindowsEdition">An edition from the ISO's inspection. Null: the profile's edition.</param>
+public sealed record CreateVmFromProfileRequest(
+    [property: JsonRequired] string Name,
+    [property: JsonRequired] string IsoName,
+    string? WindowsEdition = null,
+    bool AcknowledgeWarnings = false);
+
 /// <summary>A saved machine profile. Schema: StoredMachineProfile.</summary>
 public sealed record StoredMachineProfile(string Id, DateTimeOffset UpdatedAt, MachineProfile Profile);
 

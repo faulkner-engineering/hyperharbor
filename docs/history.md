@@ -340,6 +340,19 @@ verified, and what was found along the way. User-facing changes per release are 
    Verified with unit and API tests and a browser preview of every section; not yet against a live host. Not done in
    26b: wallpaper image upload, retention and conditions overrides for backups (the target's apply), and anything
    that applies a machine profile (26c, 26d).
+   Done: 26c create a VM from a machine profile (2026-10-23; API 1.28.0). MachineProfileVmCreation reads the profile
+   against the host (switch and GPU by name are errors when missing, a backup target is a warning; empty compute takes
+   the Create VM dialog's defaults; Performance mode forces fixed memory), turns the account into an UnattendProfile
+   through UnattendProfileStore.Normalize ("machine-<id>") and the software plus display.guest into the setup
+   profile snapshot (theme: appearance.darkMode or the light values; accent: DWM AccentColor and Explorer\Accent
+   AccentColorMenu as ABGR; wallpaper color: Control Panel\Colors Background and an empty Desktop WallPaper), and
+   calls VmCreationService with CreationExtras (UnattendedSetup.PlanFor instead of profile IDs, SecureBoot on the
+   blueprint, the profile's warnings, and a Configure step after the TPM: nested virtualization and MAC spoofing,
+   VmPerformanceService.ApplyWithinJobAsync, IMachineBackupPolicies). The install record's GuestPerformanceSetup
+   makes the watcher start the guest setup job (IGuestPerformanceStarter) once ready. Unit and API tested with fakes;
+   not run against Hyper-V yet. Not verified: Windows Setup with a GPU partition attached from the start, and the
+   accent and wallpaper registry values in a real guest. Not done: connection defaults (display.connection) do not
+   reach the client yet, and wallpaper images.
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.

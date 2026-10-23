@@ -35,13 +35,20 @@ note anything that needs action, such as updating the host, a new elevation requ
   the model follows the settings: the TPM LED blinks with the TPM on, the GPU fans spin in Performance mode, and the
   backup LED pulses on a schedule. Settings left "as it is" keep a VM's current value. The account section can be
   filled from an unattended install profile and the software sections from a setup profile, and Convert on a setup
-  profile makes a machine profile from it. Creating VMs from machine profiles comes next.
+  profile makes a machine profile from it.
+- Create VM… on a machine profile (hosts with API 1.28.0) makes a VM from it: choose a name, an image, and the
+  edition. One job builds the VM with the profile's processors, memory, disk, switch, TPM, and Secure Boot, sets
+  nested virtualization, MAC address spoofing, Performance mode, and the backup policy while it is still off, and
+  starts the unattended install. When the install is ready, the profile's software, theme, accent color, and
+  wallpaper color are applied, and for a profile with a GPU share the GPU driver is set up in the guest. Names the
+  host does not have (a switch or GPU) stop the create; a missing backup target is a warning.
 
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
   (RUSTSEC-2026-0385).
 
 ### Changed
+- API 1.28.0: POST /machine-profiles/{profileId}/vms creates a VM from a machine profile as a createVm job.
 - API 1.27.0: machine profiles on the host (/machine-profiles: list, create, import, export, update, delete, and
   the JSON Schema). The account section follows the unattended install profile rules and the software sections the
   setup profile rules.

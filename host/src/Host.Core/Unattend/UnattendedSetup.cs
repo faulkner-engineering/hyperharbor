@@ -14,7 +14,15 @@ namespace HyperHarbor.Host.Core.Unattend;
 /// <param name="MachineName">The Windows computer name or the Linux host name.</param>
 /// <param name="UserAccountName">The creating User's VM account, for example hh-owner.</param>
 /// <param name="SetupProfile">The setup profile to apply once the install is ready, as it is now; null for none.</param>
-public sealed record InstallPlan(UnattendProfile Profile, string? Edition, string MachineName, string SeedPath, string UserAccountName, Shared.Contracts.Profiles.SetupProfile? SetupProfile = null);
+/// <param name="GuestPerformanceSetup">Set up Performance mode in the guest once the install is ready (machine profiles with a GPU share).</param>
+public sealed record InstallPlan(
+    UnattendProfile Profile,
+    string? Edition,
+    string MachineName,
+    string SeedPath,
+    string UserAccountName,
+    Shared.Contracts.Profiles.SetupProfile? SetupProfile = null,
+    bool GuestPerformanceSetup = false);
 
 /// <summary>
 /// The parts of VM creation that unattended installs add: checking the request against the ISO,
@@ -110,6 +118,30 @@ public sealed partial class UnattendedSetup
             return null;
         }
 
+        var setupProfile = SetupProfileFor(userId, request.SetupProfileId, inspection.Os ?? profile.Os, errors);
+        return PlanFor(userId, profile, setupProfile, request.WindowsEdition, request.ComputerName, isoPath, inspection, vmName, seedPath, enableTpm, errors, warnings);
+    }
+
+    /// <summary>
+    /// Checks an install of the given account settings and setup profile snapshot against the ISO and the User; a
+    /// machine profile carries both itself instead of naming stored profiles.
+    /// </summary>
+    /// <returns>The plan, or null when there were errors.</returns>
+    public InstallPlan? PlanFor(
+        Guid userId,
+        UnattendProfile profile,
+        Shared.Contracts.Profiles.SetupProfile? setupProfile,
+        string? windowsEdition,
+        string? computerName,
+        string isoPath,
+        IsoInspection inspection,
+        string vmName,
+        string seedPath,
+        bool enableTpm,
+        List<ValidationIssue> errors,
+        List<ValidationIssue> warnings,
+        bool guestPerformanceSetup = false)
+    {
         if (inspection.Os is not { } os)
         {
             errors.Add(new("install.profileId", $"HyperHarbor cannot tell what {Path.GetFileName(isoPath)} installs, so it cannot install it unattended. Choose manual install."));
@@ -133,14 +165,14 @@ public sealed partial class UnattendedSetup
         string machineName;
         if (os == InstallOs.Windows)
         {
-            var wanted = (request.WindowsEdition ?? profile.Windows!.DefaultEdition).Trim();
+            var wanted = (windowsEdition ?? profile.Windows!.DefaultEdition).Trim();
             edition = inspection.Editions.FirstOrDefault(name => string.Equals(name, wanted, StringComparison.OrdinalIgnoreCase));
             if (edition is null)
             {
                 errors.Add(new("install.windowsEdition", $"This ISO has no edition named \"{wanted}\". Choose one of: {string.Join(", ", inspection.Editions)}."));
             }
 
-            machineName = (request.ComputerName ?? AutounattendBuilder.ComputerName(vmName)).Trim();
+            machineName = (computerName ?? AutounattendBuilder.ComputerName(vmName)).Trim();
             if (!ComputerName().IsMatch(machineName) || machineName.All(char.IsAsciiDigit))
             {
                 errors.Add(new("install.computerName", "Use 1 to 15 letters, digits, or hyphens, not only digits."));
@@ -153,7 +185,7 @@ public sealed partial class UnattendedSetup
         }
         else
         {
-            if (request.WindowsEdition is not null || request.ComputerName is not null)
+            if (windowsEdition is not null || computerName is not null)
             {
                 errors.Add(new("install", "Edition and computer name apply to Windows installs only."));
             }
@@ -166,8 +198,12 @@ public sealed partial class UnattendedSetup
             errors.Add(new("name", $"An answer file already exists at {seedPath}. Choose another name or remove the file."));
         }
 
-        var setupProfile = SetupProfileFor(userId, request.SetupProfileId, os, errors);
-        return errors.Count > 0 ? null : new InstallPlan(profile, edition, machineName, seedPath, user.VmAccountName, setupProfile);
+        if (setupProfile is not null && os != InstallOs.Windows)
+        {
+            errors.Add(new("install.setupProfileId", "Setup profiles apply to Windows installs only."));
+        }
+
+        return errors.Count > 0 ? null : new InstallPlan(profile, edition, machineName, seedPath, user.VmAccountName, setupProfile, guestPerformanceSetup);
     }
 
     /// <summary>The User's setup profile as it is now, so later edits do not change an install in progress.</summary>
@@ -248,7 +284,8 @@ public sealed partial class UnattendedSetup
             profile.Os == InstallOs.Linux ? "Type yes in the console to start the install" : "Installing Windows",
             now,
             now,
-            SetupProfile: plan.SetupProfile));
+            SetupProfile: plan.SetupProfile,
+            GuestPerformanceSetup: plan.GuestPerformanceSetup));
 
         report("Starting the virtual machine");
         await _power.InvokeAsync(vmId, VmAction.Start, cancellationToken).ConfigureAwait(false);

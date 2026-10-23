@@ -914,6 +914,19 @@ impl ApiClient {
         .await
     }
 
+    /// POST /machine-profiles/{id}/vms (needs elevation): the createVm job.
+    pub async fn create_vm_from_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        id: &str,
+        request: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("{}/vms", profile_path(ProfileKind::Machine, id)?);
+        self.send_json(host, paired, reqwest::Method::POST, &path, request)
+            .await
+    }
+
     /// GET /setup-profiles/{id} or /machine-profiles/{id}: the stored profile.
     pub async fn get_profile(
         &self,
@@ -3684,6 +3697,30 @@ mod server_tests {
         let requests = server.requests();
         assert_eq!(requests[0].path, "/api/v1/setup-profiles/dev-workstation-2");
         assert_eq!(requests[1].path, "/api/v1/machine-profiles/gaming-rig");
+    }
+
+    #[tokio::test]
+    async fn a_vm_is_created_from_a_machine_profile_by_its_checked_id() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(202, "{}"));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let paired = paired(server.certificate_hash());
+        let request = serde_json::json!({"name": "Rig", "isoName": "win11.iso"});
+
+        let refused = api()
+            .create_vm_from_profile(&target, &paired, "../vms", &request)
+            .await;
+        api()
+            .create_vm_from_profile(&target, &paired, "gaming-rig", &request)
+            .await
+            .unwrap();
+
+        assert!(matches!(refused, Err(ClientError::InvalidRequest(_))));
+        let requests = server.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            (requests[0].method.as_str(), requests[0].path.as_str()),
+            ("POST", "/api/v1/machine-profiles/gaming-rig/vms")
+        );
     }
 
     #[tokio::test]

@@ -25,6 +25,7 @@
     downloadHostLogs,
     SetupProfilesApiVersion,
     MachineProfilesApiVersion,
+    MachineProfileVmsApiVersion,
     ApplySetupProfileApiVersion,
     BackupApiVersion,
     GameAwareApiVersion,
@@ -606,7 +607,7 @@
           {/key}
         {:else if view === "machine"}
           {#key selectedHost.key}
-            <MachineProfiles host={selectedHost} vms={runningWindows} />
+            <MachineProfiles host={selectedHost} vms={runningWindows} canCreateVms={hostSupports(selectedHost, MachineProfileVmsApiVersion)} />
           {/key}
         {:else if view === "setup"}
           {#key selectedHost.key}

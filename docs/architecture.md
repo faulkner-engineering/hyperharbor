@@ -119,8 +119,10 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   SoftwarePanel.svelte are the software sections both editors share; lib/machineDraft.svelte.ts (MachineDraft) holds
   the machine sections, the reactions (ControlState), and the HUD text; AccountSection, DisplaySection,
   FirmwareSection, ComputeSection, GpuSection, NetworkSection, and BackupSection edit them, with Choice.svelte for
-  "as it is / on / off" choices. MachineProfiles.svelte is the list tab. Host side: Host.Core/Profiles
-  MachineProfileYaml, MachineProfileValidator, MachineProfileStore; Host.Service/Api/MachineProfileEndpoints.
+  "as it is / on / off" choices. MachineProfiles.svelte is the list tab; CreateVmFromProfileDialog.svelte makes a VM
+  from a profile. Host side: Host.Core/Profiles MachineProfileYaml, MachineProfileValidator, MachineProfileStore,
+  MachineProfileVmCreation (profile to CreateVmRequest plus CreationExtras for VmCreationService);
+  Host.Service/Api/MachineProfileEndpoints and MachineBackupPolicies (IMachineBackupPolicies over the backup engine).
   Each software section is a component (InstallSection, RemoveSection,
   TweaksSection, BrowserSection) built on CatalogBrowser.svelte (filter and category chips pinned in the panel's one
   scroll area), ProfileChips.svelte (what the profile holds), and DetailCard.svelte (the selected entry's details on

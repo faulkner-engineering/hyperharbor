@@ -18,15 +18,19 @@
   import { toasts } from "$lib/toasts.svelte";
   import { onMount } from "svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import CreateVmFromProfileDialog from "./CreateVmFromProfileDialog.svelte";
   import MachineProfileEditor from "./MachineProfileEditor.svelte";
 
   interface Props {
     host: HostEntry;
     /** Running Windows VMs, for reading provisioned packages in the editor. */
     vms: Vm[];
+    /** Whether the host creates VMs from machine profiles (API 1.28.0). */
+    canCreateVms?: boolean;
   }
 
-  let { host, vms }: Props = $props();
+  let { host, vms, canCreateVms = false }: Props = $props();
+  let creating = $state<MachineProfileSummary | null>(null);
 
   let profiles = $state<MachineProfileSummary[] | null>(null);
   let error = $state<string | null>(null);
@@ -142,6 +146,7 @@
           </td>
           <td class="details">{new Date(profile.updatedAt).toLocaleString()}</td>
           <td class="actions">
+            {#if canCreateVms && !profile.error}<button type="button" onclick={() => (creating = profile)}>Create VM…</button>{/if}
             {#if !profile.error}<button type="button" onclick={() => edit(profile)}>Edit</button>{/if}
             <button type="button" onclick={() => exportFile(profile)}>Export…</button>
             <button type="button" class="danger" onclick={() => (confirmDelete = profile)}>Delete</button>
@@ -154,6 +159,9 @@
 
 {#if editing}
   <MachineProfileEditor {host} {vms} profileId={editing.profileId} initial={editing.initial} onclose={edited} />
+{/if}
+{#if creating}
+  <CreateVmFromProfileDialog {host} profile={creating} onclose={() => (creating = null)} />
 {/if}
 {#if confirmDelete}
   <ConfirmDialog

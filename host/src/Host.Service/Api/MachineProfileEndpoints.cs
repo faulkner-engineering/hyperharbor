@@ -5,6 +5,7 @@ using HyperHarbor.Host.Service.Audit;
 using HyperHarbor.Host.Service.Security;
 using HyperHarbor.Shared.Contracts;
 using HyperHarbor.Shared.Contracts.Profiles;
+using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace HyperHarbor.Host.Service.Api;
@@ -36,7 +37,24 @@ public static class MachineProfileEndpoints
         profiles.MapDelete("/{profileId}", Delete).WithName("deleteMachineProfile")
             .Audited<string>(profileId => $"profileId={profileId}")
             .RequireElevation();
+        profiles.MapPost("/{profileId}/vms", CreateVmAsync).WithName("createVmFromMachineProfile")
+            .Audited<CreateVmFromProfileRequest>(request => $"name={request.Name}, iso={request.IsoName}, edition={request.WindowsEdition ?? "profile"}")
+            .RequireElevation();
         return endpoints;
+    }
+
+    private static async Task<Accepted<VmJob>> CreateVmAsync(
+        string profileId,
+        CreateVmFromProfileRequest request,
+        MachineProfileVmCreation creation,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var audit = context.Audit()!;
+        audit.VmName = request.Name?.Trim();
+        var job = await creation.StartAsync(context.User.UserId(), profileId, request, context.CompletionAuditor(), cancellationToken);
+        audit.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }
 
     private static string Describe(MachineProfile profile) =>

@@ -56,6 +56,7 @@ public sealed class UnattendedInstallWatcher
     private readonly GuestRestart? _restart;
     private readonly VmOperationLocks? _locks;
     private readonly IAuditLog? _audit;
+    private readonly Performance.IGuestPerformanceStarter? _performance;
     private readonly ConcurrentDictionary<Guid, Task> _configuring = new();
     private DateTimeOffset? _lastTick;
 
@@ -75,8 +76,10 @@ public sealed class UnattendedInstallWatcher
         SetupProfileApplication? setup = null,
         GuestRestart? restart = null,
         VmOperationLocks? locks = null,
-        IAuditLog? audit = null)
+        IAuditLog? audit = null,
+        Performance.IGuestPerformanceStarter? performance = null)
     {
+        _performance = performance;
         _appx = appx;
         _setup = setup;
         _restart = restart;
@@ -290,6 +293,30 @@ public sealed class UnattendedInstallWatcher
 
         Save(install with { AccountConfigured = true, Error = null, NextAttemptAt = null }, UnattendedInstallState.Ready, "Ready");
         _logger.LogInformation("The unattended install of VM {VmId} is ready.", install.VmId);
+        await StartGuestPerformanceSetupAsync(install).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// For a machine profile with a GPU share: the host part of Performance mode was applied before the install, and
+    /// the guest part (the GPU driver and Remote Desktop settings) starts as its own job once the install is ready. A
+    /// failure to start it is logged; the VM's Performance dialog offers the same step.
+    /// </summary>
+    private async Task StartGuestPerformanceSetupAsync(UnattendedInstall install)
+    {
+        if (!install.GuestPerformanceSetup || _performance is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _performance.StartGuestSetupAsync(install.VmId, install.UserId, CancellationToken.None).ConfigureAwait(false);
+            _logger.LogInformation("Started the Performance mode guest setup of VM {VmId}.", install.VmId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not start the Performance mode guest setup of VM {VmId}. Run it from the VM's Performance dialog.", install.VmId);
+        }
     }
 
     /// <summary>
@@ -348,6 +375,7 @@ public sealed class UnattendedInstallWatcher
             "Applied the setup profile {Profile} to VM {VmId}: {Applied} items, {Problems} problems, restarted {Restarted}.",
             profile.Name, install.VmId, outcome.Applied, outcome.Problems.Count, restarted);
         WriteAudit(install, profile.Name, result);
+        await StartGuestPerformanceSetupAsync(install).ConfigureAwait(false);
     }
 
     private void WriteAudit(UnattendedInstall install, string profileName, SetupProfileResult result)

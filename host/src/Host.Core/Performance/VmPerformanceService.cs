@@ -6,12 +6,18 @@ using Microsoft.Extensions.Logging;
 
 namespace HyperHarbor.Host.Core.Performance;
 
+/// <summary>Starts the guest part of Performance mode, for the unattended install watcher.</summary>
+public interface IGuestPerformanceStarter
+{
+    Task StartGuestSetupAsync(Guid vmId, Guid userId, CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// Turns Performance mode on and off. Every change needs the VM off: a GPU partition, fixed memory, and
 /// the MMIO gaps can only change then, and there is deliberately no shut-down-and-apply. The state is
 /// checked before anything else, so a running VM is never touched.
 /// </summary>
-public sealed class VmPerformanceService
+public sealed class VmPerformanceService : IGuestPerformanceStarter
 {
     private readonly IVmInventory _inventory;
     private readonly IHyperVPerformance _performance;
@@ -104,6 +110,31 @@ public sealed class VmPerformanceService
         return _jobs.Start(VmJobKind.ApplyPerformance, vmId, userId, "Setting fixed memory and processors",
             context => RunAsync(vm.Name, vmId, settings, plan, context), onFinished);
     }
+
+    /// <summary>Checks Performance mode settings against the host's GPUs and memory, as ApplyAsync does, without a VM.</summary>
+    /// <exception cref="LifecycleConflictException">The host has no partitionable GPU (code gpuUnavailable).</exception>
+    /// <exception cref="LifecycleValidationException">A value is invalid.</exception>
+    public async Task<(PerformanceSettings Settings, PerformancePlan Plan)> CheckAsync(PerformanceSettings request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var gpus = await _gpus.ReadAsync(cancellationToken).ConfigureAwait(false);
+        return PerformanceValidator.Check(request, gpus, _capacity.Read(), _options.HostMemoryReserveMb);
+    }
+
+    /// <summary>The partitionable GPU whose name contains <paramref name="name"/> (ignoring case), or null.</summary>
+    public async Task<HostGpuInfo?> FindGpuAsync(string name, CancellationToken cancellationToken)
+    {
+        var gpus = await _gpus.ReadAsync(cancellationToken).ConfigureAwait(false);
+        return gpus.FirstOrDefault(gpu => gpu.Partitionable && gpu.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Applies checked settings inside another job, for a VM being created from a machine profile.</summary>
+    public Task ApplyWithinJobAsync(string name, Guid vmId, PerformanceSettings settings, PerformancePlan plan, VmJobContext context) =>
+        RunAsync(name, vmId, settings, plan, context);
+
+    /// <inheritdoc/>
+    Task IGuestPerformanceStarter.StartGuestSetupAsync(Guid vmId, Guid userId, CancellationToken cancellationToken) =>
+        StartGuestSetupAsync(vmId, userId, driversOnly: false, onFinished: null, cancellationToken);
 
     /// <summary>Removes the GPU partition and restores Hyper-V's defaults. Memory stays fixed and checkpoints stay off.</summary>
     /// <exception cref="LifecycleConflictException">The VM is not off (code vmMustBeOff).</exception>

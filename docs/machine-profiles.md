@@ -144,10 +144,12 @@ does not change them. To bring them over:
   "Older profiles". Removing the old types is a later release, after a version that warns.
 
 ## Applying (26c and 26d)
-- Create (26c): Create VM takes a machine profile and an ISO. One job runs the existing steps in order: create the VM
-  (firmware, compute, network, disk), unattended install (account), wait for ready, setup (software and display.guest),
-  Performance mode with guest setup (gpu), backup policy. A step that fails stops the chain and says which step; what
-  was done stays, as with today's jobs.
+- Create (26c, built): POST /machine-profiles/{id}/vms with a name, an ISO, and an optional edition. One createVm job
+  creates the VM (firmware, compute, network, disk), then while it is still off sets nested virtualization and MAC
+  spoofing, applies the host part of Performance mode (GPU partition, fixed memory), and sets the backup policy; then
+  the unattended install starts (account). When the install is ready the watcher applies the software and
+  display.guest (as a setup profile snapshot) and, with a GPU share, starts the guest Performance setup job. As with
+  Create VM, a failure while building removes the VM and its disk; the install and guest steps report like today's.
 - Existing VM (26d): GET /vms/{vmId}/machine-profile-preview?profileId= lists each change with what it needs (the VM off,
   a restart, the guest running with a credential) and what does not resolve on this host. The apply job runs only the
   parts the user ticks. Firmware: a TPM can be added, never removed; Secure Boot is left as it is.

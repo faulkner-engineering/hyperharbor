@@ -36,7 +36,8 @@ public sealed record UnattendedInstall(
     long RunningSeconds = 0,
     SetupProfile? SetupProfile = null,
     bool AccountConfigured = false,
-    SetupProfileResult? SetupResult = null)
+    SetupProfileResult? SetupResult = null,
+    bool GuestPerformanceSetup = false)
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsActive => State is not (UnattendedInstallState.Ready or UnattendedInstallState.Failed or UnattendedInstallState.Canceled);

@@ -9,6 +9,7 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// <param name="SwitchId">Null: no network adapter.</param>
 /// <param name="SecureBootTemplateId">Microsoft Windows, or Microsoft UEFI CA for Linux installers.</param>
 /// <param name="SeedIsoPath">An unattended install's answer file ISO, attached as a second DVD; null for none.</param>
+/// <param name="SecureBoot">False only when a machine profile turns Secure Boot off.</param>
 public sealed record VmBlueprint(
     string Name,
     string? ConfigurationFolder,
@@ -20,7 +21,8 @@ public sealed record VmBlueprint(
     bool DynamicMemory,
     string? SwitchId,
     string SecureBootTemplateId = CimHyperVBuilder.MicrosoftWindowsTemplateId,
-    string? SeedIsoPath = null);
+    string? SeedIsoPath = null,
+    bool SecureBoot = true);
 
 /// <summary>The Hyper-V steps of creating a VM. Each step either completes or throws.</summary>
 public interface IHyperVBuilder
@@ -28,7 +30,7 @@ public interface IHyperVBuilder
     /// <summary>Creates a new dynamic VHDX. The file must not exist.</summary>
     Task CreateDiskAsync(string path, long sizeBytes, Action<int> progress, CancellationToken cancellationToken);
 
-    /// <summary>Defines a Generation 2 VM with Secure Boot (the blueprint's template) and the given notes.</summary>
+    /// <summary>Defines a Generation 2 VM with Secure Boot (the blueprint's template, unless turned off) and the given notes.</summary>
     /// <returns>The new VM's ID.</returns>
     Task<Guid> DefineAsync(VmBlueprint blueprint, string notes, CancellationToken cancellationToken);
 
@@ -85,7 +87,7 @@ public sealed class CimHyperVBuilder : IHyperVBuilder
             {
                 new("ElementName", CimType.String, blueprint.Name),
                 new("VirtualSystemSubType", CimType.String, "Microsoft:Hyper-V:SubType:2"),
-                new("SecureBootEnabled", CimType.Boolean, true),
+                new("SecureBootEnabled", CimType.Boolean, blueprint.SecureBoot),
                 new("SecureBootTemplateId", CimType.String, blueprint.SecureBootTemplateId),
                 new("Notes", CimType.StringArray, new[] { notes }),
             };

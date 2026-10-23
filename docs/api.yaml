@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.27.0
+  version: 1.28.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -968,6 +968,53 @@ paths:
           $ref: "#/components/responses/ElevationRequired"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /machine-profiles/{profileId}/vms:
+    parameters:
+      - $ref: "#/components/parameters/MachineProfileId"
+    post:
+      tags: [VMs]
+      operationId: createVmFromMachineProfile
+      summary: Create a VM from a machine profile.
+      description: |
+        Since 1.28.0. Needs elevation. The profile is read against this host first: its switch, GPU, and backup target
+        names must exist here (a missing backup target is a warning), sections it leaves out take the Create VM
+        defaults, the account section becomes an unattended install, and the software and guest display settings are
+        applied when the install is ready. One createVm job builds the VM and, while it is still off, sets nested
+        virtualization, MAC address spoofing, Performance mode, and the backup policy; for a profile with a GPU share,
+        the guest part of Performance mode starts as its own job when the install is ready. Errors use the profile's
+        field paths (for example `network.switch`) or the request's (`name`, `isoName`).
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVmFromProfileRequest"
+      responses:
+        "202":
+          description: The createVm job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /machine-profiles/{profileId}/yaml:
     parameters:
@@ -5720,6 +5767,24 @@ components:
           oneOf:
             - $ref: "#/components/schemas/BackupGpuMode"
             - type: "null"
+
+    CreateVmFromProfileRequest:
+      type: object
+      required: [name, isoName]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        isoName:
+          type: string
+          description: An image in the ISO library.
+        windowsEdition:
+          type: [string, "null"]
+          description: An edition from `GET /isos/{name}/inspection`. Null means the profile's edition.
+        acknowledgeWarnings:
+          type: boolean
+          default: false
 
     StoredMachineProfile:
       type: object

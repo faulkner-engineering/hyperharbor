@@ -296,6 +296,11 @@
     "expiresAt": "2026-10-03T12:00:00\u002B00:00",
     "ticketExpiresAt": "2026-10-03T12:01:00\u002B00:00"
   },
+  "CreateVmFromProfileRequest": {
+    "name": "Rig",
+    "isoName": "win11.iso",
+    "acknowledgeWarnings": true
+  },
   "CreateVmRequest": {
     "name": "Win11 Dev",
     "isoName": "Win11_24H2.iso",
@@ -474,7 +479,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.27.0",
+    "apiVersion": "1.28.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {

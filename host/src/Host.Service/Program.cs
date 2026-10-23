@@ -408,6 +408,19 @@ builder.Services.AddSingleton<GpuEventReader>();
 builder.Services.AddSingleton<IGpuDriverSource, CimGpuDriverSource>();
 builder.Services.AddSingleton<IGuestPerformanceSetup, PowerShellDirectPerformanceSetup>();
 builder.Services.AddSingleton<VmPerformanceService>();
+builder.Services.AddSingleton<IGuestPerformanceStarter>(services => services.GetRequiredService<VmPerformanceService>());
+builder.Services.AddSingleton<IMachineBackupPolicies, MachineBackupPolicies>();
+builder.Services.AddSingleton(services => new MachineProfileVmCreation(
+    services.GetRequiredService<MachineProfileStore>(),
+    services.GetRequiredService<VmCreationService>(),
+    services.GetRequiredService<UnattendedSetup>(),
+    services.GetRequiredService<UnattendProfileStore>(),
+    new ProfileValidator(services.GetRequiredService<Catalogs>()),
+    services.GetRequiredService<VmPerformanceService>(),
+    services.GetRequiredService<IHyperVCompute>(),
+    services.GetRequiredService<IHyperVHost>(),
+    services.GetRequiredService<IMachineBackupPolicies>(),
+    services.GetRequiredService<ILogger<MachineProfileVmCreation>>()));
 builder.Services.AddSingleton<GpuVmShutdownCoordinator>();
 
 // Backup (Phase 21): Kopia is extracted from the executable on first use; the coordinator decides when runs start.

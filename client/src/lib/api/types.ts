@@ -586,6 +586,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/machine-profiles/{profileId}/vms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A machine profile ID (its file name on the host). */
+                profileId: components["parameters"]["MachineProfileId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a VM from a machine profile.
+         * @description Since 1.28.0. Needs elevation. The profile is read against this host first: its switch, GPU, and backup target
+         *     names must exist here (a missing backup target is a warning), sections it leaves out take the Create VM
+         *     defaults, the account section becomes an unattended install, and the software and guest display settings are
+         *     applied when the install is ready. One createVm job builds the VM and, while it is still off, sets nested
+         *     virtualization, MAC address spoofing, Performance mode, and the backup policy; for a profile with a GPU share,
+         *     the guest part of Performance mode starts as its own job when the install is ready. Errors use the profile's
+         *     field paths (for example `network.switch`) or the request's (`name`, `isoName`).
+         */
+        post: operations["createVmFromMachineProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/machine-profiles/{profileId}/yaml": {
         parameters: {
             query?: never;
@@ -3409,6 +3438,15 @@ export interface components {
             conditions?: components["schemas"]["BackupConditions"] | null;
             gpuMode?: components["schemas"]["BackupGpuMode"] | null;
         };
+        CreateVmFromProfileRequest: {
+            name: string;
+            /** @description An image in the ISO library. */
+            isoName: string;
+            /** @description An edition from `GET /isos/{name}/inspection`. Null means the profile's edition. */
+            windowsEdition?: string | null;
+            /** @default false */
+            acknowledgeWarnings: boolean;
+        };
         StoredMachineProfile: {
             id: string;
             /** Format: date-time */
@@ -5332,6 +5370,40 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["ElevationRequired"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    createVmFromMachineProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A machine profile ID (its file name on the host). */
+                profileId: components["parameters"]["MachineProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVmFromProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The createVm job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     exportMachineProfile: {
