@@ -11,6 +11,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Fixed
+- Deleting a VM that has no disks, or deleting a VM and keeping its disks elsewhere, left its folder behind with empty
+  Hyper-V folders in it, so the next VM of that name (a VM moved back, for one) was named "(moved)" or "(copy)". The
+  host now also removes the VM's configuration folder when it is named after the VM and nothing but empty Hyper-V
+  folders is left in it.
+- Every change to a VM's settings, and every transfer, warned that its maximum memory was more than the host has, for
+  any VM made in Hyper-V Manager: Hyper-V gives those a 1 TB maximum, which means "no limit". That maximum is no longer
+  reported, and a change to other settings no longer repeats the warning for a maximum set earlier.
 - The update helper's own log lines were lost: it wrote to the host's daily log file, which the running service keeps
   open, so nothing it logged during an update (including why a run failed) reached the disk. It now writes
   logs\update-yyyyMMdd.log, which Download host logs includes.

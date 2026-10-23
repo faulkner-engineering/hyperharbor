@@ -192,6 +192,42 @@ public sealed class VmComputeServiceTests : IDisposable
         Assert.Equal(8192, update.Settings!.StartupMemoryMb);
     }
 
+    [Theory]
+    [InlineData(VmSettingsValidator.HyperVDefaultMaximumMemoryMb)]
+    [InlineData(65536)]
+    public async Task AMaximumAboveTheHostsMemory_IsNotReported_WhenOtherSettingsChange(long maximumMb)
+    {
+        // Seen live: every VM made in Hyper-V Manager has a 1 TB maximum, so each change warned about it.
+        _compute.States[VmId] = new ComputeState(2, 2048, maximumMb, true, false, false, 1);
+
+        var update = await UpdateAsync(new UpdateVmComputeRequest(ProcessorCount: 4));
+
+        Assert.Equal(4, update.Settings!.ProcessorCount);
+    }
+
+    [Fact]
+    public async Task SettingAMaximumAboveTheHostsMemory_IsAWarning()
+    {
+        _compute.States[VmId] = new ComputeState(2, 2048, 4096, true, false, false, 1);
+
+        var warned = await Assert.ThrowsAsync<ResourceWarningsException>(() => UpdateAsync(new UpdateVmComputeRequest(MaximumMemoryMb: 65536)));
+
+        Assert.Equal("maximumMemoryMb", Assert.Single(warned.Warnings).Field);
+    }
+
+    [Fact]
+    public void HyperVsDefaultMaximum_IsNotReportedAsMoreThanTheHostHas()
+    {
+        var errors = new List<ValidationIssue>();
+        var warnings = new List<ValidationIssue>();
+
+        VmSettingsValidator.Check(
+            new ComputeRequest(2, 2048, VmSettingsValidator.HyperVDefaultMaximumMemoryMb, DynamicMemory: true), new HostCapacity(16, 32768, 20000), 2048, errors, warnings);
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
     [Fact]
     public async Task LoweringMemory_NeverWarns()
     {

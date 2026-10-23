@@ -11,6 +11,7 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// Parents: Msvm_ImageManagementService.GetVirtualHardDiskSettingData.
 /// Deletion: Msvm_VirtualSystemSnapshotService.DestroySnapshotTree and
 /// Msvm_VirtualSystemManagementService.DestroySystem.
+/// Configuration folder: ConfigurationDataRoot of the realized Msvm_VirtualSystemSettingData.
 /// </summary>
 public sealed class CimHyperVStorage : IHyperVStorage
 {
@@ -97,6 +98,26 @@ public sealed class CimHyperVStorage : IHyperVStorage
                 CimMethodParameter.Create("AffectedSystem", system, CimType.Reference, CimFlags.In),
             };
             await HyperVCim.InvokeAsync(session, service, "DestroySystem", parameters, "DestroySystem", cancellationToken);
+        }, cancellationToken);
+
+    public Task<string?> GetConfigurationFolderAsync(Guid vmId, CancellationToken cancellationToken) =>
+        HyperVCim.RunAsync(session =>
+        {
+            string? folder = null;
+            foreach (var settings in HyperVCim.Query(session,
+                $"SELECT VirtualSystemType, ConfigurationDataRoot FROM Msvm_VirtualSystemSettingData WHERE VirtualSystemIdentifier = '{vmId:D}'"))
+            {
+                using (settings)
+                {
+                    if (settings.CimInstanceProperties["VirtualSystemType"]?.Value as string == RealizedType
+                        && settings.CimInstanceProperties["ConfigurationDataRoot"]?.Value is string { Length: > 0 } root)
+                    {
+                        folder = root;
+                    }
+                }
+            }
+
+            return Task.FromResult(folder);
         }, cancellationToken);
 
     private static StorageSnapshot Read(CimSession session)

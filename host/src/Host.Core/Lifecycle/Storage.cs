@@ -33,6 +33,9 @@ public interface IHyperVStorage
 
     /// <summary>Removes the VM's configuration from Hyper-V. Its disk files are left in place.</summary>
     Task DeleteVmAsync(Guid vmId, CancellationToken cancellationToken);
+
+    /// <summary>The folder Hyper-V keeps the VM's configuration in (ConfigurationDataRoot), or null when it is not known.</summary>
+    Task<string?> GetConfigurationFolderAsync(Guid vmId, CancellationToken cancellationToken);
 }
 
 /// <summary>File operations on virtual hard disk files.</summary>

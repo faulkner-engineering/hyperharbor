@@ -53,6 +53,12 @@ internal sealed class FakeHyperVStorage : IHyperVStorage
         return Task.CompletedTask;
     }
 
+    /// <summary>Each VM's configuration folder (ConfigurationDataRoot).</summary>
+    public Dictionary<Guid, string> ConfigurationFolders { get; } = [];
+
+    public Task<string?> GetConfigurationFolderAsync(Guid vmId, CancellationToken cancellationToken) =>
+        Task.FromResult(ConfigurationFolders.TryGetValue(vmId, out var folder) ? folder : null);
+
     public void Attach(Guid vmId, string vmName, string path, bool inCheckpoint = false) =>
         Disks.Add(new DiskAttachment(vmId, vmName, path, inCheckpoint));
 }

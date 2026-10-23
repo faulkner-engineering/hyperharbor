@@ -20,6 +20,12 @@ public static class VmSettingsValidator
     /// <summary>The largest memory Hyper-V assigns a Generation 2 VM (12 TB).</summary>
     public const long MaximumMemoryLimitMb = 12L * 1024 * 1024;
 
+    /// <summary>
+    /// The maximum Hyper-V gives a VM with dynamic memory unless told otherwise (1 TB). It means "no limit", so a maximum
+    /// of exactly this is not reported as more than the host has.
+    /// </summary>
+    public const long HyperVDefaultMaximumMemoryMb = 1024L * 1024;
+
     /// <summary>Dynamic memory never takes a VM below this, or below its startup memory if that is smaller.</summary>
     public const long DynamicMinimumMb = 512;
 
@@ -48,7 +54,7 @@ public static class VmSettingsValidator
             {
                 errors.Add(new("maximumMemoryMb", "Maximum memory must be at least the startup memory."));
             }
-            else if (request.MaximumMemoryMb > host.TotalMemoryMb)
+            else if (request.MaximumMemoryMb > host.TotalMemoryMb && request.MaximumMemoryMb != HyperVDefaultMaximumMemoryMb)
             {
                 warnings.Add(new("maximumMemoryMb", $"Maximum memory is more than the host's {Mb(host.TotalMemoryMb)}; the VM can never use all of it."));
             }

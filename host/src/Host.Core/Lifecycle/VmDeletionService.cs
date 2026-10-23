@@ -156,12 +156,14 @@ public sealed class VmDeletionService
         }
 
         report("Deleting the virtual machine", 65);
+        var configurationFolder = await ConfigurationFolderAsync(vmId, cancellationToken).ConfigureAwait(false);
         await _storage.DeleteVmAsync(vmId, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Deleted virtual machine {Name} ({VmId}).", preview.VmName, vmId);
         ForgetRecords(vmId, preview.VmName);
 
         if (!request.DeleteDisks)
         {
+            DeleteOwnFolders(preview.VmName, [configurationFolder]);
             return;
         }
 
@@ -187,36 +189,56 @@ public sealed class VmDeletionService
                 $"The virtual machine was deleted, but these disk files could not be: {string.Join(", ", failed)}. Delete them on the host.");
         }
 
-        DeleteOwnFolders(preview);
+        var diskFolders = preview.Disks
+            .Select(Path.GetDirectoryName)
+            .Where(directory => directory is not null && string.Equals(Path.GetFileName(directory), "Virtual Hard Disks", StringComparison.OrdinalIgnoreCase))
+            .Select(directory => Path.GetDirectoryName(directory!));
+        DeleteOwnFolders(preview.VmName, diskFolders.Append(configurationFolder));
     }
 
     /// <summary>
-    /// Removes the VM's own folder once its disks are gone, so a later VM of the same name (a move back, for one) gets
-    /// it again. Only a folder named after the VM that holds a disk's "Virtual Hard Disks" folder counts as its own, and
-    /// only when nothing but empty Hyper-V folders is left in it. A folder that stays is logged, never an error.
+    /// The VM's configuration folder, read before the VM is deleted. A VM without disks has its own folder only there.
+    /// Unknown (null) when Hyper-V cannot say; the folder then stays, which is not an error.
     /// </summary>
-    private void DeleteOwnFolders(VmDeletePreview preview)
+    private async Task<string?> ConfigurationFolderAsync(Guid vmId, CancellationToken cancellationToken)
     {
-        var folders = preview.Disks
-            .Select(Path.GetDirectoryName)
-            .Where(directory => directory is not null && string.Equals(Path.GetFileName(directory), "Virtual Hard Disks", StringComparison.OrdinalIgnoreCase))
-            .Select(directory => Path.GetDirectoryName(directory!))
-            .Where(folder => folder is not null
-                && Path.GetDirectoryName(folder) is not null
-                && string.Equals(Path.GetFileName(folder), preview.VmName, StringComparison.OrdinalIgnoreCase))
+        try
+        {
+            return await _storage.GetConfigurationFolderAsync(vmId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HyperV.HyperVUnavailableException or HyperVOperationException or HyperV.HyperVJobFailedException)
+        {
+            _logger.LogWarning(ex, "Could not read the configuration folder of virtual machine {VmId}.", vmId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Removes the VM's own folder once it is deleted, so a later VM of the same name (a move back, for one) gets it
+    /// again. A candidate is the folder that holds a disk's "Virtual Hard Disks" folder, or the VM's configuration folder;
+    /// it counts as the VM's own only when it is named after the VM, and it is deleted only when nothing but empty Hyper-V
+    /// folders is left in it. A folder that stays is logged, never an error.
+    /// </summary>
+    private void DeleteOwnFolders(string vmName, IEnumerable<string?> candidates)
+    {
+        var folders = candidates
+            .Where(folder => !string.IsNullOrWhiteSpace(folder))
+            .Select(folder => DiskPaths.Normalize(folder!))
+            .Where(folder => Path.GetDirectoryName(folder) is not null
+                && string.Equals(Path.GetFileName(folder), vmName, StringComparison.OrdinalIgnoreCase))
             .Distinct(DiskPaths.Comparer);
         foreach (var folder in folders)
         {
             try
             {
-                if (_files.DeleteEmptyVmFolder(folder!))
+                if (_files.DeleteEmptyVmFolder(folder))
                 {
-                    _logger.LogInformation("Deleted the empty folder {Folder} of {Name}.", folder, preview.VmName);
+                    _logger.LogInformation("Deleted the empty folder {Folder} of {Name}.", folder, vmName);
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                _logger.LogWarning(ex, "Could not delete the empty folder {Folder} of {Name}.", folder, preview.VmName);
+                _logger.LogWarning(ex, "Could not delete the empty folder {Folder} of {Name}.", folder, vmName);
             }
         }
     }

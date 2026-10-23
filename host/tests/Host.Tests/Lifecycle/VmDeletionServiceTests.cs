@@ -295,6 +295,65 @@ public sealed class VmDeletionServiceTests : IDisposable
         Assert.Empty(_files.FolderRequests);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AVmWithoutDisks_HasItsConfigurationFolderRemoved(bool deleteDisks)
+    {
+        // Seen live: a VM with no disks left its empty folder behind, so the next VM of that name was renamed.
+        _storage.Disks.Clear();
+        _files.Files.Clear();
+        _storage.ConfigurationFolders[VmId] = @"D:\VMs\Dev\";
+
+        var job = await StartAsync(deleteDisks);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+        Assert.Equal([@"D:\VMs\Dev"], _files.DeletedFolders);
+    }
+
+    [Fact]
+    public async Task TheConfigurationFolder_AndTheDiskFolder_AreOneRequestWhenTheyMatch()
+    {
+        UseDisk(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx");
+        _storage.ConfigurationFolders[VmId] = @"D:\VMs\Dev";
+
+        var job = await StartAsync(deleteDisks: true);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal([@"D:\VMs\Dev"], _files.FolderRequests);
+    }
+
+    [Theory]
+    [InlineData(@"C:\ProgramData\Microsoft\Windows\Hyper-V")]
+    [InlineData(@"D:\VMs")]
+    [InlineData(@"D:\")]
+    public async Task AConfigurationFolderNotNamedAfterTheVm_IsNeverTouched(string folder)
+    {
+        _storage.ConfigurationFolders[VmId] = folder;
+
+        var job = await StartAsync(deleteDisks: false);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+        Assert.Empty(_files.FolderRequests);
+    }
+
+    [Fact]
+    public async Task TheConfigurationFolder_StaysWhileItHoldsTheKeptDisks()
+    {
+        const string disk = @"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx";
+        UseDisk(disk);
+        _storage.ConfigurationFolders[VmId] = @"D:\VMs\Dev";
+
+        var job = await StartAsync(deleteDisks: false);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, UserId)!.State);
+        Assert.Empty(_files.DeletedFolders);
+        Assert.Contains(disk, _files.Files);
+    }
+
     [Fact]
     public void WindowsDiskFiles_DeletesOnlyAFolderOfEmptyHyperVFolders()
     {

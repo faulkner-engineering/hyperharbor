@@ -176,6 +176,12 @@ public sealed class VmComputeService
         // The reserve warning concerns memory the VM would take; skip it unless startup memory grows.
         // A running VM already holds its current startup memory, so only the increase counts.
         warnings.RemoveAll(warning => warning.Field == "startupMemoryMb");
+
+        // A maximum above the host's memory is reported when it is set, not on every later change of other settings.
+        if (change.MaximumMemoryMb is null && change.DynamicMemory is not true)
+        {
+            warnings.RemoveAll(warning => warning.Field == "maximumMemoryMb");
+        }
         if (change.StartupMemoryMb is not null && desired.StartupMemoryMb > current.StartupMemoryMb)
         {
             var taken = state == VmState.Running ? desired.StartupMemoryMb - current.StartupMemoryMb : desired.StartupMemoryMb;
