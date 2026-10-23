@@ -788,11 +788,14 @@ export interface paths {
         };
         /**
          * Search the winget community source.
-         * @description Runs Find-WinGetPackage (Microsoft.WinGet.Client) in PowerShell 7 on the host. The service runs
-         *     as SYSTEM, where the module works only in PowerShell 7, so search needs PowerShell 7 and the
-         *     module installed for all users; until then it answers 409 with `code: wingetUnavailable`
-         *     (on the host, the tray's Set up package search installs both). Results are cached for ten
-         *     minutes.
+         * @description Since 1.34.0 the host searches its own copy of the winget community source's package index
+         *     (source2.msix from cdn.winget.microsoft.com, fetched when the host starts and refreshed daily), so
+         *     search needs nothing installed and answers in milliseconds, fast enough to search as the user types.
+         *     Matches are on the id, name, and moniker (contains) or a tag (exact); exact matches come first, then
+         *     names that start with the text. Without the index (no internet since the host started), it falls back
+         *     to Find-WinGetPackage (Microsoft.WinGet.Client) in PowerShell 7, which needs PowerShell 7 and the
+         *     module installed for all users (the tray's Set up package search); when neither works it answers 409
+         *     with `code: wingetUnavailable`. Before 1.34.0 only the PowerShell search existed.
          */
         get: operations["searchPackages"];
         put?: never;
@@ -5926,7 +5929,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Package search is not set up on the host (`code: wingetUnavailable`). */
+            /** @description Neither the package index nor the PowerShell search is available (`code: wingetUnavailable`). */
             409: {
                 headers: {
                     [name: string]: unknown;

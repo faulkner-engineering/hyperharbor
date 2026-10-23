@@ -79,6 +79,9 @@ note anything that needs action, such as updating the host, a new elevation requ
   paired host's package, setting, and network lists (Catalogs from, when there are several), and the host checks the
   profile when it is sent.
 
+- Package search works on any host with internet access: nothing to set up first (PowerShell 7 and the WinGet
+  module are no longer needed), and results come back in milliseconds.
+
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
   (RUSTSEC-2026-0385).
@@ -88,6 +91,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   profile becomes a machine profile with its account settings, a setup profile one with its software. The originals
   stay for older clients. A profile whose file no longer reads is skipped and listed in
   machine-profiles/converted.json in the host's data folder.
+- API 1.34.0: GET /packages/search reads the host's own copy of the winget package index (downloaded from
+  cdn.winget.microsoft.com when the host starts and refreshed daily) and falls back to PowerShell 7 only without it.
 - API 1.33.0: GET /isos/{name}/content downloads an image from the ISO library (a Range header resumes it) and
   GET /profile-images/{name}/content downloads a wallpaper image, so a client can keep them in its own library.
 - API 1.32.0: GET /machine-profile-templates (the built-in install profiles as machine profile templates) and
