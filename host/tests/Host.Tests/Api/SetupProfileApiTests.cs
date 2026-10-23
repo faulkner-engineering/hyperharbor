@@ -135,7 +135,11 @@ public sealed class SetupProfileApiTests : IDisposable
         var catalog = (await _client.GetFromJsonAsync<JsonObject>($"{Path}/catalog"))!;
         var created = await SendAsync(HttpMethod.Post, Path, JsonContent.Create(new { name = "Catalog" }));
 
-        Assert.Contains(catalog["tweaks"]!.AsArray(), tweak => (string?)tweak!["id"] == "explorer.showFileExtensions");
+        var extensions = catalog["tweaks"]!.AsArray().Single(tweak => (string?)tweak!["id"] == "explorer.showFileExtensions")!;
+        var value = extensions["values"]!.AsArray().Single()!;
+        Assert.Equal(("HideFileExt", "dword", "0", "1"), ((string?)value["name"], (string?)value["type"], (string?)value["value"], (string?)value["default"]));
+        Assert.Equal(Catalogs.Default.Appx.Count, catalog["appx"]!.AsArray().Count);
+        Assert.Contains(catalog["appx"]!.AsArray(), appx => (string?)appx!["rating"] is "safe" or "caution" or "keep");
         Assert.Equal(["chrome", "edge", "brave"], catalog["browsers"]!.AsArray().Select(browser => (string)browser!["id"]!));
         Assert.Contains(catalog["policies"]!.AsArray(), policy => (string?)policy!["key"] == "restoreOnStartup" && policy["values"]!["5"] is not null);
         Assert.Equal("catalog-2", (string?)(await created.Content.ReadFromJsonAsync<JsonObject>())!["id"]);

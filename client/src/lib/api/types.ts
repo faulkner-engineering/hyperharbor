@@ -3246,8 +3246,10 @@ export interface components {
             alias: string;
             id: string;
             name: string;
+            /** @description One line about the package, for the picker's details (since 1.26.0). */
+            description: string | null;
             category: string;
-            /** @description Listed on the package picker's Popular tab. */
+            /** @description Listed under the package picker's Popular filter. */
             popular: boolean;
         };
         /**
@@ -3313,6 +3315,18 @@ export interface components {
             name: string;
             category: string;
             note: string | null;
+            /** @description The registry values the tweak writes, for the editor's details (since 1.26.0). */
+            values: components["schemas"]["TweakCatalogValue"][];
+        };
+        TweakCatalogValue: {
+            key: string;
+            /** @description The value name; empty for the key's default value. */
+            name: string;
+            type: components["schemas"]["RegistryValueType"];
+            /** @description What the tweak writes. Decimal for dword and qword. */
+            value: string;
+            /** @description The value on a clean install; null when the value is absent there. */
+            default: string | null;
         };
         BrowserCatalogItem: {
             /** @description chrome, edge, or brave. */
@@ -3338,6 +3352,16 @@ export interface components {
             tweaks: components["schemas"]["TweakCatalogItem"][];
             browsers: components["schemas"]["BrowserCatalogItem"][];
             policies: components["schemas"]["BrowserPolicyItem"][];
+            /** @description The rated provisioned packages HyperHarbor knows, so removals can be chosen without reading a VM (since 1.26.0; older hosts leave it out). */
+            appx: components["schemas"]["AppxCatalogItem"][];
+        };
+        AppxCatalogItem: {
+            /** @description The package family name a profile lists, for example Microsoft.BingNews. */
+            name: string;
+            friendlyName: string;
+            publisher: string;
+            rating: components["schemas"]["AppxRating"];
+            note: string | null;
         };
         /** @description Settings for installing an OS without anyone at the console. Profiles never hold passwords. */
         UnattendProfile: {

@@ -87,9 +87,22 @@ public static class SetupProfileEndpoints
         TypedResults.Text(store.GetYaml(context.User.UserId(), profileId), YamlMediaType, Encoding.UTF8);
 
     private static Ok<SetupProfileCatalog> Catalog(Catalogs catalogs) => TypedResults.Ok(new SetupProfileCatalog(
-        catalogs.Tweaks.Select(tweak => new TweakCatalogItem(tweak.Id, tweak.Name, tweak.Category, tweak.Note)).ToList(),
+        catalogs.Tweaks.Select(tweak => new TweakCatalogItem(
+            tweak.Id,
+            tweak.Name,
+            tweak.Category,
+            tweak.Note,
+            tweak.Values.Select(value => new TweakCatalogValue(value.Key, value.Name, RegistryType(value.Type), value.Value, value.Default)).ToList())).ToList(),
         catalogs.Browsers.Select(browser => new BrowserCatalogItem(browser.Id, browser.Name, browser.WingetId, browser.Alias)).ToList(),
-        catalogs.Policies.Select(policy => new BrowserPolicyItem(policy.Key, policy.Name, policy.Type, policy.AppliesTo, policy.Description, policy.Values)).ToList()));
+        catalogs.Policies.Select(policy => new BrowserPolicyItem(policy.Key, policy.Name, policy.Type, policy.AppliesTo, policy.Description, policy.Values)).ToList(),
+        catalogs.Appx.Select(appx => new AppxCatalogItem(appx.Name, appx.FriendlyName, appx.Publisher, appx.Rating, appx.Note)).ToList()));
+
+    private static RegistryValueType RegistryType(string type) => type switch
+    {
+        "dword" => RegistryValueType.Dword,
+        "qword" => RegistryValueType.Qword,
+        _ => RegistryValueType.String,
+    };
 
     private static ContentHttpResult Schema() =>
         TypedResults.Text(Catalogs.ProfileSchema, "application/schema+json", Encoding.UTF8);

@@ -114,7 +114,10 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   --hh-crt-* tokens in app.css), scene.ts (three r170, imported on demand: EdgesGeometry lines, UnrealBloomPass, CRT
   ShaderPass). UI: MachineView.svelte (3D or the still; motion setting; bindable status) and MachineStill.svelte
   (exploded.svg with the same highlights). SetupProfileEditor.svelte lays out the section list, the machine with its
-  HUD, and the form panel in Dialog's terminal variant.
+  HUD, and the form panel in Dialog's terminal variant. Each section is a component (InstallSection, RemoveSection,
+  TweaksSection, BrowserSection) built on CatalogBrowser.svelte (filter and category chips pinned in the panel's one
+  scroll area), ProfileChips.svelte (what the profile holds), and DetailCard.svelte (the selected entry's details on
+  the machine stage); lib/catalogBrowser.ts has the filtering and the Detail type.
 - Camera sharing (Rust workspace rooted at client/src-tauri, which lists ../vcam-protocol and ../vcam):
   - client/vcam-protocol: no dependencies; the pipe frame format (FrameHeader, 32 bytes then NV12), pipe_name,
     SOURCE_CLSID, and NV12 black and scale. Used by both sides.

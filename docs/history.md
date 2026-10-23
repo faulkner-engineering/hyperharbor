@@ -311,6 +311,28 @@ verified, and what was found along the way. User-facing changes per release are 
    spin, firmware, green palette) and with --disable-3d-apis (the still). The GPU fans gained blades: a plain ring
    spinning about its own axis looks still; viewer.html only appeared to spin them because it rotated world-space
    lines about the origin.
+26. Machine profiles (planned 2026-10-22 with the user; in progress). One document that describes a whole VM, edited in
+   the terminal editor with one section per part of the wireframe machine. Decisions:
+   - One self-contained document, not references: account (today's unattended install profile fields), display,
+     firmware (TPM), compute, GPU (Performance mode), network (switch, MAC spoofing), backup (schedule, retention,
+     triggers), and the software sections (install, remove, tweaks, browser). Setup profiles and unattended install
+     profiles become legacy, with a migration into machine profiles.
+   - Applies at VM creation (one job chain: create, unattended install, setup, performance, backup policy) and to an
+     existing VM, with a preview of what changes and the off-VM requirements for hardware.
+   - Display holds both guest settings (resolution, scaling, dark mode, applied in the guest) and connection defaults
+     (monitors, full screen or windowed), which a client may still override per device.
+   - Discovery: one scroll area per pane with a pinned filter box and category chips over the whole curated catalog
+     (winget search as the fallback group), the profile's items as a chip strip, and a detail drawer (package
+     descriptions; the registry values a tweak writes).
+   Done: 26a discovery (2026-10-22; API 1.26.0): PackageCatalogItem.description (catalogs/packages.yaml),
+   TweakCatalogItem.values (TweakCatalogValue with the clean-install default), SetupProfileCatalog.appx
+   (AppxCatalogItem from catalogs/appx.yaml). Client: CatalogBrowser (pinned filter and chips, counts follow the
+   filter), ProfileChips, DetailCard on the machine stage, and InstallSection, RemoveSection, TweaksSection,
+   BrowserSection replace PackagePicker, AppxChecklist, and ExtensionPicker. Verified in a browser preview with the
+   repository catalogs; not yet against a live host.
+   Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
+   contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
+   to an existing VM.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

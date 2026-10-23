@@ -1,170 +1,209 @@
 # Package aliases and the Popular list for setup profiles. An alias (lowercase letters, digits, and hyphens)
 # can stand for a winget id in a profile's install list; it is resolved when the profile is applied.
-# Fields: alias, id (winget), name, category (browsers | development | utilities | media | communication |
-# productivity | security | gaming), popular (shown on the Popular tab).
+# Fields: alias, id (winget), name, description (one line, shown in the picker's details), category (browsers |
+# development | utilities | media | communication | productivity | security | gaming), popular (shown on the
+# Popular tab).
 - alias: chrome
   id: Google.Chrome
   name: Google Chrome
+  description: "Google's web browser, with sync to a Google account."
   category: browsers
   popular: true
 - alias: firefox
   id: Mozilla.Firefox
   name: Mozilla Firefox
+  description: "Open-source web browser from Mozilla."
   category: browsers
   popular: true
 - alias: brave
   id: Brave.Brave
   name: Brave
+  description: "Chromium-based browser that blocks ads and trackers by default."
   category: browsers
   popular: true
 - alias: edge
   id: Microsoft.Edge
   name: Microsoft Edge
+  description: "Microsoft's Chromium-based browser, included with Windows."
   category: browsers
 - alias: git
   id: Git.Git
   name: Git
+  description: "Distributed version control, with Git Bash."
   category: development
   popular: true
 - alias: gh
   id: GitHub.cli
   name: GitHub CLI
+  description: "GitHub on the command line: pull requests, issues, and repositories."
   category: development
 - alias: github-desktop
   id: GitHub.GitHubDesktop
   name: GitHub Desktop
+  description: "Desktop app for working with Git repositories on GitHub."
   category: development
 - alias: vscode
   id: Microsoft.VisualStudioCode
   name: Visual Studio Code
+  description: "Code editor with debugging, Git, and a large extension marketplace."
   category: development
   popular: true
 - alias: terminal
   id: Microsoft.WindowsTerminal
   name: Windows Terminal
+  description: "Tabbed terminal for PowerShell, Command Prompt, and WSL."
   category: development
 - alias: powershell
   id: Microsoft.PowerShell
   name: PowerShell 7
+  description: "Cross-platform PowerShell, installed beside Windows PowerShell 5.1."
   category: development
   popular: true
 - alias: python
   id: Python.Python.3.12
   name: Python 3.12
+  description: "The Python 3.12 interpreter and pip."
   category: development
   popular: true
 - alias: nodejs
   id: OpenJS.NodeJS.LTS
   name: Node.js LTS
+  description: "JavaScript runtime with npm, long-term support release."
   category: development
   popular: true
 - alias: dotnet-sdk
   id: Microsoft.DotNet.SDK.8
   name: .NET 8 SDK
+  description: "Tools to build and run .NET 8 applications."
   category: development
 - alias: docker
   id: Docker.DockerDesktop
   name: Docker Desktop
+  description: "Build and run containers; needs WSL 2 or Hyper-V in the VM (nested virtualization)."
   category: development
 - alias: jetbrains-toolbox
   id: JetBrains.Toolbox
   name: JetBrains Toolbox
+  description: "Installs and updates JetBrains IDEs such as IntelliJ IDEA and Rider."
   category: development
 - alias: putty
   id: PuTTY.PuTTY
   name: PuTTY
+  description: "SSH and telnet client."
   category: development
 - alias: winscp
   id: WinSCP.WinSCP
   name: WinSCP
+  description: "SFTP, SCP, and FTP file transfer client."
   category: development
 - alias: wireshark
   id: WiresharkFoundation.Wireshark
   name: Wireshark
+  description: "Network protocol analyzer for capturing and inspecting traffic."
   category: development
 - alias: 7zip
   id: 7zip.7zip
   name: 7-Zip
+  description: "File archiver for 7z, zip, rar, and more."
   category: utilities
   popular: true
 - alias: notepadplusplus
   id: Notepad++.Notepad++
   name: Notepad++
+  description: "Lightweight text and source code editor."
   category: utilities
   popular: true
 - alias: powertoys
   id: Microsoft.PowerToys
   name: PowerToys
+  description: "Microsoft utilities such as FancyZones, PowerToys Run, and Color Picker."
   category: utilities
   popular: true
 - alias: everything
   id: voidtools.Everything
   name: Everything
+  description: "Finds files by name instantly across NTFS drives."
   category: utilities
 - alias: sharex
   id: ShareX.ShareX
   name: ShareX
+  description: "Screen capture and recording with annotation and upload."
   category: utilities
 - alias: windirstat
   id: WinDirStat.WinDirStat
   name: WinDirStat
+  description: "Shows what is using disk space, as a tree and a map."
   category: utilities
 - alias: vlc
   id: VideoLAN.VLC
   name: VLC media player
+  description: "Media player for almost any audio and video format."
   category: media
   popular: true
 - alias: obs
   id: OBSProject.OBSStudio
   name: OBS Studio
+  description: "Screen recording and live streaming."
   category: media
 - alias: gimp
   id: GIMP.GIMP
   name: GIMP
+  description: "Open-source image editor."
   category: media
 - alias: spotify
   id: Spotify.Spotify
   name: Spotify
+  description: "Music and podcast streaming."
   category: media
 - alias: discord
   id: Discord.Discord
   name: Discord
+  description: "Voice, video, and text chat for communities and friends."
   category: communication
   popular: true
 - alias: slack
   id: SlackTechnologies.Slack
   name: Slack
+  description: "Team messaging and channels."
   category: communication
 - alias: zoom
   id: Zoom.Zoom
   name: Zoom
+  description: "Video meetings and webinars."
   category: communication
 - alias: thunderbird
   id: Mozilla.Thunderbird
   name: Thunderbird
+  description: "Email, calendar, and contacts client from Mozilla."
   category: communication
 - alias: libreoffice
   id: TheDocumentFoundation.LibreOffice
   name: LibreOffice
+  description: "Office suite: documents, spreadsheets, and presentations."
   category: productivity
 - alias: obsidian
   id: Obsidian.Obsidian
   name: Obsidian
+  description: "Notes in local Markdown files, with links between them."
   category: productivity
 - alias: acrobat-reader
   id: Adobe.Acrobat.Reader.64-bit
   name: Adobe Acrobat Reader
+  description: "View, sign, and comment on PDF files."
   category: productivity
 - alias: bitwarden
   id: Bitwarden.Bitwarden
   name: Bitwarden
+  description: "Password manager with sync across devices."
   category: security
   popular: true
 - alias: keepassxc
   id: KeePassXCTeam.KeePassXC
   name: KeePassXC
+  description: "Offline password manager that keeps a local encrypted database."
   category: security
 - alias: steam
   id: Valve.Steam
   name: Steam
+  description: "Game store and launcher."
   category: gaming

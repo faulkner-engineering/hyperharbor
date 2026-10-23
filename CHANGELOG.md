@@ -20,6 +20,19 @@ note anything that needs action, such as updating the host, a new elevation requ
   WebGL, or when the view stays under 30 frames per second for five seconds, it shows a still exploded drawing with
   the same highlights instead, and says why. The editor fills the window, with thin scrollbars, fields, and buttons
   that glow in the terminal color; with Motion off its own animations (the section fade and the cursor) stop too.
+- Finding things in the setup profile editor: each section is one list with a filter box and category chips that stay
+  at the top, over the whole catalog (all packages, not only the popular ones), with one scroll bar per panel. What
+  the profile holds shows as chips above the list. Selecting an entry opens its details on the model: a package's
+  description, an app's rating, or the exact registry values a tweak writes, with a button to add or remove it.
+  In Install, typing a winget id offers to add it as typed, and winget search shows its results in the same list.
+  Remove lists HyperHarbor's rated built-in apps without a running VM (reading a VM still marks what it has), with
+  Remove all safe; capabilities and optional features moved under a fold. Pasting a store link into the extension
+  filter looks the extension up.
+
+### Changed
+- API 1.26.0: the package catalog has a description per package, the setup profile catalog lists the rated built-in
+  apps (appx) and the registry values of each tweak. Update the host for package descriptions, built-in apps without
+  a VM, and tweak details; with an older host the editor works as before without them.
 
 ## [0.2.0] - 2026-10-22 (API 1.25.0)
 

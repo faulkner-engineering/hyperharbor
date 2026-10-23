@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.25.0
+  version: 1.26.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -5390,7 +5390,7 @@ components:
 
     PackageCatalogItem:
       type: object
-      required: [alias, id, name, category, popular]
+      required: [alias, id, name, description, category, popular]
       properties:
         alias:
           type: string
@@ -5399,11 +5399,14 @@ components:
           type: string
         name:
           type: string
+        description:
+          type: [string, "null"]
+          description: One line about the package, for the picker's details (since 1.26.0).
         category:
           type: string
         popular:
           type: boolean
-          description: Listed on the package picker's Popular tab.
+          description: Listed under the package picker's Popular filter.
 
     ExtensionStore:
       type: string
@@ -5526,7 +5529,7 @@ components:
 
     TweakCatalogItem:
       type: object
-      required: [id, name, category, note]
+      required: [id, name, category, note, values]
       properties:
         id:
           type: string
@@ -5536,6 +5539,29 @@ components:
           type: string
         note:
           type: [string, "null"]
+        values:
+          type: array
+          description: The registry values the tweak writes, for the editor's details (since 1.26.0).
+          items:
+            $ref: "#/components/schemas/TweakCatalogValue"
+
+    TweakCatalogValue:
+      type: object
+      required: [key, name, type, value, default]
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+          description: The value name; empty for the key's default value.
+        type:
+          $ref: "#/components/schemas/RegistryValueType"
+        value:
+          type: string
+          description: What the tweak writes. Decimal for dword and qword.
+        default:
+          type: [string, "null"]
+          description: The value on a clean install; null when the value is absent there.
 
     BrowserCatalogItem:
       type: object
@@ -5577,7 +5603,7 @@ components:
 
     SetupProfileCatalog:
       type: object
-      required: [tweaks, browsers, policies]
+      required: [tweaks, browsers, policies, appx]
       properties:
         tweaks:
           type: array
@@ -5591,6 +5617,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BrowserPolicyItem"
+        appx:
+          type: array
+          description: >-
+            The rated provisioned packages HyperHarbor knows, so removals can be chosen without reading a VM
+            (since 1.26.0; older hosts leave it out).
+          items:
+            $ref: "#/components/schemas/AppxCatalogItem"
+
+    AppxCatalogItem:
+      type: object
+      required: [name, friendlyName, publisher, rating, note]
+      properties:
+        name:
+          type: string
+          description: The package family name a profile lists, for example Microsoft.BingNews.
+        friendlyName:
+          type: string
+        publisher:
+          type: string
+        rating:
+          $ref: "#/components/schemas/AppxRating"
+        note:
+          type: [string, "null"]
 
     UnattendProfile:
       type: object

@@ -65,6 +65,7 @@ public sealed class PackageApiTests : IDisposable
 
         var vscode = catalog.Single(item => (string?)item!["alias"] == "vscode")!;
         Assert.Equal(("Microsoft.VisualStudioCode", true), ((string?)vscode["id"], (bool)vscode["popular"]!));
+        Assert.StartsWith("Code editor", (string?)vscode["description"]);
         Assert.Equal(Catalogs.Default.Packages.Count, catalog.Count);
     }
 }

@@ -236,15 +236,19 @@ public class ContractFixtureTests
         ["SetupProfile"] = SetupProfileSample,
         ["AppxBaselineInfo"] = AppxBaselineSample,
         ["PackageSearchResult"] = new PackageSearchResult("Git.Git", "Git", "2.55.0.5", "winget"),
-        ["TweakCatalogItem"] = new TweakCatalogItem("explorer.showFileExtensions", "Show file name extensions", "explorer", null),
+        ["TweakCatalogItem"] = new TweakCatalogItem("explorer.showFileExtensions", "Show file name extensions", "explorer", null,
+            [new TweakCatalogValue(@"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "HideFileExt", RegistryValueType.Dword, "0", "1")]),
+        ["TweakCatalogValue"] = new TweakCatalogValue(@"HKCU\Software\Policies\Microsoft\Dsh", "AllowNewsAndInterests", RegistryValueType.Dword, "0", null),
         ["BrowserCatalogItem"] = new BrowserCatalogItem("brave", "Brave", "Brave.Brave", "brave"),
 
         // Nulls on purpose: description and values are required but nullable.
         ["BrowserPolicyItem"] = new BrowserPolicyItem("passwordManager", "Offer to save passwords", "boolean", ["chrome", "edge", "brave"], null, null),
         ["SetupProfileCatalog"] = new SetupProfileCatalog(
-            [new TweakCatalogItem("taskbar.disableWidgets", "Turn off Widgets", "taskbar", "Uses the policy.")],
+            [new TweakCatalogItem("taskbar.disableWidgets", "Turn off Widgets", "taskbar", "Uses the policy.", [])],
             [new BrowserCatalogItem("edge", "Microsoft Edge", "Microsoft.Edge", "edge")],
-            [new BrowserPolicyItem("restoreOnStartup", "On startup", "integer", ["chrome"], "What opens at startup.", new Dictionary<string, string> { ["5"] = "Open the New Tab page" })]),
+            [new BrowserPolicyItem("restoreOnStartup", "On startup", "integer", ["chrome"], "What opens at startup.", new Dictionary<string, string> { ["5"] = "Open the New Tab page" })],
+            [new AppxCatalogItem("Microsoft.BingNews", "News", "Microsoft", AppxRating.Safe, null)]),
+        ["AppxCatalogItem"] = new AppxCatalogItem("Microsoft.WindowsCalculator", "Calculator", "Microsoft", AppxRating.Keep, "Most people use it."),
 
         // Null on purpose: note is required but nullable.
         ["DraftItem"] = new DraftItem("Git.Git", "Git", true, null),
@@ -261,7 +265,7 @@ public class ContractFixtureTests
             [new DraftBrowser("Brave.Brave", "Brave", true, [])],
             [],
             ["There is no clean Appx baseline for Windows 10.0.26100.2033 Professional."]),
-        ["PackageCatalogItem"] = new PackageCatalogItem("vscode", "Microsoft.VisualStudioCode", "Visual Studio Code", "development", true),
+        ["PackageCatalogItem"] = new PackageCatalogItem("vscode", "Microsoft.VisualStudioCode", "Visual Studio Code", "Code editor.", "development", true),
 
         // Null on purpose: edgeId is required but nullable.
         ["ExtensionCatalogItem"] = new ExtensionCatalogItem("eimadpbcbfnmbkopoojfekhnkhdbieeh", "Dark Reader", "accessibility", "Dark theme for every website.", null),

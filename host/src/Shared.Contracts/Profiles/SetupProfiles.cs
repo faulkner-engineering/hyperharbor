@@ -125,7 +125,14 @@ public sealed record PackageSearchResult(string Id, string Name, string Version,
 
 /// <summary>A package from HyperHarbor's package catalog (aliases and the Popular list). Schema: PackageCatalogItem.</summary>
 /// <param name="Alias">What a profile may write instead of the winget id.</param>
-public sealed record PackageCatalogItem(string Alias, string Id, string Name, string Category, bool Popular);
+/// <param name="Description">One line about the package, for the picker's details.</param>
+public sealed record PackageCatalogItem(
+    string Alias,
+    string Id,
+    string Name,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Description,
+    string Category,
+    bool Popular);
 
 /// <summary>Which store an extension id belongs to. Schema: ExtensionStore.</summary>
 public enum ExtensionStore
@@ -159,11 +166,24 @@ public sealed record ResolvedExtension(
     bool InCatalog);
 
 /// <summary>A curated tweak, for the profile editor. Schema: TweakCatalogItem.</summary>
+/// <param name="Values">The registry values the tweak writes, for the editor's details.</param>
 public sealed record TweakCatalogItem(
     string Id,
     string Name,
     string Category,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Note);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Note,
+    IReadOnlyList<TweakCatalogValue> Values);
+
+/// <summary>One registry value a curated tweak writes. Schema: TweakCatalogValue.</summary>
+/// <param name="Name">The value name; empty for the key's default value.</param>
+/// <param name="Value">What the tweak writes. Decimal for dword and qword.</param>
+/// <param name="Default">The value on a clean install; null when the value is absent there.</param>
+public sealed record TweakCatalogValue(
+    string Key,
+    string Name,
+    RegistryValueType Type,
+    string Value,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Default);
 
 /// <summary>A browser a profile can configure. Schema: BrowserCatalogItem.</summary>
 public sealed record BrowserCatalogItem(string Id, string Name, string WingetId, string Alias);
@@ -184,4 +204,14 @@ public sealed record BrowserPolicyItem(
 public sealed record SetupProfileCatalog(
     IReadOnlyList<TweakCatalogItem> Tweaks,
     IReadOnlyList<BrowserCatalogItem> Browsers,
-    IReadOnlyList<BrowserPolicyItem> Policies);
+    IReadOnlyList<BrowserPolicyItem> Policies,
+    IReadOnlyList<AppxCatalogItem> Appx);
+
+/// <summary>A rated provisioned package from catalogs/appx.yaml. Schema: AppxCatalogItem.</summary>
+/// <param name="Name">The package family name a profile lists, for example Microsoft.BingNews.</param>
+public sealed record AppxCatalogItem(
+    string Name,
+    string FriendlyName,
+    string Publisher,
+    AppxRating Rating,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Note);

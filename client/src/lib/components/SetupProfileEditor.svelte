@@ -16,16 +16,18 @@
     type Vm,
   } from "$lib/api/client";
   import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import { addItem, policyValue, removeItem } from "$lib/setupProfiles";
+  import type { Detail } from "$lib/catalogBrowser";
   import { onMount, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import type { PaletteName } from "$lib/machine/assets";
   import { prefersReducedMotion } from "$lib/machine/fallback";
-  import AppxChecklist from "./AppxChecklist.svelte";
+  import BrowserSection from "./BrowserSection.svelte";
+  import DetailCard from "./DetailCard.svelte";
   import Dialog from "./Dialog.svelte";
-  import ExtensionPicker from "./ExtensionPicker.svelte";
+  import InstallSection from "./InstallSection.svelte";
   import MachineView, { type MachineStatus, type MotionSetting } from "./MachineView.svelte";
-  import PackagePicker from "./PackagePicker.svelte";
+  import RemoveSection from "./RemoveSection.svelte";
+  import TweaksSection from "./TweaksSection.svelte";
 
   interface Props {
     host: HostEntry;
@@ -69,13 +71,8 @@
   let error = $state<string | null>(null);
   let issues = $state<ValidationIssue[]>([]);
 
-  let byId = $state("");
-  let capability = $state("");
-  let feature = $state("");
-  let newKey = $state("HKCU\\");
-  let newName = $state("");
-  let newType = $state<RegistryTweak["type"]>("dword");
-  let newValue = $state("");
+  /** The catalog entry whose details the machine view shows. */
+  let detail = $state<Detail | null>(null);
 
   const browser = $derived(catalog?.browsers.find((item) => item.wingetId === browserApp || item.alias === browserApp) ?? null);
   const removals = $derived(appx.length + capabilities.length + features.length);
@@ -113,15 +110,6 @@
   );
 
   const browserPolicies = $derived(browser ? (catalog?.policies ?? []).filter((policy) => policy.appliesTo.includes(browser.id)) : []);
-  const tweakGroups = $derived(
-    Object.entries(
-      (catalog?.tweaks ?? []).reduce<Record<string, NonNullable<typeof catalog>["tweaks"]>>((groups, tweak) => {
-        (groups[tweak.category] ??= []).push(tweak);
-        return groups;
-      }, {}),
-    ),
-  );
-
   function plural(count: number, noun: string): string {
     return `${count} ${noun}${count === 1 ? "" : "s"}`;
   }
@@ -164,40 +152,6 @@
       error = errorMessage(e);
     }
   });
-
-  function addById(event: SubmitEvent) {
-    event.preventDefault();
-    if (byId.trim()) install = addItem(install, { id: byId.trim() });
-    byId = "";
-  }
-
-  function addCapability(event: SubmitEvent) {
-    event.preventDefault();
-    if (capability.trim()) capabilities = addItem(capabilities, { id: capability.trim() });
-    capability = "";
-  }
-
-  function addFeature(event: SubmitEvent) {
-    event.preventDefault();
-    if (feature.trim()) features = addItem(features, { id: feature.trim() });
-    feature = "";
-  }
-
-  function addCustom(event: SubmitEvent) {
-    event.preventDefault();
-    custom = [...custom, { registry: { key: newKey.trim(), name: newName, type: newType, value: newValue.trim() } }];
-    newName = "";
-    newValue = "";
-  }
-
-  function toggleTweak(id: string, on: boolean) {
-    tweakIds = on ? [...tweakIds, id] : tweakIds.filter((item) => item !== id);
-  }
-
-  function togglePolicy(key: string, type: string, on: boolean) {
-    if (on) policies.set(key, type === "boolean" ? "true" : "");
-    else policies.delete(key);
-  }
 
   function profile(): SetupProfile {
     const tweakNames = new Map((catalog?.tweaks ?? []).map((tweak) => [tweak.id, tweak.name]));
@@ -257,7 +211,10 @@
               aria-selected={tab === item.id}
               aria-controls="section-panel"
               class:active={tab === item.id}
-              onclick={() => (tab = item.id)}
+              onclick={() => {
+                tab = item.id;
+                detail = null;
+              }}
             >
               <span class="label">{item.label}{#if item.count !== null}<span class="count">{item.count}</span>{/if}</span>
               <small>{item.hint}</small>
@@ -275,6 +232,7 @@
       <div class="stage">
         <MachineView section={current.section} controls={{ items: install.length }} {palette} {motion} bind:status={machineStatus} />
         <div class="hud" aria-live="polite">{hud}</div>
+        {#if detail}<DetailCard {detail} onclose={() => (detail = null)} />{/if}
       </div>
 
       <div class="panel" id="section-panel" role="tabpanel" aria-labelledby="section-{tab}">
@@ -282,144 +240,33 @@
         {#key tab}
           <div class="body enter">
             {#if tab === "packages"}
-              <div class="columns">
-                <section>
-                  <h4>In this profile</h4>
-                  {#if install.length === 0}<p class="muted">Nothing yet. Add packages from the right, or by winget id.</p>{/if}
-                  <ul class="items">
-                    {#each install as item (item.id)}
-                      <li>
-                        <span>{item.name ?? item.id}</span><code>{item.id}</code>
-                        <button type="button" onclick={() => (install = removeItem(install, item.id))}>Remove</button>
-                      </li>
-                    {/each}
-                  </ul>
-                  <form class="inline" onsubmit={addById}>
-                    <input aria-label="winget id, Microsoft Store id, or alias" placeholder="winget id, Store id, or alias" bind:value={byId} />
-                    <button type="submit" disabled={byId.trim() === ""}>Add</button>
-                  </form>
-                </section>
-                <section>
-                  <PackagePicker {host} added={install.map((item) => item.id)} onadd={(item) => (install = addItem(install, item))} />
-                </section>
-              </div>
+              <InstallSection {host} bind:install selected={detail?.key ?? null} onselect={(next) => (detail = next)} />
             {:else if tab === "remove"}
-              <AppxChecklist {host} {vms} bind:items={appx} />
-              <div class="columns">
-                <section>
-                  <h4>Windows capabilities</h4>
-                  <ul class="items">
-                    {#each capabilities as item (item.id)}
-                      <li><code>{item.id}</code><button type="button" onclick={() => (capabilities = removeItem(capabilities, item.id))}>Remove</button></li>
-                    {/each}
-                  </ul>
-                  <form class="inline" onsubmit={addCapability}>
-                    <input aria-label="Capability name" placeholder="For example Browser.InternetExplorer~~~~0.0.11.0" bind:value={capability} />
-                    <button type="submit" disabled={capability.trim() === ""}>Add</button>
-                  </form>
-                </section>
-                <section>
-                  <h4>Optional features</h4>
-                  <ul class="items">
-                    {#each features as item (item.id)}
-                      <li><code>{item.id}</code><button type="button" onclick={() => (features = removeItem(features, item.id))}>Remove</button></li>
-                    {/each}
-                  </ul>
-                  <form class="inline" onsubmit={addFeature}>
-                    <input aria-label="Feature name" placeholder="For example MicrosoftWindowsPowerShellV2Root" bind:value={feature} />
-                    <button type="submit" disabled={feature.trim() === ""}>Add</button>
-                  </form>
-                </section>
-              </div>
+              <RemoveSection
+                {host}
+                {vms}
+                catalog={catalog?.appx ?? []}
+                bind:appx
+                bind:capabilities
+                bind:features
+                selected={detail?.key ?? null}
+                onselect={(next) => (detail = next)}
+              />
             {:else if tab === "tweaks"}
-              <div class="tweaks">
-                {#each tweakGroups as [category, tweaks] (category)}
-                  <fieldset>
-                    <legend>{category}</legend>
-                    {#each tweaks as tweak (tweak.id)}
-                      <label class="check" title={tweak.note ?? tweak.id}>
-                        <input
-                          type="checkbox"
-                          checked={tweakIds.includes(tweak.id)}
-                          onchange={(event) => toggleTweak(tweak.id, event.currentTarget.checked)}
-                        />
-                        {tweak.name}
-                      </label>
-                    {/each}
-                  </fieldset>
-                {/each}
-              </div>
-              <h4>Custom registry values</h4>
-              <ul class="items">
-                {#each custom as item, index (index)}
-                  <li>
-                    <code>{item.registry.key}\{item.registry.name || "(default)"} = {item.registry.value} ({item.registry.type})</code>
-                    <button type="button" onclick={() => (custom = custom.filter((_, i) => i !== index))}>Remove</button>
-                  </li>
-                {/each}
-              </ul>
-              <form class="inline" onsubmit={addCustom}>
-                <input aria-label="Registry key" bind:value={newKey} placeholder="HKCU\Software\..." />
-                <input aria-label="Value name" bind:value={newName} placeholder="Value name" />
-                <select aria-label="Value type" bind:value={newType}>
-                  <option value="dword">DWORD</option>
-                  <option value="qword">QWORD</option>
-                  <option value="string">String</option>
-                </select>
-                <input aria-label="Value" bind:value={newValue} placeholder="Value" />
-                <button type="submit" disabled={newKey.trim().length < 6}>Add</button>
-              </form>
+              <TweaksSection catalog={catalog?.tweaks ?? []} bind:tweakIds bind:custom selected={detail?.key ?? null} onselect={(next) => (detail = next)} />
             {:else}
-              <label>
-                Browser
-                <select bind:value={browserApp}>
-                  <option value="">None</option>
-                  {#each catalog?.browsers ?? [] as item (item.id)}<option value={item.wingetId}>{item.name}</option>{/each}
-                </select>
-              </label>
-              {#if browser}
-                <div class="columns">
-                  <section>
-                    <h4>Extensions</h4>
-                    <ExtensionPicker {host} catalog={extensionCatalog} edge={browser.id === "edge"} bind:items={extensions} />
-                  </section>
-                  <section>
-                    <h4>Policies</h4>
-                    {#each browserPolicies as policy (policy.key)}
-                      <div class="policy">
-                        <label class="check" title={policy.description ?? policy.key}>
-                          <input
-                            type="checkbox"
-                            checked={policies.has(policy.key)}
-                            onchange={(event) => togglePolicy(policy.key, policy.type, event.currentTarget.checked)}
-                          />
-                          {policy.name}
-                        </label>
-                        {#if policies.has(policy.key)}
-                          {#if policy.type === "boolean"}
-                            <select aria-label={policy.name} value={policies.get(policy.key)} onchange={(event) => policies.set(policy.key, policyValue("boolean", event.currentTarget.value))}>
-                              <option value="true">On</option>
-                              <option value="false">Off</option>
-                            </select>
-                          {:else if policy.values}
-                            <select aria-label={policy.name} value={policies.get(policy.key)} onchange={(event) => policies.set(policy.key, event.currentTarget.value)}>
-                              <option value="" disabled>Choose…</option>
-                              {#each Object.entries(policy.values) as [value, label] (value)}<option {value}>{label}</option>{/each}
-                            </select>
-                          {:else}
-                            <input
-                              aria-label={policy.name}
-                              type={policy.type === "integer" ? "number" : "text"}
-                              value={policies.get(policy.key)}
-                              oninput={(event) => policies.set(policy.key, policyValue(policy.type, event.currentTarget.value))}
-                            />
-                          {/if}
-                        {/if}
-                      </div>
-                    {/each}
-                  </section>
-                </div>
-              {/if}
+              <BrowserSection
+                {host}
+                browsers={catalog?.browsers ?? []}
+                {browser}
+                {browserPolicies}
+                {extensionCatalog}
+                bind:browserApp
+                bind:extensions
+                {policies}
+                selected={detail?.key ?? null}
+                onselect={(next) => (detail = next)}
+              />
             {/if}
           </div>
         {/key}
@@ -456,8 +303,7 @@
     gap: 0.75rem;
   }
 
-  .header label,
-  .policy {
+  .header label {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
@@ -623,12 +469,6 @@
     overflow-y: auto;
   }
 
-  .columns {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: 1rem;
-  }
-
   @media (max-width: 900px) {
     .workspace {
       grid-template-columns: 1fr;
@@ -643,71 +483,5 @@
     .sections [role="tab"] {
       width: auto;
     }
-  }
-
-  h4 {
-    margin: 0.5rem 0 0.4rem;
-    font-size: 0.9rem;
-  }
-
-  .items {
-    list-style: none;
-    margin: 0 0 0.5rem;
-    padding: 0;
-  }
-
-  .items li {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.25rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .items li > span {
-    flex: 1;
-  }
-
-  code {
-    font-size: 0.8rem;
-    color: var(--muted);
-  }
-
-  .inline {
-    flex-direction: row !important;
-    flex-wrap: wrap;
-  }
-
-  .inline input {
-    flex: 1;
-    min-width: 8rem;
-  }
-
-  .tweaks {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-    gap: 0.5rem;
-  }
-
-  fieldset {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.4rem 0.6rem;
-    margin: 0;
-  }
-
-  legend {
-    font-weight: 600;
-    font-size: 0.85rem;
-    text-transform: capitalize;
-  }
-
-  .policy {
-    margin-bottom: 0.4rem;
-  }
-
-  .items button,
-  .inline button {
-    padding: 0.2rem 0.7rem !important;
   }
 </style>

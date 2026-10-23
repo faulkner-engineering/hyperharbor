@@ -5,10 +5,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import AppxChecklist from "./AppxChecklist.svelte";
 import CaptureReview from "./CaptureReview.svelte";
-import ExtensionPicker from "./ExtensionPicker.svelte";
-import PackagePicker from "./PackagePicker.svelte";
 import SetupProfiles from "./SetupProfiles.svelte";
 import type { HostEntry, ProfileDraft, Vm } from "$lib/api/client";
 
@@ -47,115 +44,6 @@ const calls = (command: string) => invoke.mock.calls.filter(([name]) => name ===
 
 beforeEach(() => {
   invoke.mockReset();
-});
-
-describe("PackagePicker", () => {
-  const catalog = [
-    { alias: "git", id: "Git.Git", name: "Git", category: "development", popular: true },
-    { alias: "putty", id: "PuTTY.PuTTY", name: "PuTTY", category: "development", popular: false },
-  ];
-
-  it("lists popular packages and adds one", async () => {
-    answer({ "resource:packageCatalog": () => catalog });
-    const onadd = vi.fn();
-    render(PackagePicker, { host, added: [], onadd });
-
-    await fireEvent.click(await screen.findByRole("button", { name: "Add" }));
-
-    expect(screen.queryByText("PuTTY")).toBeNull();
-    expect(onadd).toHaveBeenCalledWith({ id: "Git.Git", name: "Git" });
-  });
-
-  it("searches after typing pauses, and explains when search is not set up", async () => {
-    answer({
-      "resource:packageCatalog": () => catalog,
-      search_packages: () => {
-        throw { code: "api", message: "not set up", status: 409, problemCode: "wingetUnavailable", issues: [] };
-      },
-    });
-    render(PackagePicker, { host, added: [], onadd: vi.fn() });
-
-    await fireEvent.click(screen.getByRole("tab", { name: "Search winget" }));
-    await fireEvent.input(screen.getByRole("searchbox", { name: "Search winget packages" }), { target: { value: "git" } });
-
-    expect(await screen.findByText(/Set up package search/)).toBeTruthy();
-    expect(calls("search_packages")).toEqual([{ key: host.key, query: "git" }]);
-  });
-});
-
-describe("ExtensionPicker", () => {
-  it("adds a pasted store link by its resolved name", async () => {
-    answer({
-      resolve_extension: () => ({
-        store: "chrome",
-        id: "ghbmnnjooekpmoecnnnilnnbdlolhkhi",
-        profileId: "ghbmnnjooekpmoecnnnilnnbdlolhkhi",
-        name: "Google Docs Offline",
-        iconDataUrl: "data:image/png;base64,iVBORw0KGgo=",
-        inCatalog: false,
-      }),
-    });
-    render(ExtensionPicker, { host, catalog: [], items: [], edge: false });
-
-    await fireEvent.input(screen.getByRole("textbox", { name: "Extension link or id" }), {
-      target: { value: "https://chromewebstore.google.com/detail/x/ghbmnnjooekpmoecnnnilnnbdlolhkhi" },
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    const added = (await screen.findByText("Google Docs Offline")).closest("li")!;
-    expect(within(added).getByText("ghbmnnjooekpmoecnnnilnnbdlolhkhi")).toBeTruthy();
-    expect(added.querySelector("img")?.getAttribute("src")).toContain("data:image/png");
-    expect(calls("resolve_extension")).toEqual([{ key: host.key, input: "https://chromewebstore.google.com/detail/x/ghbmnnjooekpmoecnnnilnnbdlolhkhi" }]);
-  });
-
-  it("refuses an Edge-only extension for another browser", async () => {
-    answer({
-      resolve_extension: () => ({
-        store: "edge",
-        id: "odfafepnkmbhccpbejgmiehpchacaeak",
-        profileId: "edge:odfafepnkmbhccpbejgmiehpchacaeak",
-        name: "uBlock Origin",
-        iconDataUrl: null,
-        inCatalog: true,
-      }),
-    });
-    render(ExtensionPicker, { host, catalog: [], items: [], edge: false });
-
-    await fireEvent.input(screen.getByRole("textbox", { name: "Extension link or id" }), { target: { value: "edge:odfafepnkmbhccpbejgmiehpchacaeak" } });
-    await fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    expect(await screen.findByText(/works only in Microsoft Edge/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
-  });
-});
-
-describe("AppxChecklist", () => {
-  const inventory = {
-    vmId: vm.id,
-    build: "10.0.26100.2033",
-    edition: "Professional",
-    baseline: null,
-    removedFromBaseline: [],
-    packages: [
-      { name: "Microsoft.BingNews", friendlyName: "Microsoft News", version: "1", publisher: "Microsoft", rating: "safe", note: null, inBaseline: null },
-      { name: "Microsoft.WindowsStore", friendlyName: "Microsoft Store", version: "1", publisher: "Microsoft", rating: "keep", note: null, inBaseline: null },
-      { name: "Clipchamp.Clipchamp", friendlyName: "Clipchamp", version: "1", publisher: "Clipchamp", rating: "safe", note: null, inBaseline: null },
-    ],
-  };
-
-  it("reads a VM, groups by publisher, and the debloat preset ticks only safe packages", async () => {
-    answer({ list_vm_appx: () => inventory });
-    render(AppxChecklist, { host, vms: [vm], items: [] });
-
-    await fireEvent.click(screen.getByRole("button", { name: "Read packages" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Debloat preset" }));
-
-    expect(screen.getByRole("group", { name: "Microsoft" })).toBeTruthy();
-    const checked = (name: RegExp) => (screen.getByRole("checkbox", { name }) as HTMLInputElement).checked;
-    expect([checked(/Microsoft News/), checked(/Clipchamp/), checked(/Microsoft Store/)]).toEqual([true, true, false]);
-    expect((screen.getByRole("checkbox", { name: /Microsoft Store/ }) as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByText(/No clean baseline/)).toBeTruthy();
-  });
 });
 
 describe("CaptureReview", () => {
