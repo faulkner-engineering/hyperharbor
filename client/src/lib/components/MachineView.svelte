@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-  import { loadMachineData, readPalette, type MachineData, type PaletteName } from "$lib/machine/assets";
+  import { loadMachineData, readPalette, type MachineData } from "$lib/machine/assets";
   import { prefersReducedMotion, watchReducedMotion, webglAvailable } from "$lib/machine/fallback";
   import { NO_HIGHLIGHT, resolveHighlight, type ControlState } from "$lib/machine/highlights";
   import type { MachineScene } from "$lib/machine/scene";
@@ -19,12 +19,11 @@
     section: string;
     /** Form state that drives the per-control reactions. */
     controls?: ControlState;
-    palette?: PaletteName;
     motion?: MotionSetting;
     status?: MachineStatus;
   }
 
-  let { section, controls = {}, palette = "amber", motion = "system", status = $bindable("loading") }: Props = $props();
+  let { section, controls = {}, motion = "system", status = $bindable("loading") }: Props = $props();
 
   let stage: HTMLDivElement;
   let data = $state<MachineData | null>(null);
@@ -70,7 +69,7 @@
       try {
         const { createMachineScene } = await import("$lib/machine/scene");
         const created = await createMachineScene(stage, loaded, {
-          palette: readPalette(palette),
+          palette: readPalette(),
           reducedMotion,
           onslow: () => fallBack("still-slow"),
         });
@@ -102,10 +101,6 @@
   });
 
   $effect(() => {
-    if (status === "scene") scene?.setPalette(readPalette(palette));
-  });
-
-  $effect(() => {
     if (status === "scene") scene?.setReducedMotion(reducedMotion);
   });
 </script>
@@ -113,7 +108,7 @@
 <div class="machine" data-mode={status === "scene" ? "scene" : still ? "still" : "loading"} data-section={section} aria-hidden="true">
   <div class="stage" bind:this={stage}></div>
   {#if still}
-    <MachineStill {highlight} {palette} {reducedMotion} />
+    <MachineStill {highlight} {reducedMotion} />
   {/if}
 </div>
 

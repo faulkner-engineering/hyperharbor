@@ -113,11 +113,11 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - Machine view (the setup profile editor's left pane; each tab is a section of targets.json): client/src/lib/machine:
   camera.ts (targetFor, rigFor, CameraRig: 900 ms eased fly, tilted rest orbit slowing with distance, cuts under reduced
   motion), highlights.ts (resolveHighlight for perItem, blink, pulse, spin; applyHighlight; reactionFrame), fallback.ts
-  (webglAvailable, FrameRateWatch, reduced-motion query), assets.ts (loaders, parseExplodedSvg, palettes from the
+  (webglAvailable, FrameRateWatch, reduced-motion query), assets.ts (loaders, parseExplodedSvg, the amber palette from the
   --hh-crt-* tokens in app.css), scene.ts (three r170, imported on demand: EdgesGeometry lines, UnrealBloomPass, CRT
   ShaderPass). UI: MachineView.svelte (3D or the still; motion setting; bindable status) and MachineStill.svelte
   (exploded.svg with the same highlights). ProfileWorkspace.svelte is the editors' shell (section list with groups,
-  the machine with its HUD and DetailCard, the form panel, palette and Motion, Save) in Dialog's terminal variant;
+  the machine with its HUD and DetailCard, the form panel, Motion beside Cancel and Save) in Dialog's terminal variant;
   SetupProfileEditor and MachineProfileEditor fill it. lib/softwareDraft.svelte.ts (SoftwareDraft) and
   SoftwarePanel.svelte are the software sections both editors share; lib/machineDraft.svelte.ts (MachineDraft) holds
   the machine sections, the reactions (ControlState), and the HUD text; AccountSection, DisplaySection,

@@ -27,13 +27,11 @@ describe("readPalette", () => {
   });
 
   it("reads the brand tokens", () => {
-    document.documentElement.style.setProperty("--hh-crt-amber-glow", "#e39b2e");
-    document.documentElement.style.setProperty("--hh-crt-green-glow", "#00ff00");
-    expect(readPalette("amber").glow).toBe("#e39b2e");
-    expect(readPalette("green").glow).toBe("#00ff00");
+    document.documentElement.style.setProperty("--hh-crt-amber-glow", "#ffaa00");
+    expect(readPalette().glow).toBe("#ffaa00");
   });
 
   it("falls back when a token is missing", () => {
-    expect(readPalette("green")).toEqual({ background: "#0b0d10", line: "#2a5a3a", lineDim: "#163322", glow: "#7cff9a" });
+    expect(readPalette()).toEqual({ background: "#0b0d10", line: "#3a4250", lineDim: "#1f252d", glow: "#e39b2e" });
   });
 });

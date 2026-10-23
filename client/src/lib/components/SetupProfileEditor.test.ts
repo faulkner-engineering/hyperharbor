@@ -81,15 +81,13 @@ describe("SetupProfileEditor machine view", () => {
     expect(hud()).toContain("INSTALL · 2 packages, 2 of 4 drives lit");
   });
 
-  it("remembers the palette and the motion setting", async () => {
+  it("remembers the motion setting, which sits with Cancel and Save", async () => {
     open();
 
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Green terminal" }));
-    expect(document.querySelector(".editor")!.getAttribute("data-palette")).toBe("green");
-    expect(localStorage.getItem("hh.machinePalette")).toBe("green");
-
+    expect(screen.queryByRole("checkbox", { name: "Green terminal" })).toBeNull();
     const motion = screen.getByRole("checkbox", { name: "Motion" }) as HTMLInputElement;
     await fireEvent.click(motion);
     expect(localStorage.getItem("hh.machineMotion")).toBe(motion.checked ? "on" : "off");
+    expect(motion.closest(".actions")?.contains(screen.getByRole("button", { name: "Save" }))).toBe(true);
   });
 });

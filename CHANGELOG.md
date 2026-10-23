@@ -14,8 +14,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 - The setup profile editor has a dark terminal look built around a wireframe model of a PC: the section list on the
   left, the model in the middle, and the section's form on the right. Choosing a section flies the camera to its part
   (the drive bay for Install and Remove, the browser tabs on the screen for Browser) and lights it up, and each
-  package you add lights one more drive. A line under the model names the section and its counts. Options under the
-  section list switch between amber and green and turn motion on or off. Motion starts from the Windows animation
+  package you add lights one more drive. A line under the model names the section and its counts. A Motion check box
+  beside Cancel and Save turns motion on or off; it starts from the Windows animation
   effects setting: with it off, the camera cuts instead of flying and does not orbit, until you check Motion. Without
   WebGL, or when the view stays under 30 frames per second for five seconds, it shows a still exploded drawing with
   the same highlights instead, and says why. The editor fills the window, with thin scrollbars, fields, and buttons

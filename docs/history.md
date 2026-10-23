@@ -301,7 +301,8 @@ verified, and what was found along the way. User-facing changes per release are 
    workspace (Dialog terminal: larger than xl, dark CRT variables): a vertical section list (tabs with counts) drives both
    the wireframe machine in the middle and the form panel on the right (Install packages, Remove debloat, Browser
    browser, Tweaks overview); a HUD line under the machine names the section, its counts, and why it is a still.
-   Green terminal and Motion checkboxes are stored per device (hh.machinePalette, hh.machineMotion); Motion starts
+   Green terminal and Motion checkboxes are stored per device (hh.machinePalette, hh.machineMotion; the green palette
+   was removed 2026-10-23 at the user's request, and Motion moved to the Cancel and Save row); Motion starts
    from prefers-reduced-motion and, once set, overrides it (MachineView motion: system, on, off). The first version
    sat beside the old tab strip on the light dialog and, on a PC with Windows animation effects off, never moved. Only perItem has a control there (one drive per package); blink, pulse, and spin follow
    ControlState fields that no editor sets yet (TPM, backup schedules, and performance mode live in other dialogs).

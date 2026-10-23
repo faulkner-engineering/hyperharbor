@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { ValidationIssue } from "$lib/api/client";
   import type { Detail } from "$lib/catalogBrowser";
-  import type { PaletteName } from "$lib/machine/assets";
   import { prefersReducedMotion } from "$lib/machine/fallback";
   import type { ControlState } from "$lib/machine/highlights";
   import type { WorkspaceSection } from "$lib/softwareDraft.svelte";
@@ -50,10 +49,8 @@
     children,
   }: Props = $props();
 
-  const PALETTE_KEY = "hh.machinePalette";
   const MOTION_KEY = "hh.machineMotion";
 
-  let palette = $state<PaletteName>(stored(PALETTE_KEY) === "green" ? "green" : "amber");
   let motion = $state<MotionSetting>(storedMotion());
   let machineStatus = $state<MachineStatus>("loading");
   const motionOn = $derived(motion === "system" ? !prefersReducedMotion() : motion === "on");
@@ -95,11 +92,6 @@
     return value === "on" || value === "off" ? value : "system";
   }
 
-  function setPalette(green: boolean) {
-    palette = green ? "green" : "amber";
-    store(PALETTE_KEY, palette);
-  }
-
   function setMotion(on: boolean) {
     motion = on ? "on" : "off";
     store(MOTION_KEY, motion);
@@ -111,8 +103,8 @@
   }
 </script>
 
-<Dialog {title} terminal accent={palette === "green" ? "var(--hh-crt-green-glow)" : "var(--hh-crt-amber-glow)"}>
-  <div class="editor" data-palette={palette} class:calm={!motionOn}>
+<Dialog {title} terminal accent="var(--hh-crt-amber-glow)">
+  <div class="editor" class:calm={!motionOn}>
     <div class="header">{@render header()}</div>
 
     <div class="workspace">
@@ -135,16 +127,10 @@
             </button>
           {/each}
         </div>
-        <div class="view-options">
-          <label class="check"><input type="checkbox" checked={palette === "green"} onchange={(event) => setPalette(event.currentTarget.checked)} /> Green terminal</label>
-          <label class="check" title="Starts from the Windows animation effects setting">
-            <input type="checkbox" checked={motionOn} onchange={(event) => setMotion(event.currentTarget.checked)} /> Motion
-          </label>
-        </div>
       </nav>
 
       <div class="stage">
-        <MachineView section={current.section} {controls} {palette} {motion} bind:status={machineStatus} />
+        <MachineView section={current.section} {controls} {motion} bind:status={machineStatus} />
         <div class="hud" aria-live="polite">{line}</div>
         {#if detail}<DetailCard {detail} onclose={() => (detail = null)} />{/if}
       </div>
@@ -168,6 +154,9 @@
       </div>
     {/if}
     <div class="actions">
+      <label class="check motion" title="Starts from the Windows animation effects setting">
+        <input type="checkbox" checked={motionOn} onchange={(event) => setMotion(event.currentTarget.checked)} /> Motion
+      </label>
       <button type="button" onclick={oncancel} disabled={busy}>Cancel</button>
       <button type="button" class="primary" onclick={onsave} disabled={busy || !canSave}>{busy ? "Saving…" : "Save"}</button>
     </div>
@@ -292,9 +281,9 @@
     font-size: 0.75rem;
   }
 
-  .view-options {
-    margin-top: auto;
-    padding-top: 0.75rem;
+  /* On the Cancel and Save row, at its left end. */
+  .motion {
+    margin: 0 auto 0 0;
   }
 
   .stage {
