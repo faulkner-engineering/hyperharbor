@@ -10,6 +10,14 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-22 (API 1.25.0)
+
+The first stable release since 0.1.6. It brings everything from the 0.1.7 and 0.2.0 betas below to the stable channel:
+moving or copying VMs between hosts, backup and restore with Kopia, Tailscale for connecting from away, the Game ready
+checklist and game-aware mode, camera sharing for several VMs at once, client self-update, the Lean host action, and the
+Apache License 2.0. Both hosts must run 0.2.0 or later to transfer a VM between them. The host updates itself to this
+version when it is on the stable channel with automatic updates on; installed clients update at their next check.
+
 ### Fixed
 - Deleting a VM that has no disks, or deleting a VM and keeping its disks elsewhere, left its folder behind with empty
   Hyper-V folders in it, so the next VM of that name (a VM moved back, for one) was named "(moved)" or "(copy)". The
