@@ -93,10 +93,21 @@ gpu = box(extents=[0.04, 0.11, 0.26])
 gpu_y = board_y - 0.07
 at(gpu, board_x - 0.05, gpu_y, board_z)
 scene.add_geometry(gpu, node_name="GPU", geom_name="GPU")
+def fan_rotor():
+    """A ring with a hub and four blades, axis along Z. The blades make a spin visible as edges."""
+    parts = [annulus(r_min=0.03, r_max=0.038, height=0.004, sections=24), cylinder(radius=0.008, height=0.004, sections=12)]
+    for k in range(4):
+        blade = box(extents=[0.022, 0.007, 0.002])
+        blade.apply_translation([0.019, 0, 0])
+        blade.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90 * k + 20), [0, 0, 1]))
+        parts.append(blade)
+    return trimesh.util.concatenate(parts)
+
+
 for j, dz in enumerate((-0.07, 0.03)):
-    ring = annulus(r_min=0.03, r_max=0.038, height=0.004, sections=24)
-    at(ring, board_x - 0.072, gpu_y, board_z + dz, rot=([0, 1, 0], 90))
-    scene.add_geometry(ring, node_name=f"GPU_Fan_{j + 1}", geom_name=f"GPU_Fan_{j + 1}")
+    fan = fan_rotor()
+    at(fan, board_x - 0.072, gpu_y, board_z + dz, rot=([0, 1, 0], 90))
+    scene.add_geometry(fan, node_name=f"GPU_Fan_{j + 1}", geom_name=f"GPU_Fan_{j + 1}")
 
 # Drive bay: a cage near the front with four slabs (packages light these up)
 cage = box(extents=[0.11, 0.09, 0.12])
@@ -190,6 +201,77 @@ scene.add_geometry(floor, node_name="Floor", geom_name="Floor")
 # ---------------------------------------------------------------------------
 glb_path = os.path.join(OUT, "hyperharbor-machine.glb")
 scene.export(glb_path)
+
+# ---------------------------------------------------------------------------
+# Exploded still: the client's fallback when WebGL is missing or too slow.
+# Same edges as the runtime (EdgesGeometry, 25 degrees), parts pulled apart so the internals do not overlap,
+# projected orthographically from the front left. One <g data-node> per node so the client can apply highlights.
+# ---------------------------------------------------------------------------
+MONITOR = [-0.12, 0, 0]
+BACKUP = [0.2, 0, 0.5]
+EXPLODE = {
+    "Case_Front": [0, 0, 0.06], "PowerButton": [0, 0, 0.07],
+    "Board": [0.5, 0.1, 0], "TPM_Chip": [0.42, 0.13, 0], "TPM_LED": [0.38, 0.13, 0],
+    "CPU": [0.42, 0.12, 0], "CPU_Cooler": [0.32, 0.14, 0],
+    "GPU": [0.36, -0.02, 0], "GPU_Fan_1": [0.32, -0.02, 0], "GPU_Fan_2": [0.32, -0.02, 0],
+    "DriveBay": [0, 0, 0.3], "PSU": [0, -0.02, -0.12], "RearIO": [0, 0, -0.16], "Ethernet": [0, 0, -0.2],
+    "Case_Fan": [0, 0.06, -0.12],
+    "Monitor": MONITOR, "Screen": [-0.12, 0, 0.05], "Screen_Login": [-0.12, 0, 0.1],
+    "Monitor_Neck": [-0.12, 0, -0.06], "Monitor_Base": [-0.12, -0.03, 0],
+    "Backup_Disk": BACKUP, "Backup_LED": [BACKUP[0], 0.03, BACKUP[2]],
+}
+EXPLODE.update({f"RAM_{i}": [0.42 - 0.012 * i, 0.12, 0] for i in range(1, 5)})
+EXPLODE.update({f"Drive_{i}": [0, -0.02 + 0.035 * i, 0.3 + 0.04 * i] for i in range(1, 5)})
+EXPLODE.update({f"USB_{i}": [0, 0, -0.2] for i in range(1, 5)})
+EXPLODE.update({f"Screen_Tab_{i}": [-0.12, 0.02, 0.1] for i in range(1, 6)})
+EXPLODE.update({f"Backup_Cable_{i}": BACKUP for i in range(1, 4)})
+
+
+def feature_edges(mesh, threshold_deg=25.0):
+    """Edges where adjacent faces meet at or above the threshold, plus open boundaries (as EdgesGeometry does)."""
+    sharp = mesh.face_adjacency_edges[mesh.face_adjacency_angles >= np.radians(threshold_deg)]
+    boundary = mesh.edges_sorted[trimesh.grouping.group_rows(mesh.edges_sorted, require_count=1)]
+    return np.vstack([sharp, boundary]) if len(boundary) else sharp
+
+
+def view_basis(elevation_deg, azimuth_deg):
+    el, az = np.radians(elevation_deg), np.radians(azimuth_deg)
+    toward_camera = np.array([np.cos(el) * np.sin(az), np.sin(el), np.cos(el) * np.cos(az)])
+    right = np.cross([0.0, 1.0, 0.0], toward_camera)
+    right /= np.linalg.norm(right)
+    up = np.cross(toward_camera, right)
+    return right, up
+
+
+right, up = view_basis(22, 35)
+segments = {}
+for node in scene.graph.nodes_geometry:
+    if node == "Floor":
+        continue
+    transform, geom_name = scene.graph[node]
+    mesh = scene.geometry[geom_name].copy()
+    mesh.apply_transform(transform)
+    points = mesh.vertices + np.array(EXPLODE.get(node, [0, 0, 0]))
+    flat = np.column_stack([points @ right, -(points @ up)])
+    segments[node] = flat[feature_edges(mesh)]
+
+all_points = np.vstack([s.reshape(-1, 2) for s in segments.values()])
+low, high = all_points.min(axis=0), all_points.max(axis=0)
+scale = 1000.0 / (high[0] - low[0])
+pad = 24.0
+width, height = (high - low) * scale + 2 * pad
+svg = [
+    f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" fill="none" stroke="#3a4250" '
+    'stroke-width="1" stroke-linecap="round">',
+    "<title>HyperHarbor machine, exploded</title>",
+]
+for node in sorted(segments):
+    lines = (segments[node] - low) * scale + pad
+    d = "".join(f"M{a[0]:.1f} {a[1]:.1f}L{b[0]:.1f} {b[1]:.1f}" for a, b in lines)
+    svg.append(f'<g data-node="{node}"><path d="{d}"/></g>')
+svg.append("</svg>")
+with open(os.path.join(OUT, "exploded.svg"), "w", encoding="utf-8", newline="\n") as handle:
+    handle.write("\n".join(svg) + "\n")
 
 # Camera targets per profile section: node to frame, distance, and an orbit tilt.
 targets = {

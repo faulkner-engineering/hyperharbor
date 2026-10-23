@@ -107,10 +107,15 @@ gltf.scene.traverse((obj) => {
   if (!obj.isMesh) return;
   const name = obj.name || obj.parent?.name || 'unnamed';
   const edges = new THREE.EdgesGeometry(obj.geometry, 25);
+  // Center the edges on the part so a rotation (the fan spin) turns it in place, not about the origin.
+  edges.applyMatrix4(obj.matrixWorld);
+  edges.computeBoundingBox();
+  const center = edges.boundingBox.getCenter(new THREE.Vector3());
+  edges.translate(-center.x, -center.y, -center.z);
   const isFloor = name === 'Floor';
   const base = lineMaterial(isFloor ? palette.lineDim : palette.line);
   const lines = new THREE.LineSegments(edges, base);
-  lines.applyMatrix4(obj.matrixWorld);
+  lines.position.copy(center);
   lines.name = name;
   scene.add(lines);
   const box = new THREE.Box3().setFromObject(lines);
