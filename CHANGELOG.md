@@ -115,6 +115,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   a VM, and tweak details; with an older host the editor works as before without them.
 
 ### Fixed
+- With dynamic memory off, New VM, create from a profile, and a VM's settings hide Maximum memory instead of showing
+  it greyed out.
 - Buttons and drop-downs that had no style of their own (the Library page, the template list on the Profiles tab)
   no longer show the plain Windows look; every button, list, and field now shares one base style.
 - Editing a saved machine profile with an Account section could fail to open the editor.

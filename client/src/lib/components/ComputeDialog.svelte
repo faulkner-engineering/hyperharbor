@@ -168,8 +168,10 @@
         {@render field("startupMemoryMb", "vm-startup")}
         <input id="vm-startup" type="number" min="0.1" step="any" bind:value={startupMemoryGb} disabled={job !== null || saved} />
 
-        {@render field("maximumMemoryMb", "vm-maximum")}
-        <input id="vm-maximum" type="number" min="0.1" step="any" bind:value={maximumMemoryGb} disabled={!dynamicMemory || job !== null || saved} />
+        {#if dynamicMemory}
+          {@render field("maximumMemoryMb", "vm-maximum")}
+          <input id="vm-maximum" type="number" min="0.1" step="any" bind:value={maximumMemoryGb} disabled={job !== null || saved} />
+        {/if}
       </div>
       <p class="muted">
         Memory in GB. The host has {resources.logicalProcessorCount} logical processors and {toGb(resources.availableMemoryMb)} GB

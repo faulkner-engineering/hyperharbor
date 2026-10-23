@@ -97,6 +97,21 @@ describe("CreateVmDialog", () => {
     });
   });
 
+  it("hides Maximum memory with dynamic memory off and sends fixed memory", async () => {
+    respond([{ name: "Win11.iso", sizeBytes: 6_000_000_000, modifiedAt: "2026-10-01T00:00:00Z" }]);
+    render(CreateVmDialog, { host, onclose: vi.fn() });
+
+    await fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "Fixed" } });
+    expect(screen.getByLabelText("Maximum memory (GB)")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Dynamic memory" }));
+    expect(screen.queryByLabelText("Maximum memory (GB)")).toBeNull();
+    expect(screen.getByLabelText("Memory (GB)")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await screen.findByText("Done.");
+    expect(createCalls()[0]).toMatchObject({ startupMemoryMb: 4096, maximumMemoryMb: 4096, dynamicMemory: false });
+  });
+
   it("shows resource warnings and sends acknowledgeWarnings when the user continues", async () => {
     const warned = {
       code: "api",
