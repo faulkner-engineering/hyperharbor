@@ -350,8 +350,7 @@ verified, and what was found along the way. User-facing changes per release are 
    blueprint, the profile's warnings, and a Configure step after the TPM: nested virtualization and MAC spoofing,
    VmPerformanceService.ApplyWithinJobAsync, IMachineBackupPolicies). The install record's GuestPerformanceSetup
    makes the watcher start the guest setup job (IGuestPerformanceStarter) once ready. Unit and API tested with fakes;
-   not run against Hyper-V yet. Not verified: Windows Setup with a GPU partition attached from the start, and the
-   accent and wallpaper registry values in a real guest. Not done: connection defaults (display.connection) do not
+   run live afterwards (below). Not verified: the wallpaper color values in a real guest. Not done: connection defaults (display.connection) do not
    reach the client yet, and wallpaper images.
    Live (2026-10-23, laptop, MachineProfileLiveTests through the harness, Windows 11 26300 ISO, Intel iGPU at 25%):
    the createVm job made the VM with the TPM, Secure Boot, 2 processors, 4 GB fixed, nested virtualization, and the
