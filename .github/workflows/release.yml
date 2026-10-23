@@ -6,7 +6,7 @@ name: Release
 #   - stable: hosts read releases/latest/download/latest.json, which follows the newest published,
 #     non-prerelease release.
 #   - beta: publishing a prerelease copies its latest.json to the fixed "channel-beta" release, which beta
-#     hosts read (the beta-channel job below).
+#     hosts read (the beta-channel job below). A stable release newer than the channel's beta is copied there too.
 
 on:
   push:
@@ -115,8 +115,11 @@ jobs:
           gh @arguments
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)." }
 
+  # A published prerelease always becomes the beta channel. A published stable release becomes it too when it is newer
+  # than the beta the channel offers (0.2.0 after 0.2.0-beta.2), so beta hosts and clients are not left behind; a stable
+  # release older than the channel's beta (0.2.1 while 0.3.0-beta.1 is out) leaves the channel alone.
   beta-channel:
-    if: github.event_name == 'release' && github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')
+    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
       - name: Point the beta channel at this release
@@ -124,10 +127,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
+          # True when semantic version $1 is newer than $2; a release is newer than a prerelease of the same version.
+          newer() {
+            local a_core="${1%%-*}" b_core="${2%%-*}"
+            if [ "$a_core" != "$b_core" ]; then
+              [ "$(printf '%s\n%s\n' "$a_core" "$b_core" | sort -V | tail -n 1)" = "$a_core" ]
+            else
+              [ "$1" = "$a_core" ] && [ "$2" != "$b_core" ]
+            fi
+          }
           gh release download "$TAG" --repo "$REPO" --pattern latest.json --pattern client-latest.json --dir manifest
           if ! gh release view channel-beta --repo "$REPO" > /dev/null 2>&1; then
             gh release create channel-beta --repo "$REPO" --prerelease --title "Beta channel" \
               --notes "Holds the beta channel's update manifests (latest.json for hosts, client-latest.json for clients). Do not delete."
+          elif [ "$PRERELEASE" != "true" ]; then
+            version="$(jq -r .version manifest/latest.json)"
+            current="$(gh release download channel-beta --repo "$REPO" --pattern latest.json --output - | jq -r .version)"
+            if ! newer "$version" "$current"; then
+              echo "The beta channel offers $current, which is newer than $version; it is left as it is."
+              exit 0
+            fi
           fi
+          # Hosts check that a manifest names the channel they read it from.
+          jq '.channel = "beta"' manifest/latest.json > manifest/latest.beta.json
+          mv manifest/latest.beta.json manifest/latest.json
           gh release upload channel-beta manifest/latest.json manifest/client-latest.json --repo "$REPO" --clobber

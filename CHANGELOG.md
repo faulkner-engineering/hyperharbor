@@ -18,6 +18,11 @@ checklist and game-aware mode, camera sharing for several VMs at once, client se
 Apache License 2.0. Both hosts must run 0.2.0 or later to transfer a VM between them. The host updates itself to this
 version when it is on the stable channel with automatic updates on; installed clients update at their next check.
 
+### Changed
+- Hosts and clients on the beta channel are now offered a stable release when it is newer than the channel's latest beta,
+  starting with this one. Before, the beta channel moved only with prereleases, so a beta install stayed on its last beta
+  until the next one.
+
 ### Fixed
 - Deleting a VM that has no disks, or deleting a VM and keeping its disks elsewhere, left its folder behind with empty
   Hyper-V folders in it, so the next VM of that name (a VM moved back, for one) was named "(moved)" or "(copy)". The

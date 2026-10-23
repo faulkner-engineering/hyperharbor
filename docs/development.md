@@ -65,7 +65,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   (cargo install cargo-audit --locked) before tagging; without it the script skips the audit CI runs.
   Publishing the draft is the owner's step: stable hosts read releases/latest/download/latest.json (newest
   published non-prerelease); publishing a prerelease copies its latest.json to the fixed "channel-beta"
-  release that beta hosts read.
+  release that beta hosts read. Publishing a stable release copies it there too when it is newer than the beta the
+  channel offers, so beta users get it; the job rewrites the host manifest's "channel" to "beta", which hosts check.
 
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
