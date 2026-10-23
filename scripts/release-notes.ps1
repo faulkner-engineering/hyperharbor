@@ -31,10 +31,12 @@ for ($i = $start + 1; $i -lt $lines.Count; $i++) {
 }
 $body = @($lines[($start + 1)..($end - 1)])
 # The changelog wraps long entries, but GitHub shows every line break in release text, so join each wrapped line onto
-# the line it continues. A continuation is indented and is not itself a list item.
+# the line it continues: a non-empty line that starts no block of its own (a list item, heading, rule, quote, table, or
+# code fence), after a non-empty line that is not a heading. That covers indented list continuations and wrapped paragraphs.
 $joined = New-Object System.Collections.Generic.List[string]
 foreach ($line in $body) {
-    $isContinuation = $line -match '^\s+\S' -and $line -notmatch '^\s*([-*]|\d+\.)\s' -and $joined.Count -gt 0 -and $joined[$joined.Count - 1].Trim()
+    $previous = if ($joined.Count -gt 0) { $joined[$joined.Count - 1] } else { '' }
+    $isContinuation = $line.Trim() -and $line -notmatch '^\s*([-*]|\d+\.)\s|^\s*(#|---|>|\||```)' -and $previous.Trim() -and $previous -notmatch '^\s*(#|---|```)'
     if ($isContinuation) { $joined[$joined.Count - 1] += ' ' + $line.Trim() } else { $joined.Add($line) }
 }
 $text = ($joined -join "`n").Trim()
