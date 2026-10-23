@@ -10,6 +10,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- The setup profile editor shows a wireframe model of a PC beside the form. Each tab flies the camera to its part
+  (the drive bay for Install and Remove, the browser tabs on the screen for Browser) and lights it up, and each
+  package you add lights one more drive. A button under the view switches between amber and green. With reduced motion
+  turned on in Windows the camera cuts instead of flying and does not orbit. Without WebGL, or when the view stays
+  under 30 frames per second for five seconds, it shows a still exploded drawing with the same highlights instead.
+
 ## [0.2.0] - 2026-10-22 (API 1.25.0)
 
 The first stable release since 0.1.6. It brings everything from the 0.1.7 and 0.2.0 betas below to the stable channel:

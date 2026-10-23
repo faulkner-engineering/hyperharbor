@@ -26,9 +26,10 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   create, compute changes, and turnOff need a 5-minute elevation token from the admin passphrase set in the tray.
 
 ## Repository layout
-- models/machine: source for the profile builder's wireframe machine (build_model.py generates the glTF and the camera
-  and highlight maps with trimesh; viewer.html is the Three.js reference implementation; shots/ are renders).
-  The runtime assets it writes live in client/static/machine (hyperharbor-machine.glb, targets.json, highlights.json).
+- models/machine: source for the profile builder's wireframe machine (build_model.py generates the glTF, the camera
+  and highlight maps, and the exploded still with trimesh; viewer.html is the Three.js reference implementation; shots/
+  are renders). The runtime assets it writes live in client/static/machine (hyperharbor-machine.glb, targets.json,
+  highlights.json, exploded.svg).
 - docs/api.yaml: OpenAPI 3.1 contract, the source of truth for host and client
 - host/src/Shared.Contracts: DTOs mirroring api.yaml; ContractJson holds the wire JSON options
 - host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/,
@@ -106,6 +107,12 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   identity.rs (key in Credential Manager), paired.rs, rdp.rs (mstsc launch), console.rs (loopback listener and
   tunnels for the VM console), camera/ (see below); client/src: SvelteKit SPA. Lifecycle UI:
   lib/lifecycle.svelte.ts (elevation prompt, job polling) and lib/components/*Dialog.svelte on a shared Dialog
+- Machine view (the setup profile editor's left pane; each tab is a section of targets.json): client/src/lib/machine:
+  camera.ts (targetFor, rigFor, CameraRig: 900 ms eased fly, tilted rest orbit slowing with distance, cuts under reduced
+  motion), highlights.ts (resolveHighlight for perItem, blink, pulse, spin; applyHighlight; reactionFrame), fallback.ts
+  (webglAvailable, FrameRateWatch, reduced-motion query), assets.ts (loaders, parseExplodedSvg, palettes from the
+  --hh-crt-* tokens in app.css), scene.ts (three r170, imported on demand: EdgesGeometry lines, UnrealBloomPass, CRT
+  ShaderPass). UI: MachineView.svelte (3D or the still) and MachineStill.svelte (exploded.svg with the same highlights).
 - Camera sharing (Rust workspace rooted at client/src-tauri, which lists ../vcam-protocol and ../vcam):
   - client/vcam-protocol: no dependencies; the pipe frame format (FrameHeader, 32 bytes then NV12), pipe_name,
     SOURCE_CLSID, and NV12 black and scale. Used by both sides.

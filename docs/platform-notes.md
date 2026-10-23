@@ -411,6 +411,16 @@ section for an area before changing it: most of these were learned from a failur
 - Tests that cannot run live: "camera in use" by another application, a real Windows 10 start, and focus changes by
   clicking between windows (the foreground poll is unit tested with a fake).
 
+## Machine view (three.js in the client, 2026-10-22)
+- jsdom has no WebGLRenderingContext, and calling canvas.getContext there logs "Not implemented". webglAvailable()
+  checks the constructor first, so component tests take the still path quietly; tests mock $lib/machine/scene.
+- glTF from trimesh bakes positions into the vertices (node transforms are identity). Rotating a LineSegments built from
+  them turns it about the world origin; center the edges and set the object's position to the center first.
+- Headless Edge renders the scene with `--enable-unsafe-swiftshader --use-angle=swiftshader`; `--virtual-time-budget`
+  sets how far the animation runs before `--screenshot`. `--disable-3d-apis` exercises the no-WebGL fallback.
+- three is about 580 KB minified; MachineView imports scene.ts dynamically so it is its own chunk, fetched only when
+  WebGL is available.
+
 ## Wake-on-LAN lessons (from real hosts)
 - Readiness checks can all pass while waking fails. Seen on the desktop (2026-10-02): BIOS "PCI-E wake" was
   disabled. Firmware settings are not readable from Windows; the client shows a firmware checklist instead.

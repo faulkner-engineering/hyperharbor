@@ -19,9 +19,11 @@
   import { addItem, policyValue, removeItem } from "$lib/setupProfiles";
   import { onMount, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
+  import type { PaletteName } from "$lib/machine/assets";
   import AppxChecklist from "./AppxChecklist.svelte";
   import Dialog from "./Dialog.svelte";
   import ExtensionPicker from "./ExtensionPicker.svelte";
+  import MachineView from "./MachineView.svelte";
   import PackagePicker from "./PackagePicker.svelte";
   import Tabs from "./Tabs.svelte";
 
@@ -53,6 +55,27 @@
   const policies = new SvelteMap<string, string>(Object.entries(start.browser?.policies ?? {}));
 
   let tab = $state("packages");
+  /** The machine view section each tab flies to (keys of static/machine/targets.json). */
+  const MACHINE_SECTIONS: Record<string, string> = { packages: "packages", remove: "debloat", tweaks: "overview", browser: "browser" };
+  const PALETTE_KEY = "hh.machinePalette";
+  let palette = $state<PaletteName>(readPalette());
+
+  function readPalette(): PaletteName {
+    try {
+      return localStorage.getItem(PALETTE_KEY) === "green" ? "green" : "amber";
+    } catch {
+      return "amber";
+    }
+  }
+
+  function togglePalette() {
+    palette = palette === "green" ? "amber" : "green";
+    try {
+      localStorage.setItem(PALETTE_KEY, palette);
+    } catch {
+      // A per-viewer convenience; the default palette is fine without storage.
+    }
+  }
   let catalog = $state<SetupProfileCatalog | null>(null);
   let extensionCatalog = $state<ExtensionCatalogItem[]>([]);
   let busy = $state(false);
@@ -177,147 +200,153 @@
       bind:selected={tab}
     />
 
-    <div class="body">
-      {#if tab === "packages"}
-        <div class="columns">
-          <section>
-            <h4>In this profile</h4>
-            {#if install.length === 0}<p class="muted">Nothing yet. Add packages from the right, or by winget id.</p>{/if}
-            <ul class="items">
-              {#each install as item (item.id)}
-                <li>
-                  <span>{item.name ?? item.id}</span><code>{item.id}</code>
-                  <button type="button" onclick={() => (install = removeItem(install, item.id))}>Remove</button>
-                </li>
-              {/each}
-            </ul>
-            <form class="inline" onsubmit={addById}>
-              <input aria-label="winget id, Microsoft Store id, or alias" placeholder="winget id, Store id, or alias" bind:value={byId} />
-              <button type="submit" disabled={byId.trim() === ""}>Add</button>
-            </form>
-          </section>
-          <section>
-            <PackagePicker {host} added={install.map((item) => item.id)} onadd={(item) => (install = addItem(install, item))} />
-          </section>
-        </div>
-      {:else if tab === "remove"}
-        <AppxChecklist {host} {vms} bind:items={appx} />
-        <div class="columns">
-          <section>
-            <h4>Windows capabilities</h4>
-            <ul class="items">
-              {#each capabilities as item (item.id)}
-                <li><code>{item.id}</code><button type="button" onclick={() => (capabilities = removeItem(capabilities, item.id))}>Remove</button></li>
-              {/each}
-            </ul>
-            <form class="inline" onsubmit={addCapability}>
-              <input aria-label="Capability name" placeholder="For example Browser.InternetExplorer~~~~0.0.11.0" bind:value={capability} />
-              <button type="submit" disabled={capability.trim() === ""}>Add</button>
-            </form>
-          </section>
-          <section>
-            <h4>Optional features</h4>
-            <ul class="items">
-              {#each features as item (item.id)}
-                <li><code>{item.id}</code><button type="button" onclick={() => (features = removeItem(features, item.id))}>Remove</button></li>
-              {/each}
-            </ul>
-            <form class="inline" onsubmit={addFeature}>
-              <input aria-label="Feature name" placeholder="For example MicrosoftWindowsPowerShellV2Root" bind:value={feature} />
-              <button type="submit" disabled={feature.trim() === ""}>Add</button>
-            </form>
-          </section>
-        </div>
-      {:else if tab === "tweaks"}
-        <div class="tweaks">
-          {#each tweakGroups as [category, tweaks] (category)}
-            <fieldset>
-              <legend>{category}</legend>
-              {#each tweaks as tweak (tweak.id)}
-                <label class="check" title={tweak.note ?? tweak.id}>
-                  <input
-                    type="checkbox"
-                    checked={tweakIds.includes(tweak.id)}
-                    onchange={(event) => toggleTweak(tweak.id, event.currentTarget.checked)}
-                  />
-                  {tweak.name}
-                </label>
-              {/each}
-            </fieldset>
-          {/each}
-        </div>
-        <h4>Custom registry values</h4>
-        <ul class="items">
-          {#each custom as item, index (index)}
-            <li>
-              <code>{item.registry.key}\{item.registry.name || "(default)"} = {item.registry.value} ({item.registry.type})</code>
-              <button type="button" onclick={() => (custom = custom.filter((_, i) => i !== index))}>Remove</button>
-            </li>
-          {/each}
-        </ul>
-        <form class="inline" onsubmit={addCustom}>
-          <input aria-label="Registry key" bind:value={newKey} placeholder="HKCU\Software\..." />
-          <input aria-label="Value name" bind:value={newName} placeholder="Value name" />
-          <select aria-label="Value type" bind:value={newType}>
-            <option value="dword">DWORD</option>
-            <option value="qword">QWORD</option>
-            <option value="string">String</option>
-          </select>
-          <input aria-label="Value" bind:value={newValue} placeholder="Value" />
-          <button type="submit" disabled={newKey.trim().length < 6}>Add</button>
-        </form>
-      {:else}
-        <label>
-          Browser
-          <select bind:value={browserApp}>
-            <option value="">None</option>
-            {#each catalog?.browsers ?? [] as item (item.id)}<option value={item.wingetId}>{item.name}</option>{/each}
-          </select>
-        </label>
-        {#if browser}
+    <div class="split">
+      <div class="machine-pane">
+        <MachineView section={MACHINE_SECTIONS[tab] ?? "overview"} controls={{ items: install.length }} {palette} />
+        <button type="button" class="palette" onclick={togglePalette}>{palette === "green" ? "Amber terminal" : "Green terminal"}</button>
+      </div>
+      <div class="body">
+        {#if tab === "packages"}
           <div class="columns">
             <section>
-              <h4>Extensions</h4>
-              <ExtensionPicker {host} catalog={extensionCatalog} edge={browser.id === "edge"} bind:items={extensions} />
+              <h4>In this profile</h4>
+              {#if install.length === 0}<p class="muted">Nothing yet. Add packages from the right, or by winget id.</p>{/if}
+              <ul class="items">
+                {#each install as item (item.id)}
+                  <li>
+                    <span>{item.name ?? item.id}</span><code>{item.id}</code>
+                    <button type="button" onclick={() => (install = removeItem(install, item.id))}>Remove</button>
+                  </li>
+                {/each}
+              </ul>
+              <form class="inline" onsubmit={addById}>
+                <input aria-label="winget id, Microsoft Store id, or alias" placeholder="winget id, Store id, or alias" bind:value={byId} />
+                <button type="submit" disabled={byId.trim() === ""}>Add</button>
+              </form>
             </section>
             <section>
-              <h4>Policies</h4>
-              {#each browserPolicies as policy (policy.key)}
-                <div class="policy">
-                  <label class="check" title={policy.description ?? policy.key}>
-                    <input
-                      type="checkbox"
-                      checked={policies.has(policy.key)}
-                      onchange={(event) => togglePolicy(policy.key, policy.type, event.currentTarget.checked)}
-                    />
-                    {policy.name}
-                  </label>
-                  {#if policies.has(policy.key)}
-                    {#if policy.type === "boolean"}
-                      <select aria-label={policy.name} value={policies.get(policy.key)} onchange={(event) => policies.set(policy.key, policyValue("boolean", event.currentTarget.value))}>
-                        <option value="true">On</option>
-                        <option value="false">Off</option>
-                      </select>
-                    {:else if policy.values}
-                      <select aria-label={policy.name} value={policies.get(policy.key)} onchange={(event) => policies.set(policy.key, event.currentTarget.value)}>
-                        <option value="" disabled>Choose…</option>
-                        {#each Object.entries(policy.values) as [value, label] (value)}<option {value}>{label}</option>{/each}
-                      </select>
-                    {:else}
-                      <input
-                        aria-label={policy.name}
-                        type={policy.type === "integer" ? "number" : "text"}
-                        value={policies.get(policy.key)}
-                        oninput={(event) => policies.set(policy.key, policyValue(policy.type, event.currentTarget.value))}
-                      />
-                    {/if}
-                  {/if}
-                </div>
-              {/each}
+              <PackagePicker {host} added={install.map((item) => item.id)} onadd={(item) => (install = addItem(install, item))} />
             </section>
           </div>
+        {:else if tab === "remove"}
+          <AppxChecklist {host} {vms} bind:items={appx} />
+          <div class="columns">
+            <section>
+              <h4>Windows capabilities</h4>
+              <ul class="items">
+                {#each capabilities as item (item.id)}
+                  <li><code>{item.id}</code><button type="button" onclick={() => (capabilities = removeItem(capabilities, item.id))}>Remove</button></li>
+                {/each}
+              </ul>
+              <form class="inline" onsubmit={addCapability}>
+                <input aria-label="Capability name" placeholder="For example Browser.InternetExplorer~~~~0.0.11.0" bind:value={capability} />
+                <button type="submit" disabled={capability.trim() === ""}>Add</button>
+              </form>
+            </section>
+            <section>
+              <h4>Optional features</h4>
+              <ul class="items">
+                {#each features as item (item.id)}
+                  <li><code>{item.id}</code><button type="button" onclick={() => (features = removeItem(features, item.id))}>Remove</button></li>
+                {/each}
+              </ul>
+              <form class="inline" onsubmit={addFeature}>
+                <input aria-label="Feature name" placeholder="For example MicrosoftWindowsPowerShellV2Root" bind:value={feature} />
+                <button type="submit" disabled={feature.trim() === ""}>Add</button>
+              </form>
+            </section>
+          </div>
+        {:else if tab === "tweaks"}
+          <div class="tweaks">
+            {#each tweakGroups as [category, tweaks] (category)}
+              <fieldset>
+                <legend>{category}</legend>
+                {#each tweaks as tweak (tweak.id)}
+                  <label class="check" title={tweak.note ?? tweak.id}>
+                    <input
+                      type="checkbox"
+                      checked={tweakIds.includes(tweak.id)}
+                      onchange={(event) => toggleTweak(tweak.id, event.currentTarget.checked)}
+                    />
+                    {tweak.name}
+                  </label>
+                {/each}
+              </fieldset>
+            {/each}
+          </div>
+          <h4>Custom registry values</h4>
+          <ul class="items">
+            {#each custom as item, index (index)}
+              <li>
+                <code>{item.registry.key}\{item.registry.name || "(default)"} = {item.registry.value} ({item.registry.type})</code>
+                <button type="button" onclick={() => (custom = custom.filter((_, i) => i !== index))}>Remove</button>
+              </li>
+            {/each}
+          </ul>
+          <form class="inline" onsubmit={addCustom}>
+            <input aria-label="Registry key" bind:value={newKey} placeholder="HKCU\Software\..." />
+            <input aria-label="Value name" bind:value={newName} placeholder="Value name" />
+            <select aria-label="Value type" bind:value={newType}>
+              <option value="dword">DWORD</option>
+              <option value="qword">QWORD</option>
+              <option value="string">String</option>
+            </select>
+            <input aria-label="Value" bind:value={newValue} placeholder="Value" />
+            <button type="submit" disabled={newKey.trim().length < 6}>Add</button>
+          </form>
+        {:else}
+          <label>
+            Browser
+            <select bind:value={browserApp}>
+              <option value="">None</option>
+              {#each catalog?.browsers ?? [] as item (item.id)}<option value={item.wingetId}>{item.name}</option>{/each}
+            </select>
+          </label>
+          {#if browser}
+            <div class="columns">
+              <section>
+                <h4>Extensions</h4>
+                <ExtensionPicker {host} catalog={extensionCatalog} edge={browser.id === "edge"} bind:items={extensions} />
+              </section>
+              <section>
+                <h4>Policies</h4>
+                {#each browserPolicies as policy (policy.key)}
+                  <div class="policy">
+                    <label class="check" title={policy.description ?? policy.key}>
+                      <input
+                        type="checkbox"
+                        checked={policies.has(policy.key)}
+                        onchange={(event) => togglePolicy(policy.key, policy.type, event.currentTarget.checked)}
+                      />
+                      {policy.name}
+                    </label>
+                    {#if policies.has(policy.key)}
+                      {#if policy.type === "boolean"}
+                        <select aria-label={policy.name} value={policies.get(policy.key)} onchange={(event) => policies.set(policy.key, policyValue("boolean", event.currentTarget.value))}>
+                          <option value="true">On</option>
+                          <option value="false">Off</option>
+                        </select>
+                      {:else if policy.values}
+                        <select aria-label={policy.name} value={policies.get(policy.key)} onchange={(event) => policies.set(policy.key, event.currentTarget.value)}>
+                          <option value="" disabled>Choose…</option>
+                          {#each Object.entries(policy.values) as [value, label] (value)}<option {value}>{label}</option>{/each}
+                        </select>
+                      {:else}
+                        <input
+                          aria-label={policy.name}
+                          type={policy.type === "integer" ? "number" : "text"}
+                          value={policies.get(policy.key)}
+                          oninput={(event) => policies.set(policy.key, policyValue(policy.type, event.currentTarget.value))}
+                        />
+                      {/if}
+                    {/if}
+                  </div>
+                {/each}
+              </section>
+            </div>
+          {/if}
         {/if}
-      {/if}
+      </div>
     </div>
 
     {#if error}
@@ -357,16 +386,47 @@
     gap: 0.2rem;
   }
 
-  .body {
+  .split {
     flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(18rem, 2fr) 3fr;
+    gap: 1rem;
+  }
+
+  .machine-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 0;
+  }
+
+  .machine-pane > :global(.machine) {
+    flex: 1;
+  }
+
+  .palette {
+    align-self: flex-start;
+    padding: 0.15rem 0.6rem !important;
+    font-size: 0.8rem;
+  }
+
+  .body {
     min-height: 0;
     overflow-y: auto;
   }
 
   .columns {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
     gap: 1rem;
+  }
+
+  @media (max-width: 760px) {
+    .split {
+      grid-template-columns: 1fr;
+      grid-template-rows: 12rem 1fr;
+    }
   }
 
   h4 {

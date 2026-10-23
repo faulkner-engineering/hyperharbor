@@ -7,3 +7,14 @@
   --hh-text-muted: #5b6470;
   --hh-border: #e2ded5;
 }
+
+/* Terminal palettes for the profile builder's machine view. Amber glows in the brand accent. */
+:root {
+  --hh-crt-screen: #0b0d10;
+  --hh-crt-amber-line: #3a4250;
+  --hh-crt-amber-dim: #1f252d;
+  --hh-crt-amber-glow: var(--hh-accent);
+  --hh-crt-green-line: #2a5a3a;
+  --hh-crt-green-dim: #163322;
+  --hh-crt-green-glow: #7cff9a;
+}

@@ -297,5 +297,16 @@ verified, and what was found along the way. User-facing changes per release are 
    (PowerShellTpmCapabilityProbe) runs detached from its callers: the client's 10 s request timeout canceled it halfway,
    leaving its VM running and nothing cached; the client now allows the offer 3 minutes.
 
+25. Profile builder machine view (2026-10-22; client only, no API change). The setup profile editor shows the wireframe
+   machine from models/machine left of its form; the tabs drive both (Install packages, Remove debloat, Browser browser,
+   Tweaks overview). Only perItem has a control there (one drive per package); blink, pulse, and spin follow
+   ControlState fields that no editor sets yet (TPM, backup schedules, and performance mode live in other dialogs).
+   Fallback: exploded.svg from build_model.py when WebGL is missing, the scene fails to start, or FrameRateWatch
+   sees under 30 fps for 5 s; it stays the still for the dialog's life. Reduced motion: cuts, no orbit, no fan spin, no
+   CRT flicker (blink and pulse stay, as status). Verified in headless Edge with SwiftShader WebGL (overview, gpu with
+   spin, firmware, green palette) and with --disable-3d-apis (the still). The GPU fans gained blades: a plain ring
+   spinning about its own axis looks still; viewer.html only appeared to spin them because it rotated world-space
+   lines about the origin.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
