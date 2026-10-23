@@ -387,6 +387,11 @@ verified, and what was found along the way. User-facing changes per release are 
    before the setup profile (UnattendedInstall.WallpaperPath; a guest that does not answer retries the install, an
    image deleted since is a problem). Client: Rust upload_profile_image (file dialog) and delete_profile_image, the
    image list in DisplaySection; hosts before 1.31.0 keep a typed name.
+   Live (2026-10-23, laptop, no GPU share): MachineProfileLiveTests uploaded a BMP, created the VM from a profile naming
+   it, and reached Ready in about 9 minutes; the guest had the file in Public\Pictures\HyperHarbor and the Default hive
+   had WallPaper pointing to it with WallpaperStyle 10. MachineProfileApplyLiveTests on that VM then applied a wallpaper
+   color: Background "11 13 16" and an empty WallPaper, no problems. Both wallpaper paths (watcher and applier) and the
+   wallpaper color are now verified in a real guest; what Windows shows at the first sign-in was not looked at.
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.
