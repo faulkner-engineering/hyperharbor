@@ -40,7 +40,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   Power/ (VM power actions; KeepAwake: the power request that keeps the host awake during remote use),
   Profiles/ (setup profiles: Catalogs, ProfileYamlReader/Writer, ProfileValidator, PackageAliasResolver,
   ExtensionIdParser, SetupProfileStore, AppxBaselines, AppxInventoryService, GuestProfileReader (PowerShell Direct
-  scripts), PackageSearch (pwsh), ExtensionResolver, ProfileCaptureService)
+  scripts), PackageSearch (pwsh fallback), WingetIndex and WingetPackageSearch (the downloaded winget index, read
+  through WinSqlite over winsqlite3.dll), ExtensionResolver, ProfileCaptureService)
 - catalogs/*.yaml (packages, extensions, appx, tweaks, browsers) and schemas/profile.v1.schema.json at the repository
   root, embedded in Host.Core; they are data people read and edit, checked by CatalogTests and ProfileFormatTests
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
@@ -105,7 +106,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
   identity.rs (key in Credential Manager), paired.rs, rdp.rs (mstsc launch), console.rs (loopback listener and
-  tunnels for the VM console), library.rs (the library on this device: ISOs and machine profiles with the hosts that
+  tunnels for the VM console), store_search.rs (opens an extension store's
+  search page), library.rs (the library on this device: ISOs and machine profiles with the hosts that
   have a copy; UI in lib/components/Library.svelte), camera/ (see below); client/src: SvelteKit SPA. Lifecycle UI:
   lib/lifecycle.svelte.ts (elevation prompt, job polling) and lib/components/*Dialog.svelte on a shared Dialog
 - Machine view (the setup profile editor's left pane; each tab is a section of targets.json): client/src/lib/machine:

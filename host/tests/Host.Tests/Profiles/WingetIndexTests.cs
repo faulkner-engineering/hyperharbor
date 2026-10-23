@@ -34,11 +34,13 @@ public sealed class WingetIndexTests : IDisposable
 
         var vlc = WingetIndex.Search(index, "vlc", 10);
         var editors = WingetIndex.Search(index, "text-editor", 10);
+        var spaced = WingetIndex.Search(index, "Text  Editor", 10);
         var limited = WingetIndex.Search(index, "o", 2);
 
         Assert.Equal(["VideoLAN.VLC", "CrySer66.JellyfinVlcBridge"], vlc.Select(result => result.Id));
         Assert.Equal(new PackageSearchResult("VideoLAN.VLC", "VLC media player", "3.0.24", "winget"), vlc[0]);
         Assert.Equal(["Notepad++.Notepad++"], editors.Select(result => result.Id));
+        Assert.Equal(["Notepad++.Notepad++"], spaced.Select(result => result.Id));
         Assert.Equal(2, limited.Count);
     }
 

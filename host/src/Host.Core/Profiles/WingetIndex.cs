@@ -62,17 +62,21 @@ public sealed class WingetIndex
         return current;
     }
 
-    /// <summary>Packages whose id, name, or moniker contains the query, or with the query as a tag; best matches first.</summary>
+    /// <summary>
+    /// Packages whose id, name, or moniker contains the query, or with the query as a tag (also with its spaces as
+    /// hyphens, the usual tag spelling, so "photo editor" finds the photo-editor tag); best matches first.
+    /// </summary>
     public static IReadOnlyList<PackageSearchResult> Search(string indexPath, string query, int count)
     {
         var text = query.Trim();
         var lower = text.ToLowerInvariant();
         var contains = $"%{EscapeLike(text)}%";
         var prefix = $"{EscapeLike(lower)}%";
+        var tag = string.Join('-', lower.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         const string sql = """
             SELECT id, name, latest_version FROM packages
             WHERE id LIKE ?1 ESCAPE '\' OR name LIKE ?1 ESCAPE '\' OR moniker LIKE ?1 ESCAPE '\'
-               OR rowid IN (SELECT m.package FROM tags2_map m JOIN tags2 t ON t.rowid = m.tag WHERE t.tag = ?2)
+               OR rowid IN (SELECT m.package FROM tags2_map m JOIN tags2 t ON t.rowid = m.tag WHERE t.tag IN (?2, ?5))
             ORDER BY CASE
                 WHEN lower(id) = ?2 OR lower(name) = ?2 OR moniker = ?2 THEN 0
                 WHEN lower(name) LIKE ?3 ESCAPE '\' OR moniker LIKE ?3 ESCAPE '\' THEN 1
@@ -82,7 +86,7 @@ public sealed class WingetIndex
             LIMIT ?4
             """;
         using var db = WinSqlite.Open(indexPath);
-        return db.Query(sql, 3, contains, lower, prefix, count)
+        return db.Query(sql, 3, contains, lower, prefix, count, tag)
             .Where(row => !string.IsNullOrEmpty(row[0]))
             .Select(row => new PackageSearchResult(row[0]!, row[1] ?? row[0]!, row[2] ?? "", "winget"))
             .ToList();

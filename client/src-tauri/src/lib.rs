@@ -13,6 +13,7 @@ mod rdp;
 mod rdp_trust;
 mod sessions;
 mod spake2;
+mod store_search;
 mod tailnet;
 #[cfg(test)]
 mod test_server;
@@ -1567,6 +1568,15 @@ async fn send_library_profile(
     )
 }
 
+/// Opens an extension store's search for `query` in the default browser.
+#[tauri::command]
+fn open_store_search(
+    store: store_search::ExtensionStore,
+    query: String,
+) -> Result<(), ClientError> {
+    store_search::open(&store_search::search_url(store, &query)?)
+}
+
 /// A library profile as MachineProfile JSON, for the editor.
 #[tauri::command]
 fn get_library_profile(
@@ -2991,6 +3001,7 @@ pub fn run() {
             send_library_profile,
             library_status,
             get_library_profile,
+            open_store_search,
             save_library_profile,
             cancel_library_task,
             rename_iso,

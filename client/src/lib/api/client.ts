@@ -727,8 +727,14 @@ export const listExtensionCatalog = (key: string) =>
   invoke<ExtensionCatalogItem[]>("get_host_resource", { key, resource: "extensionCatalog" });
 
 /** Fails with problem code wingetUnavailable until package search is set up on the host. */
+/** The API version whose package search reads the host's own winget index: quick enough to search as you type. */
+export const PackageIndexApiVersion = "1.34.0";
+
 export const searchPackages = (key: string, query: string) =>
   invoke<PackageSearchResult[]>("search_packages", { key, query });
+
+/** Opens the store's own search in the default browser; the stores have no public search API. */
+export const openStoreSearch = (store: "chrome" | "edge", query: string) => invoke<void>("open_store_search", { store, query });
 
 export const resolveExtension = (key: string, input: string) =>
   invoke<ResolvedExtension>("resolve_extension", { key, input });

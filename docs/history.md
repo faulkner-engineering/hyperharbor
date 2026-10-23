@@ -425,6 +425,12 @@ verified, and what was found along the way. User-facing changes per release are 
    Verified: unit tests for the store, the statuses, and resume against a test server; e2e_loopback (scripts\e2e.ps1)
    downloads a 3 MB image from the real service with 1 MB already on disk and gets the whole file back (Kestrel's
    range processing), and a missing wallpaper image is 404. The Library page itself was not yet driven by hand.
+   Package and extension discovery (2026-10-23; API 1.34.0), asked for by the user: package search reads the host's
+   own copy of the winget index (WingetIndex: source2.msix, refreshed daily, fetched at start; PowerShell 7 search is
+   the fallback), so InstallSection searches as the user types (250 ms pause) and lists winget results the catalog
+   lacks under "From winget"; BrowserSection opens the Chrome Web Store or Edge Add-ons search in the browser for
+   text that is not a link. The index has no descriptions, so search by purpose works only through names and tags.
+   Live: WingetIndexLiveTests (HH_WINGET_LIVE=1) downloads the real index and finds VLC, Visual Studio Code, and Git.
    Library profiles are made and edited in MachineProfileEditor with an onsave prop: a paired host supplies the catalogs
    (Catalogs from), save_library_profile stores the JSON and takes a wallpaper image the library lacks from that host;
    nothing validates it until a host does on send. app.css got :where() base styles for buttons and form controls, so a

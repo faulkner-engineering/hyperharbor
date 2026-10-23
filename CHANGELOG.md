@@ -79,6 +79,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   paired host's package, setting, and network lists (Catalogs from, when there are several), and the host checks the
   profile when it is sent.
 
+- The package list searches winget as you type (hosts with API 1.34.0): what the catalog lacks shows under "From
+  winget", with no button to press. Search matches names, ids, and tags, not descriptions.
+- Extensions: typing something the catalog lacks offers Search the Chrome Web Store (and Search Edge Add-ons for
+  Edge), which opens the store's search in your browser; paste the extension's link back to add it.
 - Package search works on any host with internet access: nothing to set up first (PowerShell 7 and the WinGet
   module are no longer needed), and results come back in milliseconds.
 

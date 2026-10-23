@@ -54,9 +54,9 @@ describe("InstallSection", () => {
     { alias: "vlc", id: "VideoLAN.VLC", name: "VLC media player", description: null, category: "media", popular: false },
   ];
 
-  function open(install: ProfileItem[] = []) {
+  function open(install: ProfileItem[] = [], on: HostEntry = host) {
     const onselect = vi.fn();
-    const props = $state({ host, install, selected: null, onselect });
+    const props = $state({ host: on, install, selected: null, onselect });
     render(InstallSection, props);
     return { props, onselect };
   }
@@ -126,6 +126,48 @@ describe("InstallSection", () => {
     await fireEvent.click(screen.getByRole("button", { name: 'Search winget for "steam"' }));
     await fireEvent.click(await screen.findByRole("button", { name: "Add Steam" }));
     expect(props.install).toEqual([{ id: "Valve.Steam", name: "Steam" }]);
+  });
+});
+
+describe("InstallSection on a host with the winget index (1.34.0)", () => {
+  const indexed: HostEntry = { ...host, apiVersion: "1.34.0" };
+  const catalog = [{ alias: "vlc", id: "VideoLAN.VLC", name: "VLC media player", description: null, category: "media", popular: true }];
+
+  it("searches winget as you type and lists only what the catalog does not already show", async () => {
+    answer({
+      "resource:packageCatalog": () => catalog,
+      search_packages: () => [
+        { id: "VideoLAN.VLC", name: "VLC media player", version: "3.0.24", source: "winget" },
+        { id: "CrySer66.JellyfinVlcBridge", name: "Jellyfin VLC Bridge", version: "1.18.0", source: "winget" },
+      ],
+    });
+    const onselect = vi.fn();
+    const props = $state({ host: indexed, install: [] as ProfileItem[], selected: null, onselect });
+    render(InstallSection, props);
+    await waitFor(() => expect(rows("Package catalog")).toHaveLength(1));
+
+    await fireEvent.input(screen.getByRole("searchbox", { name: "Package catalog" }), { target: { value: "vlc" } });
+
+    await waitFor(() => expect(calls("search_packages")).toEqual([{ key: indexed.key, query: "vlc" }]));
+    expect(rows("winget results").map((row) => row.textContent)).toEqual([expect.stringContaining("Jellyfin VLC Bridge")]);
+    expect(screen.queryByRole("button", { name: /Search winget for/ })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Add Jellyfin VLC Bridge" }));
+    expect(props.install).toEqual([{ id: "CrySer66.JellyfinVlcBridge", name: "Jellyfin VLC Bridge" }]);
+  });
+
+  it("waits for a pause in typing before searching", async () => {
+    answer({ "resource:packageCatalog": () => catalog, search_packages: () => [] });
+    const onselect = vi.fn();
+    render(InstallSection, { host: indexed, install: [], selected: null, onselect });
+    await waitFor(() => expect(rows("Package catalog")).toHaveLength(1));
+    const box = screen.getByRole("searchbox", { name: "Package catalog" });
+
+    await fireEvent.input(box, { target: { value: "no" } });
+    await fireEvent.input(box, { target: { value: "note" } });
+    await fireEvent.input(box, { target: { value: "notepad" } });
+
+    await waitFor(() => expect(calls("search_packages")).toEqual([{ key: indexed.key, query: "notepad" }]));
+    expect(await screen.findByText('winget found nothing for "notepad".')).toBeTruthy();
   });
 });
 
@@ -253,6 +295,29 @@ describe("BrowserSection", () => {
 
     await waitFor(() => expect(props.extensions).toEqual([{ id: "ghbmnnjooekpmoecnnnilnnbdlolhkhi", name: "Google Docs Offline" }]));
     expect(calls("resolve_extension")).toEqual([{ key: host.key, input: link }]);
+  });
+
+  it("opens the store's own search for what the catalog lacks", async () => {
+    answer({ open_store_search: () => undefined });
+    open("Microsoft.Edge");
+
+    await fireEvent.input(screen.getByRole("searchbox", { name: "Extension catalog" }), { target: { value: "dark reader" } });
+    await fireEvent.click(screen.getByRole("button", { name: 'Search the Chrome Web Store for "dark reader"' }));
+    await fireEvent.click(screen.getByRole("button", { name: 'Search Edge Add-ons for "dark reader"' }));
+
+    expect(calls("open_store_search")).toEqual([
+      { store: "chrome", query: "dark reader" },
+      { store: "edge", query: "dark reader" },
+    ]);
+  });
+
+  it("offers the Edge store only when the browser is Edge", async () => {
+    open();
+
+    await fireEvent.input(screen.getByRole("searchbox", { name: "Extension catalog" }), { target: { value: "dark reader" } });
+
+    expect(screen.getByRole("button", { name: 'Search the Chrome Web Store for "dark reader"' })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Edge Add-ons/ })).toBeNull();
   });
 
   it("refuses an Edge-only extension for another browser", async () => {
