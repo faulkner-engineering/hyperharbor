@@ -52,6 +52,9 @@ note anything that needs action, such as updating the host, a new elevation requ
   monitors (unless you chose monitors for that VM on this device), full screen or windowed, and whether the clipboard,
   printers, microphone, and camera are shared. VMs get them when created from a profile or when the profile is applied
   (the new Remote Desktop defaults part).
+- A machine profile's Backups section can keep a different number of daily, weekly, and monthly backups than its
+  target, and use other conditions for when a backup may start (wait while connected, wait while a game runs, a time
+  window). A profile that would keep no backups at all is refused.
 
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons

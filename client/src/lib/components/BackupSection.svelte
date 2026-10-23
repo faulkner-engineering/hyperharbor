@@ -68,6 +68,50 @@
     <input type="checkbox" checked={triggers.onShutdown === true} onchange={(event) => (backup.triggers = { ...triggers, onShutdown: event.currentTarget.checked })} />
     After the VM shuts down
   </label>
+  <label class="check override">
+    <input
+      type="checkbox"
+      checked={backup.retention != null}
+      onchange={(event) => (backup.retention = event.currentTarget.checked ? { daily: 7, weekly: 4, monthly: 6 } : null)}
+    />
+    Keep a different number of backups than the target
+  </label>
+  {#if backup.retention}
+    {@const retention = backup.retention}
+    <div class="grid">
+      <label>Daily <input type="number" min="0" value={retention.daily} oninput={(event) => (backup.retention = { ...retention, daily: Number(event.currentTarget.value) })} /></label>
+      <label>Weekly <input type="number" min="0" value={retention.weekly} oninput={(event) => (backup.retention = { ...retention, weekly: Number(event.currentTarget.value) })} /></label>
+      <label>Monthly <input type="number" min="0" value={retention.monthly} oninput={(event) => (backup.retention = { ...retention, monthly: Number(event.currentTarget.value) })} /></label>
+    </div>
+  {/if}
+  <label class="check override">
+    <input
+      type="checkbox"
+      checked={backup.conditions != null}
+      onchange={(event) => (backup.conditions = event.currentTarget.checked ? { noActiveSession: true, notInGame: true } : null)}
+    />
+    Use other conditions than the target for when a backup may start
+  </label>
+  {#if backup.conditions}
+    {@const conditions = backup.conditions}
+    <label class="check"><input type="checkbox" checked={conditions.noActiveSession !== false} onchange={(event) => (backup.conditions = { ...conditions, noActiveSession: event.currentTarget.checked })} /> Wait while someone is connected</label>
+    <label class="check"><input type="checkbox" checked={conditions.notInGame !== false} onchange={(event) => (backup.conditions = { ...conditions, notInGame: event.currentTarget.checked })} /> Wait while a game runs on the host</label>
+    <label class="check">
+      <input
+        type="checkbox"
+        checked={conditions.window != null}
+        onchange={(event) => (backup.conditions = { ...conditions, window: event.currentTarget.checked ? { start: "01:00", end: "06:00" } : undefined })}
+      />
+      Only between
+    </label>
+    {#if conditions.window}
+      {@const window = conditions.window}
+      <div class="grid">
+        <label>From <input type="time" value={window.start} oninput={(event) => (backup.conditions = { ...conditions, window: { ...window, start: event.currentTarget.value } })} /></label>
+        <label>To <input type="time" value={window.end} oninput={(event) => (backup.conditions = { ...conditions, window: { ...window, end: event.currentTarget.value } })} /></label>
+      </div>
+    {/if}
+  {/if}
   <Choice
     label="With Performance mode on"
     options={[
@@ -90,5 +134,15 @@
   small {
     display: block;
     margin: 0.2rem 0 0.6rem;
+  }
+
+  .override {
+    margin-top: 0.7rem !important;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+    gap: 0 0.6rem;
   }
 </style>

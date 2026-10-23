@@ -250,6 +250,10 @@ public sealed partial class MachineProfileValidator(ProfileValidator software, U
         {
             issues.Add(new("backup.retention", "Keep zero or more of each."));
         }
+        else if (backup.Retention is { Daily: 0, Weekly: 0, Monthly: 0 })
+        {
+            issues.Add(new("backup.retention", "Keep at least one backup."));
+        }
 
         if (backup.Conditions?.Window is { } window && (!TimeOfDay().IsMatch(window.Start) || !TimeOfDay().IsMatch(window.End)))
         {

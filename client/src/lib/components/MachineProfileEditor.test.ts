@@ -109,6 +109,26 @@ describe("MachineProfileEditor", () => {
     });
   });
 
+  it("saves backup retention and conditions that differ from the target's", async () => {
+    const onclose = open();
+    await fireEvent.input(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Kept" } });
+    await fireEvent.click(screen.getByRole("tab", { name: /Backups/ }));
+    await fireEvent.click(within("Backups").on);
+
+    await fireEvent.click(screen.getByRole("checkbox", { name: /Keep a different number of backups/ }));
+    await fireEvent.input(screen.getByRole("spinbutton", { name: "Daily" }), { target: { value: "14" } });
+    await fireEvent.click(screen.getByRole("checkbox", { name: /Use other conditions/ }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: /Wait while a game runs/ }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    const [args] = saved() as { profile: { backup: Record<string, unknown> } }[];
+    expect(args.profile.backup).toMatchObject({
+      retention: { daily: 14, weekly: 4, monthly: 6 },
+      conditions: { noActiveSession: true, notInGame: false },
+    });
+  });
+
   it("fills the software sections from a setup profile", async () => {
     open();
 

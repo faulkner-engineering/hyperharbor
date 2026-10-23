@@ -140,6 +140,14 @@ public sealed class MachineProfileTests : IDisposable
     }
 
     [Fact]
+    public void BackupRetention_KeepsAtLeastOne()
+    {
+        var none = Sample() with { Backup = new MachineBackup(true, "NAS", Retention: new BackupRetention(0, 0, 0)) };
+
+        Assert.Equal("backup.retention", Assert.Single(Assert.Throws<LifecycleValidationException>(() => _validator.Normalize(none)).Errors).Field);
+    }
+
+    [Fact]
     public void Windows11WithoutATpm_NeedsTheHardwareBypass()
     {
         var noTpm = Sample() with { Firmware = new MachineFirmware(Tpm: false) };
