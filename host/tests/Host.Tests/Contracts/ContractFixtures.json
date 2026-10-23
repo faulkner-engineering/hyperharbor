@@ -307,7 +307,12 @@
   "CreateVmFromProfileRequest": {
     "name": "Rig",
     "isoName": "win11.iso",
-    "acknowledgeWarnings": true
+    "acknowledgeWarnings": true,
+    "compute": {
+      "processors": 6,
+      "diskSizeGb": 200
+    },
+    "switch": "LAN"
   },
   "CreateVmRequest": {
     "name": "Win11 Dev",
@@ -487,7 +492,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.31.0",
+    "apiVersion": "1.32.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -893,6 +898,20 @@
     "softwareCount": 3,
     "updatedAt": "2026-10-03T12:00:00\u002B00:00",
     "error": null
+  },
+  "MachineProfileTemplate": {
+    "id": "windows-workstation",
+    "name": "Windows Workstation",
+    "description": "Windows 11 Pro.",
+    "profile": {
+      "name": "Windows Workstation",
+      "os": "windows",
+      "account": {
+        "adminAccountName": "hhadmin",
+        "timeZone": "UTC",
+        "locale": "en-US"
+      }
+    }
   },
   "MachineRedirect": {
     "clipboard": true

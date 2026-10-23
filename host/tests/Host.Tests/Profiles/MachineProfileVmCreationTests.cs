@@ -69,7 +69,7 @@ public sealed class MachineProfileVmCreationTests : IDisposable
         _connectionDefaults = new VmConnectionDefaultsStore(data);
         _creation = new MachineProfileVmCreation(
             _profiles, vmCreation, unattended, unattendProfiles, software, performance, _compute, hyperV, _backups,
-            NullLogger<MachineProfileVmCreation>.Instance, _connectionDefaults);
+            NullLogger<MachineProfileVmCreation>.Instance, _connectionDefaults, templates: new MachineProfileTemplates(unattendProfiles));
     }
 
     public void Dispose()
@@ -85,6 +85,43 @@ public sealed class MachineProfileVmCreationTests : IDisposable
         var job = await _creation.StartAsync(_userId, profileId, new CreateVmFromProfileRequest("Rig", iso, null, acknowledge), null, CancellationToken.None);
         await _jobs.WhenFinished(job.Id);
         return _jobs.Get(job.Id, _userId)!;
+    }
+
+    [Fact]
+    public async Task HardwareInTheRequest_ReplacesTheProfiles_ForThisVmOnly()
+    {
+        var id = Save(new MachineProfile("Small", InstallOs.Windows, Compute: new MachineCompute(2, new MachineMemory(4096, 8192, true), DiskSizeGb: 64)));
+        var request = new CreateVmFromProfileRequest("Rig", "win11.iso", Compute: new MachineCompute(6, DiskSizeGb: 200));
+
+        var job = await _creation.StartAsync(_userId, id, request, null, CancellationToken.None);
+        await _jobs.WhenFinished(job.Id);
+
+        var blueprint = _builder.Configured!;
+        Assert.Equal((6, 4096L, 8192L, true), (blueprint.ProcessorCount, blueprint.StartupMemoryMb, blueprint.MaximumMemoryMb, blueprint.DynamicMemory));
+        Assert.Equal(2, _profiles.Get(_userId, id).Profile.Compute!.Processors);
+    }
+
+    [Fact]
+    public async Task OverridesThatDoNotFit_AreReportedAtTheRequestsFields()
+    {
+        var id = Save(new MachineProfile("Small", InstallOs.Windows));
+        var request = new CreateVmFromProfileRequest("Rig", "win11.iso", Compute: new MachineCompute(0), Switch: "Nowhere");
+
+        var error = await Assert.ThrowsAsync<LifecycleValidationException>(() => _creation.StartAsync(_userId, id, request, null, CancellationToken.None));
+
+        Assert.Contains(error.Errors, issue => issue.Field == "switch");
+    }
+
+    [Fact]
+    public async Task ATemplate_CreatesAVmWithItsAccount()
+    {
+        var job = await _creation.StartFromTemplateAsync(_userId, "windows-burner", new CreateVmFromProfileRequest("Rig", "win11.iso"), null, CancellationToken.None);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Succeeded, _jobs.Get(job.Id, _userId)!.State);
+        Assert.Equal("template-windows-burner", _installs.Find(_builder.CreatedVmId)!.ProfileId[("machine-".Length)..]);
+        await Assert.ThrowsAsync<MachineProfileTemplateNotFoundException>(() =>
+            _creation.StartFromTemplateAsync(_userId, "nothing", new CreateVmFromProfileRequest("Rig", "win11.iso"), null, CancellationToken.None));
     }
 
     [Fact]

@@ -635,6 +635,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/machine-profile-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the host's machine profile templates.
+         * @description Since 1.32.0. Read-only starting points that replace the built-in unattended install profiles: each is a machine
+         *     profile with only the account section (Windows Workstation, Windows Burner, Ubuntu Dev Server). A client offers
+         *     them when making a new profile and in New VM; they are not in `GET /machine-profiles`.
+         */
+        get: operations["listMachineProfileTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/machine-profile-templates/{templateId}/vms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A template ID from `GET /machine-profile-templates`. */
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a VM from a machine profile template.
+         * @description Since 1.32.0. As `POST /machine-profiles/{profileId}/vms`, with the template in place of a saved profile.
+         */
+        post: operations["createVmFromMachineProfileTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profile-images": {
         parameters: {
             query?: never;
@@ -3597,6 +3642,13 @@ export interface components {
             isoName: string;
             /** @description An edition from `GET /isos/{name}/inspection`. Null means the profile's edition. */
             windowsEdition?: string | null;
+            /**
+             * @description Since 1.32.0. Hardware for this VM only: each field set here replaces the profile's (processors, memory,
+             *     nested virtualization, disk size). Errors use the request's field paths (`compute.processors`).
+             */
+            compute?: components["schemas"]["MachineCompute"] | null;
+            /** @description Since 1.32.0. A virtual switch's name for this VM only, in place of the profile's. */
+            switch?: string | null;
             /** @default false */
             acknowledgeWarnings: boolean;
         };
@@ -3611,6 +3663,12 @@ export interface components {
             name: string;
             /** Format: int64 */
             sizeBytes: number;
+        };
+        MachineProfileTemplate: {
+            id: string;
+            name: string;
+            description: string;
+            profile: components["schemas"]["MachineProfile"];
         };
         MachineProfileSummary: {
             id: string;
@@ -5590,6 +5648,61 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listMachineProfileTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The templates. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineProfileTemplate"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createVmFromMachineProfileTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A template ID from `GET /machine-profile-templates`. */
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVmFromProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The createVm job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listProfileImages: {

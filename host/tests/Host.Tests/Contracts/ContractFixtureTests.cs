@@ -324,7 +324,8 @@ public class ContractFixtureTests
         ["ApplyMachineProfileRequest"] = new ApplyMachineProfileRequest("gaming-rig", [MachinePart.Compute, MachinePart.Software], true),
 
         // Null on purpose: windowsEdition is nullable.
-        ["CreateVmFromProfileRequest"] = new CreateVmFromProfileRequest("Rig", "win11.iso", null, true),
+        ["CreateVmFromProfileRequest"] = new CreateVmFromProfileRequest("Rig", "win11.iso", null, true, new MachineCompute(6, DiskSizeGb: 200), "LAN"),
+        ["MachineProfileTemplate"] = new MachineProfileTemplate("windows-workstation", "Windows Workstation", "Windows 11 Pro.", new MachineProfile("Windows Workstation", InstallOs.Windows, Account: new MachineAccount("hhadmin", "UTC", "en-US"))),
         ["StoredMachineProfile"] = new StoredMachineProfile("gaming-rig", Time, MachineProfileSample),
         ["MachineAccount"] = MachineProfileSample.Account!,
         ["MachineDisplay"] = MachineProfileSample.Display!,

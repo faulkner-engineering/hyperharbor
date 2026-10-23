@@ -140,6 +140,18 @@ public sealed class MachineProfileApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Templates_AreServed_AndAreNotInTheUsersProfiles()
+    {
+        var templates = (await _client.GetFromJsonAsync<JsonArray>("/api/v1/machine-profile-templates"))!;
+
+        Assert.Equal(["windows-workstation", "windows-burner", "ubuntu-dev-server"], templates.Select(template => (string?)template!["id"]));
+        Assert.Equal("linux", (string?)templates[2]!["profile"]!["os"]);
+        Assert.Empty((await _client.GetFromJsonAsync<JsonArray>(Path))!);
+        var missing = await SendAsync(HttpMethod.Post, "/api/v1/machine-profile-templates/nothing/vms", JsonContent.Create(new { name = "Rig", isoName = "win11.iso" }));
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
     public async Task WallpaperImages_AreUploadedListedAndDeleted_WithElevation()
     {
         const string images = "/api/v1/profile-images";

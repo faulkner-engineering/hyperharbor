@@ -113,11 +113,15 @@ public sealed record MachineBackup(
 /// <summary>Creates a VM from a machine profile. Schema: CreateVmFromProfileRequest.</summary>
 /// <param name="IsoName">An image in the ISO library.</param>
 /// <param name="WindowsEdition">An edition from the ISO's inspection. Null: the profile's edition.</param>
+/// <param name="Compute">Hardware for this VM only; each field set replaces the profile's.</param>
+/// <param name="Switch">A virtual switch's name for this VM only.</param>
 public sealed record CreateVmFromProfileRequest(
     [property: JsonRequired] string Name,
     [property: JsonRequired] string IsoName,
     string? WindowsEdition = null,
-    bool AcknowledgeWarnings = false);
+    bool AcknowledgeWarnings = false,
+    MachineCompute? Compute = null,
+    string? Switch = null);
 
 /// <summary>A part of a machine profile that can be applied to an existing VM. Schema: MachinePart.</summary>
 public enum MachinePart
@@ -187,3 +191,6 @@ public sealed record MachineProfileSummary(
 
 /// <summary>A wallpaper image in the User's library. Schema: ProfileImage.</summary>
 public sealed record ProfileImage(string Name, long SizeBytes);
+
+/// <summary>A read-only starting point for machine profiles, served by the host. Schema: MachineProfileTemplate.</summary>
+public sealed record MachineProfileTemplate(string Id, string Name, string Description, MachineProfile Profile);

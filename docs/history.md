@@ -392,6 +392,12 @@ verified, and what was found along the way. User-facing changes per release are 
    had WallPaper pointing to it with WallpaperStyle 10. MachineProfileApplyLiveTests on that VM then applied a wallpaper
    color: Background "11 13 16" and an empty WallPaper, no problems. Both wallpaper paths (watcher and applier) and the
    wallpaper color are now verified in a real guest; what Windows shows at the first sign-in was not looked at.
+   Done: one place for profiles, host (2026-10-23; API 1.32.0, data format 4). ProfileConsolidation converts each
+   User's unattended install and setup profiles into machine profiles when the host starts on format 3 data (originals
+   kept, results in machine-profiles/converted.json); MachineProfileTemplates serves the built-in install profiles as
+   templates (/machine-profile-templates, create from one); CreateVmFromProfileRequest takes compute and switch for
+   that VM only (MachineProfileVmCreation.WithOverrides). docs/machine-profiles.md "One place for profiles" has the
+   user's decisions.
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.

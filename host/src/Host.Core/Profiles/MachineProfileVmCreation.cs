@@ -40,7 +40,8 @@ public sealed class MachineProfileVmCreation(
     IMachineBackupPolicies? backups,
     ILogger<MachineProfileVmCreation> logger,
     VmConnectionDefaultsStore? connectionDefaults = null,
-    ProfileImageStore? images = null)
+    ProfileImageStore? images = null,
+    MachineProfileTemplates? templates = null)
 {
     /// <summary>The Create VM dialog's defaults, used for whatever the compute section leaves out.</summary>
     public const int DefaultProcessors = 2;
@@ -54,15 +55,64 @@ public sealed class MachineProfileVmCreation(
     /// <exception cref="MachineProfileNotFoundException">No such profile.</exception>
     /// <exception cref="LifecycleValidationException">The profile does not fit this host or the ISO; Errors lists each problem.</exception>
     /// <exception cref="ResourceWarningsException">Warnings were not acknowledged.</exception>
-    public async Task<VmJobSnapshot> StartAsync(
+    public Task<VmJobSnapshot> StartAsync(
         Guid userId,
         string profileId,
+        CreateVmFromProfileRequest request,
+        Action<VmJobSnapshot>? onFinished,
+        CancellationToken cancellationToken) =>
+        StartAsync(userId, profileId, profiles.Get(userId, profileId).Profile, request, onFinished, cancellationToken);
+
+    /// <summary>As <see cref="StartAsync(Guid, string, CreateVmFromProfileRequest, Action{VmJobSnapshot}?, CancellationToken)"/>, from a template.</summary>
+    /// <exception cref="MachineProfileTemplateNotFoundException">No such template.</exception>
+    public Task<VmJobSnapshot> StartFromTemplateAsync(
+        Guid userId,
+        string templateId,
+        CreateVmFromProfileRequest request,
+        Action<VmJobSnapshot>? onFinished,
+        CancellationToken cancellationToken)
+    {
+        var template = (templates ?? throw new MachineProfileTemplateNotFoundException(templateId)).Get(templateId);
+        return StartAsync(userId, "template-" + template.Id, template.Profile, request, onFinished, cancellationToken);
+    }
+
+    /// <summary>
+    /// The profile with the request's hardware for this VM: each compute field the request sets replaces the
+    /// profile's, and a switch name replaces the profile's switch.
+    /// </summary>
+    internal static MachineProfile WithOverrides(MachineProfile profile, CreateVmFromProfileRequest request)
+    {
+        if (request.Compute is { } wanted)
+        {
+            var current = profile.Compute ?? new MachineCompute();
+            profile = profile with
+            {
+                Compute = new MachineCompute(
+                    wanted.Processors ?? current.Processors,
+                    wanted.Memory ?? current.Memory,
+                    wanted.NestedVirtualization ?? current.NestedVirtualization,
+                    wanted.DiskSizeGb ?? current.DiskSizeGb),
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Switch))
+        {
+            profile = profile with { Network = (profile.Network ?? new MachineNetwork()) with { Switch = request.Switch.Trim() } };
+        }
+
+        return profile;
+    }
+
+    private async Task<VmJobSnapshot> StartAsync(
+        Guid userId,
+        string profileId,
+        MachineProfile stored,
         CreateVmFromProfileRequest request,
         Action<VmJobSnapshot>? onFinished,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var profile = profiles.Get(userId, profileId).Profile;
+        var profile = WithOverrides(stored, request);
         var errors = new List<ValidationIssue>();
         var warnings = new List<ValidationIssue>();
         var windows = profile.Os == InstallOs.Windows;
@@ -82,7 +132,9 @@ public sealed class MachineProfileVmCreation(
             switchId = switches.FirstOrDefault(item => string.Equals(item.Name, switchName, StringComparison.OrdinalIgnoreCase))?.Id;
             if (switchId is null)
             {
-                errors.Add(new("network.switch", $"This host has no virtual switch named \"{switchName}\". Add one, or change the profile."));
+                errors.Add(string.IsNullOrWhiteSpace(request.Switch)
+                    ? new("network.switch", $"This host has no virtual switch named \"{switchName}\". Add one, or change the profile.")
+                    : new("switch", $"This host has no virtual switch named \"{switchName}\"."));
             }
         }
 
@@ -151,8 +203,25 @@ public sealed class MachineProfileVmCreation(
             profile.Firmware?.SecureBoot ?? true,
             warnings,
             (vmId, context) => ConfigureAsync(vmId, request.Name.Trim(), profile, performancePlan, backupTarget, context));
-        return await creation.StartAsync(userId, createRequest, extras, onFinished, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await creation.StartAsync(userId, createRequest, extras, onFinished, cancellationToken).ConfigureAwait(false);
+        }
+        catch (LifecycleValidationException ex) when (request.Compute is not null)
+        {
+            // Hardware set in the request is reported at the request's own field paths.
+            var mapped = ex.Errors.Select(issue => ComputeFields.TryGetValue(issue.Field, out var field) ? issue with { Field = field } : issue).ToList();
+            throw new LifecycleValidationException(ex.Message, mapped);
+        }
     }
+
+    private static readonly Dictionary<string, string> ComputeFields = new(StringComparer.Ordinal)
+    {
+        ["processorCount"] = "compute.processors",
+        ["startupMemoryMb"] = "compute.memory.startupMb",
+        ["maximumMemoryMb"] = "compute.memory.maximumMb",
+        ["diskSizeGb"] = "compute.diskSizeGb",
+    };
 
     /// <summary>The steps that need the new VM off: processor and network options, Performance mode, and backups.</summary>
     private async Task ConfigureAsync(

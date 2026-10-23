@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.31.0
+  version: 1.32.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -1034,6 +1034,73 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /machine-profile-templates:
+    get:
+      tags: [Profiles]
+      operationId: listMachineProfileTemplates
+      summary: List the host's machine profile templates.
+      description: |
+        Since 1.32.0. Read-only starting points that replace the built-in unattended install profiles: each is a machine
+        profile with only the account section (Windows Workstation, Windows Burner, Ubuntu Dev Server). A client offers
+        them when making a new profile and in New VM; they are not in `GET /machine-profiles`.
+      responses:
+        "200":
+          description: The templates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MachineProfileTemplate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /machine-profile-templates/{templateId}/vms:
+    parameters:
+      - name: templateId
+        in: path
+        required: true
+        description: A template ID from `GET /machine-profile-templates`.
+        schema:
+          type: string
+    post:
+      tags: [VMs]
+      operationId: createVmFromMachineProfileTemplate
+      summary: Create a VM from a machine profile template.
+      description: |
+        Since 1.32.0. As `POST /machine-profiles/{profileId}/vms`, with the template in place of a saved profile.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVmFromProfileRequest"
+      responses:
+        "202":
+          description: The createVm job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /profile-images:
     get:
@@ -6030,6 +6097,16 @@ components:
         windowsEdition:
           type: [string, "null"]
           description: An edition from `GET /isos/{name}/inspection`. Null means the profile's edition.
+        compute:
+          oneOf:
+            - $ref: "#/components/schemas/MachineCompute"
+            - type: "null"
+          description: |
+            Since 1.32.0. Hardware for this VM only: each field set here replaces the profile's (processors, memory,
+            nested virtualization, disk size). Errors use the request's field paths (`compute.processors`).
+        switch:
+          type: [string, "null"]
+          description: Since 1.32.0. A virtual switch's name for this VM only, in place of the profile's.
         acknowledgeWarnings:
           type: boolean
           default: false
@@ -6056,6 +6133,19 @@ components:
         sizeBytes:
           type: integer
           format: int64
+
+    MachineProfileTemplate:
+      type: object
+      required: [id, name, description, profile]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        profile:
+          $ref: "#/components/schemas/MachineProfile"
 
     MachineProfileSummary:
       type: object

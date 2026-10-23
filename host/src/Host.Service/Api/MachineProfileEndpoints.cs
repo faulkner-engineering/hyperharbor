@@ -18,6 +18,7 @@ public static class MachineProfileEndpoints
 {
     public const string ProfilesPath = ContractInfo.BasePath + "/machine-profiles";
     public const string ImagesPath = ContractInfo.BasePath + "/profile-images";
+    public const string TemplatesPath = ContractInfo.BasePath + "/machine-profile-templates";
 
     public static IEndpointRouteBuilder MapMachineProfileEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -37,6 +38,11 @@ public static class MachineProfileEndpoints
             .RequireElevation();
         profiles.MapDelete("/{profileId}", Delete).WithName("deleteMachineProfile")
             .Audited<string>(profileId => $"profileId={profileId}")
+            .RequireElevation();
+        var templates = endpoints.MapGroup(TemplatesPath);
+        templates.MapGet("/", (MachineProfileTemplates source) => TypedResults.Ok(source.List())).WithName("listMachineProfileTemplates");
+        templates.MapPost("/{templateId}/vms", CreateVmFromTemplateAsync).WithName("createVmFromMachineProfileTemplate")
+            .Audited<CreateVmFromProfileRequest>(request => $"name={request.Name}, iso={request.IsoName}, edition={request.WindowsEdition ?? "profile"}")
             .RequireElevation();
         var images = endpoints.MapGroup(ImagesPath);
         images.MapGet("/", ListImages).WithName("listProfileImages");
@@ -87,6 +93,20 @@ public static class MachineProfileEndpoints
         var audit = context.Audit()!;
         audit.VmName = request.Name?.Trim();
         var job = await creation.StartAsync(context.User.UserId(), profileId, request, context.CompletionAuditor(), cancellationToken);
+        audit.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
+    }
+
+    private static async Task<Accepted<VmJob>> CreateVmFromTemplateAsync(
+        string templateId,
+        CreateVmFromProfileRequest request,
+        MachineProfileVmCreation creation,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var audit = context.Audit()!;
+        audit.VmName = request.Name?.Trim();
+        var job = await creation.StartFromTemplateAsync(context.User.UserId(), templateId, request, context.CompletionAuditor(), cancellationToken);
         audit.JobId = job.Id;
         return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }

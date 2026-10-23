@@ -165,3 +165,19 @@ does not change them. To bring them over:
 2. display.guest: theme, accent color, and wallpaper (color or image). No console resolution.
 3. display.connection.redirect: clipboard, printers, microphone, and camera. Drives are not offered.
 4. backup.target by name, with a preview warning and no policy when the host has no such target.
+
+## One place for profiles (decided 2026-10-23, 26e)
+The user asked for a single configuration location. Decisions (they replace decision 1 above):
+- Convert on update: data format 4 (ProfileConsolidation) turns each User's unattended install profiles into machine
+  profiles with only the account section, and their setup profiles into machine profiles with only the software
+  sections (Windows). A name already taken gets " (install profile)" or " (setup profile)". The older files stay for
+  older clients; machine-profiles/converted.json records what converted and what did not (a file that does not read).
+- New VM always starts from a profile or a template, then adjusts the hardware for that VM:
+  CreateVmFromProfileRequest.compute (each field set replaces the profile's) and switch (API 1.32.0). Errors for these
+  use the request's paths (compute.processors, switch).
+- The built-in install profiles become templates (MachineProfileTemplates, GET /machine-profile-templates, create
+  with POST /machine-profile-templates/{templateId}/vms). They are offered when making a new profile and in New VM,
+  not listed with the User's profiles.
+- Client on hosts at 1.32.0: one Profiles tab (machine profiles); the Install profiles and Setup profiles tabs,
+  Fill from, and Convert go away; capture saves a machine profile; New VM lists profiles and templates. Older hosts
+  keep today's tabs and dialogs.
