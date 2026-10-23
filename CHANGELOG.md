@@ -29,11 +29,18 @@ note anything that needs action, such as updating the host, a new elevation requ
   Remove all safe; capabilities and optional features moved under a fold. Pasting a store link into the extension
   filter looks the extension up.
 
+- Machine profiles: a new Machine profiles tab (hosts with API 1.27.0) for profiles that describe a whole VM in one
+  YAML file. The editor has a section for each part of the wireframe machine, grouped as Identity (account, display),
+  Hardware (firmware, compute, GPU, network), Care (backups), and Software (install, remove, tweaks, browser), and
+  the model follows the settings: the TPM LED blinks with the TPM on, the GPU fans spin in Performance mode, and the
+  backup LED pulses on a schedule. Settings left "as it is" keep a VM's current value. The account section can be
+  filled from an unattended install profile and the software sections from a setup profile, and Convert on a setup
+  profile makes a machine profile from it. Creating VMs from machine profiles comes next.
+
 ### Changed
-- API 1.27.0: machine profiles on the host. A machine profile describes a whole VM in one YAML file (account,
-  display, firmware, compute, GPU share, network, backups, and software), with the same rules as unattended install
-  and setup profiles for the parts they share. The host stores, imports, and exports them under /machine-profiles;
-  the editor and creating VMs from them follow.
+- API 1.27.0: machine profiles on the host (/machine-profiles: list, create, import, export, update, delete, and
+  the JSON Schema). The account section follows the unattended install profile rules and the software sections the
+  setup profile rules.
 - API 1.26.0: the package catalog has a description per package, the setup profile catalog lists the rated built-in
   apps (appx) and the registry values of each tweak. Update the host for package descriptions, built-in apps without
   a VM, and tweak details; with an older host the editor works as before without them.

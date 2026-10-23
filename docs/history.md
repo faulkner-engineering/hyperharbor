@@ -331,6 +331,15 @@ verified, and what was found along the way. User-facing changes per release are 
    BrowserSection replace PackagePicker, AppxChecklist, and ExtensionPicker. Verified in a browser preview with the
    repository catalogs; not yet against a live host.
    The document format, API, migration, and apply design for 26b to 26d: [machine-profiles.md](machine-profiles.md).
+   Done: 26b machine profiles (2026-10-23; API 1.27.0). Host: MachineProfile contracts, MachineProfileYaml (machine
+   sections through the contract JSON with unknown keys refused; software sections through ProfileYamlWriter.AppendBody
+   and the reader's helpers), MachineProfileValidator (UnattendProfileStore.Normalize for account, ProfileValidator for
+   software, hardware rules), MachineProfileStore, /machine-profiles routes. Client: the Tauri profile commands take a
+   kind (setup or machine); ProfileWorkspace (the terminal shell), SoftwareDraft and SoftwarePanel (shared software
+   sections), MachineDraft, the seven section components, MachineProfiles (list), Convert on setup profiles.
+   Verified with unit and API tests and a browser preview of every section; not yet against a live host. Not done in
+   26b: wallpaper image upload, retention and conditions overrides for backups (the target's apply), and anything
+   that applies a machine profile (26c, 26d).
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.

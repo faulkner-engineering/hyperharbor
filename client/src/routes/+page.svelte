@@ -24,6 +24,7 @@
     HostLogsApiVersion,
     downloadHostLogs,
     SetupProfilesApiVersion,
+    MachineProfilesApiVersion,
     ApplySetupProfileApiVersion,
     BackupApiVersion,
     GameAwareApiVersion,
@@ -61,6 +62,7 @@
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
   import InstallProfiles from "$lib/components/InstallProfiles.svelte";
   import SetupProfiles from "$lib/components/SetupProfiles.svelte";
+  import MachineProfiles from "$lib/components/MachineProfiles.svelte";
   import CaptureReview from "$lib/components/CaptureReview.svelte";
   import ApplySetupProfileDialog from "$lib/components/ApplySetupProfileDialog.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
@@ -99,7 +101,7 @@
   let downloadingLogs = $state(false);
   /** The host's Remote Desktop state while asking whether to turn it on, and the answer's resolver. */
   let enablingRemoteDesktop = $state<{ state: HostRemoteDesktop; answer: (confirmed: boolean) => void } | null>(null);
-  let view = $state<"vms" | "isos" | "profiles" | "setup">("vms");
+  let view = $state<"vms" | "isos" | "profiles" | "machine" | "setup">("vms");
   let capturing = $state<Vm | null>(null);
   let applyingProfile = $state<Vm | null>(null);
   let showBackups = $state(false);
@@ -117,6 +119,7 @@
   const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
   const hostHasLogs = $derived(selectedHost ? hostSupports(selectedHost, HostLogsApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
+  const hostHasMachineProfiles = $derived(selectedHost ? hostSupports(selectedHost, MachineProfilesApiVersion) : false);
   const hostHasGameAware = $derived(selectedHost ? hostSupports(selectedHost, GameAwareApiVersion) : false);
   const hostHasTailscale = $derived(selectedHost ? hostSupports(selectedHost, TailscaleApiVersion) : false);
   const hostHasBackups = $derived(selectedHost ? hostSupports(selectedHost, BackupApiVersion) : false);
@@ -574,6 +577,15 @@
             class:active={view === "profiles"}
             onclick={() => (view = "profiles")}>Install profiles</button
           >
+          {#if hostHasMachineProfiles}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "machine"}
+              class:active={view === "machine"}
+              onclick={() => (view = "machine")}>Machine profiles</button
+            >
+          {/if}
           {#if hostHasSetupProfiles}
             <button
               type="button"
@@ -592,9 +604,13 @@
           {#key selectedHost.key}
             <InstallProfiles host={selectedHost} />
           {/key}
+        {:else if view === "machine"}
+          {#key selectedHost.key}
+            <MachineProfiles host={selectedHost} vms={runningWindows} />
+          {/key}
         {:else if view === "setup"}
           {#key selectedHost.key}
-            <SetupProfiles host={selectedHost} vms={runningWindows} />
+            <SetupProfiles host={selectedHost} vms={runningWindows} canConvert={hostHasMachineProfiles} />
           {/key}
         {:else}
           <VmList

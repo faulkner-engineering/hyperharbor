@@ -113,8 +113,15 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   (webglAvailable, FrameRateWatch, reduced-motion query), assets.ts (loaders, parseExplodedSvg, palettes from the
   --hh-crt-* tokens in app.css), scene.ts (three r170, imported on demand: EdgesGeometry lines, UnrealBloomPass, CRT
   ShaderPass). UI: MachineView.svelte (3D or the still; motion setting; bindable status) and MachineStill.svelte
-  (exploded.svg with the same highlights). SetupProfileEditor.svelte lays out the section list, the machine with its
-  HUD, and the form panel in Dialog's terminal variant. Each section is a component (InstallSection, RemoveSection,
+  (exploded.svg with the same highlights). ProfileWorkspace.svelte is the editors' shell (section list with groups,
+  the machine with its HUD and DetailCard, the form panel, palette and Motion, Save) in Dialog's terminal variant;
+  SetupProfileEditor and MachineProfileEditor fill it. lib/softwareDraft.svelte.ts (SoftwareDraft) and
+  SoftwarePanel.svelte are the software sections both editors share; lib/machineDraft.svelte.ts (MachineDraft) holds
+  the machine sections, the reactions (ControlState), and the HUD text; AccountSection, DisplaySection,
+  FirmwareSection, ComputeSection, GpuSection, NetworkSection, and BackupSection edit them, with Choice.svelte for
+  "as it is / on / off" choices. MachineProfiles.svelte is the list tab. Host side: Host.Core/Profiles
+  MachineProfileYaml, MachineProfileValidator, MachineProfileStore; Host.Service/Api/MachineProfileEndpoints.
+  Each software section is a component (InstallSection, RemoveSection,
   TweaksSection, BrowserSection) built on CatalogBrowser.svelte (filter and category chips pinned in the panel's one
   scroll area), ProfileChips.svelte (what the profile holds), and DetailCard.svelte (the selected entry's details on
   the machine stage); lib/catalogBrowser.ts has the filtering and the Detail type.
