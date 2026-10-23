@@ -75,6 +75,9 @@ note anything that needs action, such as updating the host, a new elevation requ
   copies them here. Each item shows which hosts have a copy and whether it still matches: In sync, Library newer
   (Send), Changed on host (Update library), Both changed (keep either), or Missing on host (Send again). Saving an ISO
   from a host needs a host with API 1.33.0; a stopped download resumes where it stopped.
+  + New profile and Edit on the Library page open the profile editor and save into the library; the editor uses a
+  paired host's package, setting, and network lists (Catalogs from, when there are several), and the host checks the
+  profile when it is sent.
 
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
@@ -103,6 +106,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   a VM, and tweak details; with an older host the editor works as before without them.
 
 ### Fixed
+- Buttons and drop-downs that had no style of their own (the Library page, the template list on the Profiles tab)
+  no longer show the plain Windows look; every button, list, and field now shares one base style.
 - Editing a saved machine profile with an Account section could fail to open the editor.
 
 ## [0.2.0] - 2026-10-22 (API 1.25.0)

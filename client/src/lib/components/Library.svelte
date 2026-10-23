@@ -5,6 +5,7 @@
     addLibraryIso,
     cancelLibraryTask,
     errorMessage,
+    getLibraryProfile,
     hostSupports,
     isClientError,
     libraryStatus,
@@ -17,6 +18,7 @@
     removeLibraryItem,
     renameLibraryIso,
     saveHostProfileToLibrary,
+    saveLibraryProfile,
     sendLibraryIso,
     sendLibraryProfile,
     unlinkLibraryItem,
@@ -25,10 +27,12 @@
     type LibraryIso,
     type LibraryProfile,
     type LinkState,
+    type MachineProfile,
   } from "$lib/api/client";
   import { ElevationCancelled, ensureElevated, withElevation } from "$lib/lifecycle.svelte";
   import { toasts } from "$lib/toasts.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import MachineProfileEditor from "./MachineProfileEditor.svelte";
 
   interface Props {
     /** Every known host; items are sent to the paired ones. */
@@ -50,6 +54,12 @@
   let confirmRemove = $state<{ id: string; name: string } | null>(null);
 
   const pairedHosts = $derived(hosts.filter((host) => host.paired && host.hostId));
+  /** Hosts whose catalogs (packages, settings, switches, images) the editor can use. */
+  const catalogHosts = $derived(pairedHosts.filter((host) => hostSupports(host, MachineProfilesApiVersion)));
+  let catalogKey = $state<string | null>(null);
+  const catalogHost = $derived(catalogHosts.find((host) => host.key === catalogKey) ?? catalogHosts[0] ?? null);
+  /** The profile open in the editor: a library item, or a new one (null ID). */
+  let editing = $state<{ itemId: string | null; initial: MachineProfile | null } | null>(null);
   const percent = $derived(task && task.total > 0 ? Math.floor((task.done / task.total) * 100) : 0);
 
   const stateKey = (itemId: string, hostId: string) => `${itemId}/${hostId}`;
@@ -233,6 +243,20 @@
     }
   }
 
+  async function edit(profile: LibraryProfile) {
+    try {
+      editing = { itemId: profile.id, initial: await getLibraryProfile(profile.id) };
+    } catch (e) {
+      toasts.error(errorMessage(e));
+    }
+  }
+
+  async function saveEdited(profile: MachineProfile) {
+    const saved = await saveLibraryProfile(catalogHost?.key ?? null, editing?.itemId ?? null, profile);
+    toasts.show(`Saved ${saved.name} to the library.`);
+    await refresh();
+  }
+
   async function cancelTask() {
     if (!task) return;
     task.cancelling = true;
@@ -351,9 +375,25 @@
 
     <div class="section-head">
       <h3>Machine profiles</h3>
+      {#if catalogHost}
+        <div class="buttons">
+          {#if catalogHosts.length > 1}
+            <label class="catalogs">
+              Catalogs from
+              <select value={catalogHost.key} onchange={(event) => (catalogKey = event.currentTarget.value)}>
+                {#each catalogHosts as host (host.key)}<option value={host.key}>{host.displayName}</option>{/each}
+              </select>
+            </label>
+          {/if}
+          <button type="button" class="primary" onclick={() => (editing = { itemId: null, initial: null })}>+ New profile</button>
+        </div>
+      {/if}
     </div>
+    {#if !catalogHost}
+      <p class="muted">Pair a host to make profiles here: the editor uses its package, setting, and network lists.</p>
+    {/if}
     {#if library.profiles.length === 0}
-      <p class="muted">No profiles yet. Use Save to library on a host's Profiles tab.</p>
+      <p class="muted">No profiles yet. Use + New profile, or Save to library on a host's Profiles tab.</p>
     {:else}
       <table>
         <thead>
@@ -405,6 +445,9 @@
                 </ul>
               </td>
               <td class="actions">
+                {#if catalogHost}
+                  <button type="button" disabled={busy !== null} onclick={() => edit(profile)}>Edit</button>
+                {/if}
                 {#if targets(profile.links, true).length > 0}
                   <select aria-label="Send {profile.name} to a host" value="" disabled={busy !== null}
                     onchange={(event) => chooseTarget(event, (host) => sendProfile(profile, host))}>
@@ -423,6 +466,17 @@
     {/if}
   {/if}
 </section>
+
+{#if editing && catalogHost}
+  <MachineProfileEditor
+    host={catalogHost}
+    vms={[]}
+    profileId={null}
+    initial={editing.initial}
+    onsave={saveEdited}
+    onclose={() => (editing = null)}
+  />
+{/if}
 
 {#if confirmRemove}
   <ConfirmDialog
@@ -459,6 +513,24 @@
   .muted {
     margin: 0;
     color: var(--muted);
+  }
+
+  .buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .catalogs {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .actions > * + * {
+    margin-left: 0.35rem;
   }
 
   .error {

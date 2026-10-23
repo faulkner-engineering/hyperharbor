@@ -863,6 +863,15 @@ export const saveHostProfileToLibrary = (key: string, profileId: string) =>
 export const sendLibraryProfile = (key: string, itemId: string, asNew = false) =>
   invoke<LibraryProfile>("send_library_profile", { key, itemId, asNew });
 
+export const getLibraryProfile = (itemId: string) => invoke<MachineProfile>("get_library_profile", { itemId });
+
+/**
+ * Saves an edited profile into the library (a new item when `itemId` is null). `key` is the host whose catalogs
+ * the editor used; a wallpaper image the library lacks is fetched from it.
+ */
+export const saveLibraryProfile = (key: string | null, itemId: string | null, profile: MachineProfile) =>
+  invoke<LibraryProfile>("save_library_profile", { key, itemId, profile });
+
 export const libraryStatus = (key: string) => invoke<LinkStatus[]>("library_status", { key });
 
 export const cancelLibraryTask = (taskId: string) => invoke<void>("cancel_library_task", { taskId });

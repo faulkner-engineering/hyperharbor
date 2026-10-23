@@ -425,7 +425,11 @@ verified, and what was found along the way. User-facing changes per release are 
    Verified: unit tests for the store, the statuses, and resume against a test server; e2e_loopback (scripts\e2e.ps1)
    downloads a 3 MB image from the real service with 1 MB already on disk and gets the whole file back (Kestrel's
    range processing), and a missing wallpaper image is 404. The Library page itself was not yet driven by hand.
-   Not done: editing a profile in the library without a host (the editor needs the host's schema and catalogs),
+   Library profiles are made and edited in MachineProfileEditor with an onsave prop: a paired host supplies the catalogs
+   (Catalogs from), save_library_profile stores the JSON and takes a wallpaper image the library lacks from that host;
+   nothing validates it until a host does on send. app.css got :where() base styles for buttons and form controls, so a
+   component without its own button rules no longer shows the browser's default look.
+   Not done: editing a profile in the library with no paired host at all (the editor needs a host's catalogs),
    choosing another library folder, cloud backup.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:

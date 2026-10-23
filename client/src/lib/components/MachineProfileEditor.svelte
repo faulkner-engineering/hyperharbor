@@ -39,9 +39,14 @@
     /** Running Windows VMs, for reading provisioned packages. */
     vms: Vm[];
     onclose: (saved: StoredMachineProfile | null) => void;
+    /**
+     * Saves somewhere other than the host (the library on this device). The host then only supplies the catalogs,
+     * and onclose gets null after a save.
+     */
+    onsave?: (profile: MachineProfile) => Promise<void>;
   }
 
-  let { host, profileId, initial, vms, onclose }: Props = $props();
+  let { host, profileId, initial, vms, onclose, onsave }: Props = $props();
 
   const start = untrack(() => initial);
   const draft = new MachineDraft(start ?? undefined);
@@ -78,7 +83,12 @@
     error = null;
     issues = [];
     try {
-      onclose(await withElevation(host.key, () => saveMachineProfile(host.key, profileId, draft.toProfile())));
+      if (onsave) {
+        await onsave(draft.toProfile());
+        onclose(null);
+      } else {
+        onclose(await withElevation(host.key, () => saveMachineProfile(host.key, profileId, draft.toProfile())));
+      }
     } catch (e) {
       if (e instanceof ElevationCancelled) return;
       error = errorMessage(e);
@@ -90,7 +100,7 @@
 </script>
 
 <ProfileWorkspace
-  title={profileId ? `Edit ${start?.name}` : "New machine profile"}
+  title={start?.name && (profileId || onsave) ? `Edit ${start.name}` : "New machine profile"}
   sections={draft.sections()}
   bind:tab
   bind:detail

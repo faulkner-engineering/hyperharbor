@@ -1567,6 +1567,49 @@ async fn send_library_profile(
     )
 }
 
+/// A library profile as MachineProfile JSON, for the editor.
+#[tauri::command]
+fn get_library_profile(
+    state: State<'_, AppState>,
+    item_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    state.library.profile_document(&item_id)
+}
+
+/// Saves a profile made or changed in the editor into the library, as a new item or over `item_id`. A wallpaper
+/// image the library does not have yet comes from the host whose catalogs the editor used (`key`, API 1.33.0).
+/// The host checks the profile when it is sent.
+#[tauri::command]
+async fn save_library_profile(
+    state: State<'_, AppState>,
+    key: Option<String>,
+    item_id: Option<String>,
+    profile: serde_json::Value,
+) -> Result<library::LibraryProfile, ClientError> {
+    let mut images = Vec::new();
+    if let Some(image) = library::wallpaper_image(&profile) {
+        let content = match state.library.image_bytes(&image) {
+            Some(content) => content,
+            None => {
+                let key = key.ok_or_else(|| {
+                    ClientError::InvalidRequest(format!(
+                        "the library has no image named \"{image}\""
+                    ))
+                })?;
+                let (host, paired) = state.paired_host(&key)?;
+                state
+                    .api
+                    .download_profile_image(&host, &paired, &image)
+                    .await?
+            }
+        };
+        images.push((image, content));
+    }
+    state
+        .library
+        .save_profile(item_id.as_deref(), &profile, &images)
+}
+
 /// How each library item's copy on this host compares with the library.
 #[tauri::command]
 async fn library_status(
@@ -2947,6 +2990,8 @@ pub fn run() {
             save_host_profile_to_library,
             send_library_profile,
             library_status,
+            get_library_profile,
+            save_library_profile,
             cancel_library_task,
             rename_iso,
             delete_iso,

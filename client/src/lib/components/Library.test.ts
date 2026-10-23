@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 
 const invoke = vi.hoisted(() => vi.fn());
@@ -59,8 +59,17 @@ beforeEach(() => {
     if (command === "get_elevation") return { active: true, configured: true, expiresAt: null };
     if (command === "send_library_iso") return library.isos[0];
     if (command === "save_host_profile_to_library") return library.profiles[0];
+    if (command === "get_library_profile") return { name: "Dev box", os: "windows" };
+    if (command === "save_library_profile") return library.profiles[0];
+    if (command === "get_host_resource") return [];
+    if (command === "list_backup_targets") return [];
     throw new Error(`unexpected ${command}`);
   });
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '<svg xmlns="http://www.w3.org/2000/svg"></svg>' })));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("Library", () => {
@@ -99,6 +108,23 @@ describe("Library", () => {
     const picker = await screen.findByRole("combobox", { name: "Send Dev box to a host" });
     const options = [...picker.querySelectorAll("option")].map((option) => option.textContent);
     expect(options).toEqual(["Send to…", "Den PC"]);
+  });
+
+  it("makes a new profile in the library with a host's catalogs", async () => {
+    render(Library, { hosts });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "+ New profile" }));
+    expect(await screen.findByText("New machine profile")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Catalogs from" })).toBeTruthy();
+  });
+
+  it("opens a library profile in the editor", async () => {
+    render(Library, { hosts });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+
+    expect(await screen.findByText("Edit Dev box")).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("get_library_profile", { itemId: "p-1" });
   });
 
   it("shows a linked host it cannot reach", async () => {

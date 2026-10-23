@@ -280,6 +280,11 @@ impl LibraryStore {
         self.save(&manifest)
     }
 
+    /// A wallpaper image already in the library, if any.
+    pub fn image_bytes(&self, name: &str) -> Option<Vec<u8>> {
+        std::fs::read(self.image_file(name).ok()?).ok()
+    }
+
     /// The profile as MachineProfile JSON.
     pub fn profile_document(&self, id: &str) -> Result<serde_json::Value, ClientError> {
         let profile = self.profile(id)?;
