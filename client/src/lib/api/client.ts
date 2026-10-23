@@ -42,6 +42,9 @@ export type RegistryTweak = components["schemas"]["RegistryTweak"];
 export type ProfileBrowser = components["schemas"]["ProfileBrowser"];
 export type SetupProfileSummary = components["schemas"]["SetupProfileSummary"];
 export type StoredSetupProfile = components["schemas"]["StoredSetupProfile"];
+export type MachineProfile = components["schemas"]["MachineProfile"];
+export type MachineProfileSummary = components["schemas"]["MachineProfileSummary"];
+export type StoredMachineProfile = components["schemas"]["StoredMachineProfile"];
 export type SetupProfileCatalog = components["schemas"]["SetupProfileCatalog"];
 export type VmAppxInventory = components["schemas"]["VmAppxInventory"];
 export type AppxPackage = components["schemas"]["AppxPackage"];
@@ -623,22 +626,48 @@ export const listSetupProfiles = (key: string) =>
   invoke<SetupProfileSummary[]>("get_host_resource", { key, resource: "setupProfiles" });
 
 export const getSetupProfile = (key: string, profileId: string) =>
-  invoke<StoredSetupProfile>("get_setup_profile", { key, profileId });
+  invoke<StoredSetupProfile>("get_profile", { key, kind: "setup", profileId });
 
 /** Creates a profile (null ID) or replaces one. Needs elevation: run it inside withElevation. */
 export const saveSetupProfile = (key: string, profileId: string | null, profile: SetupProfile) =>
-  invoke<StoredSetupProfile>("save_setup_profile", { key, profileId, profile });
+  invoke<StoredSetupProfile>("save_profile", { key, kind: "setup", profileId, profile });
 
 /** Needs elevation: run it inside withElevation. */
 export const deleteSetupProfile = (key: string, profileId: string) =>
-  invoke<void>("delete_setup_profile", { key, profileId });
+  invoke<void>("delete_profile", { key, kind: "setup", profileId });
 
 /** Saves the profile's YAML file where the user chooses; null when cancelled. */
 export const exportSetupProfile = (key: string, profileId: string) =>
-  invoke<string | null>("export_setup_profile", { key, profileId });
+  invoke<string | null>("export_profile", { key, kind: "setup", profileId });
 
 /** Picks a YAML file and saves it as a new profile; null when cancelled. Needs elevation. */
-export const importSetupProfile = (key: string) => invoke<StoredSetupProfile | null>("import_setup_profile", { key });
+export const importSetupProfile = (key: string) => invoke<StoredSetupProfile | null>("import_profile", { key, kind: "setup" });
+
+// Machine profiles (API 1.27.0): a whole VM in one YAML file on the host (docs/machine-profiles.md).
+
+/** The API version that added machine profiles. */
+export const MachineProfilesApiVersion = "1.27.0";
+
+export const listMachineProfiles = (key: string) =>
+  invoke<MachineProfileSummary[]>("get_host_resource", { key, resource: "machineProfiles" });
+
+export const getMachineProfile = (key: string, profileId: string) =>
+  invoke<StoredMachineProfile>("get_profile", { key, kind: "machine", profileId });
+
+/** Creates a profile (null ID) or replaces one. Needs elevation: run it inside withElevation. */
+export const saveMachineProfile = (key: string, profileId: string | null, profile: MachineProfile) =>
+  invoke<StoredMachineProfile>("save_profile", { key, kind: "machine", profileId, profile });
+
+/** Needs elevation: run it inside withElevation. */
+export const deleteMachineProfile = (key: string, profileId: string) =>
+  invoke<void>("delete_profile", { key, kind: "machine", profileId });
+
+/** Saves the profile's YAML file where the user chooses; null when cancelled. */
+export const exportMachineProfile = (key: string, profileId: string) =>
+  invoke<string | null>("export_profile", { key, kind: "machine", profileId });
+
+/** Picks a YAML file and saves it as a new machine profile; null when cancelled. Needs elevation. */
+export const importMachineProfile = (key: string) => invoke<StoredMachineProfile | null>("import_profile", { key, kind: "machine" });
 
 export const getSetupProfileCatalog = (key: string) =>
   invoke<SetupProfileCatalog>("get_host_resource", { key, resource: "setupProfileCatalog" });

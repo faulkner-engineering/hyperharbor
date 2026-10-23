@@ -66,7 +66,7 @@ describe("CaptureReview", () => {
   it("shows three columns and saves what stays ticked", async () => {
     answer({
       capture_setup_profile: () => draft,
-      save_setup_profile: (args) => ({ id: "dev-box-setup", updatedAt: "2026-10-05T12:00:00Z", profile: args.profile }),
+      save_profile: (args) => ({ id: "dev-box-setup", updatedAt: "2026-10-05T12:00:00Z", profile: args.profile }),
     });
     const onclose = vi.fn();
     render(CaptureReview, { host, vm, onclose });
@@ -76,7 +76,7 @@ describe("CaptureReview", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
 
     await vi.waitFor(() => expect(onclose).toHaveBeenCalled());
-    const [saved] = calls("save_setup_profile") as { profileId: string | null; profile: Record<string, unknown> }[];
+    const [saved] = calls("save_profile") as { profileId: string | null; profile: Record<string, unknown> }[];
     expect(saved.profileId).toBeNull();
     expect(saved.profile).toMatchObject({
       name: "Dev Box setup",
@@ -104,7 +104,7 @@ describe("SetupProfiles", () => {
   it("lists profiles, shows unreadable files, and exports one", async () => {
     answer({
       "resource:setupProfiles": () => [summary, { ...summary, id: "broken", name: "broken", error: "Line 3: oops" }],
-      export_setup_profile: () => "C:\\Users\\me\\dev-workstation.yaml",
+      export_profile: () => "C:\\Users\\me\\dev-workstation.yaml",
     });
     render(SetupProfiles, { host, vms: [] });
 
@@ -113,14 +113,14 @@ describe("SetupProfiles", () => {
     expect(screen.getByText(/does not read: Line 3: oops/)).toBeTruthy();
 
     await fireEvent.click(within(row).getByRole("button", { name: "Export…" }));
-    await vi.waitFor(() => expect(calls("export_setup_profile")).toEqual([{ key: host.key, profileId: "dev-workstation" }]));
+    await vi.waitFor(() => expect(calls("export_profile")).toEqual([{ key: host.key, kind: "setup", profileId: "dev-workstation" }]));
   });
 
   it("imports a file and lists it", async () => {
     let imported = false;
     answer({
       "resource:setupProfiles": () => (imported ? [summary] : []),
-      import_setup_profile: () => {
+      import_profile: () => {
         imported = true;
         return { id: "dev-workstation", updatedAt: "2026-10-05T12:00:00Z", profile: { name: "Dev workstation" } };
       },
