@@ -66,6 +66,7 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { elevation, ElevationCancelled, pendingElevationHost, withElevation } from "$lib/lifecycle.svelte";
   import IsoLibrary from "$lib/components/IsoLibrary.svelte";
+  import Library from "$lib/components/Library.svelte";
   import InstallProfiles from "$lib/components/InstallProfiles.svelte";
   import SetupProfiles from "$lib/components/SetupProfiles.svelte";
   import MachineProfiles from "$lib/components/MachineProfiles.svelte";
@@ -111,6 +112,8 @@
   /** The host's Remote Desktop state while asking whether to turn it on, and the answer's resolver. */
   let enablingRemoteDesktop = $state<{ state: HostRemoteDesktop; answer: (confirmed: boolean) => void } | null>(null);
   let view = $state<"vms" | "isos" | "profiles" | "machine" | "setup">("vms");
+  /** The library on this device fills the main pane instead of the selected host. */
+  let showLibrary = $state(false);
   let capturing = $state<Vm | null>(null);
   let applyingProfile = $state<Vm | null>(null);
   let applyingMachine = $state<Vm | null>(null);
@@ -460,13 +463,29 @@
 <div class="app">
   <aside>
     <h1><BrandMark size="1.4em" decorative />HyperHarbor</h1>
-    <HostList {hosts} {selectedKey} onselect={selectHost} />
+    <button type="button" class="library" class:selected={showLibrary} aria-pressed={showLibrary} onclick={() => (showLibrary = true)}>
+      <span class="library-name">Library</span>
+      <span class="library-meta">ISOs and profiles on this device</span>
+    </button>
+    <HostList
+      {hosts}
+      selectedKey={showLibrary ? null : selectedKey}
+      onselect={(key) => {
+        showLibrary = false;
+        selectHost(key);
+      }}
+    />
     <ClientUpdate />
     <RdpTrust />
   </aside>
 
   <main>
-    {#if selectedHost === null}
+    {#if showLibrary}
+      <Library {hosts} />
+      {#if elevationHost}
+        <ElevationDialog host={elevationHost} />
+      {/if}
+    {:else if selectedHost === null}
       <p class="placeholder">Select a host to see its virtual machines.</p>
     {:else}
       <header>
@@ -867,6 +886,37 @@
   main {
     padding: 1.25rem 1.5rem;
     overflow-y: auto;
+  }
+
+  .library {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .library:hover {
+    background: var(--hover);
+  }
+
+  .library.selected {
+    background: var(--selected);
+  }
+
+  .library-name {
+    font-weight: 600;
+  }
+
+  .library-meta {
+    font-size: 0.8rem;
+    color: var(--muted);
   }
 
   header {

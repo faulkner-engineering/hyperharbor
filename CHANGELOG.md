@@ -70,6 +70,12 @@ note anything that needs action, such as updating the host, a new elevation requ
   template. Capture setup profile now saves a profile on the Profiles tab, and Apply machine profile replaces Apply
   setup profile. With an older host, the client shows the earlier tabs and dialogs.
 
+- A Library on this device (sidebar, above the hosts) keeps installation images and machine profiles, with their
+  wallpaper images, and sends them to any paired host. Save to library on a host's ISO library and Profiles tabs
+  copies them here. Each item shows which hosts have a copy and whether it still matches: In sync, Library newer
+  (Send), Changed on host (Update library), Both changed (keep either), or Missing on host (Send again). Saving an ISO
+  from a host needs a host with API 1.33.0; a stopped download resumes where it stopped.
+
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
   (RUSTSEC-2026-0385).

@@ -407,6 +407,23 @@ verified, and what was found along the way. User-facing changes per release are 
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.
+27. Library on the client (2026-10-23; API 1.33.0; branch feature/local-library, stacked on 26). ISO images and
+   machine profiles kept on the client device and sent to any paired host. The user chose:
+   - Stored on the client device, in one folder (%LOCALAPPDATA%\com.hyperharbor.client\library) with a manifest, so a later paid tier can
+     back it up to the cloud as a whole.
+   - Copy with sync: each item records which hosts have a copy (by host ID) and what was sent; the Library page shows
+     each copy as In sync, Library newer, Changed on host, Both changed, Missing on host, or Not reachable.
+   - Both ways: send to a host, or save from a host (Save to library on the host's ISO library and Profiles tabs).
+   - A separate Library page in the sidebar, not tied to the selected host.
+   Host: GET /isos/{name}/content (PhysicalFile with range processing, so a download resumes) and
+   GET /profile-images/{name}/content. Client: library.rs (LibraryStore: library.json written through a temporary
+   file, isos/, profiles/<id>.json as MachineProfile JSON, images/; the hash is SHA-256 of canonical JSON plus each
+   image; statuses() compares links with the host's lists, timestamps as instants because the host writes "Z" in one
+   place and "+00:00" in another), ApiClient download_iso (fixed .partial name, Range from its length, 416 starts
+   over) and download_profile_image, and the commands in lib.rs. A profile goes to a host as its wallpaper images
+   (always uploaded) and then a create or a replace of the linked profile (404 on replace creates it again).
+   Not done: editing a profile in the library without a host (the editor needs the host's schema and catalogs),
+   choosing another library folder, cloud backup.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

@@ -105,7 +105,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
   identity.rs (key in Credential Manager), paired.rs, rdp.rs (mstsc launch), console.rs (loopback listener and
-  tunnels for the VM console), camera/ (see below); client/src: SvelteKit SPA. Lifecycle UI:
+  tunnels for the VM console), library.rs (the library on this device: ISOs and machine profiles with the hosts that
+  have a copy; UI in lib/components/Library.svelte), camera/ (see below); client/src: SvelteKit SPA. Lifecycle UI:
   lib/lifecycle.svelte.ts (elevation prompt, job polling) and lib/components/*Dialog.svelte on a shared Dialog
 - Machine view (the setup profile editor's left pane; each tab is a section of targets.json): client/src/lib/machine:
   camera.ts (targetFor, rigFor, CameraRig: 900 ms eased fly, tilted rest orbit slowing with distance, cuts under reduced
