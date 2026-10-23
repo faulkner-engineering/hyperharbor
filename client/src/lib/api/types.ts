@@ -286,6 +286,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/isos/{name}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+                name: components["parameters"]["IsoName"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Download an image from the ISO library.
+         * @description Since 1.33.0. The body is the image file. The host honors a single `Range` (answering 206 with
+         *     Content-Range), so a client can resume an interrupted download. Clients use it to save an image into
+         *     their local library.
+         */
+        get: operations["downloadIso"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/isos/{name}": {
         parameters: {
             query?: never;
@@ -693,6 +718,30 @@ export interface paths {
          *     profile copies it into the guest (C:\Users\Public\Pictures\HyperHarbor) and sets it as the wallpaper.
          */
         get: operations["listProfileImages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profile-images/{name}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A wallpaper image's file name, ending in .jpg, .jpeg, .png, or .bmp (URL-encoded). */
+                name: components["parameters"]["ProfileImageName"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Download one of the calling User's wallpaper images.
+         * @description Since 1.33.0. The body is the image file. Clients use it to save a profile with its wallpaper into their
+         *     local library.
+         */
+        get: operations["downloadProfileImage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4978,6 +5027,53 @@ export interface operations {
             503: components["responses"]["HyperVUnavailable"];
         };
     };
+    downloadIso: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description A single byte range, for example `bytes=1048576-`. */
+                Range?: string;
+            };
+            path: {
+                /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
+                name: components["parameters"]["IsoName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The whole image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description The requested part of the image. */
+            206: {
+                headers: {
+                    /** @description The part sent and the full size. */
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The range is outside the image. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     uploadIso: {
         parameters: {
             query?: never;
@@ -5724,6 +5820,31 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    downloadProfileImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A wallpaper image's file name, ending in .jpg, .jpeg, .png, or .bmp (URL-encoded). */
+                name: components["parameters"]["ProfileImageName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     uploadProfileImage: {

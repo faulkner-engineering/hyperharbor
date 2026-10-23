@@ -46,6 +46,7 @@ public static class MachineProfileEndpoints
             .RequireElevation();
         var images = endpoints.MapGroup(ImagesPath);
         images.MapGet("/", ListImages).WithName("listProfileImages");
+        images.MapGet("/{name}/content", DownloadImage).WithName("downloadProfileImage");
         images.MapPut("/{name}", UploadImageAsync).WithName("uploadProfileImage")
             .Audited<string>(name => $"name={name}")
             .RequireElevation();
@@ -143,6 +144,11 @@ public static class MachineProfileEndpoints
 
     private static Ok<IReadOnlyList<ProfileImage>> ListImages(ProfileImageStore images, HttpContext context) =>
         TypedResults.Ok(images.List(context.User.UserId()));
+
+    private static PhysicalFileHttpResult DownloadImage(string name, ProfileImageStore images, HttpContext context) =>
+        TypedResults.PhysicalFile(
+            images.PathOf(context.User.UserId(), name) ?? throw new ProfileImageNotFoundException(name),
+            "application/octet-stream");
 
     /// <summary>The body is the image file itself.</summary>
     private static async Task<Ok<ProfileImage>> UploadImageAsync(string name, HttpContext context, ProfileImageStore images, CancellationToken cancellationToken)

@@ -79,6 +79,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   profile becomes a machine profile with its account settings, a setup profile one with its software. The originals
   stay for older clients. A profile whose file no longer reads is skipped and listed in
   machine-profiles/converted.json in the host's data folder.
+- API 1.33.0: GET /isos/{name}/content downloads an image from the ISO library (a Range header resumes it) and
+  GET /profile-images/{name}/content downloads a wallpaper image, so a client can keep them in its own library.
 - API 1.32.0: GET /machine-profile-templates (the built-in install profiles as machine profile templates) and
   POST /machine-profile-templates/{templateId}/vms; CreateVmFromProfileRequest takes compute and switch for that VM.
 - API 1.31.0: /profile-images (list, upload, delete) keeps each User's wallpaper images; a machine profile's

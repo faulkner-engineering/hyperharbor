@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.32.0
+  version: 1.33.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -411,6 +411,53 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/HyperVUnavailable"
+
+  /isos/{name}/content:
+    parameters:
+      - $ref: "#/components/parameters/IsoName"
+    get:
+      tags: [Host]
+      operationId: downloadIso
+      summary: Download an image from the ISO library.
+      description: |
+        Since 1.33.0. The body is the image file. The host honors a single `Range` (answering 206 with
+        Content-Range), so a client can resume an interrupted download. Clients use it to save an image into
+        their local library.
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          description: A single byte range, for example `bytes=1048576-`.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The whole image.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "206":
+          description: The requested part of the image.
+          headers:
+            Content-Range:
+              description: The part sent and the full size.
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "416":
+          description: The range is outside the image.
 
   /isos/{name}:
     parameters:
@@ -1121,6 +1168,29 @@ paths:
                   $ref: "#/components/schemas/ProfileImage"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /profile-images/{name}/content:
+    parameters:
+      - $ref: "#/components/parameters/ProfileImageName"
+    get:
+      tags: [Profiles]
+      operationId: downloadProfileImage
+      summary: Download one of the calling User's wallpaper images.
+      description: |
+        Since 1.33.0. The body is the image file. Clients use it to save a profile with its wallpaper into their
+        local library.
+      responses:
+        "200":
+          description: The image file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /profile-images/{name}:
     parameters:
