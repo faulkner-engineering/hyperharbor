@@ -297,9 +297,13 @@ verified, and what was found along the way. User-facing changes per release are 
    (PowerShellTpmCapabilityProbe) runs detached from its callers: the client's 10 s request timeout canceled it halfway,
    leaving its VM running and nothing cached; the client now allows the offer 3 minutes.
 
-25. Profile builder machine view (2026-10-22; client only, no API change). The setup profile editor shows the wireframe
-   machine from models/machine left of its form; the tabs drive both (Install packages, Remove debloat, Browser browser,
-   Tweaks overview). Only perItem has a control there (one drive per package); blink, pulse, and spin follow
+25. Profile builder machine view (2026-10-22; client only, no API change). The setup profile editor is a terminal-style
+   workspace (Dialog terminal: larger than xl, dark CRT variables): a vertical section list (tabs with counts) drives both
+   the wireframe machine in the middle and the form panel on the right (Install packages, Remove debloat, Browser
+   browser, Tweaks overview); a HUD line under the machine names the section, its counts, and why it is a still.
+   Green terminal and Motion checkboxes are stored per device (hh.machinePalette, hh.machineMotion); Motion starts
+   from prefers-reduced-motion and, once set, overrides it (MachineView motion: system, on, off). The first version
+   sat beside the old tab strip on the light dialog and, on a PC with Windows animation effects off, never moved. Only perItem has a control there (one drive per package); blink, pulse, and spin follow
    ControlState fields that no editor sets yet (TPM, backup schedules, and performance mode live in other dialogs).
    Fallback: exploded.svg from build_model.py when WebGL is missing, the scene fails to start, or FrameRateWatch
    sees under 30 fps for 5 s; it stays the still for the dialog's life. Reduced motion: cuts, no orbit, no fan spin, no

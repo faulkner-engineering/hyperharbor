@@ -418,6 +418,9 @@ section for an area before changing it: most of these were learned from a failur
   them turns it about the world origin; center the edges and set the object's position to the center first.
 - Headless Edge renders the scene with `--enable-unsafe-swiftshader --use-angle=swiftshader`; `--virtual-time-budget`
   sets how far the animation runs before `--screenshot`. `--disable-3d-apis` exercises the no-WebGL fallback.
+- Windows animation effects off (Settings, Accessibility, Visual effects; SPI_GETCLIENTAREAANIMATION false) reaches
+  WebView2 as prefers-reduced-motion: reduce. It was off on the laptop, so the view never moved until the Motion
+  option overrode the preference. Headless Edge reproduces it with --force-prefers-reduced-motion.
 - three is about 580 KB minified; MachineView imports scene.ts dynamically so it is its own chunk, fetched only when
   WebGL is available.
 

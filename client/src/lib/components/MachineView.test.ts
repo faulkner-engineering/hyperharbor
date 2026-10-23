@@ -147,7 +147,22 @@ describe("MachineView reduced motion", () => {
 
     expect(vi.mocked(createMachineScene).mock.calls[0][2].reducedMotion).toBe(true);
     change(false);
-    expect(scene.setReducedMotion).toHaveBeenLastCalledWith(false);
+    await waitFor(() => expect(scene.setReducedMotion).toHaveBeenLastCalledWith(false));
+  });
+
+  it("lets the motion setting override the system preference", async () => {
+    stubReducedMotion(true);
+    vi.mocked(webglAvailable).mockReturnValue(true);
+    const scene = fakeScene();
+    vi.mocked(createMachineScene).mockResolvedValue(scene as never);
+    const { container, rerender } = render(MachineView, { section: "packages", motion: "on" });
+    await waitFor(() => expect(mode(container)).toBe("scene"));
+
+    expect(vi.mocked(createMachineScene).mock.calls[0][2].reducedMotion).toBe(false);
+    await rerender({ section: "packages", motion: "off" });
+    await waitFor(() => expect(scene.setReducedMotion).toHaveBeenLastCalledWith(true));
+    await rerender({ section: "packages", motion: "system" });
+    expect(scene.setReducedMotion).toHaveBeenLastCalledWith(true);
   });
 
   it("marks the still as reduced, keeping the highlight and blink", async () => {

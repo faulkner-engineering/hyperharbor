@@ -112,7 +112,9 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   motion), highlights.ts (resolveHighlight for perItem, blink, pulse, spin; applyHighlight; reactionFrame), fallback.ts
   (webglAvailable, FrameRateWatch, reduced-motion query), assets.ts (loaders, parseExplodedSvg, palettes from the
   --hh-crt-* tokens in app.css), scene.ts (three r170, imported on demand: EdgesGeometry lines, UnrealBloomPass, CRT
-  ShaderPass). UI: MachineView.svelte (3D or the still) and MachineStill.svelte (exploded.svg with the same highlights).
+  ShaderPass). UI: MachineView.svelte (3D or the still; motion setting; bindable status) and MachineStill.svelte
+  (exploded.svg with the same highlights). SetupProfileEditor.svelte lays out the section list, the machine with its
+  HUD, and the form panel in Dialog's terminal variant.
 - Camera sharing (Rust workspace rooted at client/src-tauri, which lists ../vcam-protocol and ../vcam):
   - client/vcam-protocol: no dependencies; the pipe frame format (FrameHeader, 32 bytes then NV12), pipe_name,
     SOURCE_CLSID, and NV12 black and scale. Used by both sides.
