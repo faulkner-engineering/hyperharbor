@@ -1268,6 +1268,21 @@ async fn create_vm_from_profile(
         .await
 }
 
+/// Creates a VM from a machine profile template (needs elevation). Returns the createVm job.
+#[tauri::command]
+async fn create_vm_from_template(
+    state: State<'_, AppState>,
+    key: String,
+    template_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .create_vm_from_template(&host, &paired, &template_id, &request)
+        .await
+}
+
 /// A saved setup or machine profile (StoredSetupProfile or StoredMachineProfile).
 #[tauri::command]
 async fn get_profile(
@@ -2528,6 +2543,7 @@ pub fn run() {
             inspect_iso,
             get_profile,
             create_vm_from_profile,
+            create_vm_from_template,
             preview_vm_machine_profile,
             apply_vm_machine_profile,
             save_profile,

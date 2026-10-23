@@ -63,6 +63,12 @@ note anything that needs action, such as updating the host, a new elevation requ
   dialog. Choosing every setting by hand still works below it, and installing with an unattended install profile and a
   setup profile is now labeled as using the older profiles. The setup profile list notes that machine profiles
   replace setup profiles and that Convert makes one.
+- One place for profiles (hosts with API 1.32.0): the Profiles tab holds all your profiles, and the Install profiles
+  and Setup profiles tabs are gone (your old profiles are converted when the host updates). New VM starts from one of
+  your profiles or a template (Windows Workstation, Windows Burner, Ubuntu Dev Server), and its hardware (processors,
+  memory, disk, network) can be changed for that VM without changing the profile. New profile can start from a
+  template. Capture setup profile now saves a profile on the Profiles tab, and Apply machine profile replaces Apply
+  setup profile. With an older host, the client shows the earlier tabs and dialogs.
 
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
@@ -87,6 +93,9 @@ note anything that needs action, such as updating the host, a new elevation requ
 - API 1.26.0: the package catalog has a description per package, the setup profile catalog lists the rated built-in
   apps (appx) and the registry values of each tweak. Update the host for package descriptions, built-in apps without
   a VM, and tweak details; with an older host the editor works as before without them.
+
+### Fixed
+- Editing a saved machine profile with an Account section could fail to open the editor.
 
 ## [0.2.0] - 2026-10-22 (API 1.25.0)
 

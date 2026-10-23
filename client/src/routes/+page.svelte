@@ -25,6 +25,7 @@
     downloadHostLogs,
     SetupProfilesApiVersion,
     MachineProfilesApiVersion,
+    ProfilesConsolidatedApiVersion,
     MachineProfileVmsApiVersion,
     MachineProfileApplyApiVersion,
     ApplySetupProfileApiVersion,
@@ -36,6 +37,7 @@
     type BackupTarget,
     type StoredSetupProfile,
     type MachineProfileSummary,
+    type StoredMachineProfile,
     type Vm,
   } from "$lib/api/client";
   import { onMount } from "svelte";
@@ -128,6 +130,13 @@
   const hostHasLogs = $derived(selectedHost ? hostSupports(selectedHost, HostLogsApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
   const hostHasMachineProfiles = $derived(selectedHost ? hostSupports(selectedHost, MachineProfilesApiVersion) : false);
+  /** Machine profiles are the one place for profiles (API 1.32.0): no Install or Setup profiles tabs. */
+  const hostConsolidated = $derived(selectedHost ? hostSupports(selectedHost, ProfilesConsolidatedApiVersion) : false);
+
+  // The Install and Setup profiles tabs are gone on such a host; its profiles are all on the Profiles tab.
+  $effect(() => {
+    if (hostConsolidated && (view === "profiles" || view === "setup")) view = "machine";
+  });
   const hostHasGameAware = $derived(selectedHost ? hostSupports(selectedHost, GameAwareApiVersion) : false);
   const hostHasTailscale = $derived(selectedHost ? hostSupports(selectedHost, TailscaleApiVersion) : false);
   const hostHasBackups = $derived(selectedHost ? hostSupports(selectedHost, BackupApiVersion) : false);
@@ -295,10 +304,14 @@
     pending?.answer(confirmed);
   }
 
-  function captured(saved: StoredSetupProfile | null) {
+  function captured(saved: StoredSetupProfile | StoredMachineProfile | null) {
     capturing = null;
     if (saved) {
-      toasts.show(`Saved the setup profile ${saved.profile.name}. It is on the Setup profiles tab.`);
+      toasts.show(
+        hostConsolidated
+          ? `Saved the profile ${saved.profile.name}. It is on the Profiles tab.`
+          : `Saved the setup profile ${saved.profile.name}. It is on the Setup profiles tab.`,
+      );
     }
   }
 
@@ -580,23 +593,25 @@
           <button type="button" role="tab" aria-selected={view === "isos"} class:active={view === "isos"} onclick={() => (view = "isos")}>
             ISO library
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "profiles"}
-            class:active={view === "profiles"}
-            onclick={() => (view = "profiles")}>Install profiles</button
-          >
+          {#if !hostConsolidated}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "profiles"}
+              class:active={view === "profiles"}
+              onclick={() => (view = "profiles")}>Install profiles</button
+            >
+          {/if}
           {#if hostHasMachineProfiles}
             <button
               type="button"
               role="tab"
               aria-selected={view === "machine"}
               class:active={view === "machine"}
-              onclick={() => (view = "machine")}>Machine profiles</button
+              onclick={() => (view = "machine")}>{hostConsolidated ? "Profiles" : "Machine profiles"}</button
             >
           {/if}
-          {#if hostHasSetupProfiles}
+          {#if hostHasSetupProfiles && !hostConsolidated}
             <button
               type="button"
               role="tab"
@@ -638,7 +653,7 @@
             oncamera={(vm) => (configuringCamera = vm)}
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
             onreplacedisk={hostHasBackups ? (vm) => (replacingDisk = vm) : undefined}
-            onapplyprofile={hostAppliesProfiles ? (vm) => (applyingProfile = vm) : undefined}
+            onapplyprofile={hostAppliesProfiles && !hostConsolidated ? (vm) => (applyingProfile = vm) : undefined}
             onapplymachine={hostSupports(selectedHost, MachineProfileApplyApiVersion) ? (vm) => (applyingMachine = vm) : undefined}
             ontransfer={hostHasTransfer ? (vm) => (transferring = vm) : undefined}
             ondelete={(vm) => (deleting = vm)}
@@ -686,7 +701,16 @@
         {#if configuringCamera}
           <CameraDialog host={selectedHost} vm={configuringCamera} onclose={() => (configuringCamera = null)} />
         {/if}
-        {#if creating}
+        {#if creating && hostConsolidated}
+          <CreateVmFromProfileDialog
+            host={selectedHost}
+            onclose={lifecycleClosed}
+            onopenlibrary={() => {
+              creating = false;
+              view = "isos";
+            }}
+          />
+        {:else if creating}
           <CreateVmDialog
             host={selectedHost}
             onclose={lifecycleClosed}

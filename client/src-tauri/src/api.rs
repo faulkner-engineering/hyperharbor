@@ -963,6 +963,19 @@ impl ApiClient {
             .await
     }
 
+    /// POST /machine-profile-templates/{id}/vms: creates a VM from a template (needs elevation).
+    pub async fn create_vm_from_template(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        id: &str,
+        request: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("{}/vms", template_path(id)?);
+        self.send_json(host, paired, reqwest::Method::POST, &path, request)
+            .await
+    }
+
     /// GET /setup-profiles/{id} or /machine-profiles/{id}: the stored profile.
     pub async fn get_profile(
         &self,
@@ -2212,6 +2225,7 @@ pub enum HostResource {
     Tailscale,
     SetupProfiles,
     MachineProfiles,
+    MachineProfileTemplates,
     ProfileImages,
     SetupProfileCatalog,
     PackageCatalog,
@@ -2231,6 +2245,7 @@ impl HostResource {
             HostResource::Tailscale => "/host/tailscale",
             HostResource::SetupProfiles => "/setup-profiles",
             HostResource::MachineProfiles => "/machine-profiles",
+            HostResource::MachineProfileTemplates => "/machine-profile-templates",
             HostResource::ProfileImages => "/profile-images",
             HostResource::SetupProfileCatalog => "/setup-profiles/catalog",
             HostResource::PackageCatalog => "/packages/catalog",
@@ -2364,6 +2379,23 @@ impl ProfileKind {
 }
 
 /// The profile's URL path, after checking the ID has the host's form, so an ID cannot reach another route.
+/// /machine-profile-templates/{id}: template IDs are lowercase letters, digits, and hyphens.
+fn template_path(id: &str) -> Result<String, ClientError> {
+    let valid = !id.is_empty()
+        && id.len() <= 48
+        && !id.starts_with('-')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if valid {
+        Ok(format!("/machine-profile-templates/{id}"))
+    } else {
+        Err(ClientError::InvalidRequest(format!(
+            "\"{id}\" is not a template ID"
+        )))
+    }
+}
+
 fn profile_path(kind: ProfileKind, id: &str) -> Result<String, ClientError> {
     let valid = !id.is_empty()
         && id.len() <= 48
@@ -3538,6 +3570,20 @@ mod server_tests {
             assert!(
                 matches!(iso_path(name), Err(ClientError::InvalidRequest(_))),
                 "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn template_ids_are_checked() {
+        assert_eq!(
+            template_path("windows-burner").unwrap(),
+            "/machine-profile-templates/windows-burner"
+        );
+        for id in ["", "-x", "../x", "Windows", "a/b"] {
+            assert!(
+                matches!(template_path(id), Err(ClientError::InvalidRequest(_))),
+                "{id}"
             );
         }
     }

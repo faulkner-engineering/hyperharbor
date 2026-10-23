@@ -96,8 +96,10 @@ export class MachineDraft {
     backupScheduled: this.backup?.enabled === true && this.backup.triggers?.schedule !== false,
   });
 
-  constructor(start?: MachineProfile) {
-    if (!start) return;
+  constructor(from?: MachineProfile) {
+    if (!from) return;
+    // The profile may be reactive state (a proxy), which structuredClone cannot copy; work from a plain copy.
+    const start = $state.snapshot(from) as MachineProfile;
     this.software.fill(start);
     this.name = start.name;
     this.description = start.description ?? "";

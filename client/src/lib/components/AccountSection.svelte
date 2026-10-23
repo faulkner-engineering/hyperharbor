@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { errorMessage, listUnattendProfiles, type HostEntry, type UnattendProfile } from "$lib/api/client";
+  import { errorMessage, hostSupports, listUnattendProfiles, ProfilesConsolidatedApiVersion, type HostEntry, type UnattendProfile } from "$lib/api/client";
   import { DEFAULT_EDITION, defaultLinux, defaultWindows, type MachineDraft } from "$lib/machineDraft.svelte";
   import { onMount } from "svelte";
 
@@ -16,6 +16,8 @@
   const sources = $derived(unattend.filter((profile) => profile.os === draft.os));
 
   onMount(async () => {
+    // A host at 1.32.0 converted its install profiles into machine profiles, so there is nothing to fill from.
+    if (hostSupports(host, ProfilesConsolidatedApiVersion)) return;
     try {
       unattend = await listUnattendProfiles(host.key);
     } catch (e) {

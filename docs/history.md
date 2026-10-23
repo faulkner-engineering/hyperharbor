@@ -398,6 +398,12 @@ verified, and what was found along the way. User-facing changes per release are 
    templates (/machine-profile-templates, create from one); CreateVmFromProfileRequest takes compute and switch for
    that VM only (MachineProfileVmCreation.WithOverrides). docs/machine-profiles.md "One place for profiles" has the
    user's decisions.
+   Done: one place for profiles, client (2026-10-23). On hosts at 1.32.0 (ProfilesConsolidatedApiVersion): one Profiles
+   tab (MachineProfiles, with New from a template), no Install or Setup profiles tabs, no Fill from, no Apply setup
+   profile; New VM is CreateVmFromProfileDialog without a preset profile ("Start from" your profiles and the templates,
+   "Hardware for this VM" filled from the choice, sent as compute and switch only when changed); capture saves a
+   software-only machine profile. Found: MachineDraft structuredClone'd a reactive (proxied) profile, so Edit on a saved
+   profile with an account section failed; it now snapshots first.
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.

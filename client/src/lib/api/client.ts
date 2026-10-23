@@ -45,6 +45,7 @@ export type StoredSetupProfile = components["schemas"]["StoredSetupProfile"];
 export type MachineProfile = components["schemas"]["MachineProfile"];
 export type MachineProfileSummary = components["schemas"]["MachineProfileSummary"];
 export type ProfileImage = components["schemas"]["ProfileImage"];
+export type MachineProfileTemplate = components["schemas"]["MachineProfileTemplate"];
 export type StoredMachineProfile = components["schemas"]["StoredMachineProfile"];
 export type CreateVmFromProfileRequest = components["schemas"]["CreateVmFromProfileRequest"];
 export type MachinePart = components["schemas"]["MachinePart"];
@@ -691,6 +692,19 @@ export const previewVmMachineProfile = (key: string, vmId: string, profileId: st
 /** Applies the chosen parts; returns the applyMachineProfile job. Needs elevation: run it inside withElevation. */
 export const applyVmMachineProfile = (key: string, vmId: string, request: ApplyMachineProfileRequest) =>
   invoke<VmJob>("apply_vm_machine_profile", { key, vmId, request });
+
+/**
+ * The API version that makes machine profiles the one place for profiles: the host converted the older install and
+ * setup profiles, serves templates, and takes hardware for one VM when creating from a profile.
+ */
+export const ProfilesConsolidatedApiVersion = "1.32.0";
+
+export const listMachineProfileTemplates = (key: string) =>
+  invoke<MachineProfileTemplate[]>("get_host_resource", { key, resource: "machineProfileTemplates" });
+
+/** Creates a VM from a template; returns the createVm job. Needs elevation: run it inside withElevation. */
+export const createVmFromMachineProfileTemplate = (key: string, templateId: string, request: CreateVmFromProfileRequest) =>
+  invoke<VmJob>("create_vm_from_template", { key, templateId, request });
 
 /** The API version that keeps wallpaper images for machine profiles. */
 export const ProfileImagesApiVersion = "1.31.0";

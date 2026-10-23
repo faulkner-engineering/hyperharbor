@@ -7,6 +7,10 @@
     importMachineProfile,
     isClientError,
     listMachineProfiles,
+    listMachineProfileTemplates,
+    hostSupports,
+    ProfilesConsolidatedApiVersion,
+    type MachineProfileTemplate,
     type HostEntry,
     type MachineProfile,
     type MachineProfileSummary,
@@ -35,6 +39,14 @@
   let profiles = $state<MachineProfileSummary[] | null>(null);
   let error = $state<string | null>(null);
   let editing = $state<{ profileId: string | null; initial: MachineProfile | null } | null>(null);
+  const consolidated = $derived(hostSupports(host, ProfilesConsolidatedApiVersion));
+  let templates = $state<MachineProfileTemplate[]>([]);
+
+  /** Opens the editor on a copy of a template, saved as a new profile. */
+  function fromTemplate(id: string) {
+    const template = templates.find((item) => item.id === id);
+    if (template) editing = { profileId: null, initial: { ...$state.snapshot(template.profile), name: `My ${template.name}` } };
+  }
   let confirmDelete = $state<MachineProfileSummary | null>(null);
   let working = $state(false);
 
@@ -48,7 +60,15 @@
     }
   }
 
-  onMount(refresh);
+  onMount(async () => {
+    await refresh();
+    if (!consolidated) return;
+    try {
+      templates = await listMachineProfileTemplates(host.key);
+    } catch {
+      // Templates are a convenience; New profile works without them.
+    }
+  });
 
   async function edit(summary: MachineProfileSummary) {
     try {
@@ -114,6 +134,12 @@
   </p>
   <div class="buttons">
     <button type="button" onclick={() => (editing = { profileId: null, initial: null })}>New profile</button>
+    {#if templates.length > 0}
+      <select aria-label="New profile from a template" value="" onchange={(event) => fromTemplate(event.currentTarget.value)}>
+        <option value="" disabled>From a template…</option>
+        {#each templates as template (template.id)}<option value={template.id}>{template.name}</option>{/each}
+      </select>
+    {/if}
     <button type="button" onclick={importFile} disabled={working}>Import…</button>
   </div>
 </div>
@@ -123,7 +149,11 @@
 {#if profiles === null}
   <p class="muted">Loading profiles…</p>
 {:else if profiles.length === 0}
-  <p class="muted">No machine profiles yet. Make one here, or convert a setup profile from the Setup profiles tab.</p>
+  <p class="muted">
+    {consolidated
+      ? "No profiles yet. Make one here, or start from a template."
+      : "No machine profiles yet. Make one here, or convert a setup profile from the Setup profiles tab."}
+  </p>
 {:else}
   <table>
     <thead>

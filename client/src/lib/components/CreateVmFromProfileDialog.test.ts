@@ -116,3 +116,66 @@ describe("CreateVmFromProfileDialog", () => {
     expect(await screen.findByText("network.switch")).toBeTruthy();
   });
 });
+
+describe("CreateVmFromProfileDialog as New VM (API 1.32.0)", () => {
+  const consolidated = { ...host, apiVersion: "1.32.0" };
+  const stored = {
+    id: "gaming-rig",
+    updatedAt: "",
+    profile: { name: "Gaming rig", os: "windows", compute: { processors: 8, memory: { startupMb: 16384, dynamic: false }, diskSizeGb: 256 }, network: { switch: "LAN" } },
+  };
+  const templates = [
+    { id: "windows-burner", name: "Windows Burner", description: "For short-lived VMs.", profile: { name: "Windows Burner", os: "windows", account: { adminAccountName: "hhadmin" } } },
+  ];
+  const fromTemplate = () => invoke.mock.calls.filter(([command]) => command === "create_vm_from_template").map(([, args]) => args);
+
+  beforeEach(() => {
+    invoke.mockImplementation(async (command: string, args: Record<string, unknown>) => {
+      if (command === "get_host_resource") {
+        if (args.resource === "machineProfiles") return [profile];
+        if (args.resource === "machineProfileTemplates") return templates;
+        if (args.resource === "switches") return [{ id: "s1", name: "Default Switch", isDefault: true }, { id: "s2", name: "LAN", isDefault: false }];
+        return [{ name: "Win11.iso", sizeBytes: 1, modifiedAt: "2026-10-01T00:00:00Z" }];
+      }
+      if (command === "get_profile") return stored;
+      if (command === "inspect_iso") return { os: "windows", distribution: null, editions: ["Windows 11 Pro"] };
+      if (command === "create_vm_from_profile" || command === "create_vm_from_template") return job;
+      throw new Error(`unexpected ${command}`);
+    });
+  });
+
+  it("starts from the first profile with its hardware, and sends only what changed", async () => {
+    render(CreateVmFromProfileDialog, { host: consolidated, onclose: vi.fn() });
+
+    const processors = (await screen.findByRole("spinbutton", { name: "Virtual processors" })) as HTMLInputElement;
+    expect(processors.value).toBe("8");
+    expect((screen.getByRole("spinbutton", { name: "Disk size (GB)" }) as HTMLInputElement).value).toBe("256");
+    expect((screen.getByRole("combobox", { name: "Network" }) as HTMLSelectElement).value).toBe("LAN");
+
+    await fireEvent.input(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Rig 2" } });
+    await fireEvent.input(processors, { target: { value: "4" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await screen.findByText(/Rig 2 is created/);
+    const [args] = created() as { profileId: string; request: Record<string, unknown> }[];
+    expect(args.profileId).toBe("gaming-rig");
+    expect(args.request).toMatchObject({ name: "Rig 2", compute: { processors: 4, diskSizeGb: 256, memory: { startupMb: 16384, dynamic: false } } });
+    expect(args.request).not.toHaveProperty("switch");
+  });
+
+  it("creates from a template without changing its hardware", async () => {
+    render(CreateVmFromProfileDialog, { host: consolidated, onclose: vi.fn() });
+    await screen.findByRole("spinbutton", { name: "Virtual processors" });
+
+    await fireEvent.change(screen.getByRole("combobox", { name: "Start from" }), { target: { value: "template:windows-burner" } });
+    expect(await screen.findByText(/For short-lived VMs\./)).toBeTruthy();
+    expect((screen.getByRole("spinbutton", { name: "Virtual processors" }) as HTMLInputElement).value).toBe("2");
+    await fireEvent.input(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Scratch" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await screen.findByText(/Scratch is created/);
+    const [args] = fromTemplate() as { templateId: string; request: Record<string, unknown> }[];
+    expect(args.templateId).toBe("windows-burner");
+    expect(args.request).not.toHaveProperty("compute");
+  });
+});

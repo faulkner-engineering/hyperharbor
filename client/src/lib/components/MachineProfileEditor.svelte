@@ -2,7 +2,9 @@
   import {
     errorMessage,
     getSetupProfile,
+    hostSupports,
     isClientError,
+    ProfilesConsolidatedApiVersion,
     listSetupProfiles,
     saveMachineProfile,
     type HostEntry,
@@ -53,6 +55,8 @@
 
   onMount(async () => {
     error = await draft.software.load(host.key);
+    // A host at 1.32.0 converted its setup profiles into machine profiles, so there is nothing to fill from.
+    if (hostSupports(host, ProfilesConsolidatedApiVersion)) return;
     try {
       setupProfiles = (await listSetupProfiles(host.key)).filter((profile) => !profile.error);
     } catch {
