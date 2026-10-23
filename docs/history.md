@@ -367,7 +367,12 @@ verified, and what was found along the way. User-facing changes per release are 
    with shutDownToApply), applies, starts it again, waits for Remote Desktop (GuestRestart.WaitUntilAnswersAsync),
    applies the software with one restart if needed, and runs the guest Performance setup inline
    (VmPerformanceService.GuestSetupWithinJobAsync, since the job holds the VM). Problems are the job's setupResult.
-   Unit tested with fakes; not run live yet.
+   Live (2026-10-23, laptop): a full MachineProfileLiveTests run (HH_MACHINE_GPU=1, HH_MACHINE_KEEP=1) made the VM,
+   reached Ready, wrote the theme, accent, and tweak values, and the watcher's guest Performance setup copied the Intel
+   driver (32.0.101.8860, no drift, no reboot): the first live run of the guest setup. MachineProfileApplyLiveTests on
+   that VM then shut it down, went from 2 to 3 processors, started it, waited for Remote Desktop, wrote the setting
+   (Hidden = 1 in the Default hive), reported no problems, and deleted the VM. Found: a string returned by
+   Invoke-Command carries remoting properties into ConvertTo-Json, so the test check now interpolates it.
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.

@@ -128,6 +128,7 @@ public sealed class MachineProfileApplyLiveTests(ITestOutputHelper output)
             $value
         }
         Remove-PSSession $session
-        @{ ok = $true; result = @{ hidden = $hidden } } | ConvertTo-Json -Compress -Depth 4
+        # A value back from Invoke-Command carries remoting properties; the interpolation keeps only the text.
+        @{ ok = $true; result = @{ hidden = "$hidden" } } | ConvertTo-Json -Compress -Depth 4
         """;
 }
