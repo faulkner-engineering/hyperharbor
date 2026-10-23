@@ -229,6 +229,21 @@ public sealed class UpdateApplierTests : IDisposable
     }
 
     [Fact]
+    public async Task Recovery_OfAStateWithoutAStagedExecutable_StillCommits()
+    {
+        // Seen in testing: a null staged path threw out of the clean-up, so the helper never saved the update as finished.
+        HandOff();
+        _service.CrashOn = "start 1.1.0";
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Applier().RunAsync(CancellationToken.None));
+        _store.Save(_store.Load() with { StagedExecutable = null });
+
+        var state = await Applier().RunAsync(CancellationToken.None);
+
+        Assert.Equal("Updated from 1.0.0 to 1.1.0.", state.LastResult);
+        Assert.Equal(UpdatePhase.Idle, _store.Load().Phase);
+    }
+
+    [Fact]
     public async Task CrashWhileStarting_WhenTheNewVersionIsDown_Recovery_RollsBack()
     {
         HandOff();

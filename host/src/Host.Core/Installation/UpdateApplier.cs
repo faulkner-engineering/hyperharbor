@@ -105,7 +105,7 @@ public sealed class UpdateApplier(
             () => layout.InstallHelper(layout.CurrentExecutable),
             () => layout.PruneExcept(from, to),
             () => DataBackup.PruneBackups(dataDirectory, BackupsKept),
-            () => File.Delete(state.StagedExecutable!));
+            () => DeleteStaged(state));
         logger.LogInformation("Updated HyperHarbor from {From} to {To}.", from, to);
         return Save(state.Finished($"Updated from {from} to {to}.", time.GetUtcNow()));
     }
@@ -136,7 +136,7 @@ public sealed class UpdateApplier(
         {
             logger.LogWarning("Rolled back from {To} to {From}; {To} will not be offered again.", to, from, to);
             TryAll(
-                () => File.Delete(state.StagedExecutable!),
+                () => DeleteStaged(state),
                 () => Directory.Delete(layout.VersionFolder(SemanticVersion.Parse(to)), recursive: true));
             return Save((state with { RolledBack = skipped }).Finished($"Version {to} did not start, so {from} was restored.", time.GetUtcNow()));
         }
@@ -222,6 +222,15 @@ public sealed class UpdateApplier(
         state = state with { UpdatedAt = time.GetUtcNow() };
         store.Save(state);
         return state;
+    }
+
+    /// <summary>A state without a staged path (one written by hand, for one) has nothing to delete; it must not end the run.</summary>
+    private static void DeleteStaged(UpdateState state)
+    {
+        if (!string.IsNullOrEmpty(state.StagedExecutable))
+        {
+            File.Delete(state.StagedExecutable);
+        }
     }
 
     private void TryAll(params Action[] actions)
