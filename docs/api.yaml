@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.29.0
+  version: 1.30.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -4687,6 +4687,13 @@ components:
           type: boolean
           default: false
           description: The client tunes the connection for a LAN (connection type LAN, auto-detection off).
+        defaults:
+          description: |
+            Since 1.30.0. The Remote Desktop defaults of the machine profile the VM was made from or last given; null
+            when it has none. A device's own monitor choice for the VM wins over these.
+          oneOf:
+            - $ref: "#/components/schemas/MachineConnection"
+            - type: "null"
 
     ConsoleSession:
       type: object
@@ -5849,7 +5856,7 @@ components:
 
     MachinePart:
       type: string
-      enum: [compute, firmware, gpu, network, backup, software]
+      enum: [compute, firmware, gpu, network, backup, software, connection]
       description: A part of a machine profile that can be applied to an existing VM.
 
     MachineProfileChange:

@@ -2836,6 +2836,11 @@ export interface components {
              * @default false
              */
             performanceMode: boolean;
+            /**
+             * @description Since 1.30.0. The Remote Desktop defaults of the machine profile the VM was made from or last given; null
+             *     when it has none. A device's own monitor choice for the VM wins over these.
+             */
+            defaults?: components["schemas"]["MachineConnection"] | null;
         };
         ConsoleSession: {
             /** @description Opens tunnels with `POST /vms/{vmId}/console/tunnel`. Clients must not persist it. */
@@ -3496,7 +3501,7 @@ export interface components {
          * @description A part of a machine profile that can be applied to an existing VM.
          * @enum {string}
          */
-        MachinePart: "compute" | "firmware" | "gpu" | "network" | "backup" | "software";
+        MachinePart: "compute" | "firmware" | "gpu" | "network" | "backup" | "software" | "connection";
         MachineProfileChange: {
             part: components["schemas"]["MachinePart"];
             /** @description What changes, in words, for example "Virtual processors". */

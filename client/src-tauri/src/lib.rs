@@ -29,7 +29,7 @@ use crate::api::{ApiClient, PendingPairing, ProfileKind};
 use crate::error::ClientError;
 use crate::hosts::{HostEntry, HostRegistry, HostSource};
 use crate::identity::ClientIdentity;
-use crate::monitors::{Monitor, MonitorChoice, MonitorChoiceStore};
+use crate::monitors::{Monitor, MonitorChoice, MonitorChoiceStore, MonitorLayout};
 use crate::paired::{PairedHost, PairedHostStore};
 
 /// Event emitted to the frontend whenever the host list changes.
@@ -287,13 +287,22 @@ async fn connect_vm(
             return Err(ClientError::VmUnreachable(connection.address.clone()));
         }
     }
-    let layout = state
-        .monitors
-        .get(&paired.host_id, &vm_id)
-        .resolve(&monitors::list());
+    // A monitor choice made on this device wins over the machine profile's default.
+    let layout = match state.monitors.find(&paired.host_id, &vm_id) {
+        Some(choice) => choice.resolve(&monitors::list()),
+        None => connection
+            .defaults
+            .as_ref()
+            .map(rdp::ConnectionDefaults::monitor_layout)
+            .unwrap_or(MonitorLayout::Single),
+    };
     // Linux guests (xrdp) have no camera redirection, so no virtual camera is made for them.
     let camera_key = format!("{}/{}", paired.host_id, vm_id);
-    let prepared = if connection.guest_os == rdp::GuestOs::Linux {
+    let camera_off = connection
+        .defaults
+        .as_ref()
+        .is_some_and(|defaults| !defaults.camera());
+    let prepared = if connection.guest_os == rdp::GuestOs::Linux || camera_off {
         camera::service::Prepared {
             redirect: camera::CameraRedirect::None,
             notice: None,

@@ -92,7 +92,7 @@ browser: { app: { id: Brave.Brave }, extensions: [], policies: {} }
 |---|---|---|
 | account | UnattendProfileRequest, UnattendedInstallRequest.computerName | Same names and limits. The admin password stays a one-time password rotated after setup. |
 | display.guest | new | theme writes the same values as the appearance.darkMode tweak; accentColor and a wallpaper color are registry values in the User's account. A wallpaper image is a file the host keeps beside the profile and copies into the guest when applying (the upload arrives with 26c). |
-| display.connection | the client's monitor choice (MonitorsDialog) and rdp_file | New: window and redirect. Stored in the profile, read by the client when it connects; a device's own choice wins. |
+| display.connection | the client's monitor choice (MonitorsDialog) and rdp_file | Built (API 1.30.0): kept per VM on the host (VmConnectionDefaultsStore) and sent with the connection; a monitor choice saved on the device for the VM wins. |
 | firmware | CreateVmRequest.enableTpm | secureBoot is new on the wire; today Secure Boot is always on, with the template chosen from the ISO's OS (VmCreationService). |
 | compute | CreateVmRequest, UpdateVmComputeRequest | Same rules as the compute dialog. |
 | gpu | PerformanceSettings, GpuPartitionShare | With gpu.enabled, memory must be fixed (dynamic false), as Performance mode requires today. |

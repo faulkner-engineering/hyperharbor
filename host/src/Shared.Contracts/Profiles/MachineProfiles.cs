@@ -128,6 +128,7 @@ public enum MachinePart
     Network,
     Backup,
     Software,
+    Connection,
 }
 
 /// <summary>One setting a machine profile would change on a VM. Schema: MachineProfileChange.</summary>

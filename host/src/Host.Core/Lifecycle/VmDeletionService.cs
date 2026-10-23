@@ -31,6 +31,7 @@ public sealed class VmDeletionService
     private readonly Provisioning.ProvisioningStore? _provisioning;
     private readonly GameAware.GameAwareStore? _gameAware;
     private readonly Backup.BackupConfigStore? _backups;
+    private readonly Profiles.VmConnectionDefaultsStore? _connectionDefaults;
 
     public VmDeletionService(
         IVmInventory inventory,
@@ -42,8 +43,10 @@ public sealed class VmDeletionService
         Performance.PerformanceStore? performance = null,
         Provisioning.ProvisioningStore? provisioning = null,
         GameAware.GameAwareStore? gameAware = null,
-        Backup.BackupConfigStore? backups = null)
+        Backup.BackupConfigStore? backups = null,
+        Profiles.VmConnectionDefaultsStore? connectionDefaults = null)
     {
+        _connectionDefaults = connectionDefaults;
         _unattended = unattended;
         _performance = performance;
         _provisioning = provisioning;
@@ -253,6 +256,7 @@ public sealed class VmDeletionService
         var key = vmId.ToString("D");
         Forget("install record", () => _unattended?.Forget(vmId));
         Forget("Performance mode record", () => _performance?.Remove(vmId));
+        Forget("Remote Desktop defaults", () => _connectionDefaults?.Remove(vmId));
         Forget("provisioned accounts", () => _provisioning?.Remove(vmId));
         Forget("game-aware policy", () =>
         {

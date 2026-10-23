@@ -34,6 +34,7 @@
     network: "Network",
     backup: "Backups",
     software: "Software and display",
+    connection: "Remote Desktop defaults",
   };
 
   let profiles = $state<MachineProfileSummary[]>([]);

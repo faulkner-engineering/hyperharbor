@@ -40,7 +40,8 @@ public sealed class MachineProfileApplier(
     VmJobStore jobs,
     LifecycleOptions options,
     TimeProvider time,
-    ILogger<MachineProfileApplier> logger)
+    ILogger<MachineProfileApplier> logger,
+    VmConnectionDefaultsStore? connectionDefaults = null)
 {
     private static readonly TimeSpan ShutdownPoll = TimeSpan.FromSeconds(2);
 
@@ -129,6 +130,12 @@ public sealed class MachineProfileApplier(
         var problems = new List<string>();
         var restarted = false;
         bool Chosen(MachinePart part) => parts.Contains(part) && plan.Changes.Any(change => change.Part == part);
+
+        if (Chosen(MachinePart.Connection) && plan.Profile.Display?.Connection is { } connection)
+        {
+            connectionDefaults!.Save(new VmConnectionDefaults(vm.Id, connection, plan.Profile.Name, time.GetUtcNow()));
+            applied++;
+        }
 
         if (Chosen(MachinePart.Backup) && plan.BackupTarget is not null)
         {
@@ -468,12 +475,48 @@ public sealed class MachineProfileApplier(
             notes.Add(new("account", "Account settings are used when the OS is installed, so they apply when creating a VM."));
         }
 
-        if (profile.Display?.Connection is not null)
+        if (profile.Display?.Connection is { } wanted && connectionDefaults is not null)
         {
-            notes.Add(new("display", "Connection defaults do not reach clients yet."));
+            var given = connectionDefaults.Find(vmId)?.Connection;
+            if (given is null || Describe(given) != Describe(wanted))
+            {
+                changes.Add(new(MachinePart.Connection, "Remote Desktop defaults", given is null ? null : Describe(given), Describe(wanted), false, false));
+            }
         }
 
         return new Plan(vm, profile, changes, notes, warnings, computeChange, current, macSpoofing, addTpm, performancePlan, removePerformance, backupTarget, setup);
+    }
+
+    /// <summary>"All monitors, full screen, clipboard shared, camera not shared"; settings left to the client are not named.</summary>
+    internal static string Describe(MachineConnection connection)
+    {
+        var parts = new List<string>();
+        if (connection.Monitors is { } monitors)
+        {
+            parts.Add(monitors == ConnectionMonitors.All ? "all monitors" : "one monitor");
+        }
+
+        if (connection.Window is { } window)
+        {
+            parts.Add(window == ConnectionWindow.FullScreen ? "full screen" : "windowed");
+        }
+
+        foreach (var (name, value) in new (string, bool?)[]
+        {
+            ("clipboard", connection.Redirect?.Clipboard),
+            ("printers", connection.Redirect?.Printers),
+            ("microphone", connection.Redirect?.Microphone),
+            ("camera", connection.Redirect?.Camera),
+        })
+        {
+            if (value is { } shared)
+            {
+                parts.Add(shared ? $"{name} shared" : $"{name} not shared");
+            }
+        }
+
+        var text = parts.Count == 0 ? "The device's defaults" : string.Join(", ", parts);
+        return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
     private static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);

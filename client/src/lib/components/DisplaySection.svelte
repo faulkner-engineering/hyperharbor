@@ -64,7 +64,7 @@
 {/if}
 
 <h4>Connecting</h4>
-<p class="muted">Defaults for this profile's VMs. A device's own choices still win.</p>
+<p class="muted">Used when connecting to this profile's VMs. A monitor choice made on a device for a VM still wins there.</p>
 <Choice
   label="Monitors"
   options={[

@@ -31,6 +31,7 @@ public sealed class MachineProfileVmCreationTests : IDisposable
     private readonly UnattendedInstallStore _installs;
     private readonly MachineProfileStore _profiles;
     private readonly MachineProfileVmCreation _creation;
+    private readonly VmConnectionDefaultsStore _connectionDefaults;
     private readonly Guid _userId;
 
     public MachineProfileVmCreationTests()
@@ -65,9 +66,10 @@ public sealed class MachineProfileVmCreationTests : IDisposable
             new FakeTimeProvider(DateTimeOffset.Parse("2026-10-23T12:00:00Z")), NullLogger<VmPerformanceService>.Instance);
         var software = new ProfileValidator(Catalogs.Default);
         _profiles = new MachineProfileStore(data, new MachineProfileValidator(software, unattendProfiles));
+        _connectionDefaults = new VmConnectionDefaultsStore(data);
         _creation = new MachineProfileVmCreation(
             _profiles, vmCreation, unattended, unattendProfiles, software, performance, _compute, hyperV, _backups,
-            NullLogger<MachineProfileVmCreation>.Instance);
+            NullLogger<MachineProfileVmCreation>.Instance, _connectionDefaults);
     }
 
     public void Dispose()
@@ -90,7 +92,7 @@ public sealed class MachineProfileVmCreationTests : IDisposable
     {
         var id = Save(MachineProfileTests.Sample() with
         {
-            Display = new MachineDisplay(new MachineGuestDisplay(GuestTheme.Dark, "#E39B2E")),
+            Display = new MachineDisplay(new MachineGuestDisplay(GuestTheme.Dark, "#E39B2E"), new MachineConnection(ConnectionMonitors.All)),
             Compute = new MachineCompute(4, new MachineMemory(8192, null, false), NestedVirtualization: true, DiskSizeGb: 128),
             Firmware = new MachineFirmware(Tpm: true, SecureBoot: false),
         });
@@ -104,6 +106,7 @@ public sealed class MachineProfileVmCreationTests : IDisposable
         Assert.Contains(_compute.Applied, applied => applied.Change.NestedVirtualization == true && applied.Change.MacAddressSpoofing == false);
         Assert.True(_performance.Applied.ContainsKey(_builder.CreatedVmId));
         Assert.Equal((_builder.CreatedVmId, "nas-id"), (_backups.Set.Single().VmId, _backups.Set.Single().TargetId));
+        Assert.Equal(ConnectionMonitors.All, _connectionDefaults.Find(_builder.CreatedVmId)!.Connection.Monitors);
 
         var install = _installs.Find(_builder.CreatedVmId)!;
         Assert.True(install.GuestPerformanceSetup);

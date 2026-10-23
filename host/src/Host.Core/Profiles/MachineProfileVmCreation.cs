@@ -38,7 +38,8 @@ public sealed class MachineProfileVmCreation(
     IHyperVCompute compute,
     IHyperVHost hyperV,
     IMachineBackupPolicies? backups,
-    ILogger<MachineProfileVmCreation> logger)
+    ILogger<MachineProfileVmCreation> logger,
+    VmConnectionDefaultsStore? connectionDefaults = null)
 {
     /// <summary>The Create VM dialog's defaults, used for whatever the compute section leaves out.</summary>
     public const int DefaultProcessors = 2;
@@ -184,6 +185,11 @@ public sealed class MachineProfileVmCreation(
         {
             context.Report("Setting the backup policy", 90);
             backups!.Set(vmId, backupTarget, backup);
+        }
+
+        if (profile.Display?.Connection is { } connection && connectionDefaults is not null)
+        {
+            connectionDefaults.Save(new VmConnectionDefaults(vmId, connection, profile.Name, DateTimeOffset.UtcNow));
         }
 
         logger.LogInformation("Applied the machine profile {Profile} to the new VM {Name} ({VmId}).", profile.Name, name, vmId);

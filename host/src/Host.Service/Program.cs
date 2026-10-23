@@ -410,6 +410,7 @@ builder.Services.AddSingleton<IGuestPerformanceSetup, PowerShellDirectPerformanc
 builder.Services.AddSingleton<VmPerformanceService>();
 builder.Services.AddSingleton<IGuestPerformanceStarter>(services => services.GetRequiredService<VmPerformanceService>());
 builder.Services.AddSingleton<IMachineBackupPolicies, MachineBackupPolicies>();
+builder.Services.AddSingleton(new VmConnectionDefaultsStore(dataDirectory));
 builder.Services.AddSingleton(services => new MachineProfileApplier(
     services.GetRequiredService<MachineProfileStore>(),
     services.GetRequiredService<IVmInventory>(),
@@ -428,7 +429,8 @@ builder.Services.AddSingleton(services => new MachineProfileApplier(
     services.GetRequiredService<VmJobStore>(),
     services.GetRequiredService<LifecycleOptions>(),
     services.GetRequiredService<TimeProvider>(),
-    services.GetRequiredService<ILogger<MachineProfileApplier>>()));
+    services.GetRequiredService<ILogger<MachineProfileApplier>>(),
+    services.GetRequiredService<VmConnectionDefaultsStore>()));
 builder.Services.AddSingleton(services => new MachineProfileVmCreation(
     services.GetRequiredService<MachineProfileStore>(),
     services.GetRequiredService<VmCreationService>(),
@@ -439,7 +441,8 @@ builder.Services.AddSingleton(services => new MachineProfileVmCreation(
     services.GetRequiredService<IHyperVCompute>(),
     services.GetRequiredService<IHyperVHost>(),
     services.GetRequiredService<IMachineBackupPolicies>(),
-    services.GetRequiredService<ILogger<MachineProfileVmCreation>>()));
+    services.GetRequiredService<ILogger<MachineProfileVmCreation>>(),
+    services.GetRequiredService<VmConnectionDefaultsStore>()));
 builder.Services.AddSingleton<GpuVmShutdownCoordinator>();
 
 // Backup (Phase 21): Kopia is extracted from the executable on first use; the coordinator decides when runs start.

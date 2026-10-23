@@ -37,6 +37,7 @@ public sealed class MachineProfileApplierTests : IDisposable
     private readonly VmJobStore _jobs = new(new VmOperationLocks(), TimeProvider.System, NullLogger<VmJobStore>.Instance);
     private readonly MachineProfileStore _profiles;
     private readonly MachineProfileApplier _service;
+    private readonly VmConnectionDefaultsStore _connectionDefaults;
     private readonly Guid _userId;
     private bool _tpm;
 
@@ -56,6 +57,7 @@ public sealed class MachineProfileApplierTests : IDisposable
         var software = new ProfileValidator(Catalogs.Default);
         _profiles = new MachineProfileStore(_directory, new MachineProfileValidator(software, unattendProfiles));
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-10-23T12:00:00Z"));
+        _connectionDefaults = new VmConnectionDefaultsStore(_directory);
         var performance = new VmPerformanceService(
             _inventory, _performance, _compute, new FakeHostGpuReader(), new FakeHostCapacity(), new PerformanceStore(_directory), credentials,
             new FakeGpuDriverSource(), _guestPerformance, new VmOperationLocks(), _jobs, new LifecycleOptions(), time, NullLogger<VmPerformanceService>.Instance);
@@ -63,7 +65,8 @@ public sealed class MachineProfileApplierTests : IDisposable
             _profiles, _inventory, _compute, _definitions, _builder, performance, _backups, software, credentials, users,
             new UnattendedInstallStore(_directory), new SetupProfileApplication(new SetupProfilePlanner(Catalogs.Default), _applier),
             new GuestRestart(_inventory, probe, _power, TimeProvider.System) { Poll = TimeSpan.Zero, Checks = 3 },
-            _power, _jobs, new LifecycleOptions { ShutdownTimeoutSeconds = 5 }, TimeProvider.System, NullLogger<MachineProfileApplier>.Instance);
+            _power, _jobs, new LifecycleOptions { ShutdownTimeoutSeconds = 5 }, TimeProvider.System, NullLogger<MachineProfileApplier>.Instance,
+            _connectionDefaults);
     }
 
     public void Dispose()
@@ -177,6 +180,24 @@ public sealed class MachineProfileApplierTests : IDisposable
         var error = await Assert.ThrowsAsync<LifecycleValidationException>(() => ApplyAsync(id, [MachinePart.Compute]));
 
         Assert.Equal("parts", Assert.Single(error.Errors).Field);
+    }
+
+    [Fact]
+    public async Task RemoteDesktopDefaults_AreAChange_UntilTheVmHasThem()
+    {
+        var connection = new MachineConnection(ConnectionMonitors.All, ConnectionWindow.FullScreen, new MachineRedirect(Clipboard: true, Camera: false));
+        var id = Save(new MachineProfile("Desk", InstallOs.Windows, Display: new MachineDisplay(Connection: connection)));
+
+        var change = Assert.Single((await _service.PreviewAsync(_userId, VmId, id, CancellationToken.None)).Changes);
+        Assert.Equal((MachinePart.Connection, (string?)null, "All monitors, full screen, clipboard shared, camera not shared", false),
+            (change.Part, change.Current, change.Wanted, change.NeedsOff));
+
+        var job = await ApplyAsync(id, [MachinePart.Connection]);
+
+        Assert.Equal(VmJobState.Succeeded, job.State);
+        Assert.Empty(_power.Calls);
+        Assert.Equal(connection, _connectionDefaults.Find(VmId)!.Connection);
+        Assert.Empty((await _service.PreviewAsync(_userId, VmId, id, CancellationToken.None)).Changes);
     }
 
     [Fact]

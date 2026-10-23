@@ -48,12 +48,17 @@ note anything that needs action, such as updating the host, a new elevation requ
   the parts that need it off and started again, then the software and display settings are applied in the guest and,
   when Performance mode was turned on, the GPU driver is set up. A profile never removes a TPM, never shrinks a disk,
   and leaves Secure Boot and the switch as they are.
+- A machine profile's Remote Desktop settings (Display, Connecting) now reach the client: Connect uses the profile's
+  monitors (unless you chose monitors for that VM on this device), full screen or windowed, and whether the clipboard,
+  printers, microphone, and camera are shared. VMs get them when created from a profile or when the profile is applied
+  (the new Remote Desktop defaults part).
 
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
   (RUSTSEC-2026-0385).
 
 ### Changed
+- API 1.30.0: VmConnection.defaults carries the machine profile's Remote Desktop defaults; MachinePart has connection.
 - API 1.29.0: GET /vms/{vmId}/machine-profile-preview and POST /vms/{vmId}/machine-profile (a new applyMachineProfile
   job kind).
 - API 1.28.0: POST /machine-profiles/{profileId}/vms creates a VM from a machine profile as a createVm job.

@@ -372,6 +372,12 @@ verified, and what was found along the way. User-facing changes per release are 
    that VM then shut it down, went from 2 to 3 processors, started it, waited for Remote Desktop, wrote the setting
    (Hidden = 1 in the Default hive), reported no problems, and deleted the VM. Found: a string returned by
    Invoke-Command carries remoting properties into ConvertTo-Json, so the test check now interpolates it.
+   Done: Remote Desktop defaults (2026-10-23; API 1.30.0). VmConnectionDefaultsStore (connection-defaults.json) keeps a
+   VM's display.connection, set when the VM is created from a profile or the connection part is applied, forgotten
+   when the VM is deleted; ConnectService returns it as VmConnection.defaults. The client (rdp.rs ConnectionDefaults)
+   uses its monitors only when MonitorChoiceStore has no choice for the VM on this device, writes screen mode id,
+   redirectclipboard, and redirectprinters, sets audiocapturemode 0 for a microphone that is off, and prepares no
+   camera when the camera is off.
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.
