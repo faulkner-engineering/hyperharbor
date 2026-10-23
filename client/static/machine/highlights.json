@@ -1,0 +1,82 @@
+{
+  "account": {
+    "nodes": [
+      "Screen_Login"
+    ]
+  },
+  "display": {
+    "nodes": [
+      "Screen"
+    ]
+  },
+  "browser": {
+    "nodes": [
+      "Screen_Tab_1",
+      "Screen_Tab_2",
+      "Screen_Tab_3",
+      "Screen_Tab_4",
+      "Screen_Tab_5"
+    ]
+  },
+  "packages": {
+    "nodes": [
+      "Drive_1",
+      "Drive_2",
+      "Drive_3",
+      "Drive_4"
+    ],
+    "perItem": "Drive_{n}"
+  },
+  "debloat": {
+    "nodes": [
+      "Drive_1",
+      "Drive_2",
+      "Drive_3",
+      "Drive_4"
+    ]
+  },
+  "firmware": {
+    "nodes": [
+      "TPM_Chip",
+      "TPM_LED"
+    ],
+    "blink": "TPM_LED"
+  },
+  "compute": {
+    "nodes": [
+      "CPU",
+      "CPU_Cooler",
+      "RAM_1",
+      "RAM_2",
+      "RAM_3",
+      "RAM_4"
+    ]
+  },
+  "gpu": {
+    "nodes": [
+      "GPU",
+      "GPU_Fan_1",
+      "GPU_Fan_2"
+    ],
+    "spin": [
+      "GPU_Fan_1",
+      "GPU_Fan_2"
+    ]
+  },
+  "network": {
+    "nodes": [
+      "Ethernet",
+      "RearIO"
+    ]
+  },
+  "backup": {
+    "nodes": [
+      "Backup_Disk",
+      "Backup_LED",
+      "Backup_Cable_1",
+      "Backup_Cable_2",
+      "Backup_Cable_3"
+    ],
+    "pulse": "Backup_LED"
+  }
+}

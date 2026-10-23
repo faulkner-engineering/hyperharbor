@@ -26,6 +26,9 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   create, compute changes, and turnOff need a 5-minute elevation token from the admin passphrase set in the tray.
 
 ## Repository layout
+- models/machine: source for the profile builder's wireframe machine (build_model.py generates the glTF and the camera
+  and highlight maps with trimesh; viewer.html is the Three.js reference implementation; shots/ are renders).
+  The runtime assets it writes live in client/static/machine (hyperharbor-machine.glb, targets.json, highlights.json).
 - docs/api.yaml: OpenAPI 3.1 contract, the source of truth for host and client
 - host/src/Shared.Contracts: DTOs mirroring api.yaml; ContractJson holds the wire JSON options
 - host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/,
