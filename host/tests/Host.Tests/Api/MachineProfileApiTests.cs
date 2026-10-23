@@ -139,6 +139,31 @@ public sealed class MachineProfileApiTests : IDisposable
         Assert.NotNull(JsonNode.Parse(Catalogs.MachineProfileSchema));
     }
 
+    [Fact]
+    public async Task WallpaperImages_AreUploadedListedAndDeleted_WithElevation()
+    {
+        const string images = "/api/v1/profile-images";
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
+
+        var unelevated = await _client.PutAsync($"{images}/harbor.png", new ByteArrayContent(png));
+        var uploaded = await SendAsync(HttpMethod.Put, $"{images}/harbor%20night.png", new ByteArrayContent(png));
+        var notAnImage = await SendAsync(HttpMethod.Put, $"{images}/notes.png", new ByteArrayContent("hello"u8.ToArray()));
+        var badName = await SendAsync(HttpMethod.Put, $"{images}/script.ps1", new ByteArrayContent(png));
+
+        Assert.Equal(HttpStatusCode.Forbidden, unelevated.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, uploaded.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, notAnImage.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, badName.StatusCode);
+        var listed = Assert.Single((await _client.GetFromJsonAsync<JsonArray>(images))!)!;
+        Assert.Equal(("harbor night.png", 11L), ((string?)listed["name"], (long)listed["sizeBytes"]!));
+        var audited = _host.AuditEntries().Single(entry => (string?)entry["action"] == "uploadProfileImage" && (string?)entry["outcome"] == "succeeded");
+        Assert.Equal("name=harbor night.png", (string?)audited["detail"]);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(HttpMethod.Delete, $"{images}/harbor%20night.png")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Delete, $"{images}/harbor%20night.png")).StatusCode);
+        Assert.Empty((await _client.GetFromJsonAsync<JsonArray>(images))!);
+    }
+
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content = null)
     {
         if (_token is null)

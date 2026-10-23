@@ -126,6 +126,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             UnattendProfileNotFoundException => (StatusCodes.Status404NotFound, "Profile not found"),
             SetupProfileNotFoundException => (StatusCodes.Status404NotFound, "Setup profile not found"),
             MachineProfileNotFoundException => (StatusCodes.Status404NotFound, "Machine profile not found"),
+            ProfileImageNotFoundException => (StatusCodes.Status404NotFound, "Image not found"),
             PackageSearchUnavailableException => (StatusCodes.Status409Conflict, "Package search is not set up"),
             PackageSearchFailedException => (StatusCodes.Status502BadGateway, "Package search failed"),
             ExtensionNotFoundException => (StatusCodes.Status404NotFound, "Extension not found"),

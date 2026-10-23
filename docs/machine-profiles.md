@@ -91,7 +91,7 @@ browser: { app: { id: Brave.Brave }, extensions: [], policies: {} }
 | Section | Existing contract it reuses | Notes |
 |---|---|---|
 | account | UnattendProfileRequest, UnattendedInstallRequest.computerName | Same names and limits. The admin password stays a one-time password rotated after setup. |
-| display.guest | new | theme writes the same values as the appearance.darkMode tweak; accentColor and a wallpaper color are registry values in the User's account. A wallpaper image is a file the host keeps beside the profile and copies into the guest when applying (the upload arrives with 26c). |
+| display.guest | new | theme writes the same values as the appearance.darkMode tweak; accentColor and a wallpaper color are registry values in the User's account. A wallpaper image names one of the User's images on the host (/profile-images, API 1.31.0); creating or applying copies it to C:\Users\Public\Pictures\HyperHarbor in the guest and points Desktop WallPaper there (WallpaperStyle 10, fill). |
 | display.connection | the client's monitor choice (MonitorsDialog) and rdp_file | Built (API 1.30.0): kept per VM on the host (VmConnectionDefaultsStore) and sent with the connection; a monitor choice saved on the device for the VM wins. |
 | firmware | CreateVmRequest.enableTpm | secureBoot is new on the wire; today Secure Boot is always on, with the template chosen from the ISO's OS (VmCreationService). |
 | compute | CreateVmRequest, UpdateVmComputeRequest | Same rules as the compute dialog. |
@@ -105,7 +105,7 @@ browser: { app: { id: Brave.Brave }, extensions: [], policies: {} }
 - compute: processors and memory within what the host has (a warning, not an error, since the profile may be meant for
   another host); maximumMb at least startupMb; with gpu.enabled, dynamic must be false.
 - gpu only for windows; secureBoot and tpm as Create VM allows for the os.
-- display.guest colors are #RRGGBB; wallpaper has a color or an image, not both; an image name is a plain file name.
+- display.guest colors are #RRGGBB; wallpaper has a color or an image, not both; an image name follows the image library's rule (letters, digits, spaces, and . _ ( ) -, ending in .jpg, .jpeg, .png, or .bmp). Whether the User has that image is checked when applying: a missing one is a warning and the wallpaper is left as it is.
 - The software sections go through the setup profile validator unchanged.
 - Names (switch, gpu.adapter, backup.target) are checked only when applying, against the target host.
 

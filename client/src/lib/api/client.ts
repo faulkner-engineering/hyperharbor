@@ -44,6 +44,7 @@ export type SetupProfileSummary = components["schemas"]["SetupProfileSummary"];
 export type StoredSetupProfile = components["schemas"]["StoredSetupProfile"];
 export type MachineProfile = components["schemas"]["MachineProfile"];
 export type MachineProfileSummary = components["schemas"]["MachineProfileSummary"];
+export type ProfileImage = components["schemas"]["ProfileImage"];
 export type StoredMachineProfile = components["schemas"]["StoredMachineProfile"];
 export type CreateVmFromProfileRequest = components["schemas"]["CreateVmFromProfileRequest"];
 export type MachinePart = components["schemas"]["MachinePart"];
@@ -690,6 +691,17 @@ export const previewVmMachineProfile = (key: string, vmId: string, profileId: st
 /** Applies the chosen parts; returns the applyMachineProfile job. Needs elevation: run it inside withElevation. */
 export const applyVmMachineProfile = (key: string, vmId: string, request: ApplyMachineProfileRequest) =>
   invoke<VmJob>("apply_vm_machine_profile", { key, vmId, request });
+
+/** The API version that keeps wallpaper images for machine profiles. */
+export const ProfileImagesApiVersion = "1.31.0";
+
+export const listProfileImages = (key: string) => invoke<ProfileImage[]>("get_host_resource", { key, resource: "profileImages" });
+
+/** Picks an image on this device and adds it to the host; null when cancelled. Needs elevation. */
+export const uploadProfileImage = (key: string) => invoke<ProfileImage | null>("upload_profile_image", { key });
+
+/** Needs elevation: run it inside withElevation. */
+export const deleteProfileImage = (key: string, name: string) => invoke<void>("delete_profile_image", { key, name });
 
 export const getSetupProfileCatalog = (key: string) =>
   invoke<SetupProfileCatalog>("get_host_resource", { key, resource: "setupProfileCatalog" });

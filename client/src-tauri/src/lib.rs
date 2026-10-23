@@ -1407,6 +1407,66 @@ async fn import_profile(
         .map(Some)
 }
 
+/// The host keeps wallpaper images up to this size.
+const MAX_PROFILE_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
+
+/// Picks an image on this device and adds it to the User's wallpaper images on the host, under its file name
+/// (needs elevation). Returns None when the user cancels.
+#[tauri::command]
+async fn upload_profile_image(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<Option<serde_json::Value>, ClientError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (host, paired) = state.paired_host(&key)?;
+    let dialog = app.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        dialog
+            .dialog()
+            .file()
+            .set_title("Choose a wallpaper image")
+            .add_filter("Images", &["jpg", "jpeg", "png", "bmp"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|e| ClientError::InvalidRequest(e.to_string()))?;
+
+    let Some(path) = picked.and_then(|file| file.into_path().ok()) else {
+        return Ok(None);
+    };
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .ok_or_else(|| ClientError::InvalidRequest("the file has no name".into()))?;
+    let size = std::fs::metadata(&path)
+        .map_err(|e| ClientError::Storage(e.to_string()))?
+        .len();
+    if size > MAX_PROFILE_IMAGE_BYTES {
+        return Err(ClientError::InvalidRequest(
+            "a wallpaper image is at most 20 MB".into(),
+        ));
+    }
+    let content = std::fs::read(&path).map_err(|e| ClientError::Storage(e.to_string()))?;
+    state
+        .api
+        .upload_profile_image(&host, &paired, &name, content)
+        .await
+        .map(Some)
+}
+
+/// Deletes one of the User's wallpaper images (needs elevation).
+#[tauri::command]
+async fn delete_profile_image(
+    state: State<'_, AppState>,
+    key: String,
+    name: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.delete_profile_image(&host, &paired, &name).await
+}
+
 /// winget packages found by the host.
 #[tauri::command]
 async fn search_packages(
@@ -2474,6 +2534,8 @@ pub fn run() {
             delete_profile,
             export_profile,
             import_profile,
+            upload_profile_image,
+            delete_profile_image,
             search_packages,
             resolve_extension,
             list_vm_appx,

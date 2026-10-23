@@ -37,6 +37,7 @@ public sealed class MachineProfileApplyLiveTests(ITestOutputHelper output)
             ["os"] = "windows",
             ["compute"] = new JsonObject { ["processors"] = processors },
             ["tweaks"] = new JsonArray(new JsonObject { ["id"] = "explorer.showHiddenFiles" }),
+            ["display"] = new JsonObject { ["guest"] = new JsonObject { ["wallpaper"] = new JsonObject { ["color"] = "#0B0D10" } } },
             ["account"] = new JsonObject(),
         };
         var saved = await host.SendElevatedAsync(HttpMethod.Post, "/api/v1/machine-profiles", profile);
@@ -78,6 +79,8 @@ public sealed class MachineProfileApplyLiveTests(ITestOutputHelper output)
             var check = await PowerShellDirectRunner.RunAsync(PowerShellDirectRunner.Encode(HiddenFilesScript), new { vmId, admin.UserName, admin.Password }, TimeSpan.FromMinutes(2), CancellationToken.None);
             Log("Guest: " + check!.ToJsonString());
             Assert.Equal("1", (string?)check["hidden"]);
+            Assert.Equal("11 13 16", (string?)check["background"]);
+            Assert.Equal("", (string?)check["wallpaper"]);
         }
         finally
         {
@@ -118,17 +121,24 @@ public sealed class MachineProfileApplyLiveTests(ITestOutputHelper output)
         $password = ConvertTo-SecureString $request.Password -AsPlainText -Force
         $credential = New-Object System.Management.Automation.PSCredential($request.UserName, $password)
         $session = New-PSSession -VMId $request.vmId -Credential $credential
-        $hidden = Invoke-Command -Session $session -ScriptBlock {
+        $values = Invoke-Command -Session $session -ScriptBlock {
             & reg.exe load 'HKU\HyperHarborCheck' 'C:\Users\Default\NTUSER.DAT' 2>&1 | Out-Null
-            $key = [Microsoft.Win32.Registry]::Users.OpenSubKey('HyperHarborCheck\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced')
-            $value = if ($key) { [string]$key.GetValue('Hidden') } else { $null }
-            if ($key) { $key.Close() }
+            function Value($path, $name) {
+                $key = [Microsoft.Win32.Registry]::Users.OpenSubKey("HyperHarborCheck\$path")
+                $value = if ($key) { [string]$key.GetValue($name) } else { $null }
+                if ($key) { $key.Close() }
+                $value
+            }
+            $read = @(
+                (Value 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'Hidden'),
+                (Value 'Control Panel\Colors' 'Background'),
+                (Value 'Control Panel\Desktop' 'WallPaper'))
             [GC]::Collect(); [GC]::WaitForPendingFinalizers()
             & reg.exe unload 'HKU\HyperHarborCheck' 2>&1 | Out-Null
-            $value
+            $read
         }
         Remove-PSSession $session
         # A value back from Invoke-Command carries remoting properties; the interpolation keeps only the text.
-        @{ ok = $true; result = @{ hidden = "$hidden" } } | ConvertTo-Json -Compress -Depth 4
+        @{ ok = $true; result = @{ hidden = "$($values[0])"; background = "$($values[1])"; wallpaper = "$($values[2])" } } | ConvertTo-Json -Compress -Depth 4
         """;
 }

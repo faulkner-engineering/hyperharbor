@@ -57,6 +57,7 @@ public sealed class UnattendedInstallWatcher
     private readonly VmOperationLocks? _locks;
     private readonly IAuditLog? _audit;
     private readonly Performance.IGuestPerformanceStarter? _performance;
+    private readonly IGuestFileCopier? _files;
     private readonly ConcurrentDictionary<Guid, Task> _configuring = new();
     private DateTimeOffset? _lastTick;
 
@@ -77,9 +78,11 @@ public sealed class UnattendedInstallWatcher
         GuestRestart? restart = null,
         VmOperationLocks? locks = null,
         IAuditLog? audit = null,
-        Performance.IGuestPerformanceStarter? performance = null)
+        Performance.IGuestPerformanceStarter? performance = null,
+        IGuestFileCopier? files = null)
     {
         _performance = performance;
+        _files = files;
         _appx = appx;
         _setup = setup;
         _restart = restart;
@@ -346,7 +349,13 @@ public sealed class UnattendedInstallWatcher
         try
         {
             using var held = _locks?.Acquire(install.VmId, "Applying the setup profile");
+            var copyProblem = await CopyWallpaperAsync(install, admin, step => current = Save(current, UnattendedInstallState.ApplyingProfile, step)).ConfigureAwait(false);
             outcome = await _setup.ApplyAsync(install.VmId, admin, profile, step => current = Save(current, UnattendedInstallState.ApplyingProfile, step), CancellationToken.None).ConfigureAwait(false);
+            if (copyProblem is not null)
+            {
+                outcome = outcome with { Problems = [copyProblem, .. outcome.Problems] };
+            }
+
             if (outcome.RestartNeeded && _restart is not null)
             {
                 current = Save(current, UnattendedInstallState.ApplyingProfile, $"Applying {profile.Name}: restarting to finish");
@@ -376,6 +385,30 @@ public sealed class UnattendedInstallWatcher
             profile.Name, install.VmId, outcome.Applied, outcome.Problems.Count, restarted);
         WriteAudit(install, profile.Name, result);
         await StartGuestPerformanceSetupAsync(install).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Copies the machine profile's wallpaper image into the guest, where the setup profile's wallpaper setting points.
+    /// A guest that does not answer throws, so the install is retried; an image deleted from the host since the VM was
+    /// created is a problem.
+    /// </summary>
+    /// <returns>The problem, or null.</returns>
+    private async Task<string?> CopyWallpaperAsync(UnattendedInstall install, GuestCredential admin, Action<string> report)
+    {
+        if (install.WallpaperPath is not { } path || _files is null)
+        {
+            return null;
+        }
+
+        var name = Path.GetFileName(path);
+        if (!File.Exists(path))
+        {
+            return $"The wallpaper image {name} is no longer on the host, so it was not copied into the VM.";
+        }
+
+        report($"Copying the wallpaper {name}");
+        await _files.CopyAsync(install.VmId, admin, path, ProfileImageStore.GuestFolder, CancellationToken.None).ConfigureAwait(false);
+        return null;
     }
 
     private void WriteAudit(UnattendedInstall install, string profileName, SetupProfileResult result)

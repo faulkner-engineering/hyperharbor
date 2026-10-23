@@ -39,7 +39,8 @@ public sealed class MachineProfileVmCreation(
     IHyperVHost hyperV,
     IMachineBackupPolicies? backups,
     ILogger<MachineProfileVmCreation> logger,
-    VmConnectionDefaultsStore? connectionDefaults = null)
+    VmConnectionDefaultsStore? connectionDefaults = null,
+    ProfileImageStore? images = null)
 {
     /// <summary>The Create VM dialog's defaults, used for whatever the compute section leaves out.</summary>
     public const int DefaultProcessors = 2;
@@ -101,7 +102,8 @@ public sealed class MachineProfileVmCreation(
             }
         }
 
-        var setup = windows ? SetupSnapshot(software, profile, warnings) : null;
+        var wallpaper = windows ? WallpaperSource(images, userId, profile) : null;
+        var setup = windows ? SetupSnapshot(software, profile, wallpaper, warnings) : null;
         Func<InstallContext, InstallPlan?>? planInstall = null;
         if (profile.Account is { } account)
         {
@@ -110,7 +112,8 @@ public sealed class MachineProfileVmCreation(
             {
                 planInstall = context => unattended.PlanFor(
                     userId, accountProfile, setup, request.WindowsEdition, account.ComputerName, context.IsoPath, context.Inspection,
-                    context.VmName, context.SeedPath, context.EnableTpm, context.Errors, context.Warnings, guestPerformanceSetup: gpu is not null);
+                    context.VmName, context.SeedPath, context.EnableTpm, context.Errors, context.Warnings, guestPerformanceSetup: gpu is not null,
+                    wallpaperPath: setup is null ? null : wallpaper);
             }
         }
         else
@@ -263,9 +266,10 @@ public sealed class MachineProfileVmCreation(
     /// The software sections and the guest display settings as the setup profile the install applies when ready,
     /// or null when the profile has neither.
     /// </summary>
-    internal static SetupProfile? SetupSnapshot(ProfileValidator software, MachineProfile profile, List<ValidationIssue> warnings)
+    /// <param name="wallpaperPath">The wallpaper image's file on the host, or null when the User has no such image.</param>
+    internal static SetupProfile? SetupSnapshot(ProfileValidator software, MachineProfile profile, string? wallpaperPath, List<ValidationIssue> warnings)
     {
-        var display = GuestDisplayTweaks(profile.Display?.Guest, warnings);
+        var display = GuestDisplayTweaks(profile.Display?.Guest, wallpaperPath, warnings);
         var tweaks = (profile.Tweaks ?? []).Concat(display).ToList();
         var empty = (profile.Install?.Count ?? 0) == 0 && tweaks.Count == 0 && profile.Browser is null
             && (profile.Remove?.Appx?.Count ?? 0) + (profile.Remove?.Capabilities?.Count ?? 0) + (profile.Remove?.Features?.Count ?? 0) == 0;
@@ -277,8 +281,15 @@ public sealed class MachineProfileVmCreation(
         return software.Normalize(new SetupProfile(profile.Name, profile.Description, profile.Install, profile.Remove, tweaks, profile.Browser));
     }
 
-    /// <summary>The guest display settings as registry tweaks in the User's account. They show after the next sign-in.</summary>
-    internal static IReadOnlyList<ProfileTweak> GuestDisplayTweaks(MachineGuestDisplay? guest, List<ValidationIssue> warnings)
+    /// <summary>The wallpaper image's file on the host, or null when the profile names none or the User has no such image.</summary>
+    internal static string? WallpaperSource(ProfileImageStore? images, Guid userId, MachineProfile profile) =>
+        profile.Display?.Guest?.Wallpaper?.Image is { } name ? images?.PathOf(userId, name) : null;
+
+    /// <summary>
+    /// The guest display settings as registry tweaks in the User's account. They show after the next sign-in. A
+    /// wallpaper image points to its copy in <see cref="ProfileImageStore.GuestFolder"/>, which the caller copies there.
+    /// </summary>
+    internal static IReadOnlyList<ProfileTweak> GuestDisplayTweaks(MachineGuestDisplay? guest, string? wallpaperPath, List<ValidationIssue> warnings)
     {
         if (guest is null)
         {
@@ -314,7 +325,17 @@ public sealed class MachineProfileVmCreation(
         }
         else if (guest.Wallpaper?.Image is { } image)
         {
-            warnings.Add(new("display.guest.wallpaper.image", $"Wallpaper images are not copied into VMs yet, so {image} is left out."));
+            if (wallpaperPath is null)
+            {
+                warnings.Add(new("display.guest.wallpaper.image", $"You have no wallpaper image named {image} on this host, so the wallpaper is left as it is. Add it in the profile's Display section."));
+            }
+            else
+            {
+                const string desktop = @"HKCU\Control Panel\Desktop";
+                tweaks.Add(Registry(desktop, "WallPaper", RegistryValueType.String, ProfileImageStore.GuestPath(image), $"Wallpaper {image}"));
+                tweaks.Add(Registry(desktop, "WallpaperStyle", RegistryValueType.String, "10", "Wallpaper fills the screen"));
+                tweaks.Add(Registry(desktop, "TileWallpaper", RegistryValueType.String, "0", "Wallpaper is not tiled"));
+            }
         }
 
         return tweaks;

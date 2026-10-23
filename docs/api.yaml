@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.30.0
+  version: 1.31.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -1032,6 +1032,79 @@ paths:
                 type: string
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /profile-images:
+    get:
+      tags: [Profiles]
+      operationId: listProfileImages
+      summary: List the calling User's wallpaper images for machine profiles.
+      description: |
+        Since 1.31.0. By name. A machine profile's `display.guest.wallpaper.image` names one of these; applying the
+        profile copies it into the guest (C:\Users\Public\Pictures\HyperHarbor) and sets it as the wallpaper.
+      responses:
+        "200":
+          description: The images.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProfileImage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /profile-images/{name}:
+    parameters:
+      - $ref: "#/components/parameters/ProfileImageName"
+    put:
+      tags: [Profiles]
+      operationId: uploadProfileImage
+      summary: Add or replace a wallpaper image.
+      description: |
+        Since 1.31.0. Needs elevation. The body is the image file (JPEG, PNG, or BMP, at most 20 MB), checked by its
+        first bytes. A User keeps at most 50 images. Replacing an image changes it for every profile that names it.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: The saved image.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileImage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+    delete:
+      tags: [Profiles]
+      operationId: deleteProfileImage
+      summary: Delete a wallpaper image.
+      description: |
+        Since 1.31.0. Needs elevation. Profiles that name it keep the name; applying them reports the missing image as
+        a warning. Copies already in guests stay.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "204":
+          description: The image was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -3802,6 +3875,13 @@ components:
       description: An image file name in the ISO library, ending in .iso (URL-encoded).
       schema:
         type: string
+    ProfileImageName:
+      name: name
+      in: path
+      required: true
+      description: A wallpaper image's file name, ending in .jpg, .jpeg, .png, or .bmp (URL-encoded).
+      schema:
+        type: string
     BackupTargetId:
       name: targetId
       in: path
@@ -5685,14 +5765,14 @@ components:
 
     MachineWallpaper:
       type: object
-      description: A solid color, or an image file the host keeps beside the profile. Not both.
+      description: A solid color, or an image from the User's profile images (/profile-images). Not both.
       properties:
         color:
           type: [string, "null"]
           pattern: "^#[0-9A-Fa-f]{6}$"
         image:
           type: [string, "null"]
-          description: A plain file name.
+          description: The name of one of the User's profile images.
 
     ConnectionMonitors:
       type: string
@@ -5965,6 +6045,17 @@ components:
           format: date-time
         profile:
           $ref: "#/components/schemas/MachineProfile"
+
+    ProfileImage:
+      type: object
+      required: [name, sizeBytes]
+      properties:
+        name:
+          type: string
+          description: The file name, which profiles use in `display.guest.wallpaper.image`.
+        sizeBytes:
+          type: integer
+          format: int64
 
     MachineProfileSummary:
       type: object

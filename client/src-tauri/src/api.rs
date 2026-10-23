@@ -1822,6 +1822,49 @@ impl ApiClient {
         .map(|_| ())
     }
 
+    /// PUT /profile-images/{name} with the image as the body (needs elevation).
+    pub async fn upload_profile_image(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+        content: Vec<u8>,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = profile_image_path(name)?;
+        let response = self
+            .send_paired_built(
+                host,
+                paired,
+                reqwest::Method::PUT,
+                &path,
+                Some(UPLOAD_TIMEOUT),
+                |request| {
+                    request
+                        .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+                        .body(content.clone())
+                },
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// DELETE /profile-images/{name} (needs elevation).
+    pub async fn delete_profile_image(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired(
+            host,
+            paired,
+            reqwest::Method::DELETE,
+            &profile_image_path(name)?,
+        )
+        .await
+        .map(|_| ())
+    }
+
     /// DELETE /isos/{name}.
     pub async fn delete_iso(
         &self,
@@ -2169,6 +2212,7 @@ pub enum HostResource {
     Tailscale,
     SetupProfiles,
     MachineProfiles,
+    ProfileImages,
     SetupProfileCatalog,
     PackageCatalog,
     ExtensionCatalog,
@@ -2187,6 +2231,7 @@ impl HostResource {
             HostResource::Tailscale => "/host/tailscale",
             HostResource::SetupProfiles => "/setup-profiles",
             HostResource::MachineProfiles => "/machine-profiles",
+            HostResource::ProfileImages => "/profile-images",
             HostResource::SetupProfileCatalog => "/setup-profiles/catalog",
             HostResource::PackageCatalog => "/packages/catalog",
             HostResource::ExtensionCatalog => "/extensions/catalog",
@@ -2376,6 +2421,30 @@ fn iso_path(name: &str) -> Result<String, ClientError> {
         )));
     }
 
+    Ok(format!("/isos/{}", encode_segment(name)))
+}
+
+/// /profile-images/{name}: a plain JPEG, PNG, or BMP file name. The host checks the rest.
+fn profile_image_path(name: &str) -> Result<String, ClientError> {
+    let lower = name.to_ascii_lowercase();
+    let valid = [".jpg", ".jpeg", ".png", ".bmp"]
+        .iter()
+        .any(|extension| lower.len() > extension.len() && lower.ends_with(extension))
+        && !name.contains(['/', '\\', ':'])
+        && !name.contains("..")
+        && !name.starts_with('.')
+        && !name.chars().any(char::is_control);
+    if !valid {
+        return Err(ClientError::InvalidRequest(format!(
+            "\"{name}\" is not a JPEG, PNG, or BMP file name"
+        )));
+    }
+
+    Ok(format!("/profile-images/{}", encode_segment(name)))
+}
+
+/// A path segment with everything but unreserved characters percent-encoded.
+fn encode_segment(name: &str) -> String {
     let mut encoded = String::with_capacity(name.len());
     for byte in name.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
@@ -2384,7 +2453,7 @@ fn iso_path(name: &str) -> Result<String, ClientError> {
             encoded.push_str(&format!("%{byte:02X}"));
         }
     }
-    Ok(format!("/isos/{encoded}"))
+    encoded
 }
 
 /// The file as a stream of chunks that reports progress and stops with an error once cancelled.
@@ -3468,6 +3537,32 @@ mod server_tests {
         ] {
             assert!(
                 matches!(iso_path(name), Err(ClientError::InvalidRequest(_))),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn profile_image_names_are_encoded_and_other_names_are_refused() {
+        assert_eq!(
+            profile_image_path("Harbor night.JPG").unwrap(),
+            "/profile-images/Harbor%20night.JPG"
+        );
+        for name in [
+            "../x.png",
+            "a\\b.png",
+            "C:x.png",
+            ".hidden.png",
+            "a..b.png",
+            "notes.txt",
+            ".jpeg",
+            "a\n.bmp",
+        ] {
+            assert!(
+                matches!(
+                    profile_image_path(name),
+                    Err(ClientError::InvalidRequest(_))
+                ),
                 "{name}"
             );
         }

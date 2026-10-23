@@ -15,6 +15,7 @@ namespace HyperHarbor.Host.Core.Unattend;
 /// <param name="UserAccountName">The creating User's VM account, for example hh-owner.</param>
 /// <param name="SetupProfile">The setup profile to apply once the install is ready, as it is now; null for none.</param>
 /// <param name="GuestPerformanceSetup">Set up Performance mode in the guest once the install is ready (machine profiles with a GPU share).</param>
+/// <param name="WallpaperPath">A wallpaper image on the host to copy into the guest before the setup profile, which points to it.</param>
 public sealed record InstallPlan(
     UnattendProfile Profile,
     string? Edition,
@@ -22,7 +23,8 @@ public sealed record InstallPlan(
     string SeedPath,
     string UserAccountName,
     Shared.Contracts.Profiles.SetupProfile? SetupProfile = null,
-    bool GuestPerformanceSetup = false);
+    bool GuestPerformanceSetup = false,
+    string? WallpaperPath = null);
 
 /// <summary>
 /// The parts of VM creation that unattended installs add: checking the request against the ISO,
@@ -140,7 +142,8 @@ public sealed partial class UnattendedSetup
         bool enableTpm,
         List<ValidationIssue> errors,
         List<ValidationIssue> warnings,
-        bool guestPerformanceSetup = false)
+        bool guestPerformanceSetup = false,
+        string? wallpaperPath = null)
     {
         if (inspection.Os is not { } os)
         {
@@ -203,7 +206,7 @@ public sealed partial class UnattendedSetup
             errors.Add(new("install.setupProfileId", "Setup profiles apply to Windows installs only."));
         }
 
-        return errors.Count > 0 ? null : new InstallPlan(profile, edition, machineName, seedPath, user.VmAccountName, setupProfile, guestPerformanceSetup);
+        return errors.Count > 0 ? null : new InstallPlan(profile, edition, machineName, seedPath, user.VmAccountName, setupProfile, guestPerformanceSetup, wallpaperPath);
     }
 
     /// <summary>The User's setup profile as it is now, so later edits do not change an install in progress.</summary>
@@ -285,7 +288,8 @@ public sealed partial class UnattendedSetup
             now,
             now,
             SetupProfile: plan.SetupProfile,
-            GuestPerformanceSetup: plan.GuestPerformanceSetup));
+            GuestPerformanceSetup: plan.GuestPerformanceSetup,
+            WallpaperPath: plan.WallpaperPath));
 
         report("Starting the virtual machine");
         await _power.InvokeAsync(vmId, VmAction.Start, cancellationToken).ConfigureAwait(false);

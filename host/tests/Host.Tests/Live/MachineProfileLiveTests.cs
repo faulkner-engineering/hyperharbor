@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using HyperHarbor.Host.Core.Profiles;
 using HyperHarbor.Host.Core.Provisioning;
 using Xunit.Abstractions;
 
@@ -16,6 +17,31 @@ namespace HyperHarbor.Host.Tests.Live;
 public sealed class MachineProfileLiveTests(ITestOutputHelper output)
 {
     private const string VmName = "HyperHarbor-Test";
+    private const string WallpaperName = "live-wallpaper.bmp";
+
+    /// <summary>A 64 by 36 BMP in the HyperHarbor amber, 24 bits per pixel, bottom-up rows padded to 4 bytes.</summary>
+    internal static byte[] Wallpaper()
+    {
+        const int width = 64, height = 36, row = width * 3, pixels = row * height;
+        var bmp = new byte[54 + pixels];
+        void Write(int offset, int value) => BitConverter.GetBytes(value).CopyTo(bmp, offset);
+        bmp[0] = (byte)'B';
+        bmp[1] = (byte)'M';
+        Write(2, bmp.Length);
+        Write(10, 54);
+        Write(14, 40);
+        Write(18, width);
+        Write(22, height);
+        bmp[26] = 1;
+        bmp[28] = 24;
+        Write(34, pixels);
+        for (var offset = 54; offset < bmp.Length; offset += 3)
+        {
+            (bmp[offset], bmp[offset + 1], bmp[offset + 2]) = ((byte)0x2E, (byte)0x9B, (byte)0xE3);
+        }
+
+        return bmp;
+    }
 
     [EnvironmentFact("HH_MACHINE_LIVE", "HH_SPIKE_ISO")]
     public async Task Live_CreateFromAMachineProfile_SetsTheVmAndTheGuest()
@@ -41,7 +67,15 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
             ["name"] = "Live machine",
             ["os"] = "windows",
             ["account"] = new JsonObject { ["windows"] = new JsonObject { ["defaultEdition"] = edition } },
-            ["display"] = new JsonObject { ["guest"] = new JsonObject { ["theme"] = "dark", ["accentColor"] = "#E39B2E" } },
+            ["display"] = new JsonObject
+            {
+                ["guest"] = new JsonObject
+                {
+                    ["theme"] = "dark",
+                    ["accentColor"] = "#E39B2E",
+                    ["wallpaper"] = new JsonObject { ["image"] = WallpaperName },
+                },
+            },
             ["firmware"] = new JsonObject { ["tpm"] = true },
             ["compute"] = new JsonObject
             {
@@ -77,6 +111,8 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
             return;
         }
 
+        var uploaded = await host.SendElevatedAsync(HttpMethod.Put, $"/api/v1/profile-images/{WallpaperName}", Wallpaper());
+        Assert.True(uploaded.StatusCode == HttpStatusCode.OK, await uploaded.Content.ReadAsStringAsync());
         var saved = await host.SendElevatedAsync(HttpMethod.Post, "/api/v1/machine-profiles", profile);
         Assert.True(saved.StatusCode == HttpStatusCode.Created, await saved.Content.ReadAsStringAsync());
         var profileId = (string)(await saved.Content.ReadFromJsonAsync<JsonObject>())!["id"]!;
@@ -139,6 +175,9 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
         Assert.Equal("0", (string?)check["appsUseLightTheme"]);
         Assert.Equal("4281244643", (string?)check["accentColor"]);
         Assert.Equal("0", (string?)check["hideFileExt"]);
+        Assert.Equal(ProfileImageStore.GuestPath(WallpaperName), (string?)check["wallpaper"]);
+        Assert.Equal("10", (string?)check["wallpaperStyle"]);
+        Assert.True((bool)check["wallpaperCopied"]!);
     }
 
     private static async Task<JsonObject> WaitForJobAsync(LiveHostHarness host, JsonObject job, Action<string> log)
@@ -259,12 +298,15 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
                 appsUseLightTheme = Value 'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' 'AppsUseLightTheme'
                 accentColor = Value 'Software\Microsoft\Windows\DWM' 'AccentColor'
                 hideFileExt = Value 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'HideFileExt'
+                wallpaper = Value 'Control Panel\Desktop' 'WallPaper'
+                wallpaperStyle = Value 'Control Panel\Desktop' 'WallpaperStyle'
+                wallpaperCopied = Test-Path 'C:\Users\Public\Pictures\HyperHarbor\live-wallpaper.bmp'
             }
             [GC]::Collect(); [GC]::WaitForPendingFinalizers()
             & reg.exe unload 'HKU\HyperHarborCheck' 2>&1 | Out-Null
             $values
         }
         Remove-PSSession $session
-        @{ ok = $true; result = ($result | Select-Object appsUseLightTheme, accentColor, hideFileExt) } | ConvertTo-Json -Compress -Depth 4
+        @{ ok = $true; result = ($result | Select-Object appsUseLightTheme, accentColor, hideFileExt, wallpaper, wallpaperStyle, wallpaperCopied) } | ConvertTo-Json -Compress -Depth 4
         """;
 }

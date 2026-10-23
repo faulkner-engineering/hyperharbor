@@ -177,15 +177,30 @@ public sealed class MachineProfileVmCreationTests : IDisposable
         var warnings = new List<ValidationIssue>();
 
         var tweaks = MachineProfileVmCreation.GuestDisplayTweaks(
-            new MachineGuestDisplay(GuestTheme.Light, "#112233", new MachineWallpaper("#0B0D10")), warnings);
-        var image = MachineProfileVmCreation.GuestDisplayTweaks(new MachineGuestDisplay(Wallpaper: new MachineWallpaper(Image: "harbor.jpg")), warnings);
+            new MachineGuestDisplay(GuestTheme.Light, "#112233", new MachineWallpaper("#0B0D10")), null, warnings);
 
         var values = tweaks.Select(tweak => (tweak.Registry!.Name, tweak.Registry.Value)).ToList();
         Assert.Contains(("AppsUseLightTheme", "1"), values);
         Assert.Contains(("AccentColor", "4281541137"), values);
         Assert.Contains(("Background", "11 13 16"), values);
         Assert.Contains(("WallPaper", ""), values);
-        Assert.Empty(image);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void WallpaperImage_PointsToItsCopyInTheGuest_OrIsAWarningWhenMissing()
+    {
+        var display = new MachineGuestDisplay(Wallpaper: new MachineWallpaper(Image: "harbor.jpg"));
+        var warnings = new List<ValidationIssue>();
+
+        var copied = MachineProfileVmCreation.GuestDisplayTweaks(display, @"C:\data\harbor.jpg", warnings);
+        Assert.Empty(warnings);
+        var missing = MachineProfileVmCreation.GuestDisplayTweaks(display, null, warnings);
+
+        var values = copied.Select(tweak => (tweak.Registry!.Name, tweak.Registry.Value)).ToList();
+        Assert.Contains(("WallPaper", @"C:\Users\Public\Pictures\HyperHarbor\harbor.jpg"), values);
+        Assert.Contains(("WallpaperStyle", "10"), values);
+        Assert.Empty(missing);
         Assert.Equal("display.guest.wallpaper.image", Assert.Single(warnings).Field);
     }
 

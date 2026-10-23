@@ -38,6 +38,8 @@ public sealed class MachineProfileApplierTests : IDisposable
     private readonly MachineProfileStore _profiles;
     private readonly MachineProfileApplier _service;
     private readonly VmConnectionDefaultsStore _connectionDefaults;
+    private readonly ProfileImageStore _images;
+    private readonly FakeGuestFileCopier _files = new();
     private readonly Guid _userId;
     private bool _tpm;
 
@@ -58,6 +60,7 @@ public sealed class MachineProfileApplierTests : IDisposable
         _profiles = new MachineProfileStore(_directory, new MachineProfileValidator(software, unattendProfiles));
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-10-23T12:00:00Z"));
         _connectionDefaults = new VmConnectionDefaultsStore(_directory);
+        _images = new ProfileImageStore(_directory);
         var performance = new VmPerformanceService(
             _inventory, _performance, _compute, new FakeHostGpuReader(), new FakeHostCapacity(), new PerformanceStore(_directory), credentials,
             new FakeGpuDriverSource(), _guestPerformance, new VmOperationLocks(), _jobs, new LifecycleOptions(), time, NullLogger<VmPerformanceService>.Instance);
@@ -66,7 +69,7 @@ public sealed class MachineProfileApplierTests : IDisposable
             new UnattendedInstallStore(_directory), new SetupProfileApplication(new SetupProfilePlanner(Catalogs.Default), _applier),
             new GuestRestart(_inventory, probe, _power, TimeProvider.System) { Poll = TimeSpan.Zero, Checks = 3 },
             _power, _jobs, new LifecycleOptions { ShutdownTimeoutSeconds = 5 }, TimeProvider.System, NullLogger<MachineProfileApplier>.Instance,
-            _connectionDefaults);
+            _connectionDefaults, _images, _files);
     }
 
     public void Dispose()
@@ -227,6 +230,36 @@ public sealed class MachineProfileApplierTests : IDisposable
         Assert.Equal([VmAction.Shutdown, VmAction.Start], _power.Calls.Select(call => call.Action));
         Assert.Single(_guestPerformance.Runs);
         Assert.Empty(job.SetupResult!.Problems);
+    }
+
+    [Fact]
+    public async Task AWallpaperImage_IsCopiedIntoTheGuest_BeforeTheSettingThatPointsToIt()
+    {
+        _images.Save(_userId, "dunes.jpg", [0xFF, 0xD8, 0xFF, 0xE0]);
+        var copiedFirst = false;
+        _applier.OnCall = step => copiedFirst |= step == "settings" && _files.Copies.Count == 1;
+        var id = Save(new MachineProfile("Desk", InstallOs.Windows, Display: new MachineDisplay(new MachineGuestDisplay(Wallpaper: new MachineWallpaper(Image: "dunes.jpg")))));
+
+        var job = await ApplyAsync(id, [MachinePart.Software]);
+
+        Assert.Equal(VmJobState.Succeeded, job.State);
+        var copy = Assert.Single(_files.Copies);
+        Assert.Equal((VmId, _images.PathOf(_userId, "dunes.jpg"), ProfileImageStore.GuestFolder), copy);
+        Assert.True(copiedFirst);
+        Assert.Contains(_applier.Writes, write => write.Name == "WallPaper" && write.Value == ProfileImageStore.GuestPath("dunes.jpg"));
+    }
+
+    [Fact]
+    public async Task AWallpaperImageTheUserDoesNotHave_IsAWarning_AndNothingIsCopied()
+    {
+        var id = Save(new MachineProfile("Desk", InstallOs.Windows, Display: new MachineDisplay(new MachineGuestDisplay(GuestTheme.Dark, Wallpaper: new MachineWallpaper(Image: "gone.jpg")))));
+
+        var preview = await _service.PreviewAsync(_userId, VmId, id, CancellationToken.None);
+        await ApplyAsync(id, [MachinePart.Software]);
+
+        Assert.Equal("display.guest.wallpaper.image", Assert.Single(preview.Warnings).Field);
+        Assert.Empty(_files.Copies);
+        Assert.DoesNotContain(_applier.Writes, write => write.Name == "WallPaper");
     }
 
     [Fact]

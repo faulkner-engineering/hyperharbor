@@ -17,6 +17,7 @@ namespace HyperHarbor.Host.Service.Api;
 public static class MachineProfileEndpoints
 {
     public const string ProfilesPath = ContractInfo.BasePath + "/machine-profiles";
+    public const string ImagesPath = ContractInfo.BasePath + "/profile-images";
 
     public static IEndpointRouteBuilder MapMachineProfileEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -36,6 +37,14 @@ public static class MachineProfileEndpoints
             .RequireElevation();
         profiles.MapDelete("/{profileId}", Delete).WithName("deleteMachineProfile")
             .Audited<string>(profileId => $"profileId={profileId}")
+            .RequireElevation();
+        var images = endpoints.MapGroup(ImagesPath);
+        images.MapGet("/", ListImages).WithName("listProfileImages");
+        images.MapPut("/{name}", UploadImageAsync).WithName("uploadProfileImage")
+            .Audited<string>(name => $"name={name}")
+            .RequireElevation();
+        images.MapDelete("/{name}", DeleteImage).WithName("deleteProfileImage")
+            .Audited<string>(name => $"name={name}")
             .RequireElevation();
         var vms = endpoints.MapGroup(VmEndpoints.BasePath);
         vms.MapGet("/{vmId:guid}/machine-profile-preview", PreviewAsync).WithName("previewVmMachineProfile");
@@ -111,6 +120,40 @@ public static class MachineProfileEndpoints
 
     private static ContentHttpResult Schema() =>
         TypedResults.Text(Catalogs.MachineProfileSchema, "application/schema+json", Encoding.UTF8);
+
+    private static Ok<IReadOnlyList<ProfileImage>> ListImages(ProfileImageStore images, HttpContext context) =>
+        TypedResults.Ok(images.List(context.User.UserId()));
+
+    /// <summary>The body is the image file itself.</summary>
+    private static async Task<Ok<ProfileImage>> UploadImageAsync(string name, HttpContext context, ProfileImageStore images, CancellationToken cancellationToken)
+    {
+        var tooLarge = new LifecycleValidationException("The image is too large.", [new ValidationIssue("content", $"An image is at most {ProfileImageStore.MaxBytes / 1024 / 1024} MB.")]);
+        if (context.Request.ContentLength > ProfileImageStore.MaxBytes)
+        {
+            throw tooLarge;
+        }
+
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await context.Request.Body.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            if (buffer.Length + read > ProfileImageStore.MaxBytes)
+            {
+                throw tooLarge;
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return TypedResults.Ok(images.Save(context.User.UserId(), name, buffer.ToArray()));
+    }
+
+    private static NoContent DeleteImage(string name, ProfileImageStore images, HttpContext context)
+    {
+        images.Delete(context.User.UserId(), name);
+        return TypedResults.NoContent();
+    }
 
     /// <summary>The body is the YAML file itself.</summary>
     private static async Task<Created<StoredMachineProfile>> ImportAsync(HttpContext context, MachineProfileStore store, CancellationToken cancellationToken)

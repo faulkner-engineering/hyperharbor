@@ -30,9 +30,6 @@ public sealed partial class MachineProfileValidator(ProfileValidator software, U
     [GeneratedRegex("^[A-Za-z0-9-]{1,15}$")]
     private static partial Regex ComputerName();
 
-    [GeneratedRegex(@"^[^\\/:*?""<>|]{1,100}\.(jpg|jpeg|png|bmp)$", RegexOptions.IgnoreCase)]
-    private static partial Regex ImageFile();
-
     [GeneratedRegex("^([01][0-9]|2[0-3]):[0-5][0-9]$")]
     private static partial Regex TimeOfDay();
 
@@ -188,9 +185,9 @@ public sealed partial class MachineProfileValidator(ProfileValidator software, U
                 {
                     issues.Add(new("display.guest.wallpaper.color", "Use a color as #RRGGBB."));
                 }
-                else if (wallpaper.Image is { } image && !ImageFile().IsMatch(image))
+                else if (wallpaper.Image is { } image && !ProfileImageStore.IsValidName(image))
                 {
-                    issues.Add(new("display.guest.wallpaper.image", "Use a file name ending in .jpg, .png, or .bmp, without a folder."));
+                    issues.Add(new("display.guest.wallpaper.image", "Use the name of one of your wallpaper images: a file name ending in .jpg, .jpeg, .png, or .bmp."));
                 }
             }
         }

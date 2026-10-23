@@ -184,3 +184,6 @@ public sealed record MachineProfileSummary(
     int SoftwareCount,
     DateTimeOffset UpdatedAt,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Error);
+
+/// <summary>A wallpaper image in the User's library. Schema: ProfileImage.</summary>
+public sealed record ProfileImage(string Name, long SizeBytes);

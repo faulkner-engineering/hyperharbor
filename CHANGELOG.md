@@ -55,12 +55,18 @@ note anything that needs action, such as updating the host, a new elevation requ
 - A machine profile's Backups section can keep a different number of daily, weekly, and monthly backups than its
   target, and use other conditions for when a backup may start (wait while connected, wait while a game runs, a time
   window). A profile that would keep no backups at all is refused.
+- Wallpaper images for machine profiles (hosts with API 1.31.0): in the Display section, choose Image, then pick one of
+  your images on the host or Add image… from this device (JPEG, PNG, or BMP up to 20 MB). Creating a VM from the
+  profile or applying it copies the image into the VM (C:\Users\Public\Pictures\HyperHarbor) and sets it as the
+  wallpaper, filling the screen. A profile whose image was deleted is applied without it, with a warning.
 
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
   (RUSTSEC-2026-0385).
 
 ### Changed
+- API 1.31.0: /profile-images (list, upload, delete) keeps each User's wallpaper images; a machine profile's
+  display.guest.wallpaper.image names one of them.
 - API 1.30.0: VmConnection.defaults carries the machine profile's Remote Desktop defaults; MachinePart has connection.
 - API 1.29.0: GET /vms/{vmId}/machine-profile-preview and POST /vms/{vmId}/machine-profile (a new applyMachineProfile
   job kind).

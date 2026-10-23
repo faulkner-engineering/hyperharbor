@@ -378,6 +378,15 @@ verified, and what was found along the way. User-facing changes per release are 
    uses its monitors only when MonitorChoiceStore has no choice for the VM on this device, writes screen mode id,
    redirectclipboard, and redirectprinters, sets audiocapturemode 0 for a microphone that is off, and prepares no
    camera when the camera is off.
+   Done: wallpaper images (2026-10-23; API 1.31.0). ProfileImageStore keeps each User's images in
+   machine-profiles\<user>\images (ProtectedFile ACL; JPEG, PNG, or BMP by their first bytes; 20 MB; 50 per User;
+   names without folders or ".."), served at /profile-images (an own path, so an image name never meets a profile ID).
+   The setup snapshot gets Desktop WallPaper = C:\Users\Public\Pictures\HyperHarbor\<name>, WallpaperStyle 10, and
+   TileWallpaper 0 when the image exists; IGuestFileCopier (PowerShell Direct, Copy-Item -ToSession, as the guest
+   Performance setup copies drivers) puts the file there first: the applier in its guest step, the install watcher
+   before the setup profile (UnattendedInstall.WallpaperPath; a guest that does not answer retries the install, an
+   image deleted since is a problem). Client: Rust upload_profile_image (file dialog) and delete_profile_image, the
+   image list in DisplaySection; hosts before 1.31.0 keep a typed name.
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.

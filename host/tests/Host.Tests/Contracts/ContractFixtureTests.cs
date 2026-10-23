@@ -341,6 +341,7 @@ public class ContractFixtureTests
         ["MachineBackup"] = MachineProfileSample.Backup!,
 
         // Nulls on purpose: description, processors, memoryMb, tpm, and error are required but nullable.
+        ["ProfileImage"] = new ProfileImage("dunes.jpg", 2_400_000),
         ["MachineProfileSummary"] = new MachineProfileSummary("gaming-rig", "Gaming rig", null, InstallOs.Windows, null, null, true, null, false, 3, Time, null),
 
         // Nulls on purpose: description, browser, and error are required but nullable.

@@ -41,7 +41,9 @@ public sealed class MachineProfileApplier(
     LifecycleOptions options,
     TimeProvider time,
     ILogger<MachineProfileApplier> logger,
-    VmConnectionDefaultsStore? connectionDefaults = null)
+    VmConnectionDefaultsStore? connectionDefaults = null,
+    ProfileImageStore? images = null,
+    IGuestFileCopier? files = null)
 {
     private static readonly TimeSpan ShutdownPoll = TimeSpan.FromSeconds(2);
 
@@ -59,7 +61,8 @@ public sealed class MachineProfileApplier(
         (PerformanceSettings Settings, PerformancePlan Plan)? Performance,
         bool RemovePerformance,
         string? BackupTarget,
-        SetupProfile? Setup);
+        SetupProfile? Setup,
+        string? WallpaperPath = null);
 
     /// <exception cref="VmNotFoundException">No such VM.</exception>
     /// <exception cref="MachineProfileNotFoundException">No such profile.</exception>
@@ -221,6 +224,19 @@ public sealed class MachineProfileApplier(
             }
             else
             {
+                if (softwareChosen && plan.WallpaperPath is { } wallpaper && files is not null)
+                {
+                    try
+                    {
+                        context.Report($"Copying the wallpaper {Path.GetFileName(wallpaper)}", 75);
+                        await files.CopyAsync(vm.Id, admin!, wallpaper, ProfileImageStore.GuestFolder, context.Stopping).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is GuestOperationException or GuestUnavailableException or IOException)
+                    {
+                        problems.Add($"The wallpaper image was not copied into the guest: {ex.Message}");
+                    }
+                }
+
                 if (softwareChosen)
                 {
                     var outcome = await application.ApplyAsync(vm.Id, admin!, plan.Setup!, step => context.Report(step, 80), context.Stopping, account).ConfigureAwait(false);
@@ -454,9 +470,11 @@ public sealed class MachineProfileApplier(
         }
 
         SetupProfile? setup = null;
+        string? wallpaper = null;
         if (windows)
         {
-            setup = MachineProfileVmCreation.SetupSnapshot(software, profile, warnings);
+            wallpaper = MachineProfileVmCreation.WallpaperSource(images, userId, profile);
+            setup = MachineProfileVmCreation.SetupSnapshot(software, profile, wallpaper, warnings);
             if (setup is not null)
             {
                 var removals = (setup.Remove?.Appx?.Count ?? 0) + (setup.Remove?.Capabilities?.Count ?? 0) + (setup.Remove?.Features?.Count ?? 0);
@@ -484,7 +502,8 @@ public sealed class MachineProfileApplier(
             }
         }
 
-        return new Plan(vm, profile, changes, notes, warnings, computeChange, current, macSpoofing, addTpm, performancePlan, removePerformance, backupTarget, setup);
+        return new Plan(vm, profile, changes, notes, warnings, computeChange, current, macSpoofing, addTpm, performancePlan, removePerformance, backupTarget, setup,
+            setup is null ? null : wallpaper);
     }
 
     /// <summary>"All monitors, full screen, clipboard shared, camera not shared"; settings left to the client are not named.</summary>

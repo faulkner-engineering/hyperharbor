@@ -635,6 +635,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profile-images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the calling User's wallpaper images for machine profiles.
+         * @description Since 1.31.0. By name. A machine profile's `display.guest.wallpaper.image` names one of these; applying the
+         *     profile copies it into the guest (C:\Users\Public\Pictures\HyperHarbor) and sets it as the wallpaper.
+         */
+        get: operations["listProfileImages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profile-images/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A wallpaper image's file name, ending in .jpg, .jpeg, .png, or .bmp (URL-encoded). */
+                name: components["parameters"]["ProfileImageName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Add or replace a wallpaper image.
+         * @description Since 1.31.0. Needs elevation. The body is the image file (JPEG, PNG, or BMP, at most 20 MB), checked by its
+         *     first bytes. A User keeps at most 50 images. Replacing an image changes it for every profile that names it.
+         */
+        put: operations["uploadProfileImage"];
+        post?: never;
+        /**
+         * Delete a wallpaper image.
+         * @description Since 1.31.0. Needs elevation. Profiles that name it keep the name; applying them reports the missing image as
+         *     a warning. Copies already in guests stay.
+         */
+        delete: operations["deleteProfileImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/packages/search": {
         parameters: {
             query?: never;
@@ -3414,10 +3464,10 @@ export interface components {
             accentColor?: string | null;
             wallpaper?: components["schemas"]["MachineWallpaper"] | null;
         };
-        /** @description A solid color, or an image file the host keeps beside the profile. Not both. */
+        /** @description A solid color, or an image from the User's profile images (/profile-images). Not both. */
         MachineWallpaper: {
             color?: string | null;
-            /** @description A plain file name. */
+            /** @description The name of one of the User's profile images. */
             image?: string | null;
         };
         /** @enum {string} */
@@ -3555,6 +3605,12 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             profile: components["schemas"]["MachineProfile"];
+        };
+        ProfileImage: {
+            /** @description The file name, which profiles use in `display.guest.wallpaper.image`. */
+            name: string;
+            /** Format: int64 */
+            sizeBytes: number;
         };
         MachineProfileSummary: {
             id: string;
@@ -4556,6 +4612,8 @@ export interface components {
         MachineProfileId: string;
         /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
         IsoName: string;
+        /** @description A wallpaper image's file name, ending in .jpg, .jpeg, .png, or .bmp (URL-encoded). */
+        ProfileImageName: string;
         /** @description A backup target ID. */
         BackupTargetId: string;
         /** @description Job ID returned when the job was started. */
@@ -5531,6 +5589,81 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listProfileImages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The images. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileImage"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    uploadProfileImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A wallpaper image's file name, ending in .jpg, .jpeg, .png, or .bmp (URL-encoded). */
+                name: components["parameters"]["ProfileImageName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The saved image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileImage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
+    deleteProfileImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A wallpaper image's file name, ending in .jpg, .jpeg, .png, or .bmp (URL-encoded). */
+                name: components["parameters"]["ProfileImageName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image was deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
             404: components["responses"]["NotFound"];
         };
     };

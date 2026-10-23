@@ -165,9 +165,12 @@ internal sealed class FakeGuestProfileApplier : IGuestProfileApplier
     /// <summary>The account each settings step was asked to change too.</summary>
     public List<string?> UserAccounts { get; } = [];
 
+    public List<RegistryWrite> Writes { get; } = [];
+
     public Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(Guid vmId, GuestCredential admin, IReadOnlyList<RegistryWrite> writes, string? userAccount, CancellationToken cancellationToken)
     {
         UserAccounts.Add(userAccount);
+        Writes.AddRange(writes);
         return Run("settings", admin, writes.Select(write => write.Item).Distinct().ToList());
     }
 
@@ -190,5 +193,24 @@ internal sealed class FakeGuestProfileApplier : IGuestProfileApplier
             .Select(item => Failing.TryGetValue(item, out var error) ? new ApplyItemResult(item, false, error) : new ApplyItemResult(item, true, RestartNeeded: item == Restart))
             .ToList();
         return Task.FromResult(results);
+    }
+}
+
+/// <summary>Records the files copied into guests.</summary>
+internal sealed class FakeGuestFileCopier : IGuestFileCopier
+{
+    public List<(Guid VmId, string HostPath, string GuestFolder)> Copies { get; } = [];
+
+    public Exception? Failure { get; set; }
+
+    public Task CopyAsync(Guid vmId, GuestCredential admin, string hostPath, string guestFolder, CancellationToken cancellationToken)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        Copies.Add((vmId, hostPath, guestFolder));
+        return Task.CompletedTask;
     }
 }

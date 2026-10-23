@@ -115,7 +115,7 @@
   {#if tab === "account"}
     <AccountSection {host} {draft} />
   {:else if tab === "display"}
-    <DisplaySection {draft} />
+    <DisplaySection {host} {draft} />
   {:else if tab === "firmware"}
     <FirmwareSection {draft} />
   {:else if tab === "compute"}
