@@ -18,7 +18,8 @@ note anything that needs action, such as updating the host, a new elevation requ
   section list switch between amber and green and turn motion on or off. Motion starts from the Windows animation
   effects setting: with it off, the camera cuts instead of flying and does not orbit, until you check Motion. Without
   WebGL, or when the view stays under 30 frames per second for five seconds, it shows a still exploded drawing with
-  the same highlights instead, and says why.
+  the same highlights instead, and says why. The editor fills the window, with thin scrollbars, fields, and buttons
+  that glow in the terminal color; with Motion off its own animations (the section fade and the cursor) stop too.
 
 ## [0.2.0] - 2026-10-22 (API 1.25.0)
 
