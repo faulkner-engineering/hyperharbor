@@ -166,6 +166,9 @@ public sealed class Catalogs
     /// <summary>The embedded profile JSON Schema (schemas/profile.v1.schema.json).</summary>
     public static string ProfileSchema => ReadResource("HyperHarbor.Schemas.profile.v1.schema.json");
 
+    /// <summary>The embedded machine profile JSON Schema (schemas/machine-profile.v1.schema.json).</summary>
+    public static string MachineProfileSchema => ReadResource("HyperHarbor.Schemas.machine-profile.v1.schema.json");
+
     private static string Read(string file) => ReadResource("HyperHarbor.Catalogs." + file);
 
     private static string ReadResource(string name)

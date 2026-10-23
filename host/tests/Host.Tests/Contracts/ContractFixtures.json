@@ -474,7 +474,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.26.0",
+    "apiVersion": "1.27.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -642,6 +642,209 @@
       "curl"
     ],
     "installDesktop": true
+  },
+  "MachineAccount": {
+    "adminAccountName": "hhadmin",
+    "locale": "en-US",
+    "computerName": "GAMING-RIG",
+    "windows": {
+      "defaultEdition": "Windows 11 Pro",
+      "bypassHardwareChecks": false,
+      "disableTelemetry": true,
+      "disableAdvertisingId": true,
+      "disableLocation": true,
+      "disableConsumerFeatures": true
+    }
+  },
+  "MachineBackup": {
+    "enabled": true,
+    "target": "NAS",
+    "triggers": {
+      "schedule": true,
+      "onShutdown": true,
+      "debounceMinutes": 10
+    },
+    "gpuMode": "requireOff"
+  },
+  "MachineCompute": {
+    "processors": 8,
+    "memory": {
+      "startupMb": 16384,
+      "dynamic": false
+    },
+    "nestedVirtualization": false,
+    "diskSizeGb": 256
+  },
+  "MachineConnection": {
+    "monitors": "all",
+    "window": "fullScreen",
+    "redirect": {
+      "clipboard": true,
+      "printers": false,
+      "microphone": true,
+      "camera": true
+    }
+  },
+  "MachineDisplay": {
+    "guest": {
+      "theme": "dark",
+      "accentColor": "#E39B2E",
+      "wallpaper": {
+        "color": "#0B0D10"
+      }
+    },
+    "connection": {
+      "monitors": "all",
+      "window": "fullScreen",
+      "redirect": {
+        "clipboard": true,
+        "printers": false,
+        "microphone": true,
+        "camera": true
+      }
+    }
+  },
+  "MachineFirmware": {
+    "tpm": true,
+    "secureBoot": true
+  },
+  "MachineGpu": {
+    "enabled": true,
+    "share": {
+      "vramPercent": 60,
+      "encodePercent": 50,
+      "decodePercent": 50,
+      "computePercent": 60
+    },
+    "hardwareEncoding": false
+  },
+  "MachineGpuShare": {
+    "vramPercent": 50,
+    "encodePercent": 50,
+    "decodePercent": 50,
+    "computePercent": 50
+  },
+  "MachineGuestDisplay": {
+    "theme": "dark",
+    "accentColor": "#E39B2E",
+    "wallpaper": {
+      "color": "#0B0D10"
+    }
+  },
+  "MachineMemory": {
+    "startupMb": 8192,
+    "maximumMb": 16384,
+    "dynamic": true
+  },
+  "MachineNetwork": {
+    "switch": "Default Switch",
+    "macAddressSpoofing": false
+  },
+  "MachineProfile": {
+    "name": "Gaming rig",
+    "os": "windows",
+    "description": "Steam and a GPU share",
+    "account": {
+      "adminAccountName": "hhadmin",
+      "locale": "en-US",
+      "computerName": "GAMING-RIG",
+      "windows": {
+        "defaultEdition": "Windows 11 Pro",
+        "bypassHardwareChecks": false,
+        "disableTelemetry": true,
+        "disableAdvertisingId": true,
+        "disableLocation": true,
+        "disableConsumerFeatures": true
+      }
+    },
+    "display": {
+      "guest": {
+        "theme": "dark",
+        "accentColor": "#E39B2E",
+        "wallpaper": {
+          "color": "#0B0D10"
+        }
+      },
+      "connection": {
+        "monitors": "all",
+        "window": "fullScreen",
+        "redirect": {
+          "clipboard": true,
+          "printers": false,
+          "microphone": true,
+          "camera": true
+        }
+      }
+    },
+    "firmware": {
+      "tpm": true,
+      "secureBoot": true
+    },
+    "compute": {
+      "processors": 8,
+      "memory": {
+        "startupMb": 16384,
+        "dynamic": false
+      },
+      "nestedVirtualization": false,
+      "diskSizeGb": 256
+    },
+    "gpu": {
+      "enabled": true,
+      "share": {
+        "vramPercent": 60,
+        "encodePercent": 50,
+        "decodePercent": 50,
+        "computePercent": 60
+      },
+      "hardwareEncoding": false
+    },
+    "network": {
+      "switch": "Default Switch",
+      "macAddressSpoofing": false
+    },
+    "backup": {
+      "enabled": true,
+      "target": "NAS",
+      "triggers": {
+        "schedule": true,
+        "onShutdown": true,
+        "debounceMinutes": 10
+      },
+      "gpuMode": "requireOff"
+    },
+    "install": [
+      {
+        "id": "Valve.Steam",
+        "name": "Steam"
+      }
+    ],
+    "tweaks": [
+      {
+        "id": "appearance.darkMode",
+        "name": "Use dark mode"
+      }
+    ]
+  },
+  "MachineProfileSummary": {
+    "id": "gaming-rig",
+    "name": "Gaming rig",
+    "description": null,
+    "os": "windows",
+    "processors": null,
+    "memoryMb": null,
+    "gpu": true,
+    "tpm": null,
+    "backup": false,
+    "softwareCount": 3,
+    "updatedAt": "2026-10-03T12:00:00\u002B00:00",
+    "error": null
+  },
+  "MachineRedirect": {
+    "clipboard": true
+  },
+  "MachineWallpaper": {
+    "image": "harbor.jpg"
   },
   "MmioSettings": {
     "lowGapMb": 1024,
@@ -1117,6 +1320,96 @@
     "guardian": "PHhtbD4=",
     "confirmName": "Web",
     "tpmMode": "keep"
+  },
+  "StoredMachineProfile": {
+    "id": "gaming-rig",
+    "updatedAt": "2026-10-03T12:00:00\u002B00:00",
+    "profile": {
+      "name": "Gaming rig",
+      "os": "windows",
+      "description": "Steam and a GPU share",
+      "account": {
+        "adminAccountName": "hhadmin",
+        "locale": "en-US",
+        "computerName": "GAMING-RIG",
+        "windows": {
+          "defaultEdition": "Windows 11 Pro",
+          "bypassHardwareChecks": false,
+          "disableTelemetry": true,
+          "disableAdvertisingId": true,
+          "disableLocation": true,
+          "disableConsumerFeatures": true
+        }
+      },
+      "display": {
+        "guest": {
+          "theme": "dark",
+          "accentColor": "#E39B2E",
+          "wallpaper": {
+            "color": "#0B0D10"
+          }
+        },
+        "connection": {
+          "monitors": "all",
+          "window": "fullScreen",
+          "redirect": {
+            "clipboard": true,
+            "printers": false,
+            "microphone": true,
+            "camera": true
+          }
+        }
+      },
+      "firmware": {
+        "tpm": true,
+        "secureBoot": true
+      },
+      "compute": {
+        "processors": 8,
+        "memory": {
+          "startupMb": 16384,
+          "dynamic": false
+        },
+        "nestedVirtualization": false,
+        "diskSizeGb": 256
+      },
+      "gpu": {
+        "enabled": true,
+        "share": {
+          "vramPercent": 60,
+          "encodePercent": 50,
+          "decodePercent": 50,
+          "computePercent": 60
+        },
+        "hardwareEncoding": false
+      },
+      "network": {
+        "switch": "Default Switch",
+        "macAddressSpoofing": false
+      },
+      "backup": {
+        "enabled": true,
+        "target": "NAS",
+        "triggers": {
+          "schedule": true,
+          "onShutdown": true,
+          "debounceMinutes": 10
+        },
+        "gpuMode": "requireOff"
+      },
+      "install": [
+        {
+          "id": "Valve.Steam",
+          "name": "Steam"
+        }
+      ],
+      "tweaks": [
+        {
+          "id": "appearance.darkMode",
+          "name": "Use dark mode"
+        }
+      ]
+    }
   },
   "StoredSetupProfile": {
     "id": "dev-workstation",

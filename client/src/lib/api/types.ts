@@ -499,6 +499,113 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/machine-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the calling User's machine profiles.
+         * @description Since 1.27.0. By name. A file on the host that no longer reads is listed with `error` set.
+         */
+        get: operations["listMachineProfiles"];
+        put?: never;
+        /**
+         * Save a new machine profile for the calling User.
+         * @description Needs elevation. The account section is checked like an unattended install profile and the software
+         *     sections like a setup profile (`400` with `errors` by field path, for example `compute.memory.maximumMb`
+         *     or `install[3]`). Names of host things (switch, GPU, backup target) are not checked here; applying a
+         *     profile reports the ones a host does not have.
+         */
+        post: operations["createMachineProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/machine-profiles/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a machine profile from a YAML file.
+         * @description The body is the file (at most 256 KB). A file that is not a machine profile is `400` with an error on
+         *     the `yaml` field; a profile with problems is `400` with errors by field path.
+         */
+        post: operations["importMachineProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/machine-profiles/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the JSON Schema of machine profile files. */
+        get: operations["getMachineProfileSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/machine-profiles/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A machine profile ID (its file name on the host). */
+                profileId: components["parameters"]["MachineProfileId"];
+            };
+            cookie?: never;
+        };
+        /** Get one of the calling User's machine profiles. */
+        get: operations["getMachineProfile"];
+        /** Replace one of the calling User's machine profiles. */
+        put: operations["updateMachineProfile"];
+        post?: never;
+        /** Delete one of the calling User's machine profiles. */
+        delete: operations["deleteMachineProfile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/machine-profiles/{profileId}/yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A machine profile ID (its file name on the host). */
+                profileId: components["parameters"]["MachineProfileId"];
+            };
+            cookie?: never;
+        };
+        /** Get the machine profile's YAML file as stored, for export. */
+        get: operations["exportMachineProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/packages/search": {
         parameters: {
             query?: never;
@@ -3171,6 +3278,161 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * @description Since 1.27.0. A whole VM in one document: account, display, firmware, compute, GPU share, network,
+         *     backups, and software. In YAML files it also has `schemaVersion: 1`; see schemas/machine-profile.v1.schema.json.
+         *     Every section is optional: a missing section leaves that part as it is when applied, and uses the host's
+         *     defaults when creating a VM. docs/machine-profiles.md describes how each section applies.
+         */
+        MachineProfile: {
+            name: string;
+            description?: string;
+            os: components["schemas"]["InstallOs"];
+            account?: components["schemas"]["MachineAccount"];
+            display?: components["schemas"]["MachineDisplay"];
+            firmware?: components["schemas"]["MachineFirmware"];
+            compute?: components["schemas"]["MachineCompute"];
+            gpu?: components["schemas"]["MachineGpu"];
+            network?: components["schemas"]["MachineNetwork"];
+            backup?: components["schemas"]["MachineBackup"];
+            /** @description As in a setup profile. */
+            install?: components["schemas"]["ProfileItem"][];
+            remove?: components["schemas"]["ProfileRemove"];
+            tweaks?: components["schemas"]["ProfileTweak"][];
+            browser?: components["schemas"]["ProfileBrowser"];
+        };
+        /** @description The unattended install settings, checked as an unattended install profile is. */
+        MachineAccount: {
+            /** @default hhadmin */
+            adminAccountName: string;
+            /** @description A Windows time zone ID for Windows, an IANA ID for Linux. Null means the host time zone. */
+            timeZone?: string | null;
+            /** @default en-US */
+            locale: string;
+            /** @description Windows only, at most 15 letters, digits, or hyphens. Null means derived from the VM name. */
+            computerName?: string | null;
+            windows?: components["schemas"]["WindowsInstallSettings"] | null;
+            linux?: components["schemas"]["LinuxInstallSettings"] | null;
+        };
+        MachineDisplay: {
+            guest?: components["schemas"]["MachineGuestDisplay"];
+            connection?: components["schemas"]["MachineConnection"];
+        };
+        /** @enum {string} */
+        GuestTheme: "dark" | "light";
+        /** @description Settings in the User's account in the VM. Remote Desktop sets resolution and scaling from the client. */
+        MachineGuestDisplay: {
+            theme?: components["schemas"]["GuestTheme"] | null;
+            accentColor?: string | null;
+            wallpaper?: components["schemas"]["MachineWallpaper"] | null;
+        };
+        /** @description A solid color, or an image file the host keeps beside the profile. Not both. */
+        MachineWallpaper: {
+            color?: string | null;
+            /** @description A plain file name. */
+            image?: string | null;
+        };
+        /** @enum {string} */
+        ConnectionMonitors: "one" | "all";
+        /** @enum {string} */
+        ConnectionWindow: "fullScreen" | "windowed";
+        /** @description Defaults for Remote Desktop connections to VMs made from the profile; a device's own choice wins. */
+        MachineConnection: {
+            monitors?: components["schemas"]["ConnectionMonitors"] | null;
+            window?: components["schemas"]["ConnectionWindow"] | null;
+            redirect?: components["schemas"]["MachineRedirect"];
+        };
+        /** @description Null leaves a choice to Remote Desktop's default. */
+        MachineRedirect: {
+            clipboard?: boolean | null;
+            printers?: boolean | null;
+            microphone?: boolean | null;
+            camera?: boolean | null;
+        };
+        MachineFirmware: {
+            /** @description Applying to an existing VM can add a TPM, never remove one. */
+            tpm?: boolean | null;
+            /** @description The template follows the OS. */
+            secureBoot?: boolean | null;
+        };
+        MachineMemory: {
+            /** Format: int64 */
+            startupMb: number;
+            /**
+             * Format: int64
+             * @description With dynamic memory; at least startupMb.
+             */
+            maximumMb?: number | null;
+            /** @default true */
+            dynamic: boolean;
+        };
+        MachineCompute: {
+            processors?: number | null;
+            memory?: components["schemas"]["MachineMemory"] | null;
+            nestedVirtualization?: boolean | null;
+            /** @description Used when creating a VM; on an existing VM only a larger size is offered. */
+            diskSizeGb?: number | null;
+        };
+        /** @description Each percent sets the partition's minimum, maximum, and optimal values to that share of the GPU. */
+        MachineGpuShare: {
+            /** @default 50 */
+            vramPercent: number;
+            /** @default 50 */
+            encodePercent: number;
+            /** @default 50 */
+            decodePercent: number;
+            /** @default 50 */
+            computePercent: number;
+        };
+        /** @description Performance mode. Windows only; with it on, memory must be fixed (dynamic false). */
+        MachineGpu: {
+            enabled: boolean;
+            /** @description A GPU name to match on the host. Null means the host's first partitionable GPU. */
+            adapter?: string | null;
+            share?: components["schemas"]["MachineGpuShare"] | null;
+            hardwareEncoding?: boolean | null;
+        };
+        MachineNetwork: {
+            /** @description A virtual switch name. Null means the host's default switch. */
+            switch?: string | null;
+            macAddressSpoofing?: boolean | null;
+        };
+        /** @description The schedule belongs to the target; a profile names the target. */
+        MachineBackup: {
+            enabled: boolean;
+            /** @description A backup target's name on the host. */
+            target?: string | null;
+            triggers?: components["schemas"]["BackupTriggers"] | null;
+            /** @description Null means the target's retention. */
+            retention?: components["schemas"]["BackupRetention"] | null;
+            /** @description Null means the target's conditions. */
+            conditions?: components["schemas"]["BackupConditions"] | null;
+            gpuMode?: components["schemas"]["BackupGpuMode"] | null;
+        };
+        StoredMachineProfile: {
+            id: string;
+            /** Format: date-time */
+            updatedAt: string;
+            profile: components["schemas"]["MachineProfile"];
+        };
+        MachineProfileSummary: {
+            id: string;
+            name: string;
+            description: string | null;
+            os: components["schemas"]["InstallOs"];
+            processors: number | null;
+            /** Format: int64 */
+            memoryMb: number | null;
+            gpu: boolean;
+            tpm: boolean | null;
+            backup: boolean;
+            /** @description Packages, removals, tweaks, and extensions together. */
+            softwareCount: number;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Why the file on the host does not read; the other fields are then empty. */
+            error: string | null;
+        };
         SetupProfileSummary: {
             id: string;
             name: string;
@@ -4149,6 +4411,8 @@ export interface components {
         ProfileId: string;
         /** @description A setup profile ID (its file name on the host). */
         SetupProfileId: string;
+        /** @description A machine profile ID (its file name on the host). */
+        MachineProfileId: string;
         /** @description An image file name in the ISO library, ending in .iso (URL-encoded). */
         IsoName: string;
         /** @description A backup target ID. */
@@ -4871,6 +5135,212 @@ export interface operations {
             path: {
                 /** @description A setup profile ID (its file name on the host). */
                 profileId: components["parameters"]["SetupProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/yaml": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listMachineProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profiles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineProfileSummary"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createMachineProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MachineProfile"];
+            };
+        };
+        responses: {
+            /** @description The saved profile. */
+            201: {
+                headers: {
+                    /** @description URL of the profile. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredMachineProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
+    importMachineProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/yaml": string;
+            };
+        };
+        responses: {
+            /** @description The saved profile. */
+            201: {
+                headers: {
+                    /** @description URL of the profile. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredMachineProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
+    getMachineProfileSchema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description schemas/machine-profile.v1.schema.json. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/schema+json": Record<string, never>;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getMachineProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A machine profile ID (its file name on the host). */
+                profileId: components["parameters"]["MachineProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredMachineProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateMachineProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A machine profile ID (its file name on the host). */
+                profileId: components["parameters"]["MachineProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MachineProfile"];
+            };
+        };
+        responses: {
+            /** @description The saved profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredMachineProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteMachineProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A machine profile ID (its file name on the host). */
+                profileId: components["parameters"]["MachineProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile was deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exportMachineProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A machine profile ID (its file name on the host). */
+                profileId: components["parameters"]["MachineProfileId"];
             };
             cookie?: never;
         };

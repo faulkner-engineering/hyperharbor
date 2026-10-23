@@ -30,6 +30,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   filter looks the extension up.
 
 ### Changed
+- API 1.27.0: machine profiles on the host. A machine profile describes a whole VM in one YAML file (account,
+  display, firmware, compute, GPU share, network, backups, and software), with the same rules as unattended install
+  and setup profiles for the parts they share. The host stores, imports, and exports them under /machine-profiles;
+  the editor and creating VMs from them follow.
 - API 1.26.0: the package catalog has a description per package, the setup profile catalog lists the rated built-in
   apps (appx) and the registry values of each tweak. Update the host for package descriptions, built-in apps without
   a VM, and tweak details; with an older host the editor works as before without them.

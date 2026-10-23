@@ -41,6 +41,24 @@ public class ContractFixtureTests
         VmId, VmState.Running, 4, 4096, 4096, false, true, true, 1,
         [ComputeSetting.ProcessorCount, ComputeSetting.StartupMemoryMb, ComputeSetting.MaximumMemoryMb, ComputeSetting.DynamicMemory, ComputeSetting.NestedVirtualization]);
 
+    private static readonly MachineProfile MachineProfileSample = new(
+        "Gaming rig",
+        InstallOs.Windows,
+        "Steam and a GPU share",
+        new MachineAccount("hhadmin", null, "en-US", "GAMING-RIG", new WindowsInstallSettings("Windows 11 Pro"), null),
+        new MachineDisplay(
+            new MachineGuestDisplay(GuestTheme.Dark, "#E39B2E", new MachineWallpaper("#0B0D10", null)),
+            new MachineConnection(ConnectionMonitors.All, ConnectionWindow.FullScreen, new MachineRedirect(true, false, true, true))),
+        new MachineFirmware(true, true),
+        new MachineCompute(8, new MachineMemory(16384, null, false), false, 256),
+        new MachineGpu(true, null, new MachineGpuShare(60, 50, 50, 60), false),
+        new MachineNetwork("Default Switch", false),
+        new MachineBackup(true, "NAS", new BackupTriggers(true, true, 10), null, null, BackupGpuMode.RequireOff),
+        [new ProfileItem("Valve.Steam", "Steam")],
+        null,
+        [new ProfileTweak("appearance.darkMode", "Use dark mode")],
+        null);
+
     private static readonly SetupProfile SetupProfileSample = new(
         "Dev workstation",
         "Tools for development VMs",
@@ -289,6 +307,24 @@ public class ContractFixtureTests
         ["RegistryTweak"] = SetupProfileSample.Tweaks![1].Registry!,
         ["ProfileBrowser"] = SetupProfileSample.Browser!,
         ["StoredSetupProfile"] = new StoredSetupProfile("dev-workstation", Time, SetupProfileSample),
+        ["MachineProfile"] = MachineProfileSample,
+        ["StoredMachineProfile"] = new StoredMachineProfile("gaming-rig", Time, MachineProfileSample),
+        ["MachineAccount"] = MachineProfileSample.Account!,
+        ["MachineDisplay"] = MachineProfileSample.Display!,
+        ["MachineGuestDisplay"] = MachineProfileSample.Display!.Guest!,
+        ["MachineWallpaper"] = new MachineWallpaper(null, "harbor.jpg"),
+        ["MachineConnection"] = MachineProfileSample.Display!.Connection!,
+        ["MachineRedirect"] = new MachineRedirect(Clipboard: true),
+        ["MachineFirmware"] = MachineProfileSample.Firmware!,
+        ["MachineCompute"] = MachineProfileSample.Compute!,
+        ["MachineMemory"] = new MachineMemory(8192, 16384, true),
+        ["MachineGpu"] = MachineProfileSample.Gpu!,
+        ["MachineGpuShare"] = new MachineGpuShare(),
+        ["MachineNetwork"] = MachineProfileSample.Network!,
+        ["MachineBackup"] = MachineProfileSample.Backup!,
+
+        // Nulls on purpose: description, processors, memoryMb, tpm, and error are required but nullable.
+        ["MachineProfileSummary"] = new MachineProfileSummary("gaming-rig", "Gaming rig", null, InstallOs.Windows, null, null, true, null, false, 3, Time, null),
 
         // Nulls on purpose: description, browser, and error are required but nullable.
         ["SetupProfileSummary"] = new SetupProfileSummary("dev-workstation", "Dev workstation", null, 4, 2, 2, 1, null, Time, null),

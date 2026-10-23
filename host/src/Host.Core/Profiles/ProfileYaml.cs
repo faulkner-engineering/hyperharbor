@@ -50,6 +50,13 @@ public static partial class ProfileYamlWriter
             lines.Add($"description: {Scalar(profile.Description)}");
         }
 
+        AppendBody(lines, profile, policyTypes);
+        return string.Join("\n", lines) + "\n";
+    }
+
+    /// <summary>Everything after the name and description, so machine profiles write their software sections the same way.</summary>
+    internal static void AppendBody(List<string> lines, SetupProfile profile, IReadOnlyDictionary<string, string>? policyTypes)
+    {
         if (profile.Target == ProfileTarget.Host)
         {
             lines.Add("target: host");
@@ -148,8 +155,6 @@ public static partial class ProfileYamlWriter
                 }
             }
         }
-
-        return string.Join("\n", lines) + "\n";
     }
 
     /// <summary>Plain when that reads back as the same string, otherwise single-quoted (or double-quoted for control characters).</summary>
@@ -343,7 +348,7 @@ public static class ProfileYamlReader
         return new ProfilePower(OptionalScalar(power, "plan"), OptionalScalar(power, "wake"), Items(power, "armWake", comments));
     }
 
-    private static ProfileRemove? Remove(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
+    internal static ProfileRemove? Remove(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
     {
         if (Child(root, "remove") is not { } node)
         {
@@ -355,7 +360,7 @@ public static class ProfileYamlReader
         return new ProfileRemove(Items(remove, "appx", comments), Items(remove, "capabilities", comments), Items(remove, "features", comments), Items(remove, "programs", comments));
     }
 
-    private static IReadOnlyList<ProfileTweak>? Tweaks(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
+    internal static IReadOnlyList<ProfileTweak>? Tweaks(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
     {
         if (Child(root, "tweaks") is not { } node)
         {
@@ -401,7 +406,7 @@ public static class ProfileYamlReader
         return tweaks;
     }
 
-    private static ProfileBrowser? Browser(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
+    internal static ProfileBrowser? Browser(YamlMappingNode root, IReadOnlyDictionary<long, string> comments)
     {
         if (Child(root, "browser") is not { } node)
         {
@@ -434,7 +439,7 @@ public static class ProfileYamlReader
             policies);
     }
 
-    private static List<ProfileItem>? Items(YamlMappingNode parent, string key, IReadOnlyDictionary<long, string> comments)
+    internal static List<ProfileItem>? Items(YamlMappingNode parent, string key, IReadOnlyDictionary<long, string> comments)
     {
         if (Child(parent, key) is not { } node)
         {
@@ -454,17 +459,17 @@ public static class ProfileYamlReader
             .ToList();
     }
 
-    private static YamlNode? Child(YamlMappingNode mapping, string key) =>
+    internal static YamlNode? Child(YamlMappingNode mapping, string key) =>
         mapping.Children.TryGetValue(new YamlScalarNode(key), out var node) ? node : null;
 
-    private static string? OptionalScalar(YamlMappingNode mapping, string key) => Child(mapping, key) switch
+    internal static string? OptionalScalar(YamlMappingNode mapping, string key) => Child(mapping, key) switch
     {
         null => null,
         YamlScalarNode scalar => scalar.Value,
         var other => throw new ProfileFormatException($"Line {other.Start.Line}: {key} must be a single value."),
     };
 
-    private static void CheckKeys(YamlMappingNode mapping, string[] allowed, string where)
+    internal static void CheckKeys(YamlMappingNode mapping, string[] allowed, string where)
     {
         foreach (var key in mapping.Children.Keys)
         {
@@ -476,7 +481,7 @@ public static class ProfileYamlReader
     }
 
     /// <summary>Comments that follow a value on the same line, by line number.</summary>
-    private static Dictionary<long, string> InlineComments(string yaml)
+    internal static Dictionary<long, string> InlineComments(string yaml)
     {
         var comments = new Dictionary<long, string>();
         try

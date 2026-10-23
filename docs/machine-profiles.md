@@ -1,6 +1,6 @@
 # Machine profiles (phase 26)
 
-Status: design for review (2026-10-23). Stage 26a (catalog discovery) is done; this document covers 26b to 26d.
+Status: design agreed with the user (2026-10-23). Stage 26a (catalog discovery) is done; this document covers 26b to 26d.
 Decisions already made with the user are in [history.md](history.md), entry 26.
 
 A machine profile describes a whole VM in one document: who signs in, how it looks and connects, its firmware and
@@ -44,13 +44,14 @@ account:                         # today's unattended install profile
     installDesktop: true
 
 display:
-  guest:
+  guest:                         # Remote Desktop sets resolution and scaling from the client
     theme: dark                  # dark | light | null (leave as installed)
-    consoleResolution: 1920x1080 # the Hyper-V console only; Remote Desktop follows the client window
+    accentColor: "#E39B2E"       # null = leave as installed
+    wallpaper: { color: "#0B0D10" }   # or { image: <file name> }; null = leave as installed
   connection:                    # defaults a client may override per device
     monitors: one                # one | all
     window: fullScreen           # fullScreen | windowed
-    redirect: { clipboard: true, drives: false, printers: false, microphone: true, camera: true }
+    redirect: { clipboard: true, printers: false, microphone: true, camera: true }
 
 firmware:
   tpm: true
@@ -90,7 +91,7 @@ browser: { app: { id: Brave.Brave }, extensions: [], policies: {} }
 | Section | Existing contract it reuses | Notes |
 |---|---|---|
 | account | UnattendProfileRequest, UnattendedInstallRequest.computerName | Same names and limits. The admin password stays a one-time password rotated after setup. |
-| display.guest | new | theme writes the same values as the appearance.darkMode tweak; consoleResolution sets the VM's video resolution. |
+| display.guest | new | theme writes the same values as the appearance.darkMode tweak; accentColor and a wallpaper color are registry values in the User's account. A wallpaper image is a file the host keeps beside the profile and copies into the guest when applying (the upload arrives with 26c). |
 | display.connection | the client's monitor choice (MonitorsDialog) and rdp_file | New: window and redirect. Stored in the profile, read by the client when it connects; a device's own choice wins. |
 | firmware | CreateVmRequest.enableTpm | secureBoot is new on the wire; today Secure Boot is always on, with the template chosen from the ISO's OS (VmCreationService). |
 | compute | CreateVmRequest, UpdateVmComputeRequest | Same rules as the compute dialog. |
@@ -104,7 +105,7 @@ browser: { app: { id: Brave.Brave }, extensions: [], policies: {} }
 - compute: processors and memory within what the host has (a warning, not an error, since the profile may be meant for
   another host); maximumMb at least startupMb; with gpu.enabled, dynamic must be false.
 - gpu only for windows; secureBoot and tpm as Create VM allows for the os.
-- display.guest.consoleResolution one of the resolutions Hyper-V accepts.
+- display.guest colors are #RRGGBB; wallpaper has a color or an image, not both; an image name is a plain file name.
 - The software sections go through the setup profile validator unchanged.
 - Names (switch, gpu.adapter, backup.target) are checked only when applying, against the target host.
 
@@ -151,13 +152,8 @@ does not change them. To bring them over:
   a restart, the guest running with a credential) and what does not resolve on this host. The apply job runs only the
   parts the user ticks. Firmware: a TPM can be added, never removed; Secure Boot is left as it is.
 
-## Open points for review
-1. Migration: "Fill from…" and "Convert" as above, rather than converting every old profile on upgrade. Converting
-   automatically would make one machine profile per setup profile and per unattended profile, which then need merging
-   by hand.
-2. display.guest is small (theme and console resolution) because Remote Desktop sets the guest resolution and scaling
-   from the client. Anything else you expect there, for example wallpaper or accent color?
-3. display.connection redirect toggles add clipboard, drives, printers, microphone, and camera choices to the client.
-   Today the .rdp file sets audio, microphone, camera, and WebAuthn, and leaves clipboard, drives, and printers to
-   mstsc's defaults. Keep that list?
-4. backup.target by name: a profile applied on a host without that target gets a preview warning and no policy.
+## Decisions on the open points (2026-10-23)
+1. Migration: "Fill from…" per section and "Convert" on a setup profile; nothing converts on upgrade.
+2. display.guest: theme, accent color, and wallpaper (color or image). No console resolution.
+3. display.connection.redirect: clipboard, printers, microphone, and camera. Drives are not offered.
+4. backup.target by name, with a preview warning and no policy when the host has no such target.
