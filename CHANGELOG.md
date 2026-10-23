@@ -42,12 +42,20 @@ note anything that needs action, such as updating the host, a new elevation requ
   starts the unattended install. When the install is ready, the profile's software, theme, accent color, and
   wallpaper color are applied, and for a profile with a GPU share the GPU driver is set up in the guest. Names the
   host does not have (a switch or GPU) stop the create; a missing backup target is a warning.
+- Apply machine profile… in a VM's menu (hosts with API 1.29.0) compares a machine profile with the VM and lists each
+  setting that differs, marked when it needs the VM off or runs in the guest, with notes for what applies only when
+  creating a VM. Choose the parts to apply; with Shut down, apply, and start again, a running VM is shut down for
+  the parts that need it off and started again, then the software and display settings are applied in the guest and,
+  when Performance mode was turned on, the GPU driver is set up. A profile never removes a TPM, never shrinks a disk,
+  and leaves Secure Boot and the switch as they are.
 
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
   (RUSTSEC-2026-0385).
 
 ### Changed
+- API 1.29.0: GET /vms/{vmId}/machine-profile-preview and POST /vms/{vmId}/machine-profile (a new applyMachineProfile
+  job kind).
 - API 1.28.0: POST /machine-profiles/{profileId}/vms creates a VM from a machine profile as a createVm job.
 - API 1.27.0: machine profiles on the host (/machine-profiles: list, create, import, export, update, delete, and
   the JSON Schema). The account section follows the unattended install profile rules and the software sections the

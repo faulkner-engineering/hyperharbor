@@ -100,7 +100,7 @@ public sealed class MachineProfileVmCreation(
             }
         }
 
-        var setup = windows ? SetupSnapshot(profile, warnings) : null;
+        var setup = windows ? SetupSnapshot(software, profile, warnings) : null;
         Func<InstallContext, InstallPlan?>? planInstall = null;
         if (profile.Account is { } account)
         {
@@ -257,7 +257,7 @@ public sealed class MachineProfileVmCreation(
     /// The software sections and the guest display settings as the setup profile the install applies when ready,
     /// or null when the profile has neither.
     /// </summary>
-    private SetupProfile? SetupSnapshot(MachineProfile profile, List<ValidationIssue> warnings)
+    internal static SetupProfile? SetupSnapshot(ProfileValidator software, MachineProfile profile, List<ValidationIssue> warnings)
     {
         var display = GuestDisplayTweaks(profile.Display?.Guest, warnings);
         var tweaks = (profile.Tweaks ?? []).Concat(display).ToList();

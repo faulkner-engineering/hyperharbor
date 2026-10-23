@@ -119,6 +119,51 @@ public sealed record CreateVmFromProfileRequest(
     string? WindowsEdition = null,
     bool AcknowledgeWarnings = false);
 
+/// <summary>A part of a machine profile that can be applied to an existing VM. Schema: MachinePart.</summary>
+public enum MachinePart
+{
+    Compute,
+    Firmware,
+    Gpu,
+    Network,
+    Backup,
+    Software,
+}
+
+/// <summary>One setting a machine profile would change on a VM. Schema: MachineProfileChange.</summary>
+/// <param name="Setting">What changes, in words.</param>
+/// <param name="Current">The VM's value now, in words; null when there is none.</param>
+/// <param name="NeedsOff">Applied while the VM is off.</param>
+/// <param name="NeedsGuest">Applied in the running guest with the administrator credential.</param>
+public sealed record MachineProfileChange(
+    MachinePart Part,
+    string Setting,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Current,
+    string Wanted,
+    bool NeedsOff,
+    bool NeedsGuest);
+
+/// <summary>A part of the profile that is not applied to an existing VM, and why. Schema: MachineProfileNote.</summary>
+public sealed record MachineProfileNote(string Section, string Message);
+
+/// <summary>What applying a machine profile would change on a VM. Schema: MachineProfilePreview.</summary>
+public sealed record MachineProfilePreview(
+    Guid VmId,
+    string VmName,
+    Vms.VmState VmState,
+    string ProfileId,
+    string ProfileName,
+    IReadOnlyList<MachineProfileChange> Changes,
+    IReadOnlyList<MachineProfileNote> Notes,
+    IReadOnlyList<ValidationIssue> Warnings);
+
+/// <summary>Applies the chosen parts of a machine profile to a VM. Schema: ApplyMachineProfileRequest.</summary>
+/// <param name="ShutDownToApply">Shut a running VM down for the parts that need it off, and start it again afterwards.</param>
+public sealed record ApplyMachineProfileRequest(
+    [property: JsonRequired] string ProfileId,
+    [property: JsonRequired] IReadOnlyList<MachinePart> Parts,
+    bool ShutDownToApply = false);
+
 /// <summary>A saved machine profile. Schema: StoredMachineProfile.</summary>
 public sealed record StoredMachineProfile(string Id, DateTimeOffset UpdatedAt, MachineProfile Profile);
 

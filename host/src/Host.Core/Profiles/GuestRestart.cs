@@ -57,6 +57,23 @@ public sealed class GuestRestart(IVmInventory inventory, IRemoteAccessProbe prob
         return false;
     }
 
+    /// <summary>True once the VM runs and answers Remote Desktop, checked as often and as long as a restart is waited for.</summary>
+    public async Task<bool> WaitUntilAnswersAsync(Guid vmId, CancellationToken cancellationToken)
+    {
+        for (var check = 0; check < Checks; check++)
+        {
+            var vm = await inventory.GetAsync(vmId, cancellationToken).ConfigureAwait(false);
+            if (vm is { State: VmState.Running } && Ipv4(vm) is { } address && await probe.RdpAnswersAsync(address, cancellationToken).ConfigureAwait(false))
+            {
+                return true;
+            }
+
+            await Task.Delay(Poll, time, cancellationToken).ConfigureAwait(false);
+        }
+
+        return false;
+    }
+
     private static string? Ipv4(Vm vm) =>
         vm.IpAddresses.FirstOrDefault(address => IPAddress.TryParse(address, out var ip) && ip.AddressFamily == AddressFamily.InterNetwork);
 }

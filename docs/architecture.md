@@ -121,7 +121,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   FirmwareSection, ComputeSection, GpuSection, NetworkSection, and BackupSection edit them, with Choice.svelte for
   "as it is / on / off" choices. MachineProfiles.svelte is the list tab; CreateVmFromProfileDialog.svelte makes a VM
   from a profile. Host side: Host.Core/Profiles MachineProfileYaml, MachineProfileValidator, MachineProfileStore,
-  MachineProfileVmCreation (profile to CreateVmRequest plus CreationExtras for VmCreationService);
+  MachineProfileVmCreation (profile to CreateVmRequest plus CreationExtras for VmCreationService), MachineProfileApplier
+  (preview and the applyMachineProfile job for an existing VM; client ApplyMachineProfileDialog.svelte);
   Host.Service/Api/MachineProfileEndpoints and MachineBackupPolicies (IMachineBackupPolicies over the backup engine).
   Each software section is a component (InstallSection, RemoveSection,
   TweaksSection, BrowserSection) built on CatalogBrowser.svelte (filter and category chips pinned in the panel's one

@@ -26,6 +26,7 @@
     SetupProfilesApiVersion,
     MachineProfilesApiVersion,
     MachineProfileVmsApiVersion,
+    MachineProfileApplyApiVersion,
     ApplySetupProfileApiVersion,
     BackupApiVersion,
     GameAwareApiVersion,
@@ -66,6 +67,7 @@
   import MachineProfiles from "$lib/components/MachineProfiles.svelte";
   import CaptureReview from "$lib/components/CaptureReview.svelte";
   import ApplySetupProfileDialog from "$lib/components/ApplySetupProfileDialog.svelte";
+  import ApplyMachineProfileDialog from "$lib/components/ApplyMachineProfileDialog.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
   import CameraDialog from "$lib/components/CameraDialog.svelte";
   import MonitorsDialog from "$lib/components/MonitorsDialog.svelte";
@@ -105,6 +107,7 @@
   let view = $state<"vms" | "isos" | "profiles" | "machine" | "setup">("vms");
   let capturing = $state<Vm | null>(null);
   let applyingProfile = $state<Vm | null>(null);
+  let applyingMachine = $state<Vm | null>(null);
   let showBackups = $state(false);
   let showTailscale = $state(false);
   /** How the last request reached the selected host, for the line under its name. */
@@ -155,6 +158,7 @@
     configuringCamera = null;
     capturing = null;
     applyingProfile = null;
+    applyingMachine = null;
     creating = false;
     enablingRemoteDesktop?.answer(false);
     view = "vms";
@@ -630,6 +634,7 @@
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
             onreplacedisk={hostHasBackups ? (vm) => (replacingDisk = vm) : undefined}
             onapplyprofile={hostAppliesProfiles ? (vm) => (applyingProfile = vm) : undefined}
+            onapplymachine={hostSupports(selectedHost, MachineProfileApplyApiVersion) ? (vm) => (applyingMachine = vm) : undefined}
             ontransfer={hostHasTransfer ? (vm) => (transferring = vm) : undefined}
             ondelete={(vm) => (deleting = vm)}
           />
@@ -645,6 +650,9 @@
         {/if}
         {#if applyingProfile}
           <ApplySetupProfileDialog host={selectedHost} vm={applyingProfile} onclose={() => (applyingProfile = null)} />
+        {/if}
+        {#if applyingMachine}
+          <ApplyMachineProfileDialog host={selectedHost} vm={applyingMachine} onclose={() => (applyingMachine = null)} />
         {/if}
         {#if confirmTurnOff}
           <ConfirmDialog

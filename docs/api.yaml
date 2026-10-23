@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.28.0
+  version: 1.29.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -1902,6 +1902,85 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
+
+  /vms/{vmId}/machine-profile-preview:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [VMs]
+      operationId: previewVmMachineProfile
+      summary: What applying a machine profile would change on this VM.
+      description: |
+        Since 1.29.0. Lists each setting that differs, with what it needs (the VM off, or a running guest), notes for
+        the parts that apply only when creating a VM or are left as they are, and warnings for names this host lacks.
+        Nothing is changed.
+      parameters:
+        - name: profileId
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9-]{0,47}$"
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MachineProfilePreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /vms/{vmId}/machine-profile:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [VMs]
+      operationId: applyVmMachineProfile
+      summary: Apply the chosen parts of a machine profile to this VM.
+      description: |
+        Since 1.29.0. Needs elevation. Applies only the parts listed, as one applyMachineProfile job: the backup
+        policy; then the settings that need the VM off (shutting a running VM down first when shutDownToApply is set,
+        and starting it again afterwards); then the software and guest display settings in the running guest, with
+        one restart when they need it; then, when Performance mode was turned on, the guest part of Performance mode.
+        Items that could not be applied are the job's setupResult problems. A part that needs the VM off is 409
+        (requiresShutdown) for a running VM without shutDownToApply; software needs a running Windows guest with a
+        stored administrator credential (409 credentialRequired without one).
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyMachineProfileRequest"
+      responses:
+        "202":
+          description: The applyMachineProfile job.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /vms/{vmId}/setup-profile:
     parameters:
@@ -4955,7 +5034,7 @@ components:
 
     VmJobKind:
       type: string
-      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState, transferVm, mergeCheckpoints]
+      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState, transferVm, mergeCheckpoints, applyMachineProfile]
 
     VmJobState:
       type: string
@@ -5767,6 +5846,88 @@ components:
           oneOf:
             - $ref: "#/components/schemas/BackupGpuMode"
             - type: "null"
+
+    MachinePart:
+      type: string
+      enum: [compute, firmware, gpu, network, backup, software]
+      description: A part of a machine profile that can be applied to an existing VM.
+
+    MachineProfileChange:
+      type: object
+      required: [part, setting, current, wanted, needsOff, needsGuest]
+      properties:
+        part:
+          $ref: "#/components/schemas/MachinePart"
+        setting:
+          type: string
+          description: What changes, in words, for example "Virtual processors".
+        current:
+          type: [string, "null"]
+          description: The VM's value now, in words; null when there is none.
+        wanted:
+          type: string
+        needsOff:
+          type: boolean
+          description: Applied while the VM is off.
+        needsGuest:
+          type: boolean
+          description: Applied in the running guest with the administrator credential.
+
+    MachineProfileNote:
+      type: object
+      required: [section, message]
+      properties:
+        section:
+          type: string
+          description: The profile section, for example account or display.
+        message:
+          type: string
+
+    MachineProfilePreview:
+      type: object
+      required: [vmId, vmName, vmState, profileId, profileName, changes, notes, warnings]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        vmName:
+          type: string
+        vmState:
+          $ref: "#/components/schemas/VmState"
+        profileId:
+          type: string
+        profileName:
+          type: string
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/MachineProfileChange"
+        notes:
+          type: array
+          description: Parts that are not applied to an existing VM, and why.
+          items:
+            $ref: "#/components/schemas/MachineProfileNote"
+        warnings:
+          type: array
+          description: Names in the profile this host does not have.
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+
+    ApplyMachineProfileRequest:
+      type: object
+      required: [profileId, parts]
+      properties:
+        profileId:
+          type: string
+        parts:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/MachinePart"
+        shutDownToApply:
+          type: boolean
+          default: false
+          description: Shut a running VM down for the parts that need it off, and start it again afterwards.
 
     CreateVmFromProfileRequest:
       type: object

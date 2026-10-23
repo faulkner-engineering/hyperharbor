@@ -914,6 +914,42 @@ impl ApiClient {
         .await
     }
 
+    /// GET /vms/{vmId}/machine-profile-preview?profileId=: what applying the profile would change.
+    pub async fn preview_vm_machine_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        profile_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        // The profile ID is checked as a path would be, then sent as the query value.
+        profile_path(ProfileKind::Machine, profile_id)?;
+        let path = format!(
+            "{}?profileId={}",
+            vm_path(vm_id, "machine-profile-preview")?,
+            query_value(profile_id)
+        );
+        self.get_json(host, paired, &path).await
+    }
+
+    /// POST /vms/{vmId}/machine-profile (needs elevation): the applyMachineProfile job.
+    pub async fn apply_vm_machine_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        request: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "machine-profile")?,
+            request,
+        )
+        .await
+    }
+
     /// POST /machine-profiles/{id}/vms (needs elevation): the createVm job.
     pub async fn create_vm_from_profile(
         &self,
@@ -3697,6 +3733,42 @@ mod server_tests {
         let requests = server.requests();
         assert_eq!(requests[0].path, "/api/v1/setup-profiles/dev-workstation-2");
         assert_eq!(requests[1].path, "/api/v1/machine-profiles/gaming-rig");
+    }
+
+    #[tokio::test]
+    async fn a_machine_profile_is_previewed_and_applied_on_the_vm() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(200, "{}"));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let paired = paired(server.certificate_hash());
+        let vm = "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d";
+
+        let refused = api()
+            .preview_vm_machine_profile(&target, &paired, vm, "../x")
+            .await;
+        api()
+            .preview_vm_machine_profile(&target, &paired, vm, "gaming-rig")
+            .await
+            .unwrap();
+        api()
+            .apply_vm_machine_profile(
+                &target,
+                &paired,
+                vm,
+                &serde_json::json!({"profileId": "gaming-rig", "parts": ["compute"]}),
+            )
+            .await
+            .unwrap();
+
+        assert!(matches!(refused, Err(ClientError::InvalidRequest(_))));
+        let requests = server.requests();
+        assert_eq!(
+            requests[0].path,
+            format!("/api/v1/vms/{vm}/machine-profile-preview?profileId=gaming-rig")
+        );
+        assert_eq!(
+            (requests[1].method.as_str(), requests[1].path.as_str()),
+            ("POST", format!("/api/v1/vms/{vm}/machine-profile").as_str())
+        );
     }
 
     #[tokio::test]

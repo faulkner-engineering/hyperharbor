@@ -353,6 +353,21 @@ verified, and what was found along the way. User-facing changes per release are 
    not run against Hyper-V yet. Not verified: Windows Setup with a GPU partition attached from the start, and the
    accent and wallpaper registry values in a real guest. Not done: connection defaults (display.connection) do not
    reach the client yet, and wallpaper images.
+   Live (2026-10-23, laptop, MachineProfileLiveTests through the harness, Windows 11 26300 ISO, Intel iGPU at 25%):
+   the createVm job made the VM with the TPM, Secure Boot, 2 processors, 4 GB fixed, nested virtualization, and the
+   GPU partition, and Windows Setup ran to Ready in about 9 minutes with the partition attached from the start. The
+   watcher applied the setup profile snapshot (4 items, no problems) and started the guest Performance setup. Found:
+   the test's guest check used Select-Object on a hashtable (empty values); a turnOff right after Ready is refused while
+   the guest setup job holds the VM, so the test retries until the VM is off.
+   Done: 26d apply to an existing VM (2026-10-23; API 1.29.0). MachineProfileApplier builds one plan for the preview and
+   the job: compute (processors, memory, nested virtualization; left to Performance mode when that is applied), MAC
+   spoofing, a TPM added (never removed), Performance mode on, re-shared, or off, the backup policy, and the software
+   plus display.guest snapshot; notes for account, disk size, switch, Secure Boot, connection defaults, and turning
+   backups off. The applyMachineProfile job sets the policy, shuts the VM down when a chosen part needs it off (only
+   with shutDownToApply), applies, starts it again, waits for Remote Desktop (GuestRestart.WaitUntilAnswersAsync),
+   applies the software with one restart if needed, and runs the guest Performance setup inline
+   (VmPerformanceService.GuestSetupWithinJobAsync, since the job holds the VM). Problems are the job's setupResult.
+   Unit tested with fakes; not run live yet.
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.

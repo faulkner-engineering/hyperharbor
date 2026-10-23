@@ -150,9 +150,13 @@ does not change them. To bring them over:
   the unattended install starts (account). When the install is ready the watcher applies the software and
   display.guest (as a setup profile snapshot) and, with a GPU share, starts the guest Performance setup job. As with
   Create VM, a failure while building removes the VM and its disk; the install and guest steps report like today's.
-- Existing VM (26d): GET /vms/{vmId}/machine-profile-preview?profileId= lists each change with what it needs (the VM off,
-  a restart, the guest running with a credential) and what does not resolve on this host. The apply job runs only the
-  parts the user ticks. Firmware: a TPM can be added, never removed; Secure Boot is left as it is.
+- Existing VM (26d, built): GET /vms/{vmId}/machine-profile-preview?profileId= lists each change (part, setting,
+  current, wanted, needsOff, needsGuest), notes for what is not applied to an existing VM (account, disk size, switch,
+  Secure Boot, connection defaults, turning backups off), and warnings for names this host lacks. POST
+  /vms/{vmId}/machine-profile { profileId, parts, shutDownToApply } runs one applyMachineProfile job over the chosen
+  parts: backup policy; settings that need the VM off (a running VM only with shutDownToApply, started again after);
+  software and display.guest in the running guest with one restart if needed; the guest Performance setup when it was
+  turned on. A TPM is added, never removed; Performance mode can be turned off (memory stays fixed).
 
 ## Decisions on the open points (2026-10-23)
 1. Migration: "Fill from…" per section and "Convert" on a setup profile; nothing converts on upgrade.

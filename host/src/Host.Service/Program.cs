@@ -410,6 +410,25 @@ builder.Services.AddSingleton<IGuestPerformanceSetup, PowerShellDirectPerformanc
 builder.Services.AddSingleton<VmPerformanceService>();
 builder.Services.AddSingleton<IGuestPerformanceStarter>(services => services.GetRequiredService<VmPerformanceService>());
 builder.Services.AddSingleton<IMachineBackupPolicies, MachineBackupPolicies>();
+builder.Services.AddSingleton(services => new MachineProfileApplier(
+    services.GetRequiredService<MachineProfileStore>(),
+    services.GetRequiredService<IVmInventory>(),
+    services.GetRequiredService<IHyperVCompute>(),
+    services.GetRequiredService<IHyperVDefinitionReader>(),
+    services.GetRequiredService<IHyperVBuilder>(),
+    services.GetRequiredService<VmPerformanceService>(),
+    services.GetRequiredService<IMachineBackupPolicies>(),
+    new ProfileValidator(services.GetRequiredService<Catalogs>()),
+    services.GetRequiredService<VmCredentialStore>(),
+    services.GetRequiredService<UserStore>(),
+    services.GetRequiredService<UnattendedInstallStore>(),
+    services.GetRequiredService<SetupProfileApplication>(),
+    services.GetRequiredService<GuestRestart>(),
+    services.GetRequiredService<IHyperVPowerInvoker>(),
+    services.GetRequiredService<VmJobStore>(),
+    services.GetRequiredService<LifecycleOptions>(),
+    services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<MachineProfileApplier>>()));
 builder.Services.AddSingleton(services => new MachineProfileVmCreation(
     services.GetRequiredService<MachineProfileStore>(),
     services.GetRequiredService<VmCreationService>(),

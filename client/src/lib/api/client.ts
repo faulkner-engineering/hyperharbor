@@ -46,6 +46,10 @@ export type MachineProfile = components["schemas"]["MachineProfile"];
 export type MachineProfileSummary = components["schemas"]["MachineProfileSummary"];
 export type StoredMachineProfile = components["schemas"]["StoredMachineProfile"];
 export type CreateVmFromProfileRequest = components["schemas"]["CreateVmFromProfileRequest"];
+export type MachinePart = components["schemas"]["MachinePart"];
+export type MachineProfileChange = components["schemas"]["MachineProfileChange"];
+export type MachineProfilePreview = components["schemas"]["MachineProfilePreview"];
+export type ApplyMachineProfileRequest = components["schemas"]["ApplyMachineProfileRequest"];
 export type SetupProfileCatalog = components["schemas"]["SetupProfileCatalog"];
 export type VmAppxInventory = components["schemas"]["VmAppxInventory"];
 export type AppxPackage = components["schemas"]["AppxPackage"];
@@ -676,6 +680,16 @@ export const MachineProfileVmsApiVersion = "1.28.0";
 /** Creates a VM from a machine profile; returns the createVm job. Needs elevation: run it inside withElevation. */
 export const createVmFromMachineProfile = (key: string, profileId: string, request: CreateVmFromProfileRequest) =>
   invoke<VmJob>("create_vm_from_profile", { key, profileId, request });
+
+/** The API version that applies machine profiles to existing VMs. */
+export const MachineProfileApplyApiVersion = "1.29.0";
+
+export const previewVmMachineProfile = (key: string, vmId: string, profileId: string) =>
+  invoke<MachineProfilePreview>("preview_vm_machine_profile", { key, vmId, profileId });
+
+/** Applies the chosen parts; returns the applyMachineProfile job. Needs elevation: run it inside withElevation. */
+export const applyVmMachineProfile = (key: string, vmId: string, request: ApplyMachineProfileRequest) =>
+  invoke<VmJob>("apply_vm_machine_profile", { key, vmId, request });
 
 export const getSetupProfileCatalog = (key: string) =>
   invoke<SetupProfileCatalog>("get_host_resource", { key, resource: "setupProfileCatalog" });

@@ -37,10 +37,35 @@ public static class MachineProfileEndpoints
         profiles.MapDelete("/{profileId}", Delete).WithName("deleteMachineProfile")
             .Audited<string>(profileId => $"profileId={profileId}")
             .RequireElevation();
+        var vms = endpoints.MapGroup(VmEndpoints.BasePath);
+        vms.MapGet("/{vmId:guid}/machine-profile-preview", PreviewAsync).WithName("previewVmMachineProfile");
+        vms.MapPost("/{vmId:guid}/machine-profile", ApplyAsync).WithName("applyVmMachineProfile")
+            .Audited<ApplyMachineProfileRequest>(request => $"profileId={request.ProfileId}, parts={string.Join(",", request.Parts)}, shutDownToApply={request.ShutDownToApply}")
+            .RequireElevation();
         profiles.MapPost("/{profileId}/vms", CreateVmAsync).WithName("createVmFromMachineProfile")
             .Audited<CreateVmFromProfileRequest>(request => $"name={request.Name}, iso={request.IsoName}, edition={request.WindowsEdition ?? "profile"}")
             .RequireElevation();
         return endpoints;
+    }
+
+    private static async Task<Ok<MachineProfilePreview>> PreviewAsync(
+        Guid vmId,
+        string profileId,
+        MachineProfileApplier applier,
+        HttpContext context,
+        CancellationToken cancellationToken) =>
+        TypedResults.Ok(await applier.PreviewAsync(context.User.UserId(), vmId, profileId, cancellationToken));
+
+    private static async Task<Accepted<VmJob>> ApplyAsync(
+        Guid vmId,
+        ApplyMachineProfileRequest request,
+        MachineProfileApplier applier,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var job = await applier.StartAsync(context.User.UserId(), vmId, request, context.CompletionAuditor(), cancellationToken);
+        context.Audit()!.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }
 
     private static async Task<Accepted<VmJob>> CreateVmAsync(

@@ -1214,6 +1214,36 @@ async fn delete_iso(
     state.api.delete_iso(&host, &paired, &name).await
 }
 
+/// What applying a machine profile would change on a VM.
+#[tauri::command]
+async fn preview_vm_machine_profile(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    profile_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .preview_vm_machine_profile(&host, &paired, &vm_id, &profile_id)
+        .await
+}
+
+/// Applies the chosen parts of a machine profile to a VM (needs elevation); returns the job.
+#[tauri::command]
+async fn apply_vm_machine_profile(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .apply_vm_machine_profile(&host, &paired, &vm_id, &request)
+        .await
+}
+
 /// Creates a VM from a machine profile (needs elevation); returns the createVm job.
 #[tauri::command]
 async fn create_vm_from_profile(
@@ -2429,6 +2459,8 @@ pub fn run() {
             inspect_iso,
             get_profile,
             create_vm_from_profile,
+            preview_vm_machine_profile,
+            apply_vm_machine_profile,
             save_profile,
             delete_profile,
             export_profile,

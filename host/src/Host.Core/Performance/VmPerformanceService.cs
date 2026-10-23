@@ -132,6 +132,30 @@ public sealed class VmPerformanceService : IGuestPerformanceStarter
     public Task ApplyWithinJobAsync(string name, Guid vmId, PerformanceSettings settings, PerformancePlan plan, VmJobContext context) =>
         RunAsync(name, vmId, settings, plan, context);
 
+    /// <summary>Removes Performance mode inside another job that already holds the VM; the VM must be off.</summary>
+    public async Task RemoveWithinJobAsync(Guid vmId, CancellationToken cancellationToken)
+    {
+        await _performance.RemoveAsync(vmId, cancellationToken).ConfigureAwait(false);
+        _store.Remove(vmId);
+    }
+
+    /// <summary>
+    /// Runs the guest part of Performance mode inside another job that already holds the VM (a running Windows guest
+    /// with a stored administrator credential and Performance mode on).
+    /// </summary>
+    /// <exception cref="LifecycleConflictException">Performance mode is off, no credential is stored, or the host has no partitionable GPU.</exception>
+    public async Task GuestSetupWithinJobAsync(Guid vmId, string name, VmJobContext context)
+    {
+        var record = _store.Find(vmId) ?? throw new LifecycleConflictException($"Performance mode is not on for {name}.");
+        var admin = _credentials.Find(vmId)
+            ?? throw new LifecycleConflictException($"HyperHarbor has no administrator credential for {name}.", ContractInfo.ProblemCodes.CredentialRequired);
+        var gpus = await _gpus.ReadAsync(context.Stopping).ConfigureAwait(false);
+        var gpu = gpus.FirstOrDefault(item => item.Partitionable && string.Equals(item.InstancePath, record.Settings.Gpu?.InstancePath, StringComparison.OrdinalIgnoreCase))
+            ?? gpus.FirstOrDefault(item => item.Partitionable)
+            ?? throw new LifecycleConflictException("This host has no GPU that Hyper-V can partition.", ContractInfo.ProblemCodes.GpuUnavailable);
+        await GuestSetupAsync(name, vmId, record, admin, gpu, driversOnly: false, context).ConfigureAwait(false);
+    }
+
     /// <inheritdoc/>
     Task IGuestPerformanceStarter.StartGuestSetupAsync(Guid vmId, Guid userId, CancellationToken cancellationToken) =>
         StartGuestSetupAsync(vmId, userId, driversOnly: false, onFinished: null, cancellationToken);

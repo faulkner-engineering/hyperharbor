@@ -1115,6 +1115,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/machine-profile-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What applying a machine profile would change on this VM.
+         * @description Since 1.29.0. Lists each setting that differs, with what it needs (the VM off, or a running guest), notes for
+         *     the parts that apply only when creating a VM or are left as they are, and warnings for names this host lacks.
+         *     Nothing is changed.
+         */
+        get: operations["previewVmMachineProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/machine-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply the chosen parts of a machine profile to this VM.
+         * @description Since 1.29.0. Needs elevation. Applies only the parts listed, as one applyMachineProfile job: the backup
+         *     policy; then the settings that need the VM off (shutting a running VM down first when shutDownToApply is set,
+         *     and starting it again afterwards); then the software and guest display settings in the running guest, with
+         *     one restart when they need it; then, when Performance mode was turned on, the guest part of Performance mode.
+         *     Items that could not be applied are the job's setupResult problems. A part that needs the VM off is 409
+         *     (requiresShutdown) for a running VM without shutDownToApply; software needs a running Windows guest with a
+         *     stored administrator credential (409 credentialRequired without one).
+         */
+        post: operations["applyVmMachineProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/setup-profile": {
         parameters: {
             query?: never;
@@ -3001,7 +3055,7 @@ export interface components {
             blockers: components["schemas"]["DeleteBlocker"][];
         };
         /** @enum {string} */
-        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm" | "mergeCheckpoints";
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm" | "mergeCheckpoints" | "applyMachineProfile";
         /** @enum {string} */
         VmJobState: "running" | "succeeded" | "failed";
         JobError: {
@@ -3437,6 +3491,50 @@ export interface components {
             /** @description Null means the target's conditions. */
             conditions?: components["schemas"]["BackupConditions"] | null;
             gpuMode?: components["schemas"]["BackupGpuMode"] | null;
+        };
+        /**
+         * @description A part of a machine profile that can be applied to an existing VM.
+         * @enum {string}
+         */
+        MachinePart: "compute" | "firmware" | "gpu" | "network" | "backup" | "software";
+        MachineProfileChange: {
+            part: components["schemas"]["MachinePart"];
+            /** @description What changes, in words, for example "Virtual processors". */
+            setting: string;
+            /** @description The VM's value now, in words; null when there is none. */
+            current: string | null;
+            wanted: string;
+            /** @description Applied while the VM is off. */
+            needsOff: boolean;
+            /** @description Applied in the running guest with the administrator credential. */
+            needsGuest: boolean;
+        };
+        MachineProfileNote: {
+            /** @description The profile section, for example account or display. */
+            section: string;
+            message: string;
+        };
+        MachineProfilePreview: {
+            /** Format: uuid */
+            vmId: string;
+            vmName: string;
+            vmState: components["schemas"]["VmState"];
+            profileId: string;
+            profileName: string;
+            changes: components["schemas"]["MachineProfileChange"][];
+            /** @description Parts that are not applied to an existing VM, and why. */
+            notes: components["schemas"]["MachineProfileNote"][];
+            /** @description Names in the profile this host does not have. */
+            warnings: components["schemas"]["ValidationIssue"][];
+        };
+        ApplyMachineProfileRequest: {
+            profileId: string;
+            parts: components["schemas"]["MachinePart"][];
+            /**
+             * @description Shut a running VM down for the parts that need it off, and start it again afterwards.
+             * @default false
+             */
+            shutDownToApply: boolean;
         };
         CreateVmFromProfileRequest: {
             name: string;
@@ -6313,6 +6411,68 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+        };
+    };
+    previewVmMachineProfile: {
+        parameters: {
+            query: {
+                profileId: string;
+            };
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineProfilePreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    applyVmMachineProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyMachineProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The applyMachineProfile job. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     applyVmSetupProfile: {

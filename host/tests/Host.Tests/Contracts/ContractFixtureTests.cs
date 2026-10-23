@@ -309,6 +309,20 @@ public class ContractFixtureTests
         ["StoredSetupProfile"] = new StoredSetupProfile("dev-workstation", Time, SetupProfileSample),
         ["MachineProfile"] = MachineProfileSample,
 
+        // Nulls on purpose: current is required but nullable.
+        ["MachineProfileChange"] = new MachineProfileChange(MachinePart.Backup, "Backup policy", null, "To NAS", false, false),
+        ["MachineProfileNote"] = new MachineProfileNote("account", "Account settings apply when creating a VM."),
+        ["MachineProfilePreview"] = new MachineProfilePreview(
+            Guid.Parse("7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d"),
+            "Dev Box",
+            VmState.Running,
+            "gaming-rig",
+            "Gaming rig",
+            [new MachineProfileChange(MachinePart.Compute, "Virtual processors", "2", "4", true, false)],
+            [new MachineProfileNote("firmware", "Secure Boot is left as it is on an existing VM.")],
+            [new ValidationIssue("backup.target", "This host has no backup target named \"Offsite\".")]),
+        ["ApplyMachineProfileRequest"] = new ApplyMachineProfileRequest("gaming-rig", [MachinePart.Compute, MachinePart.Software], true),
+
         // Null on purpose: windowsEdition is nullable.
         ["CreateVmFromProfileRequest"] = new CreateVmFromProfileRequest("Rig", "win11.iso", null, true),
         ["StoredMachineProfile"] = new StoredMachineProfile("gaming-rig", Time, MachineProfileSample),

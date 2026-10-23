@@ -19,6 +19,7 @@ public enum VmJobKind
     RestoreHostState,
     TransferVm,
     MergeCheckpoints,
+    ApplyMachineProfile,
 }
 
 /// <summary>Schema: VmJobState.</summary>

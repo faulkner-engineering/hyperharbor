@@ -1,4 +1,12 @@
 {
+  "ApplyMachineProfileRequest": {
+    "profileId": "gaming-rig",
+    "parts": [
+      "compute",
+      "software"
+    ],
+    "shutDownToApply": true
+  },
   "ApplySetupProfileRequest": {
     "profileId": "dev-workstation",
     "restartIfNeeded": false
@@ -479,7 +487,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.28.0",
+    "apiVersion": "1.29.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -828,6 +836,47 @@
       {
         "id": "appearance.darkMode",
         "name": "Use dark mode"
+      }
+    ]
+  },
+  "MachineProfileChange": {
+    "part": "backup",
+    "setting": "Backup policy",
+    "current": null,
+    "wanted": "To NAS",
+    "needsOff": false,
+    "needsGuest": false
+  },
+  "MachineProfileNote": {
+    "section": "account",
+    "message": "Account settings apply when creating a VM."
+  },
+  "MachineProfilePreview": {
+    "vmId": "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
+    "vmName": "Dev Box",
+    "vmState": "running",
+    "profileId": "gaming-rig",
+    "profileName": "Gaming rig",
+    "changes": [
+      {
+        "part": "compute",
+        "setting": "Virtual processors",
+        "current": "2",
+        "wanted": "4",
+        "needsOff": true,
+        "needsGuest": false
+      }
+    ],
+    "notes": [
+      {
+        "section": "firmware",
+        "message": "Secure Boot is left as it is on an existing VM."
+      }
+    ],
+    "warnings": [
+      {
+        "field": "backup.target",
+        "message": "This host has no backup target named \u0022Offsite\u0022."
       }
     ]
   },
