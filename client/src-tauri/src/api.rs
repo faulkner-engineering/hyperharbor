@@ -3246,6 +3246,10 @@ mod server_tests {
                 .args(["--Api:ListenAddress", "127.0.0.1"])
                 .args(["--Discovery:Enabled", "false"])
                 .args(["--Tray:PipeName", &pipe_name])
+                .args([
+                    "--Lifecycle:IsoFolder",
+                    data_directory.join("isos").to_str().unwrap(),
+                ])
                 .stdout(std::process::Stdio::null())
                 .spawn()
                 .expect("start the host service");
@@ -3405,6 +3409,31 @@ mod server_tests {
             .await
             .expect("ISO library");
         assert!(isos.is_array());
+
+        // A library download through the real service, resumed from a part already on disk.
+        let image: Vec<u8> = (0..3_000_000u32).map(|n| (n % 251) as u8).collect();
+        let iso_folder = service.data_directory.join("isos");
+        std::fs::create_dir_all(&iso_folder).unwrap();
+        std::fs::write(iso_folder.join("e2e image.iso"), &image).unwrap();
+        let partial = service.data_directory.join("download.partial");
+        std::fs::write(&partial, &image[..1_000_000]).unwrap();
+        api.download_iso(
+            &target,
+            &paired,
+            "e2e image.iso",
+            &partial,
+            Arc::new(|_, _| {}),
+            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        )
+        .await
+        .expect("download the image");
+        assert!(std::fs::read(&partial).unwrap() == image);
+        assert!(matches!(
+            api.download_profile_image(&target, &paired, "missing.png")
+                .await,
+            Err(ClientError::Api { status: 404, .. })
+        ));
+
         match api
             .get_resource(&target, &paired, HostResource::Resources)
             .await

@@ -422,6 +422,9 @@ verified, and what was found along the way. User-facing changes per release are 
    place and "+00:00" in another), ApiClient download_iso (fixed .partial name, Range from its length, 416 starts
    over) and download_profile_image, and the commands in lib.rs. A profile goes to a host as its wallpaper images
    (always uploaded) and then a create or a replace of the linked profile (404 on replace creates it again).
+   Verified: unit tests for the store, the statuses, and resume against a test server; e2e_loopback (scripts\e2e.ps1)
+   downloads a 3 MB image from the real service with 1 MB already on disk and gets the whole file back (Kestrel's
+   range processing), and a missing wallpaper image is 404. The Library page itself was not yet driven by hand.
    Not done: editing a profile in the library without a host (the editor needs the host's schema and catalogs),
    choosing another library folder, cloud backup.
 
