@@ -157,6 +157,13 @@
   </div>
 </div>
 
+{#if canConvert}
+  <p class="note">
+    Machine profiles replace setup profiles: one machine profile holds a VM's software together with its hardware, account,
+    and display. Setup profiles keep working; Convert makes a machine profile from one.
+  </p>
+{/if}
+
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 
 {#if profiles === null}
@@ -233,6 +240,13 @@
 
   .error {
     color: var(--danger);
+  }
+
+  .note {
+    margin: 0 0 0.8rem;
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
   }
 
   table {

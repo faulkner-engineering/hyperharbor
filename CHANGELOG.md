@@ -59,6 +59,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   your images on the host or Add image… from this device (JPEG, PNG, or BMP up to 20 MB). Creating a VM from the
   profile or applying it copies the image into the VM (C:\Users\Public\Pictures\HyperHarbor) and sets it as the
   wallpaper, filling the screen. A profile whose image was deleted is applied without it, with a warning.
+- New VM now starts with your machine profiles (hosts with API 1.28.0): Use… on one continues in that profile's create
+  dialog. Choosing every setting by hand still works below it, and installing with an unattended install profile and a
+  setup profile is now labeled as using the older profiles. The setup profile list notes that machine profiles
+  replace setup profiles and that Convert makes one.
 
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons

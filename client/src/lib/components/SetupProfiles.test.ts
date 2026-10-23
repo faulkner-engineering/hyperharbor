@@ -116,6 +116,13 @@ describe("SetupProfiles", () => {
     await vi.waitFor(() => expect(calls("export_profile")).toEqual([{ key: host.key, kind: "setup", profileId: "dev-workstation" }]));
   });
 
+  it("says machine profiles replace setup profiles when the host has them", async () => {
+    answer({ "resource:setupProfiles": () => [summary] });
+    render(SetupProfiles, { host, vms: [], canConvert: true });
+
+    expect(await screen.findByText(/Machine profiles replace setup profiles/)).toBeTruthy();
+  });
+
   it("imports a file and lists it", async () => {
     let imported = false;
     answer({

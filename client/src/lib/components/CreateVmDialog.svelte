@@ -7,8 +7,10 @@
     hasProblemCode,
     hostSupports,
     inspectIso,
+    MachineProfileVmsApiVersion,
     isClientError,
     listIsos,
+    listMachineProfiles,
     listSwitches,
     listSetupProfiles,
     listUnattendProfiles,
@@ -19,6 +21,7 @@
     type HostResources,
     type IsoImage,
     type IsoInspection,
+    type MachineProfileSummary,
     type SetupProfileSummary,
     type UnattendProfile,
     type ValidationIssue,
@@ -26,6 +29,7 @@
     type VmJob,
   } from "$lib/api/client";
   import { ElevationCancelled, toGb, toMb, waitForJob, withElevation } from "$lib/lifecycle.svelte";
+  import { machineSummary } from "$lib/machineDraft.svelte";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
   import { toasts } from "$lib/toasts.svelte";
@@ -37,9 +41,18 @@
     onopenlibrary?: () => void;
     /** Closes this dialog and opens the install profiles. */
     onopenprofiles?: () => void;
+    /** Closes this dialog and creates the VM from this machine profile instead (hosts at API 1.28.0 or later). */
+    onusemachineprofile?: (profile: MachineProfileSummary) => void;
+    /** Closes this dialog and opens the machine profiles. */
+    onopenmachineprofiles?: () => void;
   }
 
-  let { host, onclose, onopenlibrary, onopenprofiles }: Props = $props();
+  let { host, onclose, onopenlibrary, onopenprofiles, onusemachineprofile, onopenmachineprofiles }: Props = $props();
+
+  // Machine profiles come first; the settings below and the older profiles stay for VMs made without one.
+  const offersMachineProfiles = $derived(onusemachineprofile !== undefined && hostSupports(host, MachineProfileVmsApiVersion));
+  let machineProfiles = $state<MachineProfileSummary[] | null>(null);
+  const usableMachineProfiles = $derived((machineProfiles ?? []).filter((profile) => !profile.error));
 
   let resources = $state<HostResources | null>(null);
   let isos = $state<IsoImage[]>([]);
@@ -112,6 +125,7 @@
       ]);
       processorCount = Math.min(2, resources.logicalProcessorCount);
       if (offersSetupProfiles) setupProfiles = await listSetupProfiles(host.key).catch(() => []);
+      if (offersMachineProfiles) machineProfiles = await listMachineProfiles(host.key).catch(() => []);
       chooseIso(isos[0]?.name ?? "");
       switchId = switches.find((item) => item.isDefault)?.id ?? switches[0]?.id ?? null;
     } catch (e) {
@@ -235,6 +249,34 @@
       </p>
       <p class="muted">Stored on the host in {resources.virtualHardDiskFolder}.</p>
 
+      {#if offersMachineProfiles && machineProfiles !== null}
+        <section class="machine" aria-labelledby="vm-machine-heading">
+          <h3 id="vm-machine-heading">From a machine profile</h3>
+          {#if usableMachineProfiles.length === 0}
+            <p class="muted">
+              A machine profile holds a whole VM: its hardware, account, software, and display. Make one once, then create
+              VMs from it here.
+            </p>
+            {#if onopenmachineprofiles}
+              <button type="button" class="link" onclick={onopenmachineprofiles}>Open machine profiles…</button>
+            {/if}
+          {:else}
+            <ul>
+              {#each usableMachineProfiles as profile (profile.id)}
+                <li>
+                  <div>
+                    <strong>{profile.name}</strong>
+                    <span class="muted">{machineSummary(profile)}</span>
+                  </div>
+                  <button type="button" disabled={job !== null} onclick={() => onusemachineprofile?.(profile)}>Use…</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <h3>Or choose the settings here</h3>
+        </section>
+      {/if}
+
       <label for="vm-name">Name</label>
       <input id="vm-name" bind:value={name} maxlength="100" autocomplete="off" spellcheck="false" disabled={job !== null} />
       {#if issueFor("name")}<p class="error">{issueFor("name")}</p>{/if}
@@ -264,7 +306,7 @@
         </label>
         <label class="check">
           <input type="radio" name="install-mode" value="unattended" bind:group={installMode} />
-          Automatically with a profile
+          {offersMachineProfiles ? "Automatically with an older profile (install and setup profiles)" : "Automatically with a profile"}
         </label>
 
         {#if installMode === "unattended"}
@@ -450,6 +492,37 @@
   .install legend {
     padding: 0 0.3rem;
     font-weight: 600;
+  }
+
+  .machine h3 {
+    margin: 0.9rem 0 0.4rem;
+    font-size: 0.95rem;
+  }
+
+  .machine ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .machine li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .machine li div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
   }
 
   .link {

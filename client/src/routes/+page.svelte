@@ -35,6 +35,7 @@
     type ConnectionRoute,
     type BackupTarget,
     type StoredSetupProfile,
+    type MachineProfileSummary,
     type Vm,
   } from "$lib/api/client";
   import { onMount } from "svelte";
@@ -56,6 +57,7 @@
   import DeleteVmDialog from "$lib/components/DeleteVmDialog.svelte";
   import TransferVmDialog from "$lib/components/TransferVmDialog.svelte";
   import CreateVmDialog from "$lib/components/CreateVmDialog.svelte";
+  import CreateVmFromProfileDialog from "$lib/components/CreateVmFromProfileDialog.svelte";
   import ComputeDialog from "$lib/components/ComputeDialog.svelte";
   import PerformanceDialog from "$lib/components/PerformanceDialog.svelte";
   import GpuWarnings from "$lib/components/GpuWarnings.svelte";
@@ -100,6 +102,8 @@
   let choosingMonitors = $state<Vm | null>(null);
   let configuringCamera = $state<Vm | null>(null);
   let creating = $state(false);
+  /** The machine profile chosen in New VM, which hands over to the profile's own create dialog. */
+  let creatingFrom = $state<MachineProfileSummary | null>(null);
   let connectingHost = $state(false);
   let downloadingLogs = $state(false);
   /** The host's Remote Desktop state while asking whether to turn it on, and the answer's resolver. */
@@ -360,6 +364,7 @@
     editing = null;
     tuning = null;
     creating = false;
+    creatingFrom = null;
     if (changed && selectedKey) refreshVms(selectedKey);
   }
 
@@ -693,7 +698,18 @@
               creating = false;
               view = "profiles";
             }}
+            onopenmachineprofiles={() => {
+              creating = false;
+              view = "machine";
+            }}
+            onusemachineprofile={(profile) => {
+              creating = false;
+              creatingFrom = profile;
+            }}
           />
+        {/if}
+        {#if creatingFrom}
+          <CreateVmFromProfileDialog host={selectedHost} profile={creatingFrom} onclose={lifecycleClosed} />
         {/if}
       {/if}
 

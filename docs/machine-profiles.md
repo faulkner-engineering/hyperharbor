@@ -140,8 +140,10 @@ does not change them. To bring them over:
   an unattended install profile into account.
 - "Convert" on a setup profile makes a machine profile from it (software only, os windows), and the setup profile
   list gets a note that machine profiles replace it.
-- Once machine profiles can create VMs (26c), Create VM offers machine profiles first and the two older choices under
-  "Older profiles". Removing the old types is a later release, after a version that warns.
+- Built: New VM (CreateVmDialog, hosts at 1.28.0) lists machine profiles first; Use… hands over to
+  CreateVmFromProfileDialog. The settings and the unattended install below stay, with "Automatically with an older
+  profile (install and setup profiles)". The setup profile list shows the note. Removing the old types is a later
+  release, after a version that warns.
 
 ## Applying (26c and 26d)
 - Create (26c, built): POST /machine-profiles/{id}/vms with a name, an ISO, and an optional edition. One createVm job
