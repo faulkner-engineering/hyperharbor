@@ -263,7 +263,10 @@
     color: var(--danger);
   }
 
+  /* One unit: in a narrow cell the badge moves under the name instead of breaking between its words. */
   .tag {
+    display: inline-block;
+    white-space: nowrap;
     margin-left: 0.4rem;
     padding: 0.05rem 0.4rem;
     border-radius: 999px;

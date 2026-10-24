@@ -13,11 +13,13 @@
 
 Manage Hyper-V virtual machines on a home PC and connect to them in one click from any device.
 
+![Making a machine profile in the HyperHarbor client (account, processors and disk, and apps from the catalog and winget), then creating a virtual machine from it](docs/images/hyperharbor-trailer.webp)
+
 ![The HyperHarbor client listing the virtual machines on a host](docs/images/client-vms.png)
 
 ![A virtual machine's actions menu in the dark theme](docs/images/client-vm-actions-dark.png)
 
-*Screenshots show demo data.*
+*The trailer and screenshots show demo data. The trailer is recorded with [tools/trailer](tools/trailer).*
 
 ## What it does
 
