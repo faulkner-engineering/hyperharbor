@@ -30,3 +30,6 @@ client/src-tauri/resources/
 # Playwright (tray window browser tests)
 test-results/
 playwright-report/
+
+# Trailer recordings (tools/trailer)
+tools/trailer/out/
