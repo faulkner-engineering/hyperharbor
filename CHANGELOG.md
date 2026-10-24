@@ -13,6 +13,7 @@ note anything that needs action, such as updating the host, a new elevation requ
 ### Fixed
 - Scrollbars in the client, such as in the Create VM dialog and the sidebar, are thin and follow the light or dark
   theme instead of the bright default ones.
+- The Create VM dialog for a machine profile fits the client's default window size without scrolling.
 
 ## [0.2.1] - 2026-10-23 (API 1.34.0)
 
