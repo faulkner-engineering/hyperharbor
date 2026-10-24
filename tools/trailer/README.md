@@ -1,6 +1,7 @@
 # Trailer recorder
 
-Records the trailer of HyperHarbor's main flow: make a machine profile, then create a VM from it. A script moves the real
+Records the trailer of HyperHarbor's main flow: make a machine profile, create a VM from it, then connect to an
+existing VM. A script moves the real
 mouse, clicks, and types in the portable client while ffmpeg records the client's content area, then cuts the recording
 into an animated WebP.
 
@@ -13,6 +14,7 @@ Tauri's IPC (each command is a `fetch` to `http://ipc.localhost/<command>`):
 - Elevation always reads as active, so the passphrase prompt never appears.
 - Saving the profile and creating the VM happen in the page only. The create job is a fake that reports the host's
   real step names, and the new VM is shown as installing. Nothing is written to the host.
+- Connect shows Connecting… and its toast, but no Remote Desktop session starts and no password is rotated.
 
 The catalogs, package search, ISO list, and the profile editor's data still come from the real host.
 
@@ -33,7 +35,7 @@ powershell -ExecutionPolicy Bypass -File tools\trailer\make-trailer.ps1
 `-Dry` runs the clicks and typing without recording and stops before Save. Do not touch the mouse during a run.
 
 A status bar just below the client window (outside the recording) shows the stage: getting ready, a red REC timer
-while it records (making the profile, creating the VM, showing the new VM), amber while it encodes after recording
+while it records (making the profile, creating the VM, showing the new VM, connecting), amber while it encodes after recording
 stops (the mouse is free again), and green Done with the file and its size. It closes about 8 seconds later.
 
 Output goes to `tools\trailer\out\` (git-ignored): `raw.mp4` (lossless), `cuts.json`, and `hyperharbor-trailer.webp`

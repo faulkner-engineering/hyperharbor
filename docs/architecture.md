@@ -157,9 +157,10 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   ClientUpdate.svelte in the sidebar.
 - docs/pairing.md: the SPAKE2 pairing protocol; both implementations must match it and Spake2Vectors.json
 - tools/trailer: records the README trailer (docs/images/hyperharbor-trailer.webp, an animated WebP).
-  make-trailer.ps1 starts the portable client with the WebView2 debug port; drive.mjs runs the profile and Create VM
-  flow with the real mouse over the DevTools Protocol and records it with ffmpeg; demo.js intercepts the IPC fetch to
-  show made-up hosts and VMs and fake the save and the create job. Not part of any build. See its README.md.
+  make-trailer.ps1 starts the portable client with the WebView2 debug port; drive.mjs runs the profile, Create VM, and
+  Connect flow with the real mouse over the DevTools Protocol and records it with ffmpeg; demo.js intercepts the IPC
+  fetch to show made-up hosts and VMs and fake the save, the create job, and Connect. Not part of any build. See its
+  README.md.
 
 ## Known limitations
 - Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray

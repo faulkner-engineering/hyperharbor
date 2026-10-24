@@ -4,6 +4,7 @@
 // - only the "Faulkner Engineering LLC" VM is listed, with a made-up address
 // - elevation always reads as active, so the passphrase prompt never appears
 // - saving a machine profile and creating a VM from it happen in memory only
+// - Connect shows its progress and toast, but no Remote Desktop session starts
 // Catalogs, package search, ISOs, and the profile editor's data still come from the real host.
 (() => {
   const HOST_NAME = 'HOME-PC';
@@ -61,7 +62,10 @@
       }));
     }
     if (cmd === 'list_vms') {
-      const kept = result.filter((v) => v.name === KEEP_VM).map((v) => ({ ...v, ipAddresses: v.ipAddresses.length ? ['192.168.1.42'] : [] }));
+      const kept = result.filter((v) => v.name === KEEP_VM).map((v) => ({
+        ...v, ipAddresses: v.ipAddresses.length ? ['192.168.1.42'] : [],
+        remoteDesktop: v.remoteDesktop?.address ? { ...v.remoteDesktop, address: '192.168.1.42' } : v.remoteDesktop,
+      }));
       if (kept[0]) template = kept[0];
       const created = state.vms.map(({ createdAt, ...v }) => ({ ...v, uptimeSeconds: Math.floor((Date.now() - createdAt) / 1000) }));
       return [...kept, ...created];
@@ -74,6 +78,12 @@
 
   async function fake(cmd, args) {
     if (cmd === 'get_elevation') return { configured: true, active: true, expiresAt: iso(5 * 60_000) };
+    // Connect: the button shows Connecting… for about as long as a real connect, then the toast; no Remote
+    // Desktop window opens and no password is rotated. Null means no extra notice (such as camera sharing).
+    if (cmd === 'connect_vm') {
+      await new Promise((r) => setTimeout(r, 1600));
+      return null;
+    }
     if (cmd === 'save_profile' && args?.kind === 'machine') {
       const existing = state.profiles.find((p) => p.id === args.profileId);
       const stored = { id: existing?.id ?? uuid(), updatedAt: iso(), profile: args.profile };

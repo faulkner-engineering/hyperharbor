@@ -22,6 +22,8 @@ const arg = (name, fallback) => {
 const DRY = process.argv.includes('--dry');
 const PROFILE = arg('profile', 'Dev Workstation');
 const VM = arg('vm', 'dev-01');
+// The existing VM the trailer connects to at the end; demo.js keeps only this one in the list.
+const CONNECT = 'Faulkner Engineering LLC';
 const PORT = Number(arg('port', '9333'));
 const WINDOW = arg('window', '40,10,1720,1040').split(',').map(Number);
 const OUT = arg('out', join(here, 'out'));
@@ -234,13 +236,21 @@ try {
     const jobStart = now() + 1.5;
     await waitFor("__hh.btn('Close')", 5 * 60_000, 'the create job');
     const jobEnd = now();
-    status('rec', 'Showing the new VM (recording stops in a few seconds)');
+    status('rec', 'Showing the new VM');
     await sleep(2200);
     await click("__hh.btn('Close')", { after: 900 });
     await click("__hh.btn('Virtual machines')", { after: 1000 });
     // Rest beside the new VM's name, where the cursor covers no text.
     await moveTo(`[...document.querySelectorAll('tr')].find((r) => r.textContent.includes(${JSON.stringify(VM)}))?.querySelector('td')`, 700).catch(() => {});
-    await sleep(3500);
+    await sleep(2200);
+
+    // Connect to the existing VM. demo.js fakes connect_vm, so no Remote Desktop window opens.
+    status('rec', `Connecting to ${CONNECT} (recording stops in a few seconds)`);
+    await click(`__hh.rowButton(${JSON.stringify(CONNECT)}, 'Connect')`, { after: 0 });
+    await waitFor("document.body.innerText.includes('Opening Remote Desktop')", 15_000, 'the connect toast');
+    await sleep(800);
+    await moveTo(`[...document.querySelectorAll('tr')].find((r) => r.textContent.includes(${JSON.stringify(CONNECT)}))?.querySelector('td')`, 600).catch(() => {});
+    await sleep(2800);
     await stopRecording();
     status('work', 'Recording stopped. Encoding the WebP, about a minute. The mouse is yours.');
 
