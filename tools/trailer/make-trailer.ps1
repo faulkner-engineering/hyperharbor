@@ -16,9 +16,11 @@ param(
     # The client window's outer frame in physical pixels: x, y, width, height.
     [string]$Window = '40,10,1720,1040',
     [int]$Port = 9333,
-    [string]$Out = (Join-Path $PSScriptRoot 'out')
+    # Default: tools\trailer\out. Set below, because Windows PowerShell can leave $PSScriptRoot empty in parameter defaults.
+    [string]$Out = ''
 )
 $ErrorActionPreference = 'Stop'
+if (-not $Out) { $Out = Join-Path $PSScriptRoot 'out' }
 $node = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $node) { $node = 'C:\Program Files\nodejs\node.exe' }
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)

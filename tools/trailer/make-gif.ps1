@@ -6,14 +6,17 @@
         .\make-gif.ps1 -Cuts '2-38','38-95@8','95-104' -Width 960 -Fps 15
 #>
 param(
-    [string]$In = (Join-Path $PSScriptRoot 'out\raw.mp4'),
-    [string]$Out = (Join-Path $PSScriptRoot 'out\hyperharbor-trailer.gif'),
+    # Defaults: out\raw.mp4 and out\hyperharbor-trailer.gif, set below (see make-trailer.ps1).
+    [string]$In = '',
+    [string]$Out = '',
     [string[]]$Cuts = @(),
     [int]$Width = 960,
     [int]$Fps = 15,
     [double]$HoldEnd = 2.5
 )
 $ErrorActionPreference = 'Stop'
+if (-not $In) { $In = Join-Path $PSScriptRoot 'out\raw.mp4' }
+if (-not $Out) { $Out = Join-Path $PSScriptRoot 'out\hyperharbor-trailer.gif' }
 # FFMPEG, then ffmpeg on PATH, then the winget package (winget install Gyan.FFmpeg).
 $ffmpeg = if ($env:FFMPEG) { $env:FFMPEG } else { (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source }
 if (-not $ffmpeg) {
