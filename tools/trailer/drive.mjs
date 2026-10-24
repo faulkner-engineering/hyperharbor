@@ -10,7 +10,7 @@
 // demo.js is loaded for the run: the recording shows made-up hosts and VMs and nothing is created on the host.
 import { spawn, execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { connect } from './cdp.mjs';
 
@@ -28,6 +28,20 @@ const OUT = arg('out', join(here, 'out'));
 if (WINDOW.length !== 4 || WINDOW.some((n) => !Number.isInteger(n))) throw new Error('--window takes x,y,width,height.');
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ---- status bar (status.ps1), just below the client window and outside the recording ----
+const statusFile = join(OUT, 'status.txt');
+function status(state, text) {
+  writeFileSync(statusFile, `${state}|${text}`);
+  console.log(text);
+}
+status('ready', 'Trailer: getting ready. Do not touch the mouse.');
+// Closes the bar however the script ends, including a failure before the scene starts.
+process.on('exit', () => {
+  try { writeFileSync(statusFile, 'exit|'); } catch { /* the bar times out on its own */ }
+});
+spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(here, 'status.ps1'), '-File', statusFile,
+  '-X', `${WINDOW[0]}`, '-Y', `${WINDOW[1] + WINDOW[3] + 8}`, '-Width', `${WINDOW[2]}`], { stdio: 'ignore' });
 
 // ---- native mouse helper ----
 const mouse = spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(here, 'mouse.ps1')], {
@@ -164,6 +178,7 @@ try {
   await native(`move ${Math.round(origin.x + center[0] * center[2])} ${Math.round(origin.y + center[1] * center[2])} 200`);
 
   if (!DRY) await startRecording();
+  status(DRY ? 'ready' : 'rec', DRY ? 'Dry run (not recording): making the profile' : 'Making the profile');
   await sleep(1200);
 
   // Profiles tab, New profile.
@@ -200,7 +215,7 @@ try {
 
   if (DRY) {
     await click("__hh.btn('Cancel')", { after: 500 });
-    console.log('Dry run finished before Save.');
+    status('done', 'Dry run finished before Save.');
   } else {
     // Save, then the profile appears in the list.
     await click("__hh.btn('Save')", { after: 0 });
@@ -208,6 +223,7 @@ try {
     await sleep(1400);
 
     // Create a VM from it.
+    status('rec', 'Creating a VM from the profile');
     await click(`__hh.rowButton(${JSON.stringify(PROFILE)}, 'Create VM…')`, { after: 1200 });
     await click("__hh.field('Name')", { after: 200 });
     await type(VM);
@@ -218,12 +234,14 @@ try {
     const jobStart = now() + 1.5;
     await waitFor("__hh.btn('Close')", 5 * 60_000, 'the create job');
     const jobEnd = now();
+    status('rec', 'Showing the new VM (recording stops in a few seconds)');
     await sleep(2200);
     await click("__hh.btn('Close')", { after: 900 });
     await click("__hh.btn('Virtual machines')", { after: 1000 });
     await moveTo(`[...document.querySelectorAll('tr')].find((r) => r.textContent.includes(${JSON.stringify(VM)}))`, 700).catch(() => {});
     await sleep(3500);
     await stopRecording();
+    status('work', 'Recording stopped. Encoding the WebP, about a minute. The mouse is yours.');
 
     // Keep everything; play the job in about 4 seconds.
     const speed = Math.max(1, (jobEnd - jobStart) / 4);
@@ -234,9 +252,11 @@ try {
     execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(here, 'make-gif.ps1'),
       '-In', join(OUT, 'raw.mp4'), '-Out', join(OUT, 'hyperharbor-trailer.webp'),
       '-Cuts', cuts.join(','), '-Width', '1200', '-Fps', '15', '-Speed', '1.5'], { stdio: 'inherit' });
+    const mb = (statSync(join(OUT, 'hyperharbor-trailer.webp')).size / 1048576).toFixed(1);
+    status('done', `Done: ${join(OUT, 'hyperharbor-trailer.webp')} (${mb} MB)`);
   }
 } catch (e) {
-  console.error('Stopped:', e.message);
+  status('error', `Stopped: ${e.message}`);
   if (ffmpeg) await stopRecording();
   process.exitCode = 1;
 } finally {
@@ -246,4 +266,6 @@ try {
   mouse.stdin.end();
   mouse.kill();
   c.close();
+  await sleep(8000); // leave the last status readable, then close the bar
+  writeFileSync(statusFile, 'exit|');
 }

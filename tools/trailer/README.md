@@ -32,6 +32,10 @@ powershell -ExecutionPolicy Bypass -File tools\trailer\make-trailer.ps1
 
 `-Dry` runs the clicks and typing without recording and stops before Save. Do not touch the mouse during a run.
 
+A status bar just below the client window (outside the recording) shows the stage: getting ready, a red REC timer
+while it records (making the profile, creating the VM, showing the new VM), amber while it encodes after recording
+stops (the mouse is free again), and green Done with the file and its size. It closes about 8 seconds later.
+
 Output goes to `tools\trailer\out\` (git-ignored): `raw.mp4` (lossless), `cuts.json`, and `hyperharbor-trailer.webp`
 (1200 pixels wide, 15 fps, played 1.5 times faster, about 4.5 MB). To cut or encode it differently, run `make-gif.ps1`
 with your own `-Cuts` (each `start-end[@speed]` in seconds), `-Speed`, `-Width`, `-Fps`, and `-Quality`. An `-Out`
@@ -59,6 +63,7 @@ recording only and restart the client normally afterwards.
 - `demo.js`: the demo layer described above.
 - `cdp.mjs`: a minimal DevTools Protocol client; `node cdp.mjs eval "<expr>"` or `node cdp.mjs shot <file.png>`
   help when the UI changes and a step no longer finds its element.
+- `status.ps1`: the status bar, a click-through window that never takes focus; it reads `out\status.txt`.
 - `mouse.ps1`: places the window and moves and clicks the mouse (user32), driven over stdin by `drive.mjs`.
 - `make-gif.ps1`: cuts, speeds up, and encodes the animated WebP (or a GIF with a generated palette).
 
