@@ -238,7 +238,8 @@ try {
     await sleep(2200);
     await click("__hh.btn('Close')", { after: 900 });
     await click("__hh.btn('Virtual machines')", { after: 1000 });
-    await moveTo(`[...document.querySelectorAll('tr')].find((r) => r.textContent.includes(${JSON.stringify(VM)}))`, 700).catch(() => {});
+    // Rest beside the new VM's name, where the cursor covers no text.
+    await moveTo(`[...document.querySelectorAll('tr')].find((r) => r.textContent.includes(${JSON.stringify(VM)}))?.querySelector('td')`, 700).catch(() => {});
     await sleep(3500);
     await stopRecording();
     status('work', 'Recording stopped. Encoding the WebP, about a minute. The mouse is yours.');
@@ -251,7 +252,7 @@ try {
     console.log('Cuts:', cuts.join(' '));
     execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(here, 'make-gif.ps1'),
       '-In', join(OUT, 'raw.mp4'), '-Out', join(OUT, 'hyperharbor-trailer.webp'),
-      '-Cuts', cuts.join(','), '-Width', '1200', '-Fps', '15', '-Speed', '1.5'], { stdio: 'inherit' });
+      '-Cuts', cuts.join(','), '-Width', '1200', '-Fps', '15', '-Speed', '1.5', '-Quality', '85'], { stdio: 'inherit' });
     const mb = (statSync(join(OUT, 'hyperharbor-trailer.webp')).size / 1048576).toFixed(1);
     status('done', `Done: ${join(OUT, 'hyperharbor-trailer.webp')} (${mb} MB)`);
   }

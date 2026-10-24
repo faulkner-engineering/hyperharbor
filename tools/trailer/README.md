@@ -37,10 +37,10 @@ while it records (making the profile, creating the VM, showing the new VM), ambe
 stops (the mouse is free again), and green Done with the file and its size. It closes about 8 seconds later.
 
 Output goes to `tools\trailer\out\` (git-ignored): `raw.mp4` (lossless), `cuts.json`, and `hyperharbor-trailer.webp`
-(1200 pixels wide, 15 fps, played 1.5 times faster, about 4.5 MB). To cut or encode it differently, run `make-gif.ps1`
+(1200 pixels wide, 15 fps, played 1.5 times faster, WebP quality 85, about 7 MB). To cut or encode it differently, run `make-gif.ps1`
 with your own `-Cuts` (each `start-end[@speed]` in seconds), `-Speed`, `-Width`, `-Fps`, and `-Quality`. An `-Out`
 ending in `.gif` writes a GIF instead, but the orbiting model makes a GIF of this length about ten times larger.
-The main README shows the copy in `docs/media/hyperharbor-trailer.webp`.
+The main README shows the copy in `docs/images/hyperharbor-trailer.webp`.
 
 Options of `make-trailer.ps1`:
 - `-Window x,y,width,height`: the client window's outer frame in physical pixels (default `40,10,1720,1040`, for a

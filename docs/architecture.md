@@ -156,7 +156,7 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD (losing the key means installed clients cannot update; back it up). UI:
   ClientUpdate.svelte in the sidebar.
 - docs/pairing.md: the SPAKE2 pairing protocol; both implementations must match it and Spake2Vectors.json
-- tools/trailer: records the README trailer (docs/media/hyperharbor-trailer.webp, an animated WebP).
+- tools/trailer: records the README trailer (docs/images/hyperharbor-trailer.webp, an animated WebP).
   make-trailer.ps1 starts the portable client with the WebView2 debug port; drive.mjs runs the profile and Create VM
   flow with the real mouse over the DevTools Protocol and records it with ffmpeg; demo.js intercepts the IPC fetch to
   show made-up hosts and VMs and fake the save and the create job. Not part of any build. See its README.md.
