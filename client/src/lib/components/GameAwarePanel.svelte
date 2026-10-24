@@ -271,6 +271,7 @@
   }
 
   .chips button {
+    padding: 0 0.2rem;
     border: none;
     background: none;
     cursor: pointer;

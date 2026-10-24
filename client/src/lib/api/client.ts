@@ -727,8 +727,14 @@ export const listExtensionCatalog = (key: string) =>
   invoke<ExtensionCatalogItem[]>("get_host_resource", { key, resource: "extensionCatalog" });
 
 /** Fails with problem code wingetUnavailable until package search is set up on the host. */
+/** The API version whose package search reads the host's own winget index: quick enough to search as you type. */
+export const PackageIndexApiVersion = "1.34.0";
+
 export const searchPackages = (key: string, query: string) =>
   invoke<PackageSearchResult[]>("search_packages", { key, query });
+
+/** Opens the store's own search in the default browser; the stores have no public search API. */
+export const openStoreSearch = (store: "chrome" | "edge", query: string) => invoke<void>("open_store_search", { store, query });
 
 export const resolveExtension = (key: string, input: string) =>
   invoke<ResolvedExtension>("resolve_extension", { key, input });
@@ -768,6 +774,119 @@ export const renameIso = (key: string, name: string, newName: string) =>
   invoke<IsoImage>("rename_iso", { key, name, newName });
 
 export const deleteIso = (key: string, name: string) => invoke<void>("delete_iso", { key, name });
+
+// The library on this device (phase 27): images and machine profiles kept here and sent to any paired host.
+
+export interface LibraryIsoLink {
+  hostId: string;
+  hostName: string;
+  remoteName: string;
+  sizeBytes: number;
+  remoteModifiedAt: string;
+  syncedAt: number;
+}
+
+export interface LibraryIso {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  /** Seconds since the Unix epoch. */
+  addedAt: number;
+  links: LibraryIsoLink[];
+}
+
+export interface LibraryProfileLink {
+  hostId: string;
+  hostName: string;
+  remoteId: string;
+  sentHash: string;
+  remoteUpdatedAt: string;
+  syncedAt: number;
+}
+
+export interface LibraryProfile {
+  id: string;
+  name: string;
+  os: string;
+  description: string | null;
+  hash: string;
+  images: string[];
+  updatedAt: number;
+  links: LibraryProfileLink[];
+}
+
+export interface Library {
+  version: number;
+  isos: LibraryIso[];
+  profiles: LibraryProfile[];
+}
+
+/** How a host's copy compares with the library. */
+export type LinkState = "inSync" | "libraryNewer" | "hostNewer" | "bothChanged" | "missingOnHost";
+
+export interface LinkStatus {
+  itemId: string;
+  hostId: string;
+  state: LinkState;
+}
+
+export interface LibraryProgress {
+  taskId: string;
+  done: number;
+  total: number;
+}
+
+/** The API version that lets a client download ISOs and wallpaper images into its library. */
+export const LibraryDownloadApiVersion = "1.33.0";
+
+export const listLibrary = () => invoke<Library>("list_library");
+
+/** Copies a picked file into the library; progress arrives under the pick ID. */
+export const addLibraryIso = (pickId: string, name: string) => invoke<LibraryIso>("add_library_iso", { pickId, name });
+
+export const renameLibraryIso = (itemId: string, newName: string) =>
+  invoke<LibraryIso>("rename_library_iso", { itemId, newName });
+
+/** Removes an image or profile from this device; copies on hosts stay. */
+export const removeLibraryItem = (itemId: string) => invoke<void>("remove_library_item", { itemId });
+
+/** Forgets that a host has a copy; the host's copy stays. */
+export const unlinkLibraryItem = (itemId: string, hostId: string) => invoke<void>("unlink_library_item", { itemId, hostId });
+
+/** Uploads a library image to the host as `name`. Needs elevation: call ensureElevated first. */
+export const sendLibraryIso = (key: string, itemId: string, name: string, taskId: string) =>
+  invoke<LibraryIso>("send_library_iso", { key, itemId, name, taskId });
+
+/** Downloads a host image into the library (API 1.33.0); a repeated call resumes an interrupted one. */
+export const saveHostIsoToLibrary = (key: string, name: string, taskId: string) =>
+  invoke<LibraryIso>("save_host_iso_to_library", { key, name, taskId });
+
+/** Saves a host's machine profile, with its wallpaper image, into the library (or updates the linked one). */
+export const saveHostProfileToLibrary = (key: string, profileId: string) =>
+  invoke<LibraryProfile>("save_host_profile_to_library", { key, profileId });
+
+/** Sends a library profile to the host, replacing its linked copy unless `asNew`. Needs elevation: run it inside withElevation. */
+export const sendLibraryProfile = (key: string, itemId: string, asNew = false) =>
+  invoke<LibraryProfile>("send_library_profile", { key, itemId, asNew });
+
+export const getLibraryProfile = (itemId: string) => invoke<MachineProfile>("get_library_profile", { itemId });
+
+/**
+ * Saves an edited profile into the library (a new item when `itemId` is null). `key` is the host whose catalogs
+ * the editor used; a wallpaper image the library lacks is fetched from it.
+ */
+export const saveLibraryProfile = (key: string | null, itemId: string | null, profile: MachineProfile) =>
+  invoke<LibraryProfile>("save_library_profile", { key, itemId, profile });
+
+export const libraryStatus = (key: string) => invoke<LinkStatus[]>("library_status", { key });
+
+export const cancelLibraryTask = (taskId: string) => invoke<void>("cancel_library_task", { taskId });
+
+export const onLibraryProgress = (handler: (progress: LibraryProgress) => void): Promise<UnlistenFn> =>
+  listen<LibraryProgress>("library-progress", (event) => handler(event.payload));
+
+/** A fresh ID for a library task's progress and cancel. */
+export const newTaskId = () => `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 // Unattended installs. Saving or deleting a profile needs elevation.
 

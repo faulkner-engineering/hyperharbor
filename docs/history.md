@@ -301,7 +301,8 @@ verified, and what was found along the way. User-facing changes per release are 
    workspace (Dialog terminal: larger than xl, dark CRT variables): a vertical section list (tabs with counts) drives both
    the wireframe machine in the middle and the form panel on the right (Install packages, Remove debloat, Browser
    browser, Tweaks overview); a HUD line under the machine names the section, its counts, and why it is a still.
-   Green terminal and Motion checkboxes are stored per device (hh.machinePalette, hh.machineMotion); Motion starts
+   Green terminal and Motion checkboxes are stored per device (hh.machinePalette, hh.machineMotion; the green palette
+   was removed 2026-10-23 at the user's request, and Motion moved to the Cancel and Save row); Motion starts
    from prefers-reduced-motion and, once set, overrides it (MachineView motion: system, on, off). The first version
    sat beside the old tab strip on the light dialog and, on a PC with Windows animation effects off, never moved. Only perItem has a control there (one drive per package); blink, pulse, and spin follow
    ControlState fields that no editor sets yet (TPM, backup schedules, and performance mode live in other dialogs).
@@ -407,6 +408,36 @@ verified, and what was found along the way. User-facing changes per release are 
    Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
    contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
    to an existing VM.
+27. Library on the client (2026-10-23; API 1.33.0; branch feature/local-library, stacked on 26). ISO images and
+   machine profiles kept on the client device and sent to any paired host. The user chose:
+   - Stored on the client device, in one folder (%LOCALAPPDATA%\com.hyperharbor.client\library) with a manifest, so a later paid tier can
+     back it up to the cloud as a whole.
+   - Copy with sync: each item records which hosts have a copy (by host ID) and what was sent; the Library page shows
+     each copy as In sync, Library newer, Changed on host, Both changed, Missing on host, or Not reachable.
+   - Both ways: send to a host, or save from a host (Save to library on the host's ISO library and Profiles tabs).
+   - A separate Library page in the sidebar, not tied to the selected host.
+   Host: GET /isos/{name}/content (PhysicalFile with range processing, so a download resumes) and
+   GET /profile-images/{name}/content. Client: library.rs (LibraryStore: library.json written through a temporary
+   file, isos/, profiles/<id>.json as MachineProfile JSON, images/; the hash is SHA-256 of canonical JSON plus each
+   image; statuses() compares links with the host's lists, timestamps as instants because the host writes "Z" in one
+   place and "+00:00" in another), ApiClient download_iso (fixed .partial name, Range from its length, 416 starts
+   over) and download_profile_image, and the commands in lib.rs. A profile goes to a host as its wallpaper images
+   (always uploaded) and then a create or a replace of the linked profile (404 on replace creates it again).
+   Verified: unit tests for the store, the statuses, and resume against a test server; e2e_loopback (scripts\e2e.ps1)
+   downloads a 3 MB image from the real service with 1 MB already on disk and gets the whole file back (Kestrel's
+   range processing), and a missing wallpaper image is 404. The Library page itself was not yet driven by hand.
+   Package and extension discovery (2026-10-23; API 1.34.0), asked for by the user: package search reads the host's
+   own copy of the winget index (WingetIndex: source2.msix, refreshed daily, fetched at start; PowerShell 7 search is
+   the fallback), so InstallSection searches as the user types (250 ms pause) and lists winget results the catalog
+   lacks under "From winget"; BrowserSection opens the Chrome Web Store or Edge Add-ons search in the browser for
+   text that is not a link. The index has no descriptions, so search by purpose works only through names and tags.
+   Live: WingetIndexLiveTests (HH_WINGET_LIVE=1) downloads the real index and finds VLC, Visual Studio Code, and Git.
+   Library profiles are made and edited in MachineProfileEditor with an onsave prop: a paired host supplies the catalogs
+   (Catalogs from), save_library_profile stores the JSON and takes a wallpaper image the library lacks from that host;
+   nothing validates it until a host does on send. app.css got :where() base styles for buttons and form controls, so a
+   component without its own button rules no longer shows the browser's default look.
+   Not done: editing a profile in the library with no paired host at all (the editor needs a host's catalogs),
+   choosing another library folder, cloud backup.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

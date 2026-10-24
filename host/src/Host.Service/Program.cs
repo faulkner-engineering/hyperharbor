@@ -308,7 +308,16 @@ builder.Services.AddSingleton<IGuestProfileApplier, PowerShellDirectProfileAppli
 builder.Services.AddSingleton<SetupProfileApplication>();
 builder.Services.AddSingleton<GuestRestart>();
 builder.Services.AddSingleton<SetupProfileJobs>();
-builder.Services.AddSingleton<IPackageSearch, PwshPackageSearch>();
+builder.Services.AddSingleton(services => new WingetIndex(
+    WingetIndex.CreateHttpClient($"HyperHarbor-Host/{HostVersion.Current}"),
+    dataDirectory,
+    services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<WingetIndex>>()));
+builder.Services.AddSingleton<PwshPackageSearch>();
+builder.Services.AddSingleton<IPackageSearch>(services => new WingetPackageSearch(
+    services.GetRequiredService<WingetIndex>(),
+    services.GetRequiredService<PwshPackageSearch>(),
+    services.GetRequiredService<ILogger<WingetPackageSearch>>()));
 builder.Services.AddSingleton<IExtensionResolver>(services => new StoreExtensionResolver(
     StoreExtensionResolver.CreateHttpClient($"HyperHarbor-Host/{HostVersion.Current}"),
     services.GetRequiredService<Catalogs>(),
@@ -675,6 +684,10 @@ if (selfTest is not null)
 
 // After an update the screensaver file is a copy of the old version until this refreshes it.
 app.Services.GetRequiredService<AmbientService>().Refresh();
+
+// Fetch the winget package index once the host is up, so the first package search answers at once.
+app.Lifetime.ApplicationStarted.Register(() =>
+    _ = Task.Run(() => app.Services.GetRequiredService<WingetIndex>().CurrentAsync(CancellationToken.None)));
 
 await app.RunAsync();
 return 0;

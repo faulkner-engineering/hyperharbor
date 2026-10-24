@@ -398,11 +398,13 @@
           <input id="vm-startup" type="number" min="0.1" step="any" bind:value={startupMemoryGb} disabled={job !== null} />
           {#if issueFor("startupMemoryMb")}<p class="error">{issueFor("startupMemoryMb")}</p>{/if}
         </div>
-        <div>
-          <label for="vm-maximum">Maximum memory (GB)</label>
-          <input id="vm-maximum" type="number" min="0.1" step="any" bind:value={maximumMemoryGb} disabled={!dynamicMemory || job !== null} />
-          {#if issueFor("maximumMemoryMb")}<p class="error">{issueFor("maximumMemoryMb")}</p>{/if}
-        </div>
+        {#if dynamicMemory}
+          <div>
+            <label for="vm-maximum">Maximum memory (GB)</label>
+            <input id="vm-maximum" type="number" min="0.1" step="any" bind:value={maximumMemoryGb} disabled={job !== null} />
+            {#if issueFor("maximumMemoryMb")}<p class="error">{issueFor("maximumMemoryMb")}</p>{/if}
+          </div>
+        {/if}
       </div>
       <p class="muted">
         The host has {toGb(resources.totalMemoryMb)} GB of memory, {toGb(resources.availableMemoryMb)} GB free now.

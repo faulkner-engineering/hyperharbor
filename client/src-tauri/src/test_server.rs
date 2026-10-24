@@ -26,6 +26,8 @@ pub struct Reply {
     pub status: u16,
     pub body: String,
     pub delay: Duration,
+    /// Extra response headers.
+    pub headers: Vec<(String, String)>,
 }
 
 impl Reply {
@@ -34,7 +36,13 @@ impl Reply {
             status,
             body: body.into(),
             delay: Duration::ZERO,
+            headers: Vec::new(),
         }
+    }
+
+    pub fn with_header(mut self, name: &str, value: impl Into<String>) -> Self {
+        self.headers.push((name.to_string(), value.into()));
+        self
     }
 
     /// 101 Switching Protocols, then the connection echoes every byte it receives.
@@ -218,8 +226,13 @@ fn serve(
         }
         return;
     }
+    let extra: String = reply
+        .headers
+        .iter()
+        .map(|(name, value)| format!("{name}: {value}\r\n"))
+        .collect();
     let response = format!(
-        "HTTP/1.1 {} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{extra}Connection: close\r\n\r\n{}",
         reply.status,
         reply.body.len(),
         reply.body

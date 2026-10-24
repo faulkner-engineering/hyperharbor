@@ -6,12 +6,14 @@ mod elevated;
 mod error;
 mod hosts;
 mod identity;
+mod library;
 mod monitors;
 mod paired;
 mod rdp;
 mod rdp_trust;
 mod sessions;
 mod spake2;
+mod store_search;
 mod tailnet;
 #[cfg(test)]
 mod test_server;
@@ -46,6 +48,8 @@ struct AppState {
     uploads: std::sync::Mutex<HashMap<String, Arc<std::sync::atomic::AtomicBool>>>,
     /// Which monitors each VM's Remote Desktop sessions use.
     monitors: MonitorChoiceStore,
+    /// ISO images and machine profiles kept on this device and sent to any paired host.
+    library: library::LibraryStore,
     /// Receiving hosts' transfer offers by transfer ID, so their tickets never reach the frontend.
     transfers: std::sync::Mutex<HashMap<String, PendingTransfer>>,
     /// Remote Desktop and console windows still open, by host; those hosts get a check-in each minute.
@@ -1223,6 +1227,460 @@ async fn delete_iso(
     state.api.delete_iso(&host, &paired, &name).await
 }
 
+/// Event with the progress of a library copy, download, or send: `{ taskId, done, total }`.
+const LIBRARY_PROGRESS_EVENT: &str = "library-progress";
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LibraryProgress {
+    task_id: String,
+    done: u64,
+    total: u64,
+}
+
+/// Reports progress for `task_id`, at most about two hundred events per task.
+fn library_progress(app: &tauri::AppHandle, task_id: &str) -> Arc<dyn Fn(u64, u64) + Send + Sync> {
+    let last_reported = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let events = app.clone();
+    let id = task_id.to_string();
+    Arc::new(move |done, total| {
+        let step = (total / 200).max(1);
+        let last = last_reported.load(std::sync::atomic::Ordering::Relaxed);
+        if done == total || done < last || done >= last + step {
+            last_reported.store(done, std::sync::atomic::Ordering::Relaxed);
+            let _ = events.emit(
+                LIBRARY_PROGRESS_EVENT,
+                LibraryProgress {
+                    task_id: id.clone(),
+                    done,
+                    total,
+                },
+            );
+        }
+    })
+}
+
+/// A cancel flag for `task_id`, which `cancel_library_task` sets; removed again by `end_task`.
+fn start_task(state: &AppState, task_id: &str) -> Arc<std::sync::atomic::AtomicBool> {
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    state
+        .uploads
+        .lock()
+        .unwrap()
+        .insert(task_id.to_string(), cancel.clone());
+    cancel
+}
+
+fn end_task(state: &AppState, task_id: &str) {
+    state.uploads.lock().unwrap().remove(task_id);
+}
+
+#[tauri::command]
+fn cancel_library_task(state: State<'_, AppState>, task_id: String) {
+    if let Some(cancel) = state.uploads.lock().unwrap().get(&task_id) {
+        cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// The library on this device: its images and profiles, and which hosts have a copy of each.
+#[tauri::command]
+fn list_library(state: State<'_, AppState>) -> library::Manifest {
+    state.library.list()
+}
+
+/// Copies a picked ISO file into the library as `name`, emitting progress under the pick ID.
+#[tauri::command]
+async fn add_library_iso(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    pick_id: String,
+    name: String,
+) -> Result<library::LibraryIso, ClientError> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    if state.library.iso_named(&name).is_some() {
+        return Err(ClientError::InvalidRequest(format!(
+            "\"{name}\" is already in the library"
+        )));
+    }
+    let source = state
+        .picked_isos
+        .lock()
+        .unwrap()
+        .get(&pick_id)
+        .cloned()
+        .ok_or_else(|| ClientError::InvalidRequest("choose the file again".into()))?;
+    let partial = state.library.iso_partial(&name)?;
+    let progress = library_progress(&app, &pick_id);
+    let cancel = start_task(&state, &pick_id);
+    let copied = async {
+        let storage = |e: std::io::Error| ClientError::Storage(e.to_string());
+        let mut input = tokio::fs::File::open(&source).await.map_err(storage)?;
+        let total = input.metadata().await.map_err(storage)?.len();
+        let mut output = tokio::fs::File::create(&partial).await.map_err(storage)?;
+        let mut buffer = vec![0u8; 1024 * 1024];
+        let mut done = 0u64;
+        loop {
+            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(ClientError::Cancelled);
+            }
+            let read = input.read(&mut buffer).await.map_err(storage)?;
+            if read == 0 {
+                break;
+            }
+            output.write_all(&buffer[..read]).await.map_err(storage)?;
+            done += read as u64;
+            progress(done, total);
+        }
+        output.flush().await.map_err(storage)
+    }
+    .await;
+    end_task(&state, &pick_id);
+    if let Err(error) = copied {
+        let _ = std::fs::remove_file(&partial);
+        return Err(error);
+    }
+    state.picked_isos.lock().unwrap().remove(&pick_id);
+    state.library.finish_iso(&name, &partial)
+}
+
+#[tauri::command]
+fn rename_library_iso(
+    state: State<'_, AppState>,
+    item_id: String,
+    new_name: String,
+) -> Result<library::LibraryIso, ClientError> {
+    state.library.rename_iso(&item_id, &new_name)
+}
+
+/// Removes an image or profile from this device. Copies on hosts stay.
+#[tauri::command]
+fn remove_library_item(state: State<'_, AppState>, item_id: String) -> Result<(), ClientError> {
+    state.library.remove(&item_id)
+}
+
+/// Forgets that a host has a copy of an item; the host's copy stays.
+#[tauri::command]
+fn unlink_library_item(
+    state: State<'_, AppState>,
+    item_id: String,
+    host_id: String,
+) -> Result<(), ClientError> {
+    state.library.unlink(&item_id, &host_id)
+}
+
+/// Uploads a library image to the host's ISO library as `name` (needs elevation) and records the copy.
+#[tauri::command]
+async fn send_library_iso(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+    item_id: String,
+    name: String,
+    task_id: String,
+) -> Result<library::LibraryIso, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let iso = state.library.iso(&item_id)?;
+    let path = state.library.iso_file(&iso.name)?;
+    let report = library_progress(&app, &task_id);
+    let total = iso.size_bytes;
+    let progress: Arc<dyn Fn(u64) + Send + Sync> = Arc::new(move |sent| report(sent, total));
+    let cancel = start_task(&state, &task_id);
+    let sent = state
+        .api
+        .upload_iso(&host, &paired, &name, &path, progress, cancel)
+        .await;
+    end_task(&state, &task_id);
+    let image = sent?;
+    state.library.link_iso(
+        &item_id,
+        library::IsoLink {
+            host_id: paired.host_id.clone(),
+            host_name: paired.display_name.clone(),
+            remote_name: image["name"].as_str().unwrap_or(&name).to_string(),
+            size_bytes: image["sizeBytes"].as_u64().unwrap_or(iso.size_bytes),
+            remote_modified_at: image["modifiedAt"].as_str().unwrap_or_default().to_string(),
+            synced_at: library::now(),
+        },
+    )
+}
+
+/// Downloads an image from the host's ISO library into this device's library (API 1.33.0). An interrupted
+/// download resumes when started again.
+#[tauri::command]
+async fn save_host_iso_to_library(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+    name: String,
+    task_id: String,
+) -> Result<library::LibraryIso, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    if state.library.iso_named(&name).is_some() {
+        return Err(ClientError::InvalidRequest(format!(
+            "\"{name}\" is already in the library"
+        )));
+    }
+    let images = state
+        .api
+        .get_resource(&host, &paired, api::HostResource::Isos)
+        .await?;
+    let remote = images
+        .as_array()
+        .and_then(|images| images.iter().find(|image| image["name"] == name.as_str()))
+        .cloned()
+        .ok_or_else(|| ClientError::InvalidRequest(format!("\"{name}\" is not on the host")))?;
+    let partial = state.library.iso_partial(&name)?;
+    let progress = library_progress(&app, &task_id);
+    let cancel = start_task(&state, &task_id);
+    let downloaded = state
+        .api
+        .download_iso(&host, &paired, &name, &partial, progress, cancel)
+        .await;
+    end_task(&state, &task_id);
+    downloaded?;
+    let iso = state.library.finish_iso(&name, &partial)?;
+    state.library.link_iso(
+        &iso.id,
+        library::IsoLink {
+            host_id: paired.host_id.clone(),
+            host_name: paired.display_name.clone(),
+            remote_name: name,
+            size_bytes: remote["sizeBytes"].as_u64().unwrap_or(iso.size_bytes),
+            remote_modified_at: remote["modifiedAt"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+            synced_at: library::now(),
+        },
+    )
+}
+
+/// Saves a machine profile from the host, with its wallpaper image, into this device's library (API 1.33.0
+/// for the image). A profile saved before from this host is updated in place.
+#[tauri::command]
+async fn save_host_profile_to_library(
+    state: State<'_, AppState>,
+    key: String,
+    profile_id: String,
+) -> Result<library::LibraryProfile, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let stored = state
+        .api
+        .get_profile(&host, &paired, ProfileKind::Machine, &profile_id)
+        .await?;
+    let document = stored["profile"].clone();
+    let mut images = Vec::new();
+    if let Some(image) = library::wallpaper_image(&document) {
+        let content = state
+            .api
+            .download_profile_image(&host, &paired, &image)
+            .await?;
+        images.push((image, content));
+    }
+    let existing = state
+        .library
+        .profile_linked_to(&paired.host_id, &profile_id);
+    let saved =
+        state
+            .library
+            .save_profile(existing.as_ref().map(|p| p.id.as_str()), &document, &images)?;
+    state.library.link_profile(
+        &saved.id,
+        library::ProfileLink {
+            host_id: paired.host_id.clone(),
+            host_name: paired.display_name.clone(),
+            remote_id: profile_id,
+            sent_hash: saved.hash.clone(),
+            remote_updated_at: stored["updatedAt"].as_str().unwrap_or_default().to_string(),
+            synced_at: library::now(),
+        },
+    )
+}
+
+/// Sends a library profile to the host (needs elevation): its wallpaper image first, then the profile,
+/// replacing the host's linked copy unless `as_new`.
+#[tauri::command]
+async fn send_library_profile(
+    state: State<'_, AppState>,
+    key: String,
+    item_id: String,
+    as_new: bool,
+) -> Result<library::LibraryProfile, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let item = state.library.profile(&item_id)?;
+    let document = state.library.profile_document(&item_id)?;
+    for image in &item.images {
+        let content = std::fs::read(state.library.image_file(image)?)
+            .map_err(|e| ClientError::Storage(e.to_string()))?;
+        state
+            .api
+            .upload_profile_image(&host, &paired, image, content)
+            .await?;
+    }
+
+    let linked = item
+        .links
+        .iter()
+        .find(|link| link.host_id == paired.host_id)
+        .filter(|_| !as_new)
+        .map(|link| link.remote_id.clone());
+    let saved = match linked {
+        Some(remote_id) => {
+            match state
+                .api
+                .save_profile(
+                    &host,
+                    &paired,
+                    ProfileKind::Machine,
+                    Some(&remote_id),
+                    &document,
+                )
+                .await
+            {
+                // Deleted on the host since: send it as a new profile.
+                Err(ClientError::Api { status: 404, .. }) => {
+                    state
+                        .api
+                        .save_profile(&host, &paired, ProfileKind::Machine, None, &document)
+                        .await?
+                }
+                other => other?,
+            }
+        }
+        None => {
+            state
+                .api
+                .save_profile(&host, &paired, ProfileKind::Machine, None, &document)
+                .await?
+        }
+    };
+    state.library.link_profile(
+        &item_id,
+        library::ProfileLink {
+            host_id: paired.host_id.clone(),
+            host_name: paired.display_name.clone(),
+            remote_id: saved["id"].as_str().unwrap_or_default().to_string(),
+            sent_hash: item.hash,
+            remote_updated_at: saved["updatedAt"].as_str().unwrap_or_default().to_string(),
+            synced_at: library::now(),
+        },
+    )
+}
+
+/// Opens an extension store's search for `query` in the default browser.
+#[tauri::command]
+fn open_store_search(
+    store: store_search::ExtensionStore,
+    query: String,
+) -> Result<(), ClientError> {
+    store_search::open(&store_search::search_url(store, &query)?)
+}
+
+/// A library profile as MachineProfile JSON, for the editor.
+#[tauri::command]
+fn get_library_profile(
+    state: State<'_, AppState>,
+    item_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    state.library.profile_document(&item_id)
+}
+
+/// Saves a profile made or changed in the editor into the library, as a new item or over `item_id`. A wallpaper
+/// image the library does not have yet comes from the host whose catalogs the editor used (`key`, API 1.33.0).
+/// The host checks the profile when it is sent.
+#[tauri::command]
+async fn save_library_profile(
+    state: State<'_, AppState>,
+    key: Option<String>,
+    item_id: Option<String>,
+    profile: serde_json::Value,
+) -> Result<library::LibraryProfile, ClientError> {
+    let mut images = Vec::new();
+    if let Some(image) = library::wallpaper_image(&profile) {
+        let content = match state.library.image_bytes(&image) {
+            Some(content) => content,
+            None => {
+                let key = key.ok_or_else(|| {
+                    ClientError::InvalidRequest(format!(
+                        "the library has no image named \"{image}\""
+                    ))
+                })?;
+                let (host, paired) = state.paired_host(&key)?;
+                state
+                    .api
+                    .download_profile_image(&host, &paired, &image)
+                    .await?
+            }
+        };
+        images.push((image, content));
+    }
+    state
+        .library
+        .save_profile(item_id.as_deref(), &profile, &images)
+}
+
+/// How each library item's copy on this host compares with the library.
+#[tauri::command]
+async fn library_status(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<Vec<library::LinkStatus>, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let manifest = state.library.list();
+    // Only lists what this host has copies of are read.
+    let has_iso = manifest
+        .isos
+        .iter()
+        .any(|iso| iso.links.iter().any(|link| link.host_id == paired.host_id));
+    let has_profile = manifest
+        .profiles
+        .iter()
+        .any(|p| p.links.iter().any(|link| link.host_id == paired.host_id));
+    let isos = if has_iso {
+        state
+            .api
+            .get_resource(&host, &paired, api::HostResource::Isos)
+            .await?
+    } else {
+        serde_json::Value::Array(Vec::new())
+    };
+    let profiles = if has_profile {
+        state
+            .api
+            .get_resource(&host, &paired, api::HostResource::MachineProfiles)
+            .await?
+    } else {
+        serde_json::Value::Array(Vec::new())
+    };
+    let empty = Vec::new();
+    let host_isos: Vec<library::HostIso> = isos
+        .as_array()
+        .unwrap_or(&empty)
+        .iter()
+        .map(|image| library::HostIso {
+            name: image["name"].as_str().unwrap_or_default(),
+            size_bytes: image["sizeBytes"].as_u64().unwrap_or(0),
+            modified_at: image["modifiedAt"].as_str().unwrap_or_default(),
+        })
+        .collect();
+    let host_profiles: Vec<library::HostProfile> = profiles
+        .as_array()
+        .unwrap_or(&empty)
+        .iter()
+        .map(|profile| library::HostProfile {
+            id: profile["id"].as_str().unwrap_or_default(),
+            updated_at: profile["updatedAt"].as_str().unwrap_or_default(),
+        })
+        .collect();
+    Ok(library::statuses(
+        &manifest,
+        &paired.host_id,
+        &host_isos,
+        &host_profiles,
+    ))
+}
+
 /// What applying a machine profile would change on a VM.
 #[tauri::command]
 async fn preview_vm_machine_profile(
@@ -1422,8 +1880,7 @@ async fn import_profile(
         .map(Some)
 }
 
-/// The host keeps wallpaper images up to this size.
-const MAX_PROFILE_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
+const MAX_PROFILE_IMAGE_BYTES: u64 = api::MAX_PROFILE_IMAGE_BYTES;
 
 /// Picks an image on this device and adds it to the User's wallpaper images on the host, under its file name
 /// (needs elevation). Returns None when the user cancels.
@@ -2391,6 +2848,9 @@ pub fn run() {
                 picked_isos: std::sync::Mutex::new(HashMap::new()),
                 uploads: std::sync::Mutex::new(HashMap::new()),
                 monitors: MonitorChoiceStore::new(Some(config_dir.join("client-settings.json"))),
+                library: library::LibraryStore::new(
+                    app.path().app_local_data_dir()?.join("library"),
+                ),
                 transfers: std::sync::Mutex::new(HashMap::new()),
                 sessions: sessions::ActiveSessions::default(),
                 camera: camera::service::CameraService::new(
@@ -2530,6 +2990,20 @@ pub fn run() {
             pick_iso_file,
             upload_iso,
             cancel_iso_upload,
+            list_library,
+            add_library_iso,
+            rename_library_iso,
+            remove_library_item,
+            unlink_library_item,
+            send_library_iso,
+            save_host_iso_to_library,
+            save_host_profile_to_library,
+            send_library_profile,
+            library_status,
+            get_library_profile,
+            open_store_search,
+            save_library_profile,
+            cancel_library_task,
             rename_iso,
             delete_iso,
             connect_vm,

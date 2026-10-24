@@ -43,6 +43,8 @@ const TRANSFER_OFFER_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 const BACKUP_STORAGE_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 /// Bytes read from disk per chunk of an upload.
 const UPLOAD_CHUNK_BYTES: usize = 1024 * 1024;
+/// The host keeps wallpaper images up to this size.
+pub const MAX_PROFILE_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 
 /// Options for POST /vms/{vmId}/provision. `install_desktop` and `trust_new_host_key` apply to Linux
 /// guests only.
@@ -1945,6 +1947,126 @@ impl ApiClient {
         Err(unreachable(last_error))
     }
 
+    /// GET /isos/{name}/content into `partial`, resuming from what it already holds (API 1.33.0). Calls
+    /// `progress` with the bytes received and the full size. Setting `cancel` stops it and keeps the part
+    /// received, so a later call resumes.
+    pub async fn download_iso(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+        partial: &std::path::Path,
+        progress: Arc<dyn Fn(u64, u64) + Send + Sync>,
+        cancel: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<(), ClientError> {
+        use tokio::io::AsyncWriteExt;
+
+        let path = format!("{}/content", iso_path(name)?);
+        let mut offset = tokio::fs::metadata(partial)
+            .await
+            .map_or(0, |metadata| metadata.len());
+        let response = loop {
+            let range = (offset > 0).then(|| format!("bytes={offset}-"));
+            let result = self
+                .send_paired_built(
+                    host,
+                    paired,
+                    reqwest::Method::GET,
+                    &path,
+                    Some(UPLOAD_TIMEOUT),
+                    |request| match &range {
+                        Some(range) => request.header(reqwest::header::RANGE, range),
+                        None => request,
+                    },
+                )
+                .await;
+            match result {
+                // The part on disk is not a prefix of this image (it changed): start again.
+                Err(ClientError::Api { status: 416, .. }) if offset > 0 => offset = 0,
+                other => break other?,
+            }
+        };
+
+        let resumed = response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+        let total = if resumed {
+            response
+                .headers()
+                .get(reqwest::header::CONTENT_RANGE)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.rsplit('/').next())
+                .and_then(|size| size.parse().ok())
+                .ok_or_else(|| ClientError::InvalidResponse("no Content-Range".into()))?
+        } else {
+            offset = 0;
+            response.content_length().unwrap_or(0)
+        };
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(resumed)
+            .truncate(!resumed)
+            .open(partial)
+            .await
+            .map_err(|e| ClientError::Storage(e.to_string()))?;
+        let mut received = offset;
+        progress(received, total);
+        let mut response = response;
+        loop {
+            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(ClientError::Cancelled);
+            }
+            let Some(chunk) = response.chunk().await.map_err(|e| unreachable(Some(e)))? else {
+                break;
+            };
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| ClientError::Storage(e.to_string()))?;
+            received += chunk.len() as u64;
+            progress(received, total);
+        }
+        file.flush()
+            .await
+            .map_err(|e| ClientError::Storage(e.to_string()))?;
+        if total > 0 && received != total {
+            return Err(ClientError::InvalidResponse(format!(
+                "the download ended after {received} of {total} bytes"
+            )));
+        }
+        Ok(())
+    }
+
+    /// GET /profile-images/{name}/content (API 1.33.0): one of the User's wallpaper images.
+    pub async fn download_profile_image(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+    ) -> Result<Vec<u8>, ClientError> {
+        let path = format!("{}/content", profile_image_path(name)?);
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::GET,
+                &path,
+                None,
+                Some(UPLOAD_TIMEOUT),
+            )
+            .await?;
+        if response.content_length().unwrap_or(0) > MAX_PROFILE_IMAGE_BYTES {
+            return Err(ClientError::InvalidResponse(
+                "the image is larger than a wallpaper image can be".into(),
+            ));
+        }
+        let bytes = response.bytes().await.map_err(|e| unreachable(Some(e)))?;
+        if bytes.len() as u64 > MAX_PROFILE_IMAGE_BYTES {
+            return Err(ClientError::InvalidResponse(
+                "the image is larger than a wallpaper image can be".into(),
+            ));
+        }
+        Ok(bytes.to_vec())
+    }
+
     fn elevation_token(&self, paired: &PairedHost) -> Option<zeroize::Zeroizing<String>> {
         self.elevations
             .lock()
@@ -3124,6 +3246,10 @@ mod server_tests {
                 .args(["--Api:ListenAddress", "127.0.0.1"])
                 .args(["--Discovery:Enabled", "false"])
                 .args(["--Tray:PipeName", &pipe_name])
+                .args([
+                    "--Lifecycle:IsoFolder",
+                    data_directory.join("isos").to_str().unwrap(),
+                ])
                 .stdout(std::process::Stdio::null())
                 .spawn()
                 .expect("start the host service");
@@ -3283,6 +3409,31 @@ mod server_tests {
             .await
             .expect("ISO library");
         assert!(isos.is_array());
+
+        // A library download through the real service, resumed from a part already on disk.
+        let image: Vec<u8> = (0..3_000_000u32).map(|n| (n % 251) as u8).collect();
+        let iso_folder = service.data_directory.join("isos");
+        std::fs::create_dir_all(&iso_folder).unwrap();
+        std::fs::write(iso_folder.join("e2e image.iso"), &image).unwrap();
+        let partial = service.data_directory.join("download.partial");
+        std::fs::write(&partial, &image[..1_000_000]).unwrap();
+        api.download_iso(
+            &target,
+            &paired,
+            "e2e image.iso",
+            &partial,
+            Arc::new(|_, _| {}),
+            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        )
+        .await
+        .expect("download the image");
+        assert!(std::fs::read(&partial).unwrap() == image);
+        assert!(matches!(
+            api.download_profile_image(&target, &paired, "missing.png")
+                .await,
+            Err(ClientError::Api { status: 404, .. })
+        ));
+
         match api
             .get_resource(&target, &paired, HostResource::Resources)
             .await
@@ -3675,6 +3826,73 @@ mod server_tests {
             request.header("content-type"),
             Some("application/octet-stream")
         );
+    }
+
+    #[tokio::test]
+    async fn an_iso_download_resumes_from_the_part_already_saved() {
+        let server = TestServer::start("127.0.0.1:0", |request| match request.header("range") {
+            Some("bytes=4-") => {
+                Reply::json(206, "efghij").with_header("Content-Range", "bytes 4-9/10")
+            }
+            _ => Reply::json(200, "abcdefghij"),
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let partial =
+            std::env::temp_dir().join(format!("hh-download-{}.partial", hex::encode(rand_bytes())));
+        std::fs::write(&partial, b"abcd").unwrap();
+        let reported = Arc::new(Mutex::new(Vec::new()));
+        let sink = reported.clone();
+
+        api()
+            .download_iso(
+                &target,
+                &paired(server.certificate_hash()),
+                "debian 13.iso",
+                &partial,
+                Arc::new(move |done, total| sink.lock().unwrap().push((done, total))),
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(std::fs::read(&partial).unwrap(), b"abcdefghij");
+        assert_eq!(reported.lock().unwrap().last(), Some(&(10, 10)));
+        assert_eq!(
+            server.requests()[0].path,
+            "/api/v1/isos/debian%2013.iso/content"
+        );
+        std::fs::remove_file(&partial).unwrap();
+    }
+
+    #[tokio::test]
+    async fn an_iso_download_starts_over_when_the_host_has_no_such_range() {
+        let server = TestServer::start("127.0.0.1:0", |request| {
+            if request.header("range").is_some() {
+                Reply::json(416, "")
+            } else {
+                Reply::json(200, "abc")
+            }
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let partial =
+            std::env::temp_dir().join(format!("hh-download-{}.partial", hex::encode(rand_bytes())));
+        std::fs::write(&partial, b"older and longer").unwrap();
+
+        api()
+            .download_iso(
+                &target,
+                &paired(server.certificate_hash()),
+                "debian.iso",
+                &partial,
+                Arc::new(|_, _| {}),
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(std::fs::read(&partial).unwrap(), b"abc");
+        assert_eq!(server.requests().len(), 2);
+        std::fs::remove_file(&partial).unwrap();
     }
 
     #[tokio::test]

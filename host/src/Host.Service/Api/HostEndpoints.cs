@@ -37,6 +37,7 @@ public static class HostEndpoints
         endpoints.MapPut(ContractInfo.BasePath + "/isos/{name}", UploadIsoAsync).WithName("uploadIso")
             .Audited<string>(name => $"name={name}")
             .RequireElevation();
+        endpoints.MapGet(ContractInfo.BasePath + "/isos/{name}/content", DownloadIso).WithName("downloadIso");
         endpoints.MapPatch(ContractInfo.BasePath + "/isos/{name}", RenameIsoAsync).WithName("renameIso")
             .Audited<RenameIsoRequest>(request => $"newName={request.NewName}")
             .RequireElevation();
@@ -140,6 +141,10 @@ public static class HostEndpoints
         var image = await isos.UploadAsync(name, context.Request.Body, context.Request.ContentLength, cancellationToken);
         return TypedResults.Created($"{ContractInfo.BasePath}/isos/{Uri.EscapeDataString(image.Name)}", image);
     }
+
+    /// <summary>Streams the image, honoring a Range header so a client can resume.</summary>
+    private static PhysicalFileHttpResult DownloadIso(string name, IsoLibrary library) =>
+        TypedResults.PhysicalFile(library.PathOf(name), "application/octet-stream", enableRangeProcessing: true);
 
     private static async Task<Ok<IsoImage>> RenameIsoAsync(string name, RenameIsoRequest request, IsoLibraryService isos, CancellationToken cancellationToken) =>
         TypedResults.Ok(await isos.RenameAsync(name, request.NewName, cancellationToken));

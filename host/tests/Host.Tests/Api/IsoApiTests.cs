@@ -39,6 +39,35 @@ public sealed class IsoApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Download_SendsTheImage_WholeOrFromARange_WithoutElevation()
+    {
+        byte[] content = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        await File.WriteAllBytesAsync(Path.Combine(_host.IsoFolder, "ubuntu.iso"), content);
+
+        var whole = await _client.GetAsync("/api/v1/isos/ubuntu.iso/content");
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/isos/ubuntu.iso/content");
+        request.Headers.Range = new RangeHeaderValue(6, null);
+        var part = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, whole.StatusCode);
+        Assert.Equal(content, await whole.Content.ReadAsByteArrayAsync());
+        Assert.Equal(HttpStatusCode.PartialContent, part.StatusCode);
+        Assert.Equal(new byte[] { 7, 8, 9, 10 }, await part.Content.ReadAsByteArrayAsync());
+        Assert.Equal(10, part.Content.Headers.ContentRange?.Length);
+    }
+
+    [Theory]
+    [InlineData("missing.iso", HttpStatusCode.NotFound)]
+    [InlineData("..%5Cescape.iso", HttpStatusCode.BadRequest)]
+    [InlineData("image.img", HttpStatusCode.BadRequest)]
+    public async Task Download_OfAMissingOrInvalidName_IsRefused(string name, HttpStatusCode expected)
+    {
+        var response = await _client.GetAsync($"/api/v1/isos/{name}/content");
+
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Upload_StoresTheImageOnTheHost()
     {
         var content = new byte[2 * 1024 * 1024 + 3];

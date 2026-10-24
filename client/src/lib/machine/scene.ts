@@ -180,18 +180,6 @@ export class MachineScene {
     this.refreshHighlight();
   }
 
-  setPalette(palette: MachinePalette): void {
-    const old = this.materials;
-    this.materials = materialsFor(palette);
-    for (const [name, part] of this.parts) part.base = name === FLOOR ? this.materials.dim : this.materials.line;
-    this.scene.background = new THREE.Color(palette.background);
-    this.scene.remove(this.grid);
-    this.grid.dispose();
-    this.grid = this.makeGrid(palette);
-    this.refreshHighlight();
-    for (const material of Object.values(old)) material.dispose();
-  }
-
   setReducedMotion(reduced: boolean): void {
     this.reducedMotion = reduced;
     this.rig.setReducedMotion(reduced, performance.now());

@@ -1,20 +1,19 @@
 <script lang="ts">
-  import { loadExplodedStill, readPalette, type ExplodedStill, type PaletteName } from "$lib/machine/assets";
+  import { loadExplodedStill, readPalette, type ExplodedStill } from "$lib/machine/assets";
   import type { ResolvedHighlight } from "$lib/machine/highlights";
   import { onMount } from "svelte";
 
   interface Props {
     highlight: ResolvedHighlight;
-    palette: PaletteName;
     reducedMotion: boolean;
   }
 
-  let { highlight, palette, reducedMotion }: Props = $props();
+  let { highlight, reducedMotion }: Props = $props();
 
   let still = $state<ExplodedStill | null>(null);
   const glow = $derived(new Set(highlight.glow));
   const spin = $derived(new Set(highlight.spin));
-  const colors = $derived(readPalette(palette));
+  const colors = readPalette();
 
   onMount(async () => {
     try {
@@ -28,7 +27,6 @@
 <div
   class="still"
   class:reduced={reducedMotion}
-  data-palette={palette}
   style:--line={colors.line}
   style:--glow={colors.glow}
   style:--screen={colors.background}

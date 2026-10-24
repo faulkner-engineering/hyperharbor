@@ -26,7 +26,7 @@ const svg =
   "</svg>";
 
 function fakeScene() {
-  return { setSection: vi.fn(), setControls: vi.fn(), setPalette: vi.fn(), setReducedMotion: vi.fn(), dispose: vi.fn() };
+  return { setSection: vi.fn(), setControls: vi.fn(), setReducedMotion: vi.fn(), dispose: vi.fn() };
 }
 
 const mode = (container: HTMLElement) => container.querySelector(".machine")?.getAttribute("data-mode");

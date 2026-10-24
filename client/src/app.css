@@ -8,7 +8,7 @@
   --hh-border: #e2ded5;
 }
 
-/* Terminal palettes for the profile builder's machine view. Amber glows in the brand accent. */
+/* Terminal palette for the profile builder's machine view. Amber glows in the brand accent. */
 :root {
   --hh-crt-screen: #0b0d10;
   --hh-crt-panel: #11151a;
@@ -16,7 +16,60 @@
   --hh-crt-amber-line: #3a4250;
   --hh-crt-amber-dim: #1f252d;
   --hh-crt-amber-glow: var(--hh-accent);
-  --hh-crt-green-line: #2a5a3a;
-  --hh-crt-green-dim: #163322;
-  --hh-crt-green-glow: #7cff9a;
+}
+
+/*
+ * Base look for buttons and form controls everywhere, so none falls back to the browser's default. Wrapped in
+ * :where() (no specificity): a component's own rules, including Dialog's and the terminal editor's, still win.
+ */
+:where(button) {
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+:where(button:not(:disabled):hover) {
+  background: var(--hover);
+}
+
+:where(button.primary) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+:where(button.primary:not(:disabled):hover) {
+  background: var(--accent);
+  filter: brightness(1.05);
+}
+
+:where(button.danger) {
+  color: var(--danger);
+}
+
+:where(button:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+
+:where(select, input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), textarea) {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
+:where(select) {
+  cursor: pointer;
+}
+
+:where(button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

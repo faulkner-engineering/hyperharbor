@@ -10,7 +10,14 @@
   import { fade } from "svelte/transition";
   import {
     cancelIsoUpload,
+    cancelLibraryTask,
     deleteIso,
+    hostSupports,
+    LibraryDownloadApiVersion,
+    listLibrary,
+    newTaskId,
+    onLibraryProgress,
+    saveHostIsoToLibrary,
     errorMessage,
     getHostResources,
     isClientError,
@@ -44,6 +51,46 @@
   let renaming = $state<{ name: string; value: string } | null>(null);
   let confirmDelete = $state<IsoImage | null>(null);
   let busyName = $state<string | null>(null);
+  /** Names of this host's images that the library on this device has a copy of. */
+  let inLibrary = $state<string[]>([]);
+  let download = $state<{ name: string; taskId: string; done: number; total: number; cancelling: boolean } | null>(null);
+  const canDownload = $derived(hostSupports(host, LibraryDownloadApiVersion));
+  const downloadPercent = $derived(download && download.total > 0 ? Math.floor((download.done / download.total) * 100) : 0);
+
+  async function refreshLibrary() {
+    try {
+      const library = await listLibrary();
+      inLibrary = library.isos.flatMap((iso) =>
+        iso.links.filter((link) => link.hostId === host.hostId).map((link) => link.remoteName.toLowerCase()),
+      );
+    } catch {
+      // The library is optional here; the list works without the badges.
+    }
+  }
+
+  async function saveToLibrary(image: IsoImage) {
+    error = null;
+    status = null;
+    download = { name: image.name, taskId: newTaskId(), done: 0, total: image.sizeBytes, cancelling: false };
+    try {
+      await saveHostIsoToLibrary(host.key, image.name, download.taskId);
+      status = `Saved ${image.name} to the library on this device.`;
+      await refreshLibrary();
+    } catch (e) {
+      error =
+        isClientError(e) && e.code === "cancelled"
+          ? "The download was stopped. Save it again to resume where it stopped."
+          : errorMessage(e);
+    } finally {
+      download = null;
+    }
+  }
+
+  async function cancelDownload() {
+    if (!download) return;
+    download.cancelling = true;
+    await cancelLibraryTask(download.taskId);
+  }
 
   const percent = $derived(
     upload && upload.picked.sizeBytes > 0 ? Math.floor((upload.sent / upload.picked.sizeBytes) * 100) : 0,
@@ -69,11 +116,19 @@
 
   onMount(() => {
     refresh();
+    void refreshLibrary();
     const unlisten = onIsoUploadProgress((progress) => {
       if (upload && progress.pickId === upload.picked.pickId) upload.sent = progress.sent;
     });
+    const unlistenLibrary = onLibraryProgress((progress) => {
+      if (download && progress.taskId === download.taskId) {
+        download.done = progress.done;
+        download.total = progress.total;
+      }
+    });
     return () => {
       unlisten.then((stop) => stop());
+      unlistenLibrary.then((stop) => stop());
     };
   });
 
@@ -185,6 +240,19 @@
     </div>
   {/if}
 
+  {#if download}
+    <div class="upload" role="status" aria-live="polite">
+      <div class="upload-text">
+        <span>Saving {download.name} to this device</span>
+        <span class="muted">{formatSize(download.done)} of {formatSize(download.total)} ({downloadPercent}%)</span>
+      </div>
+      <progress max="100" value={downloadPercent} aria-label="Download progress">{downloadPercent}%</progress>
+      <button type="button" onclick={cancelDownload} disabled={download.cancelling}>
+        {download.cancelling ? "Stopping…" : "Stop"}
+      </button>
+    </div>
+  {/if}
+
   {#if status}<p class="status" role="status">{status}</p>{/if}
   {#if error ?? loadError}<p class="error" role="alert">{error ?? loadError}</p>{/if}
 
@@ -227,6 +295,7 @@
                     </form>
                   {:else}
                     {image.name}
+                    {#if inLibrary.includes(image.name.toLowerCase())}<span class="tag">In library</span>{/if}
                   {/if}
                 </td>
                 <td class="num">{formatSize(image.sizeBytes)}</td>
@@ -234,6 +303,11 @@
                 <td>{image.usedBy.length === 0 ? "Not in use" : image.usedBy.join(", ")}</td>
                 <td class="actions">
                   {#if renaming?.name !== image.name}
+                    {#if canDownload && !inLibrary.includes(image.name.toLowerCase())}
+                      <button type="button" disabled={busyName !== null || download !== null} onclick={() => saveToLibrary(image)}
+                        >Save to library</button
+                      >
+                    {/if}
                     <button
                       type="button"
                       disabled={busyName !== null || image.usedBy.length > 0}
@@ -283,6 +357,16 @@
   .muted {
     margin: 0;
     color: var(--muted);
+  }
+
+  .tag {
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--selected);
+    color: var(--text);
   }
 
   .empty {

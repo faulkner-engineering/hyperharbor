@@ -38,9 +38,17 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Output in dist/ (git-ignored): HyperHarbor-Host-<ver>.exe (the whole host; about 187 MB uncompressed with
   -Fast), dist\host (the same exe plus portable Start/Stop-HyperHarbor.ps1 for development), client NSIS setup
   exe, portable client exe. The script fails if the host publish yields more than the one exe.
-- -Fast is for test builds: the client without LTO at opt 1, incremental (a small client change rebuilds in
-  seconds), an uncompressed host executable. Switching between fast and full recompiles once
+- -Fast is for test builds: the client without LTO at opt 1, incremental with 256 codegen units (a small client
+  change rebuilds in seconds), no client installer (the portable exe only; a same-version installer left in dist
+  is removed), an uncompressed host executable. Switching between fast and full recompiles once
   (about 6 min). Measured 2026-10-04: thin LTO took 170 s for a one-line client change, -Fast about 7 s.
+- Measured 2026-10-23 (laptop, client crate about 23,000 lines): the release profile's codegen-units = 1 also
+  applied to -Fast, so incremental reused nothing and every client build spent 100 s on the client crate; with
+  256 units a rebuild takes 12 s. The rust-lld linker made no measurable difference (11.2 s against 11.7 s) and
+  switching linkers rebuilds every dependency, so the builds keep MSVC link.exe. The camera DLL step takes
+  under a second when the DLL is current.
+- scripts\add-defender-exclusions.ps1 (elevated, once per development PC; -Remove undoes it) excludes the
+  repository and the Rust, NuGet, and npm caches from Defender's real-time scanning.
 - Upload throughput on loopback (2026-10-04): about 320 MB/s into the host and 351 MB/s from the Rust client
   (IsoUpload_Throughput with HH_BENCHMARK=1; upload_throughput with HH_E2E_SERVICE_EXE).
 - Version comes from Directory.Build.props (host) and client/src-tauri/tauri.conf.json (client); keep them equal.

@@ -8,6 +8,8 @@
     isClientError,
     listMachineProfiles,
     listMachineProfileTemplates,
+    listLibrary,
+    saveHostProfileToLibrary,
     hostSupports,
     ProfilesConsolidatedApiVersion,
     type MachineProfileTemplate,
@@ -49,6 +51,33 @@
   }
   let confirmDelete = $state<MachineProfileSummary | null>(null);
   let working = $state(false);
+  /** IDs of this host's profiles that the library on this device has a copy of. */
+  let inLibrary = $state<string[]>([]);
+  let savingToLibrary = $state<string | null>(null);
+
+  async function refreshLibrary() {
+    try {
+      const library = await listLibrary();
+      inLibrary = library.profiles.flatMap((item) =>
+        item.links.filter((link) => link.hostId === host.hostId).map((link) => link.remoteId),
+      );
+    } catch {
+      // The library is optional here; the list works without the badges.
+    }
+  }
+
+  async function saveToLibrary(summary: MachineProfileSummary) {
+    savingToLibrary = summary.id;
+    try {
+      const saved = await saveHostProfileToLibrary(host.key, summary.id);
+      toasts.show(`Saved ${saved.name} to the library on this device.`);
+      await refreshLibrary();
+    } catch (e) {
+      toasts.error(errorMessage(e));
+    } finally {
+      savingToLibrary = null;
+    }
+  }
 
   async function refresh() {
     try {
@@ -61,6 +90,7 @@
   }
 
   onMount(async () => {
+    void refreshLibrary();
     await refresh();
     if (!consolidated) return;
     try {
@@ -169,6 +199,7 @@
         <tr>
           <td class="name">
             {profile.name}
+            {#if inLibrary.includes(profile.id)}<span class="tag">In library</span>{/if}
             {#if profile.description}<div class="details">{profile.description}</div>{/if}
           </td>
           <td class="details">
@@ -178,6 +209,11 @@
           <td class="actions">
             {#if canCreateVms && !profile.error}<button type="button" onclick={() => (creating = profile)}>Create VM…</button>{/if}
             {#if !profile.error}<button type="button" onclick={() => edit(profile)}>Edit</button>{/if}
+            {#if !profile.error}
+              <button type="button" disabled={savingToLibrary !== null} onclick={() => saveToLibrary(profile)}>
+                {savingToLibrary === profile.id ? "Saving…" : inLibrary.includes(profile.id) ? "Update library" : "Save to library"}
+              </button>
+            {/if}
             <button type="button" onclick={() => exportFile(profile)}>Export…</button>
             <button type="button" class="danger" onclick={() => (confirmDelete = profile)}>Delete</button>
           </td>
@@ -225,6 +261,16 @@
 
   .error {
     color: var(--danger);
+  }
+
+  .tag {
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--selected);
+    color: var(--text);
   }
 
   table {

@@ -52,6 +52,7 @@
     right: 0.35rem;
     width: 1.75rem;
     height: 1.75rem;
+    padding: 0;
     border: none;
     border-radius: 0;
     background: none;

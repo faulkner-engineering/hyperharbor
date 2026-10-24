@@ -11,10 +11,10 @@
     3. Builds the Tauri client and copies its NSIS installer and portable executable.
 
     -Fast is for test builds; omit it for releases. It builds the client without LTO, at
-    optimization level 1, incrementally (a one-line change rebuilds in seconds instead of about
-    three minutes), publishes the host executables without single-file compression (about 20
-    seconds faster; they are larger), and zips with the fastest compression. Switching between
-    fast and full builds recompiles the client crates once.
+    optimization level 1, incrementally with parallel code generation (a change rebuilds in
+    seconds instead of minutes), only as the portable executable (no installer), and publishes
+    the host executables without single-file compression (about 20 seconds faster; they are
+    larger). Switching between fast and full builds recompiles the client crates once.
 
     Run from any directory in Windows PowerShell or PowerShell 7:
         powershell -ExecutionPolicy Bypass -File scripts\package.ps1 [-Fast] [-SkipTests]
@@ -147,9 +147,12 @@ if (-not $HostOnly) {
     if ($Fast) {
         # Overrides [profile.release] in client/src-tauri/Cargo.toml for this build only. Measured on an
         # 8-thread PC after a one-line change: thin LTO at opt 3 took 170 s, this takes under 10 s.
+        # The release profile's single codegen unit must be overridden too: with one unit, incremental
+        # compilation reuses nothing, and the client crate took 100 s on every build (12 s with 256).
         $env:CARGO_PROFILE_RELEASE_LTO = 'off'
         $env:CARGO_PROFILE_RELEASE_OPT_LEVEL = '1'
         $env:CARGO_PROFILE_RELEASE_INCREMENTAL = 'true'
+        $env:CARGO_PROFILE_RELEASE_CODEGEN_UNITS = '256'
     }
 
     Push-Location (Join-Path $repo 'client')
@@ -167,11 +170,14 @@ if (-not $HostOnly) {
         Copy-Item (Join-Path $repo 'client\src-tauri\target\release\hyperharbor_vcam.dll') $resources -Force
         # Updater artifacts (the installer's .sig) are made only when the signing key is available:
         # the release workflow passes it from the repository secrets; a test build needs none.
-        $signing = [bool]$env:TAURI_SIGNING_PRIVATE_KEY
+        # A fast build makes only the portable executable: test runs use it, and the installer takes longer.
+        $signing = [bool]$env:TAURI_SIGNING_PRIVATE_KEY -and -not $Fast
         $configs = @('--config', 'src-tauri/tauri.camera.conf.json')
         if ($signing) { $configs += @('--config', 'src-tauri/tauri.updater.conf.json') }
-        else { Write-Host 'TAURI_SIGNING_PRIVATE_KEY is not set: building without updater artifacts.' -ForegroundColor Yellow }
-        Invoke-Step "Build client ($mode)" { npm run tauri build -- --bundles nsis @configs }
+        elseif (-not $Fast) { Write-Host 'TAURI_SIGNING_PRIVATE_KEY is not set: building without updater artifacts.' -ForegroundColor Yellow }
+        # Not splatted: npm's PowerShell shim turns a splatted --no-bundle into "-" and "no-bundle".
+        if ($Fast) { Invoke-Step "Build client ($mode)" { npm run tauri build -- --no-bundle @configs } }
+        else { Invoke-Step "Build client ($mode)" { npm run tauri build -- --bundles nsis @configs } }
     }
     finally {
         Pop-Location
@@ -179,9 +185,16 @@ if (-not $HostOnly) {
     }
 
     $release = Join-Path $repo 'client\src-tauri\target\release'
-    $installer = Get-ChildItem (Join-Path $release 'bundle\nsis\*.exe') | Sort-Object LastWriteTime | Select-Object -Last 1
-    Copy-Item $installer.FullName $dist -Force
     Remove-Item (Join-Path $dist 'client-latest.json') -ErrorAction SilentlyContinue
+    $installerName = "HyperHarbor_$($version)_x64-setup.exe"
+    if ($Fast) {
+        # An installer of this version left from an earlier build would not match the new portable executable.
+        Remove-Item (Join-Path $dist $installerName), (Join-Path $dist "$installerName.sig") -ErrorAction SilentlyContinue
+    }
+    else {
+        $installer = Get-Item (Join-Path $release "bundle\nsis\$installerName")
+        Copy-Item $installer.FullName $dist -Force
+    }
     $signature = "$($installer.FullName).sig"
     if ($signing -and (Test-Path $signature)) {
         Copy-Item $signature $dist -Force
@@ -208,6 +221,6 @@ if (-not $HostOnly) {
     Copy-Item (Join-Path $release 'hyperharbor-client.exe') (Join-Path $dist "HyperHarbor-Client-$version-portable.exe") -Force
     # The portable client looks for the camera source next to itself.
     Copy-Item (Join-Path $resources 'hyperharbor_vcam.dll') $dist -Force
-    Write-Host "Client installer: $(Join-Path $dist $installer.Name)" -ForegroundColor Green
+    if (-not $Fast) { Write-Host "Client installer: $(Join-Path $dist $installer.Name)" -ForegroundColor Green }
     Write-Host "Client portable:  $(Join-Path $dist "HyperHarbor-Client-$version-portable.exe")" -ForegroundColor Green
 }

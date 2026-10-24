@@ -247,7 +247,14 @@ section for an area before changing it: most of these were learned from a failur
   PowerShell") but works in PowerShell 7 (verified 2026-10-05: pwsh 7.6.6 as SYSTEM, about 2 s). winget installs
   PowerShell 7.6 as a per-user MSIX by default, which SYSTEM cannot run; the setup helper (--setup-package-search,
   tray "Set up package search") uses --installer-type wix --scope machine. Without it, search answers 409
-  wingetUnavailable.
+  wingetUnavailable. Since API 1.34.0 this is only the fallback.
+- winget package index (2026-10-23): https://cdn.winget.microsoft.com/cache/source2.msix is about 3.8 MB, a zip with
+  Public/index.db (about 9 MB SQLite, metadata majorVersion 2, about 15,750 packages). Table packages has id, name,
+  moniker, latest_version; tags2 and tags2_map hold tags (often hyphenated, such as video-editor). No descriptions or
+  publishers: those are in per-package manifests, not the index. source.msix (about 22 MB) is the older format 1.
+  winsqlite3.dll in System32 reads it (sqlite3_*16 functions); download plus first search took about 0.4 s.
+- Extension stores have no public search API; the client opens chromewebstore.google.com/search/<text> and
+  microsoftedge.microsoft.com/addons/search/<text> in the browser instead.
 - Extensions: the Chrome Web Store no longer lists uBlock Origin or ClearURLs (Manifest V2); uBlock Origin is an
   Edge-only catalog entry (store: edge). HH_EXTENSION_LIVE=1 checks every catalog id against its store; run it when
   editing catalogs/extensions.yaml. Browsers install some extensions themselves (browsers.yaml builtInExtensions);

@@ -2,6 +2,8 @@
   import {
     errorMessage,
     hasProblemCode,
+    hostSupports,
+    PackageIndexApiVersion,
     listPackageCatalog,
     ProblemCodes,
     searchPackages,
@@ -32,6 +34,25 @@
   let results = $state<PackageSearchResult[] | null>(null);
   let searching = $state(false);
   let searchError = $state<string | null>(null);
+  let query = $state("");
+  /** The host searches its own winget index, so the search runs as the user types. */
+  const instant = $derived(hostSupports(host, PackageIndexApiVersion));
+  /** winget results the catalog list does not already show. */
+  const extra = $derived(
+    (results ?? []).filter((result) => !catalog.some((item) => item.id.toLowerCase() === result.id.toLowerCase())),
+  );
+
+  // Search as the user types, a moment after the last key.
+  $effect(() => {
+    const text = query.trim();
+    if (!instant || text.length < 2) {
+      results = null;
+      searchError = null;
+      return;
+    }
+    const timer = setTimeout(() => search(text), 250);
+    return () => clearTimeout(timer);
+  });
 
   const entries = $derived<BrowseEntry[]>(
     catalog.map((item) => ({
@@ -117,7 +138,8 @@
 
 <CatalogBrowser
   label="Package catalog"
-  placeholder="Filter packages, or type a winget id"
+  placeholder={instant ? "Search the catalog and winget, or type a winget id" : "Filter packages, or type a winget id"}
+  bind:query
   {entries}
   isOn={has}
   ontoggle={(entry, on) => setIn(entry.key, entry.name, on)}
@@ -127,22 +149,24 @@
   {#snippet footer(query)}
     {#if query.length >= 2}
       <div class="beyond">
-        <div class="caption">Beyond the catalog</div>
+        <div class="caption">{instant ? "From winget" : "Beyond the catalog"}{#if instant && searching}<span class="muted"> · searching…</span>{/if}</div>
         <div class="actions-row">
           {#if looksLikeWingetId(query) && !has(query)}
             <button type="button" onclick={() => setIn(query, undefined, true)}>Add {query} by id</button>
           {/if}
-          <button type="button" onclick={() => search(query)} disabled={searching}>
-            {searching && searched === query ? "Searching…" : `Search winget for "${query}"`}
-          </button>
+          {#if !instant}
+            <button type="button" onclick={() => search(query)} disabled={searching}>
+              {searching && searched === query ? "Searching…" : `Search winget for "${query}"`}
+            </button>
+          {/if}
         </div>
         {#if searchError}<p class="error" role="alert">{searchError}</p>{/if}
-        {#if results !== null && !searching}
-          {#if results.length === 0}
-            <p class="muted">winget found nothing for "{searched}".</p>
+        {#if results !== null && (instant || !searching)}
+          {#if extra.length === 0}
+            <p class="muted">{results.length === 0 ? `winget found nothing for "${searched}".` : "winget has nothing beyond the catalog's matches."}</p>
           {:else}
             <ul aria-label="winget results">
-              {#each results as result (result.id)}
+              {#each extra as result (result.id)}
                 {@const on = has(result.id)}
                 <li>
                   <button type="button" class="pick" onclick={() => onselect(detailFor(result.id, result.name))}>

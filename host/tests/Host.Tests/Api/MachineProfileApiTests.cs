@@ -170,6 +170,9 @@ public sealed class MachineProfileApiTests : IDisposable
         Assert.Equal(("harbor night.png", 11L), ((string?)listed["name"], (long)listed["sizeBytes"]!));
         var audited = _host.AuditEntries().Single(entry => (string?)entry["action"] == "uploadProfileImage" && (string?)entry["outcome"] == "succeeded");
         Assert.Equal("name=harbor night.png", (string?)audited["detail"]);
+        Assert.Equal(png, await _client.GetByteArrayAsync($"{images}/harbor%20night.png/content"));
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"{images}/other.png/content")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"{images}/..%5Cother.png/content")).StatusCode);
 
         Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(HttpMethod.Delete, $"{images}/harbor%20night.png")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Delete, $"{images}/harbor%20night.png")).StatusCode);

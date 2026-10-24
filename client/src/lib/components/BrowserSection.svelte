@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     errorMessage,
+    openStoreSearch,
     resolveExtension,
     type ExtensionCatalogItem,
     type HostEntry,
@@ -108,6 +109,15 @@
     }
   }
 
+  async function searchStore(store: "chrome" | "edge", query: string) {
+    error = null;
+    try {
+      await openStoreSearch(store, query);
+    } catch (e) {
+      error = errorMessage(e);
+    }
+  }
+
   function togglePolicy(key: string, type: string, on: boolean) {
     if (on) policies.set(key, type === "boolean" ? "true" : "");
     else policies.delete(key);
@@ -156,6 +166,17 @@
         {#if looksLikeExtension(query)}
           <div class="beyond">
             <button type="button" onclick={() => lookUp(query)} disabled={resolving}>{resolving ? "Looking up…" : "Look up this extension"}</button>
+          </div>
+        {:else if query.length > 0}
+          <div class="beyond">
+            <div class="caption">Find more in the store</div>
+            <div class="actions-row">
+              <button type="button" onclick={() => searchStore("chrome", query)}>Search the Chrome Web Store for "{query}"</button>
+              {#if edge}
+                <button type="button" onclick={() => searchStore("edge", query)}>Search Edge Add-ons for "{query}"</button>
+              {/if}
+            </div>
+            <p class="muted hint">The store opens in your browser. Copy the extension's address from there and paste it into the filter above.</p>
           </div>
         {/if}
       {/snippet}
@@ -216,6 +237,26 @@
 
   .beyond {
     margin-top: 0.75rem;
+  }
+
+  .caption {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+
+  .actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .hint {
+    margin: 0.45rem 0 0;
+    font-size: 0.8rem;
   }
 
   .policies {

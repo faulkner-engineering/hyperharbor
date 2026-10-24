@@ -14,8 +14,8 @@ note anything that needs action, such as updating the host, a new elevation requ
 - The setup profile editor has a dark terminal look built around a wireframe model of a PC: the section list on the
   left, the model in the middle, and the section's form on the right. Choosing a section flies the camera to its part
   (the drive bay for Install and Remove, the browser tabs on the screen for Browser) and lights it up, and each
-  package you add lights one more drive. A line under the model names the section and its counts. Options under the
-  section list switch between amber and green and turn motion on or off. Motion starts from the Windows animation
+  package you add lights one more drive. A line under the model names the section and its counts. A Motion check box
+  beside Cancel and Save turns motion on or off; it starts from the Windows animation
   effects setting: with it off, the camera cuts instead of flying and does not orbit, until you check Motion. Without
   WebGL, or when the view stays under 30 frames per second for five seconds, it shows a still exploded drawing with
   the same highlights instead, and says why. The editor fills the window, with thin scrollbars, fields, and buttons
@@ -70,6 +70,22 @@ note anything that needs action, such as updating the host, a new elevation requ
   template. Capture setup profile now saves a profile on the Profiles tab, and Apply machine profile replaces Apply
   setup profile. With an older host, the client shows the earlier tabs and dialogs.
 
+- A Library on this device (sidebar, above the hosts) keeps installation images and machine profiles, with their
+  wallpaper images, and sends them to any paired host. Save to library on a host's ISO library and Profiles tabs
+  copies them here. Each item shows which hosts have a copy and whether it still matches: In sync, Library newer
+  (Send), Changed on host (Update library), Both changed (keep either), or Missing on host (Send again). Saving an ISO
+  from a host needs a host with API 1.33.0; a stopped download resumes where it stopped.
+  + New profile and Edit on the Library page open the profile editor and save into the library; the editor uses a
+  paired host's package, setting, and network lists (Catalogs from, when there are several), and the host checks the
+  profile when it is sent.
+
+- The package list searches winget as you type (hosts with API 1.34.0): what the catalog lacks shows under "From
+  winget", with no button to press. Search matches names, ids, and tags, not descriptions.
+- Extensions: typing something the catalog lacks offers Search the Chrome Web Store (and Search Edge Add-ons for
+  Edge), which opens the store's search in your browser; paste the extension's link back to add it.
+- Package search works on any host with internet access: nothing to set up first (PowerShell 7 and the WinGet
+  module are no longer needed), and results come back in milliseconds.
+
 ### Security
 - The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
   (RUSTSEC-2026-0385).
@@ -79,6 +95,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   profile becomes a machine profile with its account settings, a setup profile one with its software. The originals
   stay for older clients. A profile whose file no longer reads is skipped and listed in
   machine-profiles/converted.json in the host's data folder.
+- API 1.34.0: GET /packages/search reads the host's own copy of the winget package index (downloaded from
+  cdn.winget.microsoft.com when the host starts and refreshed daily) and falls back to PowerShell 7 only without it.
+- API 1.33.0: GET /isos/{name}/content downloads an image from the ISO library (a Range header resumes it) and
+  GET /profile-images/{name}/content downloads a wallpaper image, so a client can keep them in its own library.
 - API 1.32.0: GET /machine-profile-templates (the built-in install profiles as machine profile templates) and
   POST /machine-profile-templates/{templateId}/vms; CreateVmFromProfileRequest takes compute and switch for that VM.
 - API 1.31.0: /profile-images (list, upload, delete) keeps each User's wallpaper images; a machine profile's
@@ -95,6 +115,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   a VM, and tweak details; with an older host the editor works as before without them.
 
 ### Fixed
+- With dynamic memory off, New VM, create from a profile, and a VM's settings hide Maximum memory instead of showing
+  it greyed out.
+- Buttons and drop-downs that had no style of their own (the Library page, the template list on the Profiles tab)
+  no longer show the plain Windows look; every button, list, and field now shares one base style.
 - Editing a saved machine profile with an Account section could fail to open the editor.
 
 ## [0.2.0] - 2026-10-22 (API 1.25.0)

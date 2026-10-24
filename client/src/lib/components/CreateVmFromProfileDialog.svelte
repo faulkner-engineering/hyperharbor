@@ -265,7 +265,9 @@
           <label>Virtual processors <input type="number" min="1" bind:value={processors} /></label>
           <label>Disk size (GB) <input type="number" min="1" max="65536" bind:value={diskSizeGb} /></label>
           <label>{dynamic ? "Startup memory (GB)" : "Memory (GB)"} <input type="number" min="0.5" step="any" bind:value={startupGb} /></label>
-          <label>Maximum memory (GB) <input type="number" min="0.5" step="any" bind:value={maximumGb} disabled={!dynamic} /></label>
+          {#if dynamic}
+            <label>Maximum memory (GB) <input type="number" min="0.5" step="any" bind:value={maximumGb} /></label>
+          {/if}
         </div>
         {#each ["compute.processors", "compute.diskSizeGb", "compute.memory.startupMb", "compute.memory.maximumMb"] as field (field)}
           {#if issueFor(field)}<p class="error">{issueFor(field)}</p>{/if}
