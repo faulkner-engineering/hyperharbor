@@ -113,6 +113,12 @@ async function moveTo(expr, ms = 650) {
   await native(`move ${p.x} ${p.y} ${ms}`);
   return p;
 }
+// Parks the cursor in the empty space under the VM table, where it covers no text.
+async function restBelowTable(ms) {
+  const r = await c.evaluate(`(() => { const t = [...document.querySelectorAll('table')].find(__hh.visible); if (!t) return null;
+    const b = t.getBoundingClientRect(); return { x: b.x + b.width * 0.3, y: b.bottom + 70, dpr: devicePixelRatio }; })()`);
+  if (r) await native(`move ${Math.round(origin.x + r.x * r.dpr)} ${Math.round(origin.y + r.y * r.dpr)} ${ms}`);
+}
 async function click(expr, { ms = 650, after = 500 } = {}) {
   await moveTo(expr, ms);
   await sleep(120);
@@ -240,8 +246,7 @@ try {
     await sleep(2200);
     await click("__hh.btn('Close')", { after: 900 });
     await click("__hh.btn('Virtual machines')", { after: 1000 });
-    // Rest beside the new VM's name, where the cursor covers no text.
-    await moveTo(`[...document.querySelectorAll('tr')].find((r) => r.textContent.includes(${JSON.stringify(VM)}))?.querySelector('td')`, 700).catch(() => {});
+    await restBelowTable(700);
     await sleep(2200);
 
     // Connect to the existing VM. demo.js fakes connect_vm, so no Remote Desktop window opens.
@@ -249,7 +254,7 @@ try {
     await click(`__hh.rowButton(${JSON.stringify(CONNECT)}, 'Connect')`, { after: 0 });
     await waitFor("document.body.innerText.includes('Opening Remote Desktop')", 15_000, 'the connect toast');
     await sleep(800);
-    await moveTo(`[...document.querySelectorAll('tr')].find((r) => r.textContent.includes(${JSON.stringify(CONNECT)}))?.querySelector('td')`, 600).catch(() => {});
+    await restBelowTable(600);
     await sleep(2800);
     await stopRecording();
     status('work', 'Recording stopped. Encoding the WebP, about a minute. The mouse is yours.');
