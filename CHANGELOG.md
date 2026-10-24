@@ -10,6 +10,15 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-23 (API 1.34.0)
+
+Machine profiles and the Library. One kind of profile now describes a whole VM (hardware, account, display, backups,
+and software) and can create a VM or be applied to one; the host converts your install and setup profiles into it
+when it updates (data format 4). The new Library on the client device keeps ISOs and profiles and sends them to any
+paired host, and package search now works on any host with internet access, with nothing to set up. Update the host
+for these: with an older host, the client shows the earlier tabs and dialogs. The host updates itself to this
+version when it is on the stable channel with automatic updates on; installed clients update at their next check.
+
 ### Added
 - The setup profile editor has a dark terminal look built around a wireframe model of a PC: the section list on the
   left, the model in the middle, and the section's form on the right. Choosing a section flies the camera to its part
