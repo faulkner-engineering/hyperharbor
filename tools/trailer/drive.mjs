@@ -1,5 +1,5 @@
 // Drives the HyperHarbor client through "make a profile, then create a VM from it" with the real mouse,
-// records the client's content area with ffmpeg, and turns the recording into a GIF.
+// records the client's content area with ffmpeg, and turns the recording into an animated WebP.
 //
 // The client must be running with WebView2's debug port; make-trailer.ps1 starts it that way and runs this.
 // Usage: node drive.mjs [--profile "Dev Workstation"] [--vm dev-01] [--window 40,10,1720,1040] [--out <dir>]
@@ -214,7 +214,7 @@ try {
     await sleep(700);
     await click("__hh.btn('Create')", { after: 0 });
 
-    // The job, fast-forwarded in the GIF.
+    // The job, fast-forwarded in the trailer.
     const jobStart = now() + 1.5;
     await waitFor("__hh.btn('Close')", 5 * 60_000, 'the create job');
     const jobEnd = now();
@@ -232,8 +232,8 @@ try {
     writeFileSync(join(OUT, 'cuts.json'), JSON.stringify({ cuts }, null, 2));
     console.log('Cuts:', cuts.join(' '));
     execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(here, 'make-gif.ps1'),
-      '-In', join(OUT, 'raw.mp4'), '-Out', join(OUT, 'hyperharbor-trailer.gif'),
-      '-Cuts', cuts.join(','), '-Width', '1200', '-Fps', '15'], { stdio: 'inherit' });
+      '-In', join(OUT, 'raw.mp4'), '-Out', join(OUT, 'hyperharbor-trailer.webp'),
+      '-Cuts', cuts.join(','), '-Width', '1200', '-Fps', '15', '-Speed', '1.5'], { stdio: 'inherit' });
   }
 } catch (e) {
   console.error('Stopped:', e.message);

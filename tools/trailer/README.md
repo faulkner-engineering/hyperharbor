@@ -1,10 +1,10 @@
 # Trailer recorder
 
-Records the GIF of HyperHarbor's main flow: make a machine profile, then create a VM from it. A script moves the real
+Records the trailer of HyperHarbor's main flow: make a machine profile, then create a VM from it. A script moves the real
 mouse, clicks, and types in the portable client while ffmpeg records the client's content area, then cuts the recording
-into a GIF.
+into an animated WebP.
 
-## What the GIF shows is made up
+## What the trailer shows is made up
 
 `demo.js` is loaded into the client for the run, and the page is reloaded without it at the end. It intercepts
 Tauri's IPC (each command is a `fetch` to `http://ipc.localhost/<command>`):
@@ -32,8 +32,11 @@ powershell -ExecutionPolicy Bypass -File tools\trailer\make-trailer.ps1
 
 `-Dry` runs the clicks and typing without recording and stops before Save. Do not touch the mouse during a run.
 
-Output goes to `tools\trailer\out\` (git-ignored): `raw.mp4` (lossless), `cuts.json`, and `hyperharbor-trailer.gif`.
-To cut it differently, run `make-gif.ps1` with your own `-Cuts` (each `start-end[@speed]` in seconds).
+Output goes to `tools\trailer\out\` (git-ignored): `raw.mp4` (lossless), `cuts.json`, and `hyperharbor-trailer.webp`
+(1200 pixels wide, 15 fps, played 1.5 times faster, about 4.5 MB). To cut or encode it differently, run `make-gif.ps1`
+with your own `-Cuts` (each `start-end[@speed]` in seconds), `-Speed`, `-Width`, `-Fps`, and `-Quality`. An `-Out`
+ending in `.gif` writes a GIF instead, but the orbiting model makes a GIF of this length about ten times larger.
+The main README shows the copy in `docs/media/hyperharbor-trailer.webp`.
 
 Options of `make-trailer.ps1`:
 - `-Window x,y,width,height`: the client window's outer frame in physical pixels (default `40,10,1720,1040`, for a
@@ -57,7 +60,7 @@ recording only and restart the client normally afterwards.
 - `cdp.mjs`: a minimal DevTools Protocol client; `node cdp.mjs eval "<expr>"` or `node cdp.mjs shot <file.png>`
   help when the UI changes and a step no longer finds its element.
 - `mouse.ps1`: places the window and moves and clicks the mouse (user32), driven over stdin by `drive.mjs`.
-- `make-gif.ps1`: cuts, speeds up, and encodes the GIF with a generated palette.
+- `make-gif.ps1`: cuts, speeds up, and encodes the animated WebP (or a GIF with a generated palette).
 
 The steps find elements by their visible text (button labels, field labels, placeholders, winget ids), so a
 renamed label in the client needs the same change in `drive.mjs`.

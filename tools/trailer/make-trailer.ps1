@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Records the trailer GIF: a new machine profile, then a VM created from it.
+    Records the trailer: a new machine profile, then a VM created from it.
 
 .DESCRIPTION
     Restarts the newest dist\HyperHarbor-Client-*-portable.exe with WebView2's debug port when the port is not
     already open, then runs drive.mjs, which moves the real mouse, records the client, and writes
-    out\hyperharbor-trailer.gif. Do not touch the mouse while it runs. See README.md.
+    out\hyperharbor-trailer.webp. Do not touch the mouse while it runs. See README.md.
         powershell -ExecutionPolicy Bypass -File tools\trailer\make-trailer.ps1 [-Dry] [-Window 40,10,1720,1040]
 #>
 [CmdletBinding()]
