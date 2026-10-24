@@ -10,6 +10,10 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- Scrollbars in the client, such as in the Create VM dialog and the sidebar, are thin and follow the light or dark
+  theme instead of the bright default ones.
+
 ## [0.2.1] - 2026-10-23 (API 1.34.0)
 
 Machine profiles and the Library. One kind of profile now describes a whole VM (hardware, account, display, backups,

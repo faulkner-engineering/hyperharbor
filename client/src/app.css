@@ -69,6 +69,31 @@
   cursor: pointer;
 }
 
+/*
+ * Thin scrollbars on the theme's colors everywhere (dialogs, the sidebar, tables), instead of WebView2's default
+ * light ones. The terminal dialog restyles them with its glow.
+ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--border) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  border-width: 2px;
+  background: var(--muted) padding-box;
+}
+
 :where(button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
