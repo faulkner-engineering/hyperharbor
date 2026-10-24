@@ -294,3 +294,51 @@ describe("CreateVmDialog unattended install", () => {
     expect(screen.queryByLabelText("Edition")).toBeNull();
   });
 });
+
+describe("CreateVmDialog machine profiles", () => {
+  const machineProfiles = [
+    { id: "rig", name: "Gaming rig", description: null, os: "windows", processors: 8, memoryMb: 16384, gpu: true, tpm: true, backup: false, softwareCount: 3, updatedAt: "2026-10-23T12:00:00Z", error: null },
+    { id: "bad", name: "bad", description: null, os: "windows", processors: null, memoryMb: null, gpu: false, tpm: null, backup: false, softwareCount: 0, updatedAt: "2026-10-23T12:00:00Z", error: "Line 2: not YAML" },
+  ];
+
+  function respondMachine(list: unknown[]) {
+    respondUnattended(windowsMedia);
+    const answer = invoke.getMockImplementation()!;
+    invoke.mockImplementation((command: string, args: { resource?: string }) =>
+      command === "get_host_resource" && args.resource === "machineProfiles" ? Promise.resolve(list) : answer(command, args),
+    );
+  }
+
+  it("offers machine profiles first and hands the chosen one over", async () => {
+    respondMachine(machineProfiles);
+    const onusemachineprofile = vi.fn();
+    render(CreateVmDialog, { host: { ...host, apiVersion: "1.28.0" }, onclose: vi.fn(), onusemachineprofile });
+
+    expect(await screen.findByRole("heading", { name: "From a machine profile" })).toBeTruthy();
+    expect(screen.queryByText("bad")).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Use…" }));
+
+    expect(onusemachineprofile).toHaveBeenCalledWith(machineProfiles[0]);
+    expect(screen.getByLabelText("Automatically with an older profile (install and setup profiles)")).toBeTruthy();
+  });
+
+  it("points to machine profiles when there are none", async () => {
+    respondMachine([]);
+    const onopenmachineprofiles = vi.fn();
+    render(CreateVmDialog, { host: { ...host, apiVersion: "1.28.0" }, onclose: vi.fn(), onusemachineprofile: vi.fn(), onopenmachineprofiles });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Open machine profiles…" }));
+
+    expect(onopenmachineprofiles).toHaveBeenCalled();
+  });
+
+  it("does not offer machine profiles on a host that cannot create VMs from them", async () => {
+    respondMachine(machineProfiles);
+    render(CreateVmDialog, { host: { ...host, apiVersion: "1.27.0" }, onclose: vi.fn(), onusemachineprofile: vi.fn() });
+
+    await screen.findByLabelText("Automatically with a profile");
+
+    expect(screen.queryByRole("heading", { name: "From a machine profile" })).toBeNull();
+    expect(invoke.mock.calls.some(([, args]) => args?.resource === "machineProfiles")).toBe(false);
+  });
+});

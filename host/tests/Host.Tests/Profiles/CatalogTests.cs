@@ -17,6 +17,7 @@ public sealed class CatalogTests
             Assert.Equal(InstallEntryKind.Alias, PackageAliasResolver.Classify(entry.Alias));
             Assert.Equal(InstallEntryKind.Winget, PackageAliasResolver.Classify(entry.Id));
             Assert.False(string.IsNullOrWhiteSpace(entry.Name));
+            Assert.False(string.IsNullOrWhiteSpace(entry.Description), $"{entry.Id} has no description");
             Assert.Contains(entry.Category, (string[])["browsers", "development", "utilities", "media", "communication", "productivity", "security", "gaming"]);
         });
         Assert.Equal(Catalogs.Packages.Count, Catalogs.Packages.Select(entry => entry.Alias).Distinct(StringComparer.OrdinalIgnoreCase).Count());

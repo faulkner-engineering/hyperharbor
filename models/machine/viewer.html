@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HyperHarbor machine viewer</title>
+<style>
+  :root { --ink: #0b0d10; --amber: #e39b2e; --fog: #f3f1ec; --muted: #8a93a1; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--fog); font: 14px/1.4 Manrope, system-ui, sans-serif; }
+  #app { display: grid; grid-template-columns: 1fr 320px; height: 100%; }
+  #stage { position: relative; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #panel { border-left: 1px solid #1d2228; padding: 20px; overflow: auto; }
+  h1 { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  button { display: block; width: 100%; text-align: left; background: transparent; color: var(--fog); border: 1px solid #262c34; border-radius: 10px; padding: 10px 12px; margin: 0 0 8px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--amber); }
+  button.active { border-color: var(--amber); background: rgba(227,155,46,.08); }
+  button small { display: block; color: var(--muted); }
+  label { display: flex; gap: 8px; align-items: center; color: var(--muted); margin: 12px 0 0; }
+  #hud { position: absolute; left: 16px; bottom: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage"><div id="hud"></div></div>
+  <aside id="panel">
+    <h1>Profile sections</h1>
+    <div id="sections"></div>
+    <label><input type="checkbox" id="green"> Green terminal palette</label>
+    <label><input type="checkbox" id="crt" checked> CRT post-process</label>
+    <label><input type="checkbox" id="orbit" checked> Idle orbit</label>
+  </aside>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const params = new URLSearchParams(location.search);
+const PALETTES = {
+  amber: { line: 0x3a4250, lineDim: 0x1f252d, glow: 0xe39b2e, screen: 0x2a3340 },
+  green: { line: 0x2a5a3a, lineDim: 0x163322, glow: 0x7cff9a, screen: 0x1b3a28 },
+};
+let palette = PALETTES[params.get('palette') === 'green' ? 'green' : 'amber'];
+document.getElementById('green').checked = palette === PALETTES.green;
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d10);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 20);
+
+// Post-processing: bloom on the glowing parts, then a CRT pass (scanlines, slight barrel, vignette).
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.7, 0.45, 0.25);
+composer.addPass(bloom);
+const crt = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, enabled: { value: 1 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float time; uniform float enabled; varying vec2 vUv;
+    void main(){
+      vec2 uv = vUv;
+      if (enabled > 0.5) {
+        vec2 c = uv - 0.5; float r2 = dot(c, c);
+        uv = 0.5 + c * (1.0 + 0.06 * r2);                 // barrel distortion
+      }
+      if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { gl_FragColor = vec4(0.0); return; }
+      vec3 col = texture2D(tDiffuse, uv).rgb;
+      if (enabled > 0.5) {
+        float scan = 0.92 + 0.08 * sin(uv.y * 1200.0);     // scanlines
+        float vig = smoothstep(0.95, 0.35, length(uv - 0.5));
+        float flicker = 0.985 + 0.015 * sin(time * 9.0);
+        col *= scan * (0.75 + 0.25 * vig) * flicker;
+      }
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+});
+composer.addPass(crt);
+composer.addPass(new OutputPass());
+
+// Load the model and convert every mesh to edge-only lines.
+const parts = new Map();   // node name -> { lines, base: Material, glow: Material, centerWorld }
+const matCache = {};
+function lineMaterial(color) {
+  const key = color.toString(16);
+  return matCache[key] ??= new THREE.LineBasicMaterial({ color });
+}
+const loader = new GLTFLoader();
+const gltf = await loader.loadAsync(params.get('model') || '../../client/static/machine/hyperharbor-machine.glb');
+gltf.scene.updateMatrixWorld(true);
+gltf.scene.traverse((obj) => {
+  if (!obj.isMesh) return;
+  const name = obj.name || obj.parent?.name || 'unnamed';
+  const edges = new THREE.EdgesGeometry(obj.geometry, 25);
+  // Center the edges on the part so a rotation (the fan spin) turns it in place, not about the origin.
+  edges.applyMatrix4(obj.matrixWorld);
+  edges.computeBoundingBox();
+  const center = edges.boundingBox.getCenter(new THREE.Vector3());
+  edges.translate(-center.x, -center.y, -center.z);
+  const isFloor = name === 'Floor';
+  const base = lineMaterial(isFloor ? palette.lineDim : palette.line);
+  const lines = new THREE.LineSegments(edges, base);
+  lines.position.copy(center);
+  lines.name = name;
+  scene.add(lines);
+  const box = new THREE.Box3().setFromObject(lines);
+  parts.set(name, { lines, base, centerWorld: box.getCenter(new THREE.Vector3()), box });
+});
+
+// Dim the floor further with a subtle grid
+const grid = new THREE.GridHelper(1.6, 16, palette.lineDim, palette.lineDim);
+grid.position.set(0.15, 0.0005, -0.05);
+scene.add(grid);
+
+const targets = await (await fetch('../../client/static/machine/targets.json')).json();
+const highlights = await (await fetch('../../client/static/machine/highlights.json')).json();
+
+// Camera rig: spherical orbit around a look-at point, eased toward a target.
+const rig = { lookAt: new THREE.Vector3(), distance: 1.6, elevation: 22, azimuth: 35 };
+const goal = { lookAt: new THREE.Vector3(), distance: 1.6, elevation: 22, azimuth: 35 };
+let tween = null;
+let orbitBase = 0;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function goTo(sectionId) {
+  const t = targets[sectionId];
+  if (!t) return;
+  const part = parts.get(t.node);
+  const center = part ? part.centerWorld.clone() : new THREE.Vector3();
+  center.add(new THREE.Vector3(...t.lookAtOffset));
+  goal.lookAt.copy(center);
+  goal.distance = t.distance; goal.elevation = t.elevation; goal.azimuth = t.azimuth;
+  tween = reducedMotion ? null : { t0: performance.now(), dur: 900, from: { lookAt: rig.lookAt.clone(), distance: rig.distance, elevation: rig.elevation, azimuth: rig.azimuth } };
+  if (reducedMotion) Object.assign(rig, { distance: goal.distance, elevation: goal.elevation, azimuth: goal.azimuth }), rig.lookAt.copy(goal.lookAt);
+  orbitBase = goal.azimuth;
+  setHighlight(sectionId);
+  document.querySelectorAll('#sections button').forEach((b) => b.classList.toggle('active', b.dataset.id === sectionId));
+  document.getElementById('hud').textContent = `${sectionId} · ${t.node}`;
+}
+
+// Highlight: glowing material on the section's nodes, everything else stays dim.
+let active = { nodes: [], blink: null, pulse: null, spin: [] };
+function setHighlight(sectionId) {
+  for (const [, p] of parts) p.lines.material = p.base;
+  const h = highlights[sectionId] || { nodes: [] };
+  const glowMat = new THREE.LineBasicMaterial({ color: palette.glow });
+  glowMat.color.multiplyScalar(2.2); // over 1.0 so bloom picks it up
+  for (const n of h.nodes) { const p = parts.get(n); if (p) p.lines.material = glowMat; }
+  active = { nodes: h.nodes, blink: h.blink || null, pulse: h.pulse || null, spin: h.spin || [] };
+}
+
+function easeInOut(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); composer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+const clock = new THREE.Clock();
+function frame() {
+  const t = clock.getElapsedTime();
+  const now = performance.now();
+  if (tween) {
+    const k = Math.min(1, (now - tween.t0) / tween.dur), e = easeInOut(k);
+    rig.lookAt.lerpVectors(tween.from.lookAt, goal.lookAt, e);
+    rig.distance = THREE.MathUtils.lerp(tween.from.distance, goal.distance, e);
+    rig.elevation = THREE.MathUtils.lerp(tween.from.elevation, goal.elevation, e);
+    rig.azimuth = THREE.MathUtils.lerp(tween.from.azimuth, goal.azimuth, e);
+    if (k >= 1) { tween = null; orbitBase = goal.azimuth; orbitT0 = t; }
+  } else if (document.getElementById('orbit').checked && !reducedMotion) {
+    // Slow orbit at rest: a full turn in 40 s at the overview, slower when zoomed in.
+    const speed = 360 / 40 * Math.min(1, rig.distance / 1.6);
+    rig.azimuth = orbitBase + (t - orbitT0) * speed;
+  }
+  const el = THREE.MathUtils.degToRad(rig.elevation), az = THREE.MathUtils.degToRad(rig.azimuth);
+  camera.position.set(
+    rig.lookAt.x + rig.distance * Math.cos(el) * Math.sin(az),
+    rig.lookAt.y + rig.distance * Math.sin(el),
+    rig.lookAt.z + rig.distance * Math.cos(el) * Math.cos(az));
+  camera.lookAt(rig.lookAt);
+
+  // Per-control reactions
+  if (active.blink) { const p = parts.get(active.blink); if (p) p.lines.visible = Math.floor(t * 2) % 2 === 0; }
+  if (active.pulse) { const p = parts.get(active.pulse); if (p) p.lines.material.opacity = 0.5 + 0.5 * Math.sin(t * 3); }
+  for (const n of active.spin) { const p = parts.get(n); if (p) p.lines.rotation.x += 0.02; }
+
+  crt.uniforms.time.value = t;
+  crt.uniforms.enabled.value = document.getElementById('crt').checked ? 1 : 0;
+  composer.render();
+  requestAnimationFrame(frame);
+}
+let orbitT0 = 0;
+
+// Section list
+const labels = {
+  overview: ['Overview', 'The whole machine'],
+  account: ['Account and sign-in', 'Screen: login prompt'],
+  display: ['Display', 'Screen'],
+  browser: ['Browser and extensions', 'Screen: tabs'],
+  packages: ['Packages', 'Drive bay: one slab per app'],
+  debloat: ['Debloat', 'Drive bay'],
+  firmware: ['TPM and firmware', 'Board: the LED'],
+  compute: ['Compute', 'CPU and RAM'],
+  gpu: ['GPU and performance', 'Graphics card'],
+  network: ['Network', 'Rear I/O'],
+  backup: ['Backups', 'Cable to the external disk'],
+};
+const sections = document.getElementById('sections');
+for (const id of Object.keys(targets)) {
+  const b = document.createElement('button');
+  b.dataset.id = id;
+  b.innerHTML = `${labels[id]?.[0] ?? id}<small>${labels[id]?.[1] ?? ''}</small>`;
+  b.onclick = () => goTo(id);
+  sections.appendChild(b);
+}
+document.getElementById('green').onchange = (e) => {
+  palette = e.target.checked ? PALETTES.green : PALETTES.amber;
+  for (const [n, p] of parts) { p.base = lineMaterial(n === 'Floor' ? palette.lineDim : palette.line); }
+  grid.material.color.set(palette.lineDim);
+  setHighlight(document.querySelector('#sections .active')?.dataset.id || 'overview');
+};
+
+goTo(params.get('section') || 'overview');
+if (params.has('still')) { document.getElementById('orbit').checked = false; tween = null; Object.assign(rig, { distance: goal.distance, elevation: goal.elevation, azimuth: goal.azimuth }); rig.lookAt.copy(goal.lookAt); }
+frame();
+window.__ready = true;
+</script>
+</body>
+</html>

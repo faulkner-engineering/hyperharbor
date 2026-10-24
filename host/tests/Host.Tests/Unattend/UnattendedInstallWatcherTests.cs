@@ -501,6 +501,86 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         public Task<bool> SshAnswersAsync(string address, CancellationToken cancellationToken) => Task.FromResult(Ssh);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task AReadyInstall_StartsTheGuestPerformanceSetup_OnlyWhenItsProfileHasAGpuShare(bool gpuShare, bool withSetupProfile)
+    {
+        _installs.Save(new UnattendedInstall(VmId, _userId, "machine-rig", InstallOs.Windows, false, _seedPath, UnattendedInstallState.Installing,
+            "Installing", _time.GetUtcNow(), _time.GetUtcNow(), SetupProfile: withSetupProfile ? Workstation : null, GuestPerformanceSetup: gpuShare));
+        var starter = new FakePerformanceStarter();
+        var watcher = new UnattendedInstallWatcher(
+            _installs, _inventory, _probe, _provisioning, _accounts, _credentials, _guest, _media, _time, _options,
+            NullLogger<UnattendedInstallWatcher>.Instance, null,
+            new SetupProfileApplication(new SetupProfilePlanner(Catalogs.Default), _applier),
+            new GuestRestart(_inventory, _probe, _power, _time) { Poll = TimeSpan.Zero, Checks = 4 },
+            new VmOperationLocks(),
+            new ListAuditLog(_audit),
+            starter);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+
+        await TickAsync(watcher);
+
+        Assert.Equal(UnattendedInstallState.Ready, Install.State);
+        Assert.Equal(gpuShare ? [(VmId, _userId)] : [], starter.Started);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AMachineProfilesWallpaper_IsCopiedBeforeTheSetupProfile_OrIsAProblemWhenItWasDeleted(bool imageOnHost)
+    {
+        var wallpaper = Path.Combine(_directory, "dunes.jpg");
+        if (imageOnHost)
+        {
+            File.WriteAllBytes(wallpaper, [0xFF, 0xD8, 0xFF]);
+        }
+
+        _installs.Save(new UnattendedInstall(VmId, _userId, "machine-desk", InstallOs.Windows, false, _seedPath, UnattendedInstallState.Installing,
+            "Installing", _time.GetUtcNow(), _time.GetUtcNow(), SetupProfile: Workstation, WallpaperPath: wallpaper));
+        var files = new Profiles.FakeGuestFileCopier();
+        var copiedFirst = false;
+        _applier.OnCall = _ => copiedFirst |= files.Copies.Count == 1;
+        var watcher = new UnattendedInstallWatcher(
+            _installs, _inventory, _probe, _provisioning, _accounts, _credentials, _guest, _media, _time, _options,
+            NullLogger<UnattendedInstallWatcher>.Instance, null,
+            new SetupProfileApplication(new SetupProfilePlanner(Catalogs.Default), _applier),
+            new GuestRestart(_inventory, _probe, _power, _time) { Poll = TimeSpan.Zero, Checks = 4 },
+            new VmOperationLocks(),
+            new ListAuditLog(_audit),
+            files: files);
+        Guest(VmState.Running, GuestOsFamily.Windows, Address);
+        _probe.Rdp = true;
+
+        await TickAsync(watcher);
+
+        Assert.Equal(UnattendedInstallState.Ready, Install.State);
+        if (imageOnHost)
+        {
+            Assert.Equal((VmId, wallpaper, ProfileImageStore.GuestFolder), Assert.Single(files.Copies));
+            Assert.True(copiedFirst);
+            Assert.Empty(Install.SetupResult!.Problems);
+        }
+        else
+        {
+            Assert.Empty(files.Copies);
+            Assert.Contains("dunes.jpg is no longer on the host", Assert.Single(Install.SetupResult!.Problems), StringComparison.Ordinal);
+        }
+    }
+
+    private sealed class FakePerformanceStarter : Core.Performance.IGuestPerformanceStarter
+    {
+        public List<(Guid VmId, Guid UserId)> Started { get; } = [];
+
+        public Task StartGuestSetupAsync(Guid vmId, Guid userId, CancellationToken cancellationToken)
+        {
+            Started.Add((vmId, userId));
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class FakeMedia : IVmMedia
     {
         public List<(Guid VmId, string Path)> Ejected { get; } = [];

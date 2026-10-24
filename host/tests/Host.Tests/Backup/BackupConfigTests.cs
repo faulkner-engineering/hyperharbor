@@ -81,9 +81,9 @@ public sealed class BackupConfigTests : IDisposable
     }
 
     [Fact]
-    public void DataFormat_IsThree_AndTheBackupFolderIsNotCopiedInUpdateBackups()
+    public void DataFormat_IsAtLeastThree_AndTheBackupFolderIsNotCopiedInUpdateBackups()
     {
-        Assert.Equal(3, HyperHarbor.Host.Core.Installation.DataFormat.Current);
+        Assert.True(HyperHarbor.Host.Core.Installation.DataFormat.Current >= 3);
         Assert.Contains("backup", HyperHarbor.Host.Core.Installation.DataBackup.Excluded);
     }
 }

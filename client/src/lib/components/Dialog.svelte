@@ -7,16 +7,20 @@
     wide?: boolean;
     /** Nearly the whole window, for editors and side-by-side lists. */
     xl?: boolean;
+    /** The whole window, on the dark terminal palette of the machine view (the setup profile editor). */
+    terminal?: boolean;
+    /** The terminal glow color, a CSS color; the brand amber when left out. */
+    accent?: string;
     children: Snippet;
   }
 
-  let { title, wide = false, xl = false, children }: Props = $props();
+  let { title, wide = false, xl = false, terminal = false, accent, children }: Props = $props();
 
   const titleId = $props.id();
 </script>
 
-<div class="backdrop" role="presentation">
-  <div class="dialog" class:wide class:xl role="dialog" aria-modal="true" aria-labelledby={titleId}>
+<div class="backdrop" class:terminal role="presentation">
+  <div class="dialog" class:wide class:xl class:terminal style:--accent={accent} role="dialog" aria-modal="true" aria-labelledby={titleId}>
     <h3 id={titleId}>{title}</h3>
     {@render children()}
   </div>
@@ -52,6 +56,128 @@
     height: min(820px, calc(100vh - 2rem));
     display: flex;
     flex-direction: column;
+  }
+
+  /* Every color below is a variable, so re-declaring them restyles the dialog and the pickers inside it. */
+  .dialog.terminal {
+    --bg: var(--hh-crt-screen);
+    --surface: var(--hh-crt-panel);
+    --text: var(--hh-fog);
+    --muted: var(--hh-sleep);
+    --border: var(--hh-crt-rule);
+    --hover: #1a2028;
+    --selected: #222a33;
+    --danger: #ff7b72;
+    --ok-bg: #12261e;
+    --ok-fg: #56d364;
+    --idle-bg: #1a2028;
+    --warn-bg: #2e2410;
+    --warn-fg: #e3b341;
+    --busy-bg: #0c2d4b;
+    --busy-fg: #79c0ff;
+    --notice-bg: #0c2d4b;
+    --error-bg: #3c1618;
+    --accent: var(--hh-crt-amber-glow);
+    --accent-fg: var(--hh-crt-screen);
+    --glow: color-mix(in srgb, var(--accent) 35%, transparent);
+    position: relative;
+    width: calc(100vw - 1.5rem);
+    height: calc(100vh - 1.5rem);
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.6),
+      0 0 48px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  .backdrop.terminal {
+    background: rgb(4 6 8 / 0.78);
+    backdrop-filter: blur(6px);
+  }
+
+  /* Faint scanlines over the whole terminal; light enough to keep the form readable. */
+  .dialog.terminal::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 3px);
+  }
+
+  /* Thin scrollbars on the terminal palette: a dark track and a thumb that glows on hover. */
+  .dialog.terminal::-webkit-scrollbar,
+  .dialog.terminal :global(*::-webkit-scrollbar) {
+    width: 10px;
+    height: 10px;
+  }
+
+  .dialog.terminal::-webkit-scrollbar-track,
+  .dialog.terminal :global(*::-webkit-scrollbar-track),
+  .dialog.terminal::-webkit-scrollbar-corner,
+  .dialog.terminal :global(*::-webkit-scrollbar-corner) {
+    background: transparent;
+  }
+
+  .dialog.terminal::-webkit-scrollbar-thumb,
+  .dialog.terminal :global(*::-webkit-scrollbar-thumb) {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 30%, var(--border)) padding-box;
+  }
+
+  .dialog.terminal::-webkit-scrollbar-thumb:hover,
+  .dialog.terminal :global(*::-webkit-scrollbar-thumb:hover) {
+    border-width: 2px;
+    background: var(--accent) padding-box;
+  }
+
+  .dialog.terminal :global(input:not([type="checkbox"]):not([type="radio"])),
+  .dialog.terminal :global(select),
+  .dialog.terminal :global(textarea) {
+    background: rgb(0 0 0 / 0.35);
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+
+  .dialog.terminal :global(input:not([type="checkbox"]):not([type="radio"]):focus-visible),
+  .dialog.terminal :global(select:focus-visible),
+  .dialog.terminal :global(textarea:focus-visible),
+  .dialog.terminal :global(button:focus-visible) {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 12px var(--glow);
+  }
+
+  .dialog.terminal :global(button:not(:disabled):hover) {
+    border-color: var(--accent);
+  }
+
+  .dialog.terminal :global(button.primary:not(:disabled)) {
+    box-shadow: 0 0 14px var(--glow);
+  }
+
+  .dialog.terminal :global(input[type="checkbox"]),
+  .dialog.terminal :global(input[type="radio"]) {
+    accent-color: var(--accent);
+  }
+
+  .dialog.terminal :global(::selection) {
+    background: color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+
+  .dialog.terminal h3 {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
   }
 
   h3 {

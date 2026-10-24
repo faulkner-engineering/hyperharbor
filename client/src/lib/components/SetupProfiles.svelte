@@ -7,6 +7,7 @@
     importSetupProfile,
     isClientError,
     listSetupProfiles,
+    saveMachineProfile,
     type HostEntry,
     type SetupProfile,
     type SetupProfileSummary,
@@ -25,9 +26,11 @@
     host: HostEntry;
     /** Running Windows VMs, for reading provisioned packages in the editor. */
     vms: Vm[];
+    /** Whether the host has machine profiles (API 1.27.0), which a setup profile can be converted into. */
+    canConvert?: boolean;
   }
 
-  let { host, vms }: Props = $props();
+  let { host, vms, canConvert = false }: Props = $props();
 
   let profiles = $state<SetupProfileSummary[] | null>(null);
   let error = $state<string | null>(null);
@@ -76,6 +79,30 @@
       if (e instanceof ElevationCancelled) return;
       const details = isClientError(e) && e.issues.length > 0 ? ` ${e.issues.map((issue) => issue.message).join(" ")}` : "";
       toasts.error(`${errorMessage(e)}${details}`);
+    } finally {
+      working = false;
+    }
+  }
+
+  /** Makes a Windows machine profile with this setup profile's software. The setup profile stays as it is. */
+  async function convert(summary: SetupProfileSummary) {
+    working = true;
+    try {
+      const { profile } = await getSetupProfile(host.key, summary.id);
+      const saved = await withElevation(host.key, () =>
+        saveMachineProfile(host.key, null, {
+          name: profile.name,
+          description: profile.description,
+          os: "windows",
+          install: profile.install,
+          remove: profile.remove,
+          tweaks: profile.tweaks,
+          browser: profile.browser,
+        }),
+      );
+      toasts.show(`Made the machine profile ${saved.profile.name}. It is under Machine profiles.`);
+    } catch (e) {
+      if (!(e instanceof ElevationCancelled)) toasts.error(errorMessage(e));
     } finally {
       working = false;
     }
@@ -130,6 +157,13 @@
   </div>
 </div>
 
+{#if canConvert}
+  <p class="note">
+    Machine profiles replace setup profiles: one machine profile holds a VM's software together with its hardware, account,
+    and display. Setup profiles keep working; Convert makes a machine profile from one.
+  </p>
+{/if}
+
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 
 {#if profiles === null}
@@ -159,6 +193,9 @@
           <td class="details">{new Date(profile.updatedAt).toLocaleString()}</td>
           <td class="actions">
             {#if !profile.error}<button type="button" onclick={() => edit(profile)}>Edit</button>{/if}
+            {#if canConvert && !profile.error}
+              <button type="button" onclick={() => convert(profile)} disabled={working} title="Make a machine profile with this profile's software">Convert</button>
+            {/if}
             <button type="button" onclick={() => exportFile(profile)}>Export…</button>
             <button type="button" class="danger" onclick={() => (confirmDelete = profile)}>Delete</button>
           </td>
@@ -203,6 +240,13 @@
 
   .error {
     color: var(--danger);
+  }
+
+  .note {
+    margin: 0 0 0.8rem;
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
   }
 
   table {

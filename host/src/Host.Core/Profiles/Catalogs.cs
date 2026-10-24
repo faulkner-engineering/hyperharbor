@@ -10,6 +10,7 @@ public sealed class PackageCatalogEntry
     public string Alias { get; set; } = "";
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
+    public string? Description { get; set; }
     public string Category { get; set; } = "";
     public bool Popular { get; set; }
 }
@@ -164,6 +165,9 @@ public sealed class Catalogs
 
     /// <summary>The embedded profile JSON Schema (schemas/profile.v1.schema.json).</summary>
     public static string ProfileSchema => ReadResource("HyperHarbor.Schemas.profile.v1.schema.json");
+
+    /// <summary>The embedded machine profile JSON Schema (schemas/machine-profile.v1.schema.json).</summary>
+    public static string MachineProfileSchema => ReadResource("HyperHarbor.Schemas.machine-profile.v1.schema.json");
 
     private static string Read(string file) => ReadResource("HyperHarbor.Catalogs." + file);
 

@@ -10,6 +10,93 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- The setup profile editor has a dark terminal look built around a wireframe model of a PC: the section list on the
+  left, the model in the middle, and the section's form on the right. Choosing a section flies the camera to its part
+  (the drive bay for Install and Remove, the browser tabs on the screen for Browser) and lights it up, and each
+  package you add lights one more drive. A line under the model names the section and its counts. Options under the
+  section list switch between amber and green and turn motion on or off. Motion starts from the Windows animation
+  effects setting: with it off, the camera cuts instead of flying and does not orbit, until you check Motion. Without
+  WebGL, or when the view stays under 30 frames per second for five seconds, it shows a still exploded drawing with
+  the same highlights instead, and says why. The editor fills the window, with thin scrollbars, fields, and buttons
+  that glow in the terminal color; with Motion off its own animations (the section fade and the cursor) stop too.
+- Finding things in the setup profile editor: each section is one list with a filter box and category chips that stay
+  at the top, over the whole catalog (all packages, not only the popular ones), with one scroll bar per panel. What
+  the profile holds shows as chips above the list. Selecting an entry opens its details on the model: a package's
+  description, an app's rating, or the exact registry values a tweak writes, with a button to add or remove it.
+  In Install, typing a winget id offers to add it as typed, and winget search shows its results in the same list.
+  Remove lists HyperHarbor's rated built-in apps without a running VM (reading a VM still marks what it has), with
+  Remove all safe; capabilities and optional features moved under a fold. Pasting a store link into the extension
+  filter looks the extension up.
+
+- Machine profiles: a new Machine profiles tab (hosts with API 1.27.0) for profiles that describe a whole VM in one
+  YAML file. The editor has a section for each part of the wireframe machine, grouped as Identity (account, display),
+  Hardware (firmware, compute, GPU, network), Care (backups), and Software (install, remove, tweaks, browser), and
+  the model follows the settings: the TPM LED blinks with the TPM on, the GPU fans spin in Performance mode, and the
+  backup LED pulses on a schedule. Settings left "as it is" keep a VM's current value. The account section can be
+  filled from an unattended install profile and the software sections from a setup profile, and Convert on a setup
+  profile makes a machine profile from it.
+- Create VM… on a machine profile (hosts with API 1.28.0) makes a VM from it: choose a name, an image, and the
+  edition. One job builds the VM with the profile's processors, memory, disk, switch, TPM, and Secure Boot, sets
+  nested virtualization, MAC address spoofing, Performance mode, and the backup policy while it is still off, and
+  starts the unattended install. When the install is ready, the profile's software, theme, accent color, and
+  wallpaper color are applied, and for a profile with a GPU share the GPU driver is set up in the guest. Names the
+  host does not have (a switch or GPU) stop the create; a missing backup target is a warning.
+- Apply machine profile… in a VM's menu (hosts with API 1.29.0) compares a machine profile with the VM and lists each
+  setting that differs, marked when it needs the VM off or runs in the guest, with notes for what applies only when
+  creating a VM. Choose the parts to apply; with Shut down, apply, and start again, a running VM is shut down for
+  the parts that need it off and started again, then the software and display settings are applied in the guest and,
+  when Performance mode was turned on, the GPU driver is set up. A profile never removes a TPM, never shrinks a disk,
+  and leaves Secure Boot and the switch as they are.
+- A machine profile's Remote Desktop settings (Display, Connecting) now reach the client: Connect uses the profile's
+  monitors (unless you chose monitors for that VM on this device), full screen or windowed, and whether the clipboard,
+  printers, microphone, and camera are shared. VMs get them when created from a profile or when the profile is applied
+  (the new Remote Desktop defaults part).
+- A machine profile's Backups section can keep a different number of daily, weekly, and monthly backups than its
+  target, and use other conditions for when a backup may start (wait while connected, wait while a game runs, a time
+  window). A profile that would keep no backups at all is refused.
+- Wallpaper images for machine profiles (hosts with API 1.31.0): in the Display section, choose Image, then pick one of
+  your images on the host or Add image… from this device (JPEG, PNG, or BMP up to 20 MB). Creating a VM from the
+  profile or applying it copies the image into the VM (C:\Users\Public\Pictures\HyperHarbor) and sets it as the
+  wallpaper, filling the screen. A profile whose image was deleted is applied without it, with a warning.
+- New VM now starts with your machine profiles (hosts with API 1.28.0): Use… on one continues in that profile's create
+  dialog. Choosing every setting by hand still works below it, and installing with an unattended install profile and a
+  setup profile is now labeled as using the older profiles. The setup profile list notes that machine profiles
+  replace setup profiles and that Convert makes one.
+- One place for profiles (hosts with API 1.32.0): the Profiles tab holds all your profiles, and the Install profiles
+  and Setup profiles tabs are gone (your old profiles are converted when the host updates). New VM starts from one of
+  your profiles or a template (Windows Workstation, Windows Burner, Ubuntu Dev Server), and its hardware (processors,
+  memory, disk, network) can be changed for that VM without changing the profile. New profile can start from a
+  template. Capture setup profile now saves a profile on the Profiles tab, and Apply machine profile replaces Apply
+  setup profile. With an older host, the client shows the earlier tabs and dialogs.
+
+### Security
+- The client's cryptography dependencies use ctutils 0.4.5, which fixes non-constant-time comparisons
+  (RUSTSEC-2026-0385).
+
+### Changed
+- Updating the host converts your install profiles and setup profiles into machine profiles (data format 4): an install
+  profile becomes a machine profile with its account settings, a setup profile one with its software. The originals
+  stay for older clients. A profile whose file no longer reads is skipped and listed in
+  machine-profiles/converted.json in the host's data folder.
+- API 1.32.0: GET /machine-profile-templates (the built-in install profiles as machine profile templates) and
+  POST /machine-profile-templates/{templateId}/vms; CreateVmFromProfileRequest takes compute and switch for that VM.
+- API 1.31.0: /profile-images (list, upload, delete) keeps each User's wallpaper images; a machine profile's
+  display.guest.wallpaper.image names one of them.
+- API 1.30.0: VmConnection.defaults carries the machine profile's Remote Desktop defaults; MachinePart has connection.
+- API 1.29.0: GET /vms/{vmId}/machine-profile-preview and POST /vms/{vmId}/machine-profile (a new applyMachineProfile
+  job kind).
+- API 1.28.0: POST /machine-profiles/{profileId}/vms creates a VM from a machine profile as a createVm job.
+- API 1.27.0: machine profiles on the host (/machine-profiles: list, create, import, export, update, delete, and
+  the JSON Schema). The account section follows the unattended install profile rules and the software sections the
+  setup profile rules.
+- API 1.26.0: the package catalog has a description per package, the setup profile catalog lists the rated built-in
+  apps (appx) and the registry values of each tweak. Update the host for package descriptions, built-in apps without
+  a VM, and tweak details; with an older host the editor works as before without them.
+
+### Fixed
+- Editing a saved machine profile with an Account section could fail to open the editor.
+
 ## [0.2.0] - 2026-10-22 (API 1.25.0)
 
 The first stable release since 0.1.6. It brings everything from the 0.1.7 and 0.2.0 betas below to the stable channel:

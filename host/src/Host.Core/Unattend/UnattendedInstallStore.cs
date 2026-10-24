@@ -19,6 +19,7 @@ namespace HyperHarbor.Host.Core.Unattend;
 /// <param name="SetupProfile">The setup profile chosen at create time, as it was then; applied after the account is set up.</param>
 /// <param name="AccountConfigured">The User's account is set up, so a retry or a host restart goes on with the setup profile.</param>
 /// <param name="SetupResult">How applying the setup profile went.</param>
+/// <param name="WallpaperPath">A wallpaper image on the host, copied into the guest before the setup profile is applied.</param>
 public sealed record UnattendedInstall(
     Guid VmId,
     Guid UserId,
@@ -36,7 +37,9 @@ public sealed record UnattendedInstall(
     long RunningSeconds = 0,
     SetupProfile? SetupProfile = null,
     bool AccountConfigured = false,
-    SetupProfileResult? SetupResult = null)
+    SetupProfileResult? SetupResult = null,
+    bool GuestPerformanceSetup = false,
+    string? WallpaperPath = null)
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsActive => State is not (UnattendedInstallState.Ready or UnattendedInstallState.Failed or UnattendedInstallState.Canceled);

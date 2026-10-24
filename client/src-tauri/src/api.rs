@@ -914,56 +914,122 @@ impl ApiClient {
         .await
     }
 
-    /// GET /setup-profiles/{id}: the StoredSetupProfile.
-    pub async fn get_setup_profile(
+    /// GET /vms/{vmId}/machine-profile-preview?profileId=: what applying the profile would change.
+    pub async fn preview_vm_machine_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        profile_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        // The profile ID is checked as a path would be, then sent as the query value.
+        profile_path(ProfileKind::Machine, profile_id)?;
+        let path = format!(
+            "{}?profileId={}",
+            vm_path(vm_id, "machine-profile-preview")?,
+            query_value(profile_id)
+        );
+        self.get_json(host, paired, &path).await
+    }
+
+    /// POST /vms/{vmId}/machine-profile (needs elevation): the applyMachineProfile job.
+    pub async fn apply_vm_machine_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        request: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "machine-profile")?,
+            request,
+        )
+        .await
+    }
+
+    /// POST /machine-profiles/{id}/vms (needs elevation): the createVm job.
+    pub async fn create_vm_from_profile(
         &self,
         host: &HostEntry,
         paired: &PairedHost,
         id: &str,
+        request: &serde_json::Value,
     ) -> Result<serde_json::Value, ClientError> {
-        self.get_json(host, paired, &setup_profile_path(id)?).await
+        let path = format!("{}/vms", profile_path(ProfileKind::Machine, id)?);
+        self.send_json(host, paired, reqwest::Method::POST, &path, request)
+            .await
     }
 
-    /// POST /setup-profiles, or PUT /setup-profiles/{id} (needs elevation).
-    pub async fn save_setup_profile(
+    /// POST /machine-profile-templates/{id}/vms: creates a VM from a template (needs elevation).
+    pub async fn create_vm_from_template(
         &self,
         host: &HostEntry,
         paired: &PairedHost,
+        id: &str,
+        request: &serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("{}/vms", template_path(id)?);
+        self.send_json(host, paired, reqwest::Method::POST, &path, request)
+            .await
+    }
+
+    /// GET /setup-profiles/{id} or /machine-profiles/{id}: the stored profile.
+    pub async fn get_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        kind: ProfileKind,
+        id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &profile_path(kind, id)?).await
+    }
+
+    /// POST to the kind's collection, or PUT /{id} (needs elevation).
+    pub async fn save_profile(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        kind: ProfileKind,
         id: Option<&str>,
         profile: &serde_json::Value,
     ) -> Result<serde_json::Value, ClientError> {
         let (method, path) = match id {
-            Some(id) => (reqwest::Method::PUT, setup_profile_path(id)?),
-            None => (reqwest::Method::POST, "/setup-profiles".to_string()),
+            Some(id) => (reqwest::Method::PUT, profile_path(kind, id)?),
+            None => (reqwest::Method::POST, kind.collection().to_string()),
         };
         self.send_json(host, paired, method, &path, profile).await
     }
 
-    /// DELETE /setup-profiles/{id} (needs elevation).
-    pub async fn delete_setup_profile(
+    /// DELETE /{id} (needs elevation).
+    pub async fn delete_profile(
         &self,
         host: &HostEntry,
         paired: &PairedHost,
+        kind: ProfileKind,
         id: &str,
     ) -> Result<(), ClientError> {
         self.send_paired(
             host,
             paired,
             reqwest::Method::DELETE,
-            &setup_profile_path(id)?,
+            &profile_path(kind, id)?,
         )
         .await
         .map(|_| ())
     }
 
-    /// GET /setup-profiles/{id}/yaml: the file as stored on the host.
-    pub async fn export_setup_profile(
+    /// GET /{id}/yaml: the file as stored on the host.
+    pub async fn export_profile(
         &self,
         host: &HostEntry,
         paired: &PairedHost,
+        kind: ProfileKind,
         id: &str,
     ) -> Result<String, ClientError> {
-        let path = format!("{}/yaml", setup_profile_path(id)?);
+        let path = format!("{}/yaml", profile_path(kind, id)?);
         let response = self
             .send_paired(host, paired, reqwest::Method::GET, &path)
             .await?;
@@ -973,19 +1039,21 @@ impl ApiClient {
             .map_err(|e| ClientError::InvalidResponse(e.without_url().to_string()))
     }
 
-    /// POST /setup-profiles/import with the YAML file as the body (needs elevation).
-    pub async fn import_setup_profile(
+    /// POST /import with the YAML file as the body (needs elevation).
+    pub async fn import_profile(
         &self,
         host: &HostEntry,
         paired: &PairedHost,
+        kind: ProfileKind,
         yaml: &str,
     ) -> Result<serde_json::Value, ClientError> {
+        let path = format!("{}/import", kind.collection());
         let response = self
             .send_paired_built(
                 host,
                 paired,
                 reqwest::Method::POST,
-                "/setup-profiles/import",
+                &path,
                 None,
                 |request| {
                     request
@@ -1744,7 +1812,7 @@ impl ApiClient {
         profile: &serde_json::Value,
     ) -> Result<serde_json::Value, ClientError> {
         let (method, path) = match profile_id {
-            Some(id) => (reqwest::Method::PUT, profile_path(id)?),
+            Some(id) => (reqwest::Method::PUT, unattend_profile_path(id)?),
             None => (reqwest::Method::POST, "/unattend-profiles".to_string()),
         };
         self.send_json(host, paired, method, &path, profile).await
@@ -1761,7 +1829,50 @@ impl ApiClient {
             host,
             paired,
             reqwest::Method::DELETE,
-            &profile_path(profile_id)?,
+            &unattend_profile_path(profile_id)?,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// PUT /profile-images/{name} with the image as the body (needs elevation).
+    pub async fn upload_profile_image(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+        content: Vec<u8>,
+    ) -> Result<serde_json::Value, ClientError> {
+        let path = profile_image_path(name)?;
+        let response = self
+            .send_paired_built(
+                host,
+                paired,
+                reqwest::Method::PUT,
+                &path,
+                Some(UPLOAD_TIMEOUT),
+                |request| {
+                    request
+                        .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+                        .body(content.clone())
+                },
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// DELETE /profile-images/{name} (needs elevation).
+    pub async fn delete_profile_image(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        name: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired(
+            host,
+            paired,
+            reqwest::Method::DELETE,
+            &profile_image_path(name)?,
         )
         .await
         .map(|_| ())
@@ -2113,6 +2224,9 @@ pub enum HostResource {
     RemoteDesktop,
     Tailscale,
     SetupProfiles,
+    MachineProfiles,
+    MachineProfileTemplates,
+    ProfileImages,
     SetupProfileCatalog,
     PackageCatalog,
     ExtensionCatalog,
@@ -2130,6 +2244,9 @@ impl HostResource {
             HostResource::RemoteDesktop => "/host/remote-desktop",
             HostResource::Tailscale => "/host/tailscale",
             HostResource::SetupProfiles => "/setup-profiles",
+            HostResource::MachineProfiles => "/machine-profiles",
+            HostResource::MachineProfileTemplates => "/machine-profile-templates",
+            HostResource::ProfileImages => "/profile-images",
             HostResource::SetupProfileCatalog => "/setup-profiles/catalog",
             HostResource::PackageCatalog => "/packages/catalog",
             HostResource::ExtensionCatalog => "/extensions/catalog",
@@ -2236,7 +2353,34 @@ fn suggested_log_file_name(content_disposition: Option<&str>) -> String {
     }
 }
 
-fn setup_profile_path(id: &str) -> Result<String, ClientError> {
+/// Which kind of profile a call addresses: setup profiles (API 1.12.0) or machine profiles (API 1.27.0).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProfileKind {
+    Setup,
+    Machine,
+}
+
+impl ProfileKind {
+    fn collection(self) -> &'static str {
+        match self {
+            ProfileKind::Setup => "/setup-profiles",
+            ProfileKind::Machine => "/machine-profiles",
+        }
+    }
+
+    /// The profile kind in words, for messages and file dialogs.
+    pub fn noun(self) -> &'static str {
+        match self {
+            ProfileKind::Setup => "setup profile",
+            ProfileKind::Machine => "machine profile",
+        }
+    }
+}
+
+/// The profile's URL path, after checking the ID has the host's form, so an ID cannot reach another route.
+/// /machine-profile-templates/{id}: template IDs are lowercase letters, digits, and hyphens.
+fn template_path(id: &str) -> Result<String, ClientError> {
     let valid = !id.is_empty()
         && id.len() <= 48
         && !id.starts_with('-')
@@ -2244,10 +2388,27 @@ fn setup_profile_path(id: &str) -> Result<String, ClientError> {
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
     if valid {
-        Ok(format!("/setup-profiles/{id}"))
+        Ok(format!("/machine-profile-templates/{id}"))
     } else {
         Err(ClientError::InvalidRequest(format!(
-            "\"{id}\" is not a setup profile ID"
+            "\"{id}\" is not a template ID"
+        )))
+    }
+}
+
+fn profile_path(kind: ProfileKind, id: &str) -> Result<String, ClientError> {
+    let valid = !id.is_empty()
+        && id.len() <= 48
+        && !id.starts_with('-')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if valid {
+        Ok(format!("{}/{id}", kind.collection()))
+    } else {
+        Err(ClientError::InvalidRequest(format!(
+            "\"{id}\" is not a {} ID",
+            kind.noun()
         )))
     }
 }
@@ -2265,7 +2426,7 @@ fn query_value(value: &str) -> String {
     encoded
 }
 
-fn profile_path(id: &str) -> Result<String, ClientError> {
+fn unattend_profile_path(id: &str) -> Result<String, ClientError> {
     let valid = !id.is_empty()
         && id.len() <= 64
         && id
@@ -2292,6 +2453,30 @@ fn iso_path(name: &str) -> Result<String, ClientError> {
         )));
     }
 
+    Ok(format!("/isos/{}", encode_segment(name)))
+}
+
+/// /profile-images/{name}: a plain JPEG, PNG, or BMP file name. The host checks the rest.
+fn profile_image_path(name: &str) -> Result<String, ClientError> {
+    let lower = name.to_ascii_lowercase();
+    let valid = [".jpg", ".jpeg", ".png", ".bmp"]
+        .iter()
+        .any(|extension| lower.len() > extension.len() && lower.ends_with(extension))
+        && !name.contains(['/', '\\', ':'])
+        && !name.contains("..")
+        && !name.starts_with('.')
+        && !name.chars().any(char::is_control);
+    if !valid {
+        return Err(ClientError::InvalidRequest(format!(
+            "\"{name}\" is not a JPEG, PNG, or BMP file name"
+        )));
+    }
+
+    Ok(format!("/profile-images/{}", encode_segment(name)))
+}
+
+/// A path segment with everything but unreserved characters percent-encoded.
+fn encode_segment(name: &str) -> String {
     let mut encoded = String::with_capacity(name.len());
     for byte in name.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
@@ -2300,7 +2485,7 @@ fn iso_path(name: &str) -> Result<String, ClientError> {
             encoded.push_str(&format!("%{byte:02X}"));
         }
     }
-    Ok(format!("/isos/{encoded}"))
+    encoded
 }
 
 /// The file as a stream of chunks that reports progress and stops with an error once cancelled.
@@ -3389,6 +3574,46 @@ mod server_tests {
         }
     }
 
+    #[test]
+    fn template_ids_are_checked() {
+        assert_eq!(
+            template_path("windows-burner").unwrap(),
+            "/machine-profile-templates/windows-burner"
+        );
+        for id in ["", "-x", "../x", "Windows", "a/b"] {
+            assert!(
+                matches!(template_path(id), Err(ClientError::InvalidRequest(_))),
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
+    fn profile_image_names_are_encoded_and_other_names_are_refused() {
+        assert_eq!(
+            profile_image_path("Harbor night.JPG").unwrap(),
+            "/profile-images/Harbor%20night.JPG"
+        );
+        for name in [
+            "../x.png",
+            "a\\b.png",
+            "C:x.png",
+            ".hidden.png",
+            "a..b.png",
+            "notes.txt",
+            ".jpeg",
+            "a\n.bmp",
+        ] {
+            assert!(
+                matches!(
+                    profile_image_path(name),
+                    Err(ClientError::InvalidRequest(_))
+                ),
+                "{name}"
+            );
+        }
+    }
+
     fn iso_file(bytes: usize) -> std::path::PathBuf {
         let path =
             std::env::temp_dir().join(format!("hh-upload-{}.iso", hex::encode(rand_bytes())));
@@ -3573,7 +3798,12 @@ mod server_tests {
         let yaml = "schemaVersion: 1\nname: Imported\ninstall:\n  - git   # Git\n";
 
         let saved = api()
-            .import_setup_profile(&target, &paired(server.certificate_hash()), yaml)
+            .import_profile(
+                &target,
+                &paired(server.certificate_hash()),
+                ProfileKind::Setup,
+                yaml,
+            )
             .await
             .unwrap();
 
@@ -3618,13 +3848,15 @@ mod server_tests {
     }
 
     #[tokio::test]
-    async fn setup_profile_ids_are_checked_before_any_request() {
+    async fn profile_ids_are_checked_before_any_request() {
         let server = TestServer::start("127.0.0.1:0", |_| Reply::json(200, "{}"));
         let target = host(&["127.0.0.1"], server.address.port());
         let paired = paired(server.certificate_hash());
 
         for id in ["../users", "Dev", "", "-x", "a/b"] {
-            let result = api().get_setup_profile(&target, &paired, id).await;
+            let result = api()
+                .get_profile(&target, &paired, ProfileKind::Setup, id)
+                .await;
             assert!(
                 matches!(result, Err(ClientError::InvalidRequest(_))),
                 "{id}"
@@ -3632,12 +3864,121 @@ mod server_tests {
         }
         assert!(server.requests().is_empty());
         api()
-            .get_setup_profile(&target, &paired, "dev-workstation-2")
+            .get_profile(&target, &paired, ProfileKind::Setup, "dev-workstation-2")
             .await
             .unwrap();
+        api()
+            .get_profile(&target, &paired, ProfileKind::Machine, "gaming-rig")
+            .await
+            .unwrap();
+        let requests = server.requests();
+        assert_eq!(requests[0].path, "/api/v1/setup-profiles/dev-workstation-2");
+        assert_eq!(requests[1].path, "/api/v1/machine-profiles/gaming-rig");
+    }
+
+    #[tokio::test]
+    async fn a_machine_profile_is_previewed_and_applied_on_the_vm() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(200, "{}"));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let paired = paired(server.certificate_hash());
+        let vm = "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d";
+
+        let refused = api()
+            .preview_vm_machine_profile(&target, &paired, vm, "../x")
+            .await;
+        api()
+            .preview_vm_machine_profile(&target, &paired, vm, "gaming-rig")
+            .await
+            .unwrap();
+        api()
+            .apply_vm_machine_profile(
+                &target,
+                &paired,
+                vm,
+                &serde_json::json!({"profileId": "gaming-rig", "parts": ["compute"]}),
+            )
+            .await
+            .unwrap();
+
+        assert!(matches!(refused, Err(ClientError::InvalidRequest(_))));
+        let requests = server.requests();
         assert_eq!(
-            server.requests()[0].path,
-            "/api/v1/setup-profiles/dev-workstation-2"
+            requests[0].path,
+            format!("/api/v1/vms/{vm}/machine-profile-preview?profileId=gaming-rig")
+        );
+        assert_eq!(
+            (requests[1].method.as_str(), requests[1].path.as_str()),
+            ("POST", format!("/api/v1/vms/{vm}/machine-profile").as_str())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_vm_is_created_from_a_machine_profile_by_its_checked_id() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(202, "{}"));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let paired = paired(server.certificate_hash());
+        let request = serde_json::json!({"name": "Rig", "isoName": "win11.iso"});
+
+        let refused = api()
+            .create_vm_from_profile(&target, &paired, "../vms", &request)
+            .await;
+        api()
+            .create_vm_from_profile(&target, &paired, "gaming-rig", &request)
+            .await
+            .unwrap();
+
+        assert!(matches!(refused, Err(ClientError::InvalidRequest(_))));
+        let requests = server.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            (requests[0].method.as_str(), requests[0].path.as_str()),
+            ("POST", "/api/v1/machine-profiles/gaming-rig/vms")
+        );
+    }
+
+    #[tokio::test]
+    async fn machine_profiles_save_and_import_under_their_own_path() {
+        let server = TestServer::start("127.0.0.1:0", |_| Reply::json(201, "{}"));
+        let target = host(&["127.0.0.1"], server.address.port());
+        let paired = paired(server.certificate_hash());
+
+        api()
+            .save_profile(
+                &target,
+                &paired,
+                ProfileKind::Machine,
+                None,
+                &serde_json::json!({"name": "Rig", "os": "windows"}),
+            )
+            .await
+            .unwrap();
+        api()
+            .save_profile(
+                &target,
+                &paired,
+                ProfileKind::Machine,
+                Some("rig"),
+                &serde_json::json!({"name": "Rig", "os": "windows"}),
+            )
+            .await
+            .unwrap();
+        api()
+            .import_profile(&target, &paired, ProfileKind::Machine, "schemaVersion: 1\n")
+            .await
+            .unwrap();
+
+        let requests = server.requests();
+        let seen: Vec<(&str, &str)> = requests
+            .iter()
+            .map(|request| (request.method.as_str(), request.path.as_str()))
+            .collect();
+        assert_eq!(
+            seen,
+            [
+                ("POST", "/api/v1/machine-profiles"),
+                ("PUT", "/api/v1/machine-profiles/rig"),
+                ("POST", "/api/v1/machine-profiles/import"),
+            ]
         );
     }
 

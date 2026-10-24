@@ -184,6 +184,12 @@ public sealed partial class SetupProfileStore
         }
     }
 
+    /// <summary>The Users with a profile folder, for converting their profiles to machine profiles.</summary>
+    public IReadOnlyList<Guid> Users() =>
+        Directory.Exists(_root)
+            ? Directory.EnumerateDirectories(_root).Select(Path.GetFileName).Select(name => Guid.TryParse(name, out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty).ToList()
+            : [];
+
     private string Folder(Guid userId) => Path.Combine(_root, userId.ToString("D"));
 
     private string PathOf(Guid userId, string id)

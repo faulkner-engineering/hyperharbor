@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/faulkner-engineering/hyperharbor/main/schemas/machine-profile.v1.schema.json",
+  "title": "HyperHarbor machine profile",
+  "description": "A whole VM: account, display, firmware, compute, GPU share, network, backups, and software. Every section is optional; docs/machine-profiles.md describes how each applies.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "os"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "description": { "type": "string", "maxLength": 500 },
+    "os": { "enum": ["windows", "linux"] },
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The unattended install settings.",
+      "properties": {
+        "adminAccountName": { "type": "string", "description": "The local administrator Setup creates; it gets a one-time password." },
+        "timeZone": { "type": ["string", "null"], "description": "A Windows time zone ID, or an IANA ID for Linux. Null: the host's." },
+        "locale": { "type": "string", "examples": ["en-US"] },
+        "computerName": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9-]{1,15}$" },
+        "windows": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["defaultEdition"],
+          "properties": {
+            "defaultEdition": { "type": "string", "examples": ["Windows 11 Pro"] },
+            "bypassHardwareChecks": { "type": "boolean" },
+            "disableTelemetry": { "type": "boolean" },
+            "disableAdvertisingId": { "type": "boolean" },
+            "disableLocation": { "type": "boolean" },
+            "disableConsumerFeatures": { "type": "boolean" }
+          }
+        },
+        "linux": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "sshAuthorizedKeys": { "type": "array", "maxItems": 10, "items": { "type": "string" } },
+            "packages": { "type": "array", "maxItems": 50, "items": { "type": "string" } },
+            "installDesktop": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "guest": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Settings in the User's account in the VM. Remote Desktop sets resolution and scaling from the client.",
+          "properties": {
+            "theme": { "enum": ["dark", "light", null] },
+            "accentColor": { "$ref": "#/$defs/colorOrNull" },
+            "wallpaper": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "color": { "$ref": "#/$defs/colorOrNull" },
+                "image": { "type": ["string", "null"], "pattern": "^[^\\\\/:*?\"<>|]{1,100}\\.([Jj][Pp][Ee]?[Gg]|[Pp][Nn][Gg]|[Bb][Mm][Pp])$" }
+              }
+            }
+          }
+        },
+        "connection": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Remote Desktop defaults; a device's own choice wins.",
+          "properties": {
+            "monitors": { "enum": ["one", "all", null] },
+            "window": { "enum": ["fullScreen", "windowed", null] },
+            "redirect": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "clipboard": { "type": ["boolean", "null"] },
+                "printers": { "type": ["boolean", "null"] },
+                "microphone": { "type": ["boolean", "null"] },
+                "camera": { "type": ["boolean", "null"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "firmware": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tpm": { "type": ["boolean", "null"] },
+        "secureBoot": { "type": ["boolean", "null"] }
+      }
+    },
+    "compute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "processors": { "type": ["integer", "null"], "minimum": 1, "maximum": 240 },
+        "memory": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["startupMb"],
+          "properties": {
+            "startupMb": { "type": "integer", "minimum": 512 },
+            "maximumMb": { "type": ["integer", "null"] },
+            "dynamic": { "type": "boolean" }
+          }
+        },
+        "nestedVirtualization": { "type": ["boolean", "null"] },
+        "diskSizeGb": { "type": ["integer", "null"], "minimum": 1, "maximum": 65536 }
+      }
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "description": "Performance mode; Windows only, with fixed memory.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "adapter": { "type": ["string", "null"] },
+        "share": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "vramPercent": { "$ref": "#/$defs/percent" },
+            "encodePercent": { "$ref": "#/$defs/percent" },
+            "decodePercent": { "$ref": "#/$defs/percent" },
+            "computePercent": { "$ref": "#/$defs/percent" }
+          }
+        },
+        "hardwareEncoding": { "type": ["boolean", "null"] }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "switch": { "type": ["string", "null"], "description": "A virtual switch name. Null: the host's default switch." },
+        "macAddressSpoofing": { "type": ["boolean", "null"] }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "description": "The schedule belongs to the named target.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "target": { "type": ["string", "null"] },
+        "triggers": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "schedule": { "type": "boolean" },
+            "onShutdown": { "type": "boolean" },
+            "debounceMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 }
+          }
+        },
+        "retention": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "daily": { "type": "integer", "minimum": 0 },
+            "weekly": { "type": "integer", "minimum": 0 },
+            "monthly": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "conditions": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "noActiveSession": { "type": "boolean" },
+            "notInGame": { "type": "boolean" },
+            "window": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "required": ["start", "end"],
+              "properties": {
+                "start": { "$ref": "#/$defs/timeOfDay" },
+                "end": { "$ref": "#/$defs/timeOfDay" }
+              }
+            }
+          }
+        },
+        "gpuMode": { "enum": ["requireOff", "allowLive", null] }
+      }
+    },
+    "install": { "$ref": "profile.v1.schema.json#/properties/install" },
+    "remove": { "$ref": "profile.v1.schema.json#/properties/remove" },
+    "tweaks": { "$ref": "profile.v1.schema.json#/properties/tweaks" },
+    "browser": { "$ref": "profile.v1.schema.json#/properties/browser" }
+  },
+  "$defs": {
+    "colorOrNull": { "type": ["string", "null"], "pattern": "^#[0-9A-Fa-f]{6}$" },
+    "percent": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "timeOfDay": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+  }
+}

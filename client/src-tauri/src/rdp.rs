@@ -33,6 +33,70 @@ pub enum GuestOs {
     Linux,
 }
 
+/// What a machine profile shares in its sessions; None leaves a choice to mstsc. Mirrors MachineRedirect.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Redirects {
+    pub clipboard: Option<bool>,
+    pub printers: Option<bool>,
+    pub microphone: Option<bool>,
+    pub camera: Option<bool>,
+}
+
+/// The Remote Desktop defaults of the VM's machine profile (MachineConnection). A device's own
+/// monitor choice wins over `monitors`.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionDefaults {
+    /// "one" or "all".
+    pub monitors: Option<String>,
+    /// "fullScreen" or "windowed".
+    pub window: Option<String>,
+    pub redirect: Option<Redirects>,
+}
+
+impl ConnectionDefaults {
+    /// The .rdp lines for the window and what is shared; the camera is handled by the caller.
+    fn rdp_lines(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        match self.window.as_deref() {
+            Some("fullScreen") => lines.push("screen mode id:i:2".to_string()),
+            Some("windowed") => lines.push("screen mode id:i:1".to_string()),
+            _ => {}
+        }
+        if let Some(redirect) = &self.redirect {
+            if let Some(clipboard) = redirect.clipboard {
+                lines.push(format!("redirectclipboard:i:{}", u8::from(clipboard)));
+            }
+            if let Some(printers) = redirect.printers {
+                lines.push(format!("redirectprinters:i:{}", u8::from(printers)));
+            }
+        }
+        lines
+    }
+
+    /// False when the profile turns the microphone off; mstsc captures it otherwise.
+    fn microphone(&self) -> bool {
+        self.redirect
+            .as_ref()
+            .and_then(|redirect| redirect.microphone)
+            != Some(false)
+    }
+
+    /// False when the profile turns the camera off.
+    pub fn camera(&self) -> bool {
+        self.redirect.as_ref().and_then(|redirect| redirect.camera) != Some(false)
+    }
+
+    /// The layout for a VM without a monitor choice on this device.
+    pub fn monitor_layout(&self) -> MonitorLayout {
+        match self.monitors.as_deref() {
+            Some("all") => MonitorLayout::All,
+            _ => MonitorLayout::Single,
+        }
+    }
+}
+
 /// Mirrors the VmConnection schema. Debug never prints the password.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +109,8 @@ pub struct VmConnection {
     pub guest_os: GuestOs,
     #[serde(default)]
     pub performance_mode: bool,
+    #[serde(default)]
+    pub defaults: Option<ConnectionDefaults>,
 }
 
 impl std::fmt::Debug for VmConnection {
@@ -111,6 +177,9 @@ impl Drop for VmConnection {
 ///
 /// `camera` chooses what camera redirection asks for: every physical camera, or one device by its
 /// symbolic link (a session's own virtual camera). Linux guests (xrdp) get none either way.
+///
+/// `defaults` are the machine profile's: window mode, clipboard, printers, and microphone.
+#[allow(clippy::too_many_arguments)]
 pub fn rdp_file(
     address: &str,
     port: u16,
@@ -119,7 +188,9 @@ pub fn rdp_file(
     performance_mode: bool,
     monitors: &MonitorLayout,
     camera: &CameraRedirect,
+    defaults: Option<&ConnectionDefaults>,
 ) -> String {
+    let microphone = defaults.is_none_or(ConnectionDefaults::microphone);
     let linux = guest_os == GuestOs::Linux;
     let mut lines = vec![
         format!("full address:s:{address}:{port}"),
@@ -129,7 +200,7 @@ pub fn rdp_file(
         format!("enablecredsspsupport:i:{}", if linux { 0 } else { 1 }),
         "authentication level:i:2".to_string(),
         "audiomode:i:0".to_string(),
-        "audiocapturemode:i:1".to_string(),
+        format!("audiocapturemode:i:{}", u8::from(microphone)),
         // The guest resolution follows the window as it is resized, maximized, or moved to another
         // monitor, rather than the session being scaled. Servers without support (xrdp before 0.10)
         // keep their first resolution.
@@ -146,6 +217,9 @@ pub fn rdp_file(
         lines.push("bandwidthautodetect:i:0".to_string());
     }
     lines.extend(monitors.rdp_lines());
+    if let Some(defaults) = defaults {
+        lines.extend(defaults.rdp_lines());
+    }
     lines.join("\r\n") + "\r\n"
 }
 
@@ -273,6 +347,7 @@ pub fn launch(
                 connection.performance_mode,
                 monitors,
                 camera,
+                connection.defaults.as_ref(),
             ),
             window_title_key: connection.address.clone(),
         },
@@ -552,6 +627,7 @@ mod tests {
             false,
             &MonitorLayout::Single,
             &CameraRedirect::AllPhysical,
+            None,
         );
         let lines: Vec<&str> = file.lines().collect();
 
@@ -584,6 +660,7 @@ mod tests {
             false,
             &MonitorLayout::Selected(vec![2, 0]),
             &CameraRedirect::AllPhysical,
+            None,
         );
         let lines: Vec<&str> = file.lines().collect();
 
@@ -648,6 +725,7 @@ mod tests {
             true,
             &MonitorLayout::Single,
             &CameraRedirect::AllPhysical,
+            None,
         );
         let lines: Vec<&str> = file.lines().collect();
 
@@ -670,6 +748,7 @@ mod tests {
             false,
             &MonitorLayout::Single,
             &CameraRedirect::AllPhysical,
+            None,
         );
         let lines: Vec<&str> = file.lines().collect();
 
@@ -692,6 +771,7 @@ mod tests {
             false,
             &MonitorLayout::Single,
             camera,
+            None,
         )
     }
 
@@ -793,7 +873,69 @@ mod tests {
             port: 3389,
             guest_os: GuestOs::Windows,
             performance_mode: false,
+            defaults: None,
         }
+    }
+
+    #[test]
+    fn a_profiles_defaults_set_the_window_and_what_is_shared() {
+        let defaults: ConnectionDefaults = serde_json::from_str(
+            r#"{"monitors":"all","window":"windowed","redirect":{"clipboard":false,"printers":true,"microphone":false,"camera":false}}"#,
+        )
+        .unwrap();
+        let file = rdp_file(
+            "192.168.0.50",
+            3389,
+            "hh-owner",
+            GuestOs::Windows,
+            false,
+            &defaults.monitor_layout(),
+            &CameraRedirect::None,
+            Some(&defaults),
+        );
+        let lines: Vec<&str> = file.lines().collect();
+
+        for expected in [
+            "screen mode id:i:1",
+            "redirectclipboard:i:0",
+            "redirectprinters:i:1",
+            "audiocapturemode:i:0",
+            "use multimon:i:1",
+        ] {
+            assert!(lines.contains(&expected), "{expected}");
+        }
+        assert!(!defaults.camera());
+        assert!(!file.contains("camerastoredirect"));
+    }
+
+    #[test]
+    fn without_defaults_the_file_is_unchanged_and_mstsc_decides() {
+        let empty = ConnectionDefaults::default();
+        let plain = rdp_file(
+            "192.168.0.50",
+            3389,
+            "hh-owner",
+            GuestOs::Windows,
+            false,
+            &MonitorLayout::Single,
+            &CameraRedirect::None,
+            None,
+        );
+        let with_empty = rdp_file(
+            "192.168.0.50",
+            3389,
+            "hh-owner",
+            GuestOs::Windows,
+            false,
+            &empty.monitor_layout(),
+            &CameraRedirect::None,
+            Some(&empty),
+        );
+
+        assert_eq!(plain, with_empty);
+        assert!(plain.contains("audiocapturemode:i:1"));
+        assert!(!plain.contains("screen mode id") && !plain.contains("redirectclipboard"));
+        assert!(empty.camera());
     }
 
     #[test]
@@ -869,6 +1011,7 @@ mod tests {
             port: 3389,
             guest_os: GuestOs::Windows,
             performance_mode: false,
+            defaults: None,
         };
         assert!(!format!("{connection:?}").contains("Secret-Pass1!"));
     }

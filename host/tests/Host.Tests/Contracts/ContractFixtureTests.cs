@@ -41,6 +41,24 @@ public class ContractFixtureTests
         VmId, VmState.Running, 4, 4096, 4096, false, true, true, 1,
         [ComputeSetting.ProcessorCount, ComputeSetting.StartupMemoryMb, ComputeSetting.MaximumMemoryMb, ComputeSetting.DynamicMemory, ComputeSetting.NestedVirtualization]);
 
+    private static readonly MachineProfile MachineProfileSample = new(
+        "Gaming rig",
+        InstallOs.Windows,
+        "Steam and a GPU share",
+        new MachineAccount("hhadmin", null, "en-US", "GAMING-RIG", new WindowsInstallSettings("Windows 11 Pro"), null),
+        new MachineDisplay(
+            new MachineGuestDisplay(GuestTheme.Dark, "#E39B2E", new MachineWallpaper("#0B0D10", null)),
+            new MachineConnection(ConnectionMonitors.All, ConnectionWindow.FullScreen, new MachineRedirect(true, false, true, true))),
+        new MachineFirmware(true, true),
+        new MachineCompute(8, new MachineMemory(16384, null, false), false, 256),
+        new MachineGpu(true, null, new MachineGpuShare(60, 50, 50, 60), false),
+        new MachineNetwork("Default Switch", false),
+        new MachineBackup(true, "NAS", new BackupTriggers(true, true, 10), null, null, BackupGpuMode.RequireOff),
+        [new ProfileItem("Valve.Steam", "Steam")],
+        null,
+        [new ProfileTweak("appearance.darkMode", "Use dark mode")],
+        null);
+
     private static readonly SetupProfile SetupProfileSample = new(
         "Dev workstation",
         "Tools for development VMs",
@@ -236,15 +254,19 @@ public class ContractFixtureTests
         ["SetupProfile"] = SetupProfileSample,
         ["AppxBaselineInfo"] = AppxBaselineSample,
         ["PackageSearchResult"] = new PackageSearchResult("Git.Git", "Git", "2.55.0.5", "winget"),
-        ["TweakCatalogItem"] = new TweakCatalogItem("explorer.showFileExtensions", "Show file name extensions", "explorer", null),
+        ["TweakCatalogItem"] = new TweakCatalogItem("explorer.showFileExtensions", "Show file name extensions", "explorer", null,
+            [new TweakCatalogValue(@"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "HideFileExt", RegistryValueType.Dword, "0", "1")]),
+        ["TweakCatalogValue"] = new TweakCatalogValue(@"HKCU\Software\Policies\Microsoft\Dsh", "AllowNewsAndInterests", RegistryValueType.Dword, "0", null),
         ["BrowserCatalogItem"] = new BrowserCatalogItem("brave", "Brave", "Brave.Brave", "brave"),
 
         // Nulls on purpose: description and values are required but nullable.
         ["BrowserPolicyItem"] = new BrowserPolicyItem("passwordManager", "Offer to save passwords", "boolean", ["chrome", "edge", "brave"], null, null),
         ["SetupProfileCatalog"] = new SetupProfileCatalog(
-            [new TweakCatalogItem("taskbar.disableWidgets", "Turn off Widgets", "taskbar", "Uses the policy.")],
+            [new TweakCatalogItem("taskbar.disableWidgets", "Turn off Widgets", "taskbar", "Uses the policy.", [])],
             [new BrowserCatalogItem("edge", "Microsoft Edge", "Microsoft.Edge", "edge")],
-            [new BrowserPolicyItem("restoreOnStartup", "On startup", "integer", ["chrome"], "What opens at startup.", new Dictionary<string, string> { ["5"] = "Open the New Tab page" })]),
+            [new BrowserPolicyItem("restoreOnStartup", "On startup", "integer", ["chrome"], "What opens at startup.", new Dictionary<string, string> { ["5"] = "Open the New Tab page" })],
+            [new AppxCatalogItem("Microsoft.BingNews", "News", "Microsoft", AppxRating.Safe, null)]),
+        ["AppxCatalogItem"] = new AppxCatalogItem("Microsoft.WindowsCalculator", "Calculator", "Microsoft", AppxRating.Keep, "Most people use it."),
 
         // Null on purpose: note is required but nullable.
         ["DraftItem"] = new DraftItem("Git.Git", "Git", true, null),
@@ -261,7 +283,7 @@ public class ContractFixtureTests
             [new DraftBrowser("Brave.Brave", "Brave", true, [])],
             [],
             ["There is no clean Appx baseline for Windows 10.0.26100.2033 Professional."]),
-        ["PackageCatalogItem"] = new PackageCatalogItem("vscode", "Microsoft.VisualStudioCode", "Visual Studio Code", "development", true),
+        ["PackageCatalogItem"] = new PackageCatalogItem("vscode", "Microsoft.VisualStudioCode", "Visual Studio Code", "Code editor.", "development", true),
 
         // Null on purpose: edgeId is required but nullable.
         ["ExtensionCatalogItem"] = new ExtensionCatalogItem("eimadpbcbfnmbkopoojfekhnkhdbieeh", "Dark Reader", "accessibility", "Dark theme for every website.", null),
@@ -285,6 +307,43 @@ public class ContractFixtureTests
         ["RegistryTweak"] = SetupProfileSample.Tweaks![1].Registry!,
         ["ProfileBrowser"] = SetupProfileSample.Browser!,
         ["StoredSetupProfile"] = new StoredSetupProfile("dev-workstation", Time, SetupProfileSample),
+        ["MachineProfile"] = MachineProfileSample,
+
+        // Nulls on purpose: current is required but nullable.
+        ["MachineProfileChange"] = new MachineProfileChange(MachinePart.Backup, "Backup policy", null, "To NAS", false, false),
+        ["MachineProfileNote"] = new MachineProfileNote("account", "Account settings apply when creating a VM."),
+        ["MachineProfilePreview"] = new MachineProfilePreview(
+            Guid.Parse("7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d"),
+            "Dev Box",
+            VmState.Running,
+            "gaming-rig",
+            "Gaming rig",
+            [new MachineProfileChange(MachinePart.Compute, "Virtual processors", "2", "4", true, false)],
+            [new MachineProfileNote("firmware", "Secure Boot is left as it is on an existing VM.")],
+            [new ValidationIssue("backup.target", "This host has no backup target named \"Offsite\".")]),
+        ["ApplyMachineProfileRequest"] = new ApplyMachineProfileRequest("gaming-rig", [MachinePart.Compute, MachinePart.Software], true),
+
+        // Null on purpose: windowsEdition is nullable.
+        ["CreateVmFromProfileRequest"] = new CreateVmFromProfileRequest("Rig", "win11.iso", null, true, new MachineCompute(6, DiskSizeGb: 200), "LAN"),
+        ["MachineProfileTemplate"] = new MachineProfileTemplate("windows-workstation", "Windows Workstation", "Windows 11 Pro.", new MachineProfile("Windows Workstation", InstallOs.Windows, Account: new MachineAccount("hhadmin", "UTC", "en-US"))),
+        ["StoredMachineProfile"] = new StoredMachineProfile("gaming-rig", Time, MachineProfileSample),
+        ["MachineAccount"] = MachineProfileSample.Account!,
+        ["MachineDisplay"] = MachineProfileSample.Display!,
+        ["MachineGuestDisplay"] = MachineProfileSample.Display!.Guest!,
+        ["MachineWallpaper"] = new MachineWallpaper(null, "harbor.jpg"),
+        ["MachineConnection"] = MachineProfileSample.Display!.Connection!,
+        ["MachineRedirect"] = new MachineRedirect(Clipboard: true),
+        ["MachineFirmware"] = MachineProfileSample.Firmware!,
+        ["MachineCompute"] = MachineProfileSample.Compute!,
+        ["MachineMemory"] = new MachineMemory(8192, 16384, true),
+        ["MachineGpu"] = MachineProfileSample.Gpu!,
+        ["MachineGpuShare"] = new MachineGpuShare(),
+        ["MachineNetwork"] = MachineProfileSample.Network!,
+        ["MachineBackup"] = MachineProfileSample.Backup!,
+
+        // Nulls on purpose: description, processors, memoryMb, tpm, and error are required but nullable.
+        ["ProfileImage"] = new ProfileImage("dunes.jpg", 2_400_000),
+        ["MachineProfileSummary"] = new MachineProfileSummary("gaming-rig", "Gaming rig", null, InstallOs.Windows, null, null, true, null, false, 3, Time, null),
 
         // Nulls on purpose: description, browser, and error are required but nullable.
         ["SetupProfileSummary"] = new SetupProfileSummary("dev-workstation", "Dev workstation", null, 4, 2, 2, 1, null, Time, null),

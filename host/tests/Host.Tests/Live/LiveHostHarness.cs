@@ -138,7 +138,10 @@ public sealed class LiveHostHarness : IAsyncDisposable
         return new LiveHostHarness(process, certificate, data, port, log);
     }
 
-    /// <summary>Sends a request with an elevation token (asked for once, again when it expires).</summary>
+    /// <summary>
+    /// Sends a request with an elevation token (asked for once, again when it expires). A byte array body is sent as
+    /// application/octet-stream, anything else as JSON.
+    /// </summary>
     public async Task<HttpResponseMessage> SendElevatedAsync(HttpMethod method, string path, object? body = null)
     {
         for (var attempt = 0; attempt < 2; attempt++)
@@ -150,7 +153,15 @@ public sealed class LiveHostHarness : IAsyncDisposable
                 _token = (string)(await elevate.Content.ReadFromJsonAsync<JsonObject>())!["token"]!;
             }
 
-            using var request = new HttpRequestMessage(method, path) { Content = body is null ? null : JsonContent.Create(body, options: ContractJson.Options) };
+            using var request = new HttpRequestMessage(method, path)
+            {
+                Content = body switch
+                {
+                    null => null,
+                    byte[] bytes => new ByteArrayContent(bytes) { Headers = { ContentType = new("application/octet-stream") } },
+                    _ => JsonContent.Create(body, options: ContractJson.Options),
+                },
+            };
             request.Headers.Add(ContractInfo.ElevationHeader, _token);
             var response = await Client.SendAsync(request);
             if (response.StatusCode != HttpStatusCode.Forbidden)

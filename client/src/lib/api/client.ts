@@ -42,6 +42,16 @@ export type RegistryTweak = components["schemas"]["RegistryTweak"];
 export type ProfileBrowser = components["schemas"]["ProfileBrowser"];
 export type SetupProfileSummary = components["schemas"]["SetupProfileSummary"];
 export type StoredSetupProfile = components["schemas"]["StoredSetupProfile"];
+export type MachineProfile = components["schemas"]["MachineProfile"];
+export type MachineProfileSummary = components["schemas"]["MachineProfileSummary"];
+export type ProfileImage = components["schemas"]["ProfileImage"];
+export type MachineProfileTemplate = components["schemas"]["MachineProfileTemplate"];
+export type StoredMachineProfile = components["schemas"]["StoredMachineProfile"];
+export type CreateVmFromProfileRequest = components["schemas"]["CreateVmFromProfileRequest"];
+export type MachinePart = components["schemas"]["MachinePart"];
+export type MachineProfileChange = components["schemas"]["MachineProfileChange"];
+export type MachineProfilePreview = components["schemas"]["MachineProfilePreview"];
+export type ApplyMachineProfileRequest = components["schemas"]["ApplyMachineProfileRequest"];
 export type SetupProfileCatalog = components["schemas"]["SetupProfileCatalog"];
 export type VmAppxInventory = components["schemas"]["VmAppxInventory"];
 export type AppxPackage = components["schemas"]["AppxPackage"];
@@ -49,6 +59,9 @@ export type AppxBaselineInfo = components["schemas"]["AppxBaselineInfo"];
 export type PackageSearchResult = components["schemas"]["PackageSearchResult"];
 export type PackageCatalogItem = components["schemas"]["PackageCatalogItem"];
 export type ExtensionCatalogItem = components["schemas"]["ExtensionCatalogItem"];
+export type AppxCatalogItem = components["schemas"]["AppxCatalogItem"];
+export type TweakCatalogItem = components["schemas"]["TweakCatalogItem"];
+export type TweakCatalogValue = components["schemas"]["TweakCatalogValue"];
 export type ResolvedExtension = components["schemas"]["ResolvedExtension"];
 export type ProfileDraft = components["schemas"]["ProfileDraft"];
 export type DraftItem = components["schemas"]["DraftItem"];
@@ -620,22 +633,89 @@ export const listSetupProfiles = (key: string) =>
   invoke<SetupProfileSummary[]>("get_host_resource", { key, resource: "setupProfiles" });
 
 export const getSetupProfile = (key: string, profileId: string) =>
-  invoke<StoredSetupProfile>("get_setup_profile", { key, profileId });
+  invoke<StoredSetupProfile>("get_profile", { key, kind: "setup", profileId });
 
 /** Creates a profile (null ID) or replaces one. Needs elevation: run it inside withElevation. */
 export const saveSetupProfile = (key: string, profileId: string | null, profile: SetupProfile) =>
-  invoke<StoredSetupProfile>("save_setup_profile", { key, profileId, profile });
+  invoke<StoredSetupProfile>("save_profile", { key, kind: "setup", profileId, profile });
 
 /** Needs elevation: run it inside withElevation. */
 export const deleteSetupProfile = (key: string, profileId: string) =>
-  invoke<void>("delete_setup_profile", { key, profileId });
+  invoke<void>("delete_profile", { key, kind: "setup", profileId });
 
 /** Saves the profile's YAML file where the user chooses; null when cancelled. */
 export const exportSetupProfile = (key: string, profileId: string) =>
-  invoke<string | null>("export_setup_profile", { key, profileId });
+  invoke<string | null>("export_profile", { key, kind: "setup", profileId });
 
 /** Picks a YAML file and saves it as a new profile; null when cancelled. Needs elevation. */
-export const importSetupProfile = (key: string) => invoke<StoredSetupProfile | null>("import_setup_profile", { key });
+export const importSetupProfile = (key: string) => invoke<StoredSetupProfile | null>("import_profile", { key, kind: "setup" });
+
+// Machine profiles (API 1.27.0): a whole VM in one YAML file on the host (docs/machine-profiles.md).
+
+/** The API version that added machine profiles. */
+export const MachineProfilesApiVersion = "1.27.0";
+
+export const listMachineProfiles = (key: string) =>
+  invoke<MachineProfileSummary[]>("get_host_resource", { key, resource: "machineProfiles" });
+
+export const getMachineProfile = (key: string, profileId: string) =>
+  invoke<StoredMachineProfile>("get_profile", { key, kind: "machine", profileId });
+
+/** Creates a profile (null ID) or replaces one. Needs elevation: run it inside withElevation. */
+export const saveMachineProfile = (key: string, profileId: string | null, profile: MachineProfile) =>
+  invoke<StoredMachineProfile>("save_profile", { key, kind: "machine", profileId, profile });
+
+/** Needs elevation: run it inside withElevation. */
+export const deleteMachineProfile = (key: string, profileId: string) =>
+  invoke<void>("delete_profile", { key, kind: "machine", profileId });
+
+/** Saves the profile's YAML file where the user chooses; null when cancelled. */
+export const exportMachineProfile = (key: string, profileId: string) =>
+  invoke<string | null>("export_profile", { key, kind: "machine", profileId });
+
+/** Picks a YAML file and saves it as a new machine profile; null when cancelled. Needs elevation. */
+export const importMachineProfile = (key: string) => invoke<StoredMachineProfile | null>("import_profile", { key, kind: "machine" });
+
+/** The API version that creates VMs from machine profiles. */
+export const MachineProfileVmsApiVersion = "1.28.0";
+
+/** Creates a VM from a machine profile; returns the createVm job. Needs elevation: run it inside withElevation. */
+export const createVmFromMachineProfile = (key: string, profileId: string, request: CreateVmFromProfileRequest) =>
+  invoke<VmJob>("create_vm_from_profile", { key, profileId, request });
+
+/** The API version that applies machine profiles to existing VMs. */
+export const MachineProfileApplyApiVersion = "1.29.0";
+
+export const previewVmMachineProfile = (key: string, vmId: string, profileId: string) =>
+  invoke<MachineProfilePreview>("preview_vm_machine_profile", { key, vmId, profileId });
+
+/** Applies the chosen parts; returns the applyMachineProfile job. Needs elevation: run it inside withElevation. */
+export const applyVmMachineProfile = (key: string, vmId: string, request: ApplyMachineProfileRequest) =>
+  invoke<VmJob>("apply_vm_machine_profile", { key, vmId, request });
+
+/**
+ * The API version that makes machine profiles the one place for profiles: the host converted the older install and
+ * setup profiles, serves templates, and takes hardware for one VM when creating from a profile.
+ */
+export const ProfilesConsolidatedApiVersion = "1.32.0";
+
+export const listMachineProfileTemplates = (key: string) =>
+  invoke<MachineProfileTemplate[]>("get_host_resource", { key, resource: "machineProfileTemplates" });
+
+/** Creates a VM from a template; returns the createVm job. Needs elevation: run it inside withElevation. */
+export const createVmFromMachineProfileTemplate = (key: string, templateId: string, request: CreateVmFromProfileRequest) =>
+  invoke<VmJob>("create_vm_from_template", { key, templateId, request });
+
+/** The API version that keeps wallpaper images for machine profiles. */
+export const ProfileImagesApiVersion = "1.31.0";
+
+export const listProfileImages = (key: string) => invoke<ProfileImage[]>("get_host_resource", { key, resource: "profileImages" });
+
+/** Picks an image on this device and adds it to the host; null when cancelled. Needs elevation. */
+export const uploadProfileImage = (key: string) => invoke<ProfileImage | null>("upload_profile_image", { key });
+
+/** Needs elevation: run it inside withElevation. */
+export const deleteProfileImage = (key: string, name: string) => invoke<void>("delete_profile_image", { key, name });
 
 export const getSetupProfileCatalog = (key: string) =>
   invoke<SetupProfileCatalog>("get_host_resource", { key, resource: "setupProfileCatalog" });

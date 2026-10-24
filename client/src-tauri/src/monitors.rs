@@ -138,6 +138,15 @@ impl MonitorChoiceStore {
         }
     }
 
+    /// The choice saved on this device for the VM, or None when there is none.
+    pub fn find(&self, host_id: &str, vm_id: &str) -> Option<MonitorChoice> {
+        self.choices
+            .lock()
+            .unwrap()
+            .get(&vm_key(host_id, vm_id))
+            .cloned()
+    }
+
     pub fn get(&self, host_id: &str, vm_id: &str) -> MonitorChoice {
         self.choices
             .lock()

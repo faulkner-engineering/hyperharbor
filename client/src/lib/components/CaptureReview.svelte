@@ -6,6 +6,10 @@
     isClientError,
     ProblemCodes,
     saveSetupProfile,
+    saveMachineProfile,
+    hostSupports,
+    ProfilesConsolidatedApiVersion,
+    type StoredMachineProfile,
     type DraftItem,
     type HostEntry,
     type ProfileDraft,
@@ -21,7 +25,8 @@
   interface Props {
     host: HostEntry;
     vm: Vm;
-    onclose: (saved: StoredSetupProfile | null) => void;
+    /** The saved profile: a machine profile with only the software on a host at 1.32.0, a setup profile before. */
+    onclose: (saved: StoredSetupProfile | StoredMachineProfile | null) => void;
   }
 
   let { host, vm, onclose }: Props = $props();
@@ -74,7 +79,21 @@
     issues = [];
     try {
       const profile = draftToProfile(draft, choices);
-      onclose(await withElevation(host.key, () => saveSetupProfile(host.key, null, profile)));
+      onclose(
+        await withElevation(host.key, () =>
+          hostSupports(host, ProfilesConsolidatedApiVersion)
+            ? saveMachineProfile(host.key, null, {
+                name: profile.name,
+                os: "windows",
+                description: profile.description,
+                install: profile.install,
+                remove: profile.remove,
+                tweaks: profile.tweaks,
+                browser: profile.browser,
+              })
+            : saveSetupProfile(host.key, null, profile),
+        ),
+      );
     } catch (e) {
       if (e instanceof ElevationCancelled) return;
       error = errorMessage(e);

@@ -1,5 +1,4 @@
 import type {
-  AppxPackage,
   DraftBrowser,
   DraftItem,
   ProfileDraft,
@@ -43,26 +42,6 @@ export function addItem(items: ProfileItem[] | undefined, item: ProfileItem): Pr
 
 export function removeItem(items: ProfileItem[] | undefined, id: string): ProfileItem[] {
   return (items ?? []).filter((item) => item.id !== id);
-}
-
-/** Packages by publisher, publishers by name, Microsoft first since it has most of them. */
-export function groupByPublisher(packages: AppxPackage[]): { publisher: string; packages: AppxPackage[] }[] {
-  const groups = new Map<string, AppxPackage[]>();
-  for (const appx of packages) {
-    groups.set(appx.publisher, [...(groups.get(appx.publisher) ?? []), appx]);
-  }
-
-  return [...groups.entries()]
-    .sort(([a], [b]) => (a === "Microsoft" ? -1 : b === "Microsoft" ? 1 : a.localeCompare(b)))
-    .map(([publisher, list]) => ({
-      publisher,
-      packages: [...list].sort((a, b) => a.friendlyName.localeCompare(b.friendlyName)),
-    }));
-}
-
-/** The debloat preset: every package the catalog rates safe to remove. */
-export function debloatPreset(packages: AppxPackage[]): string[] {
-  return packages.filter((appx) => appx.rating === "safe").map((appx) => appx.name);
 }
 
 /** What the capture review keeps: ticked items by column, and the chosen browser. */

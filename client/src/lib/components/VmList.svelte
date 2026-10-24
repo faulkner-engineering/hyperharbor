@@ -23,6 +23,8 @@
     oncapture?: (vm: Vm) => void;
     /** Apply a setup profile to a running Windows VM; leave unset for hosts that cannot. */
     onapplyprofile?: (vm: Vm) => void;
+    /** Applies a machine profile (hosts with API 1.29.0). */
+    onapplymachine?: (vm: Vm) => void;
     onreplacedisk?: (vm: Vm) => void;
     /** Move or copy an off VM to another host; leave unset for hosts that cannot. */
     ontransfer?: (vm: Vm) => void;
@@ -44,6 +46,7 @@
     oncamera,
     oncapture,
     onapplyprofile,
+    onapplymachine,
     onreplacedisk,
     ontransfer,
     ondelete,
@@ -240,6 +243,9 @@
               {/if}
               {#if onapplyprofile && vm.state === "running" && vm.guestOs.family === "windows" && !vm.installState}
                 <button type="button" onclick={() => onapplyprofile(vm)}>Apply setup profile…</button>
+              {/if}
+              {#if onapplymachine && (vm.state === "running" || vm.state === "off") && !vm.installState}
+                <button type="button" onclick={() => onapplymachine(vm)}>Apply machine profile…</button>
               {/if}
               {#if onreplacedisk && vm.state === "off"}
                 <button type="button" onclick={() => onreplacedisk(vm)}>Restore disk from backup…</button>

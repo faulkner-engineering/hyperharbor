@@ -297,5 +297,116 @@ verified, and what was found along the way. User-facing changes per release are 
    (PowerShellTpmCapabilityProbe) runs detached from its callers: the client's 10 s request timeout canceled it halfway,
    leaving its VM running and nothing cached; the client now allows the offer 3 minutes.
 
+25. Profile builder machine view (2026-10-22; client only, no API change). The setup profile editor is a terminal-style
+   workspace (Dialog terminal: larger than xl, dark CRT variables): a vertical section list (tabs with counts) drives both
+   the wireframe machine in the middle and the form panel on the right (Install packages, Remove debloat, Browser
+   browser, Tweaks overview); a HUD line under the machine names the section, its counts, and why it is a still.
+   Green terminal and Motion checkboxes are stored per device (hh.machinePalette, hh.machineMotion); Motion starts
+   from prefers-reduced-motion and, once set, overrides it (MachineView motion: system, on, off). The first version
+   sat beside the old tab strip on the light dialog and, on a PC with Windows animation effects off, never moved. Only perItem has a control there (one drive per package); blink, pulse, and spin follow
+   ControlState fields that no editor sets yet (TPM, backup schedules, and performance mode live in other dialogs).
+   Fallback: exploded.svg from build_model.py when WebGL is missing, the scene fails to start, or FrameRateWatch
+   sees under 30 fps for 5 s; it stays the still for the dialog's life. Reduced motion: cuts, no orbit, no fan spin, no
+   CRT flicker (blink and pulse stay, as status). Verified in headless Edge with SwiftShader WebGL (overview, gpu with
+   spin, firmware, green palette) and with --disable-3d-apis (the still). The GPU fans gained blades: a plain ring
+   spinning about its own axis looks still; viewer.html only appeared to spin them because it rotated world-space
+   lines about the origin.
+26. Machine profiles (planned 2026-10-22 with the user; in progress). One document that describes a whole VM, edited in
+   the terminal editor with one section per part of the wireframe machine. Decisions:
+   - One self-contained document, not references: account (today's unattended install profile fields), display,
+     firmware (TPM), compute, GPU (Performance mode), network (switch, MAC spoofing), backup (schedule, retention,
+     triggers), and the software sections (install, remove, tweaks, browser). Setup profiles and unattended install
+     profiles become legacy, with a migration into machine profiles.
+   - Applies at VM creation (one job chain: create, unattended install, setup, performance, backup policy) and to an
+     existing VM, with a preview of what changes and the off-VM requirements for hardware.
+   - Display holds both guest settings (resolution, scaling, dark mode, applied in the guest) and connection defaults
+     (monitors, full screen or windowed), which a client may still override per device.
+   - Discovery: one scroll area per pane with a pinned filter box and category chips over the whole curated catalog
+     (winget search as the fallback group), the profile's items as a chip strip, and a detail drawer (package
+     descriptions; the registry values a tweak writes).
+   Done: 26a discovery (2026-10-22; API 1.26.0): PackageCatalogItem.description (catalogs/packages.yaml),
+   TweakCatalogItem.values (TweakCatalogValue with the clean-install default), SetupProfileCatalog.appx
+   (AppxCatalogItem from catalogs/appx.yaml). Client: CatalogBrowser (pinned filter and chips, counts follow the
+   filter), ProfileChips, DetailCard on the machine stage, and InstallSection, RemoveSection, TweaksSection,
+   BrowserSection replace PackagePicker, AppxChecklist, and ExtensionPicker. Verified in a browser preview with the
+   repository catalogs; not yet against a live host.
+   The document format, API, migration, and apply design for 26b to 26d: [machine-profiles.md](machine-profiles.md).
+   Done: 26b machine profiles (2026-10-23; API 1.27.0). Host: MachineProfile contracts, MachineProfileYaml (machine
+   sections through the contract JSON with unknown keys refused; software sections through ProfileYamlWriter.AppendBody
+   and the reader's helpers), MachineProfileValidator (UnattendProfileStore.Normalize for account, ProfileValidator for
+   software, hardware rules), MachineProfileStore, /machine-profiles routes. Client: the Tauri profile commands take a
+   kind (setup or machine); ProfileWorkspace (the terminal shell), SoftwareDraft and SoftwarePanel (shared software
+   sections), MachineDraft, the seven section components, MachineProfiles (list), Convert on setup profiles.
+   Verified with unit and API tests and a browser preview of every section; not yet against a live host. Not done in
+   26b: wallpaper image upload, retention and conditions overrides for backups (the target's apply), and anything
+   that applies a machine profile (26c, 26d).
+   Done: 26c create a VM from a machine profile (2026-10-23; API 1.28.0). MachineProfileVmCreation reads the profile
+   against the host (switch and GPU by name are errors when missing, a backup target is a warning; empty compute takes
+   the Create VM dialog's defaults; Performance mode forces fixed memory), turns the account into an UnattendProfile
+   through UnattendProfileStore.Normalize ("machine-<id>") and the software plus display.guest into the setup
+   profile snapshot (theme: appearance.darkMode or the light values; accent: DWM AccentColor and Explorer\Accent
+   AccentColorMenu as ABGR; wallpaper color: Control Panel\Colors Background and an empty Desktop WallPaper), and
+   calls VmCreationService with CreationExtras (UnattendedSetup.PlanFor instead of profile IDs, SecureBoot on the
+   blueprint, the profile's warnings, and a Configure step after the TPM: nested virtualization and MAC spoofing,
+   VmPerformanceService.ApplyWithinJobAsync, IMachineBackupPolicies). The install record's GuestPerformanceSetup
+   makes the watcher start the guest setup job (IGuestPerformanceStarter) once ready. Unit and API tested with fakes;
+   run live afterwards (below). Not verified: the wallpaper color values in a real guest. Not done: connection defaults (display.connection) do not
+   reach the client yet, and wallpaper images.
+   Live (2026-10-23, laptop, MachineProfileLiveTests through the harness, Windows 11 26300 ISO, Intel iGPU at 25%):
+   the createVm job made the VM with the TPM, Secure Boot, 2 processors, 4 GB fixed, nested virtualization, and the
+   GPU partition, and Windows Setup ran to Ready in about 9 minutes with the partition attached from the start. The
+   watcher applied the setup profile snapshot (4 items, no problems) and started the guest Performance setup. Found:
+   the test's guest check used Select-Object on a hashtable (empty values); a turnOff right after Ready is refused while
+   the guest setup job holds the VM, so the test retries until the VM is off.
+   Done: 26d apply to an existing VM (2026-10-23; API 1.29.0). MachineProfileApplier builds one plan for the preview and
+   the job: compute (processors, memory, nested virtualization; left to Performance mode when that is applied), MAC
+   spoofing, a TPM added (never removed), Performance mode on, re-shared, or off, the backup policy, and the software
+   plus display.guest snapshot; notes for account, disk size, switch, Secure Boot, connection defaults, and turning
+   backups off. The applyMachineProfile job sets the policy, shuts the VM down when a chosen part needs it off (only
+   with shutDownToApply), applies, starts it again, waits for Remote Desktop (GuestRestart.WaitUntilAnswersAsync),
+   applies the software with one restart if needed, and runs the guest Performance setup inline
+   (VmPerformanceService.GuestSetupWithinJobAsync, since the job holds the VM). Problems are the job's setupResult.
+   Live (2026-10-23, laptop): a full MachineProfileLiveTests run (HH_MACHINE_GPU=1, HH_MACHINE_KEEP=1) made the VM,
+   reached Ready, wrote the theme, accent, and tweak values, and the watcher's guest Performance setup copied the Intel
+   driver (32.0.101.8860, no drift, no reboot): the first live run of the guest setup. MachineProfileApplyLiveTests on
+   that VM then shut it down, went from 2 to 3 processors, started it, waited for Remote Desktop, wrote the setting
+   (Hidden = 1 in the Default hive), reported no problems, and deleted the VM. Found: a string returned by
+   Invoke-Command carries remoting properties into ConvertTo-Json, so the test check now interpolates it.
+   Done: Remote Desktop defaults (2026-10-23; API 1.30.0). VmConnectionDefaultsStore (connection-defaults.json) keeps a
+   VM's display.connection, set when the VM is created from a profile or the connection part is applied, forgotten
+   when the VM is deleted; ConnectService returns it as VmConnection.defaults. The client (rdp.rs ConnectionDefaults)
+   uses its monitors only when MonitorChoiceStore has no choice for the VM on this device, writes screen mode id,
+   redirectclipboard, and redirectprinters, sets audiocapturemode 0 for a microphone that is off, and prepares no
+   camera when the camera is off.
+   Done: wallpaper images (2026-10-23; API 1.31.0). ProfileImageStore keeps each User's images in
+   machine-profiles\<user>\images (ProtectedFile ACL; JPEG, PNG, or BMP by their first bytes; 20 MB; 50 per User;
+   names without folders or ".."), served at /profile-images (an own path, so an image name never meets a profile ID).
+   The setup snapshot gets Desktop WallPaper = C:\Users\Public\Pictures\HyperHarbor\<name>, WallpaperStyle 10, and
+   TileWallpaper 0 when the image exists; IGuestFileCopier (PowerShell Direct, Copy-Item -ToSession, as the guest
+   Performance setup copies drivers) puts the file there first: the applier in its guest step, the install watcher
+   before the setup profile (UnattendedInstall.WallpaperPath; a guest that does not answer retries the install, an
+   image deleted since is a problem). Client: Rust upload_profile_image (file dialog) and delete_profile_image, the
+   image list in DisplaySection; hosts before 1.31.0 keep a typed name.
+   Live (2026-10-23, laptop, no GPU share): MachineProfileLiveTests uploaded a BMP, created the VM from a profile naming
+   it, and reached Ready in about 9 minutes; the guest had the file in Public\Pictures\HyperHarbor and the Default hive
+   had WallPaper pointing to it with WallpaperStyle 10. MachineProfileApplyLiveTests on that VM then applied a wallpaper
+   color: Background "11 13 16" and an empty WallPaper, no problems. Both wallpaper paths (watcher and applier) and the
+   wallpaper color are now verified in a real guest; what Windows shows at the first sign-in was not looked at.
+   Done: one place for profiles, host (2026-10-23; API 1.32.0, data format 4). ProfileConsolidation converts each
+   User's unattended install and setup profiles into machine profiles when the host starts on format 3 data (originals
+   kept, results in machine-profiles/converted.json); MachineProfileTemplates serves the built-in install profiles as
+   templates (/machine-profile-templates, create from one); CreateVmFromProfileRequest takes compute and switch for
+   that VM only (MachineProfileVmCreation.WithOverrides). docs/machine-profiles.md "One place for profiles" has the
+   user's decisions.
+   Done: one place for profiles, client (2026-10-23). On hosts at 1.32.0 (ProfilesConsolidatedApiVersion): one Profiles
+   tab (MachineProfiles, with New from a template), no Install or Setup profiles tabs, no Fill from, no Apply setup
+   profile; New VM is CreateVmFromProfileDialog without a preset profile ("Start from" your profiles and the templates,
+   "Hardware for this VM" filled from the choice, sent as compute and switch only when changed); capture saves a
+   software-only machine profile. Found: MachineDraft structuredClone'd a reactive (proxied) profile, so Edit on a saved
+   profile with an account section failed; it now snapshots first.
+   Stages: 26a discovery for the software sections (client plus catalog fields, API 1.26.0); 26b the machine profile
+   contract, host store, migration, and the editor's eleven sections; 26c create a VM from a machine profile; 26d apply
+   to an existing VM.
+
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

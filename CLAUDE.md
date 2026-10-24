@@ -11,6 +11,7 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 - docs/development.md: commands, packaging, releases, contract changes, and live tests (environment variables and harness).
 - docs/history.md: each phase's design decisions and what was verified live. Phase 24 (VM transfer) is the latest.
 - docs/pairing.md: the SPAKE2 pairing protocol.
+- docs/machine-profiles.md: the machine profile document, API, migration, and apply design (phase 26).
 
 ## Rules
 - MVP scope only. Do not implement later phases early.

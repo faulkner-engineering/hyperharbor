@@ -57,6 +57,15 @@ public sealed partial class UnattendProfileStore
         ];
     }
 
+    /// <summary>Every User's own profiles with their owner, for converting them to machine profiles.</summary>
+    public IReadOnlyList<(Guid OwnerUserId, UnattendProfile Profile)> AllStored()
+    {
+        lock (_gate)
+        {
+            return Profiles().Select(stored => (stored.OwnerUserId, stored.Profile)).ToList();
+        }
+    }
+
     /// <summary>The built-ins, then the User's own profiles by name.</summary>
     public IReadOnlyList<UnattendProfile> List(Guid userId)
     {

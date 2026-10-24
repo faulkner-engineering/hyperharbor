@@ -1,16 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { AppxPackage, ProfileDraft } from "$lib/api/client";
-import { addItem, debloatPreset, draftToProfile, groupByPublisher, initialChoices, policyValue, setupResultMessage } from "./setupProfiles";
-
-const appx = (name: string, friendlyName: string, publisher: string, rating: AppxPackage["rating"]): AppxPackage => ({
-  name,
-  friendlyName,
-  version: "1.0.0.0",
-  publisher,
-  rating,
-  note: null,
-  inBaseline: null,
-});
+import type { ProfileDraft } from "$lib/api/client";
+import { addItem, draftToProfile, initialChoices, policyValue, setupResultMessage } from "./setupProfiles";
 
 const draft: ProfileDraft = {
   vmId: "807223df-0aeb-40a8-9d1c-223878114632",
@@ -75,27 +65,6 @@ describe("capture review", () => {
     choices.browser = null;
 
     expect(draftToProfile(draft, choices).browser).toBeUndefined();
-  });
-});
-
-describe("Appx helpers", () => {
-  const packages = [
-    appx("Clipchamp.Clipchamp", "Clipchamp", "Clipchamp", "safe"),
-    appx("Microsoft.WindowsStore", "Microsoft Store", "Microsoft", "keep"),
-    appx("Microsoft.BingNews", "Microsoft News", "Microsoft", "safe"),
-    appx("Microsoft.Paint", "Paint", "Microsoft", "caution"),
-    appx("Contoso.Tool", "Contoso.Tool", "Contoso", "unrated"),
-  ];
-
-  it("groups by publisher with Microsoft first and names sorted", () => {
-    const groups = groupByPublisher(packages);
-
-    expect(groups.map((group) => group.publisher)).toEqual(["Microsoft", "Clipchamp", "Contoso"]);
-    expect(groups[0].packages.map((item) => item.friendlyName)).toEqual(["Microsoft News", "Microsoft Store", "Paint"]);
-  });
-
-  it("selects only safe packages for the debloat preset", () => {
-    expect(debloatPreset(packages)).toEqual(["Clipchamp.Clipchamp", "Microsoft.BingNews"]);
   });
 });
 

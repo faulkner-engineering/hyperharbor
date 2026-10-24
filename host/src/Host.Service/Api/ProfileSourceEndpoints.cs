@@ -59,7 +59,7 @@ public static class ProfileSourceEndpoints
 
     private static Ok<IReadOnlyList<PackageCatalogItem>> PackageCatalog(Catalogs catalogs) =>
         TypedResults.Ok<IReadOnlyList<PackageCatalogItem>>(catalogs.Packages
-            .Select(entry => new PackageCatalogItem(entry.Alias, entry.Id, entry.Name, entry.Category, entry.Popular))
+            .Select(entry => new PackageCatalogItem(entry.Alias, entry.Id, entry.Name, entry.Description, entry.Category, entry.Popular))
             .ToList());
 
     /// <summary>Only a running VM can be read today; golden images will be another source.</summary>

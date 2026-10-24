@@ -1,0 +1,123 @@
+{
+  "overview": {
+    "node": "Case",
+    "lookAtOffset": [
+      -0.25,
+      0.02,
+      0
+    ],
+    "distance": 1.6,
+    "elevation": 22,
+    "azimuth": 35
+  },
+  "account": {
+    "node": "Screen_Login",
+    "lookAtOffset": [
+      0,
+      0,
+      0
+    ],
+    "distance": 0.55,
+    "elevation": 5,
+    "azimuth": 0
+  },
+  "display": {
+    "node": "Screen",
+    "lookAtOffset": [
+      0,
+      0,
+      0
+    ],
+    "distance": 0.9,
+    "elevation": 8,
+    "azimuth": 12
+  },
+  "browser": {
+    "node": "Screen_Tab_3",
+    "lookAtOffset": [
+      0,
+      -0.03,
+      0
+    ],
+    "distance": 0.5,
+    "elevation": 10,
+    "azimuth": -18
+  },
+  "packages": {
+    "node": "DriveBay",
+    "lookAtOffset": [
+      0,
+      0,
+      0
+    ],
+    "distance": 0.45,
+    "elevation": 18,
+    "azimuth": -50
+  },
+  "debloat": {
+    "node": "DriveBay",
+    "lookAtOffset": [
+      0,
+      0,
+      0
+    ],
+    "distance": 0.5,
+    "elevation": 30,
+    "azimuth": -70
+  },
+  "firmware": {
+    "node": "TPM_LED",
+    "lookAtOffset": [
+      0,
+      0,
+      -0.01
+    ],
+    "distance": 0.16,
+    "elevation": 14,
+    "azimuth": -70
+  },
+  "compute": {
+    "node": "CPU",
+    "lookAtOffset": [
+      0,
+      0,
+      0
+    ],
+    "distance": 0.4,
+    "elevation": 15,
+    "azimuth": -100
+  },
+  "gpu": {
+    "node": "GPU",
+    "lookAtOffset": [
+      0,
+      0,
+      0
+    ],
+    "distance": 0.5,
+    "elevation": 10,
+    "azimuth": -110
+  },
+  "network": {
+    "node": "Ethernet",
+    "lookAtOffset": [
+      0,
+      0.02,
+      0
+    ],
+    "distance": 0.3,
+    "elevation": 8,
+    "azimuth": 175
+  },
+  "backup": {
+    "node": "Backup_Disk",
+    "lookAtOffset": [
+      -0.1,
+      0.03,
+      -0.05
+    ],
+    "distance": 0.6,
+    "elevation": 25,
+    "azimuth": 150
+  }
+}

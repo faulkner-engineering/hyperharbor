@@ -293,6 +293,12 @@ builder.Services.AddSingleton(services => new VmStorageLocation(
 builder.Services.AddSingleton(new UnattendProfileStore(dataDirectory));
 builder.Services.AddSingleton(Catalogs.Default);
 builder.Services.AddSingleton(services => new SetupProfileStore(dataDirectory, services.GetRequiredService<Catalogs>()));
+builder.Services.AddSingleton(services => new MachineProfileStore(
+    dataDirectory,
+    new MachineProfileValidator(new ProfileValidator(services.GetRequiredService<Catalogs>()), services.GetRequiredService<UnattendProfileStore>())));
+builder.Services.AddSingleton(new ProfileImageStore(dataDirectory));
+builder.Services.AddSingleton(services => new MachineProfileTemplates(services.GetRequiredService<UnattendProfileStore>()));
+builder.Services.AddSingleton<IGuestFileCopier, PowerShellDirectFileCopier>();
 builder.Services.AddSingleton(new AppxBaselineStore(dataDirectory));
 builder.Services.AddSingleton<IGuestProfileReader, PowerShellDirectProfileReader>();
 builder.Services.AddSingleton<AppxInventoryService>();
@@ -405,6 +411,45 @@ builder.Services.AddSingleton<GpuEventReader>();
 builder.Services.AddSingleton<IGpuDriverSource, CimGpuDriverSource>();
 builder.Services.AddSingleton<IGuestPerformanceSetup, PowerShellDirectPerformanceSetup>();
 builder.Services.AddSingleton<VmPerformanceService>();
+builder.Services.AddSingleton<IGuestPerformanceStarter>(services => services.GetRequiredService<VmPerformanceService>());
+builder.Services.AddSingleton<IMachineBackupPolicies, MachineBackupPolicies>();
+builder.Services.AddSingleton(new VmConnectionDefaultsStore(dataDirectory));
+builder.Services.AddSingleton(services => new MachineProfileApplier(
+    services.GetRequiredService<MachineProfileStore>(),
+    services.GetRequiredService<IVmInventory>(),
+    services.GetRequiredService<IHyperVCompute>(),
+    services.GetRequiredService<IHyperVDefinitionReader>(),
+    services.GetRequiredService<IHyperVBuilder>(),
+    services.GetRequiredService<VmPerformanceService>(),
+    services.GetRequiredService<IMachineBackupPolicies>(),
+    new ProfileValidator(services.GetRequiredService<Catalogs>()),
+    services.GetRequiredService<VmCredentialStore>(),
+    services.GetRequiredService<UserStore>(),
+    services.GetRequiredService<UnattendedInstallStore>(),
+    services.GetRequiredService<SetupProfileApplication>(),
+    services.GetRequiredService<GuestRestart>(),
+    services.GetRequiredService<IHyperVPowerInvoker>(),
+    services.GetRequiredService<VmJobStore>(),
+    services.GetRequiredService<LifecycleOptions>(),
+    services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<MachineProfileApplier>>(),
+    services.GetRequiredService<VmConnectionDefaultsStore>(),
+    services.GetRequiredService<ProfileImageStore>(),
+    services.GetRequiredService<IGuestFileCopier>()));
+builder.Services.AddSingleton(services => new MachineProfileVmCreation(
+    services.GetRequiredService<MachineProfileStore>(),
+    services.GetRequiredService<VmCreationService>(),
+    services.GetRequiredService<UnattendedSetup>(),
+    services.GetRequiredService<UnattendProfileStore>(),
+    new ProfileValidator(services.GetRequiredService<Catalogs>()),
+    services.GetRequiredService<VmPerformanceService>(),
+    services.GetRequiredService<IHyperVCompute>(),
+    services.GetRequiredService<IHyperVHost>(),
+    services.GetRequiredService<IMachineBackupPolicies>(),
+    services.GetRequiredService<ILogger<MachineProfileVmCreation>>(),
+    services.GetRequiredService<VmConnectionDefaultsStore>(),
+    services.GetRequiredService<ProfileImageStore>(),
+    services.GetRequiredService<MachineProfileTemplates>()));
 builder.Services.AddSingleton<GpuVmShutdownCoordinator>();
 
 // Backup (Phase 21): Kopia is extracted from the executable on first use; the coordinator decides when runs start.
@@ -612,6 +657,7 @@ app.MapVmEndpoints();
 app.MapConsoleEndpoints();
 app.MapUnattendEndpoints();
 app.MapSetupProfileEndpoints();
+app.MapMachineProfileEndpoints();
 app.MapProfileSourceEndpoints();
 app.MapPerformanceEndpoints();
 app.MapBackupEndpoints();

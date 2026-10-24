@@ -19,6 +19,7 @@ public sealed class LinuxProvisioningTests : IDisposable
     private readonly PasswordRotator _rotator;
     private readonly ProvisioningService _service;
     private readonly ConnectService _connect;
+    private readonly Core.Profiles.VmConnectionDefaultsStore _defaults;
     private readonly Guid _userId;
 
     public LinuxProvisioningTests()
@@ -29,7 +30,8 @@ public sealed class LinuxProvisioningTests : IDisposable
         _provisioning = new ProvisioningStore(_directory);
         _rotator = new PasswordRotator(_guest, credentials, TimeProvider.System, TimeSpan.FromSeconds(60), NullLogger<PasswordRotator>.Instance);
         _service = new ProvisioningService(_inventory, users, _guest, credentials, _provisioning, TimeProvider.System, NullLogger<ProvisioningService>.Instance);
-        _connect = new ConnectService(_inventory, _provisioning, _rotator, NullLogger<ConnectService>.Instance);
+        _defaults = new Core.Profiles.VmConnectionDefaultsStore(_directory);
+        _connect = new ConnectService(_inventory, _provisioning, _rotator, NullLogger<ConnectService>.Instance, defaults: _defaults);
         _inventory.Vms.Add(FakeVmInventory.CreateVm(LinuxVm, "Ubuntu Dev", VmState.Running, GuestOsFamily.Linux, Address));
     }
 
@@ -94,6 +96,19 @@ public sealed class LinuxProvisioningTests : IDisposable
         var account = _provisioning.Find(LinuxVm, _userId)!;
         Assert.Equal(GuestOsFamily.Linux, account.GuestOs);
         Assert.Equal(FakeGuestAccountManager.FakeHostKey, account.SshHostKey);
+    }
+
+    [Fact]
+    public async Task Connect_CarriesTheProfilesRemoteDesktopDefaults()
+    {
+        await _service.ProvisionAsync(LinuxVm, _userId, Request(), CancellationToken.None);
+        Assert.Null((await _connect.ConnectAsync(LinuxVm, _userId, "laptop", CancellationToken.None)).Defaults);
+
+        var wanted = new Shared.Contracts.Profiles.MachineConnection(
+            Shared.Contracts.Profiles.ConnectionMonitors.All, null, new Shared.Contracts.Profiles.MachineRedirect(Clipboard: false));
+        _defaults.Save(new Core.Profiles.VmConnectionDefaults(LinuxVm, wanted, "Dev", DateTimeOffset.UtcNow));
+
+        Assert.Equal(wanted, (await _connect.ConnectAsync(LinuxVm, _userId, "laptop", CancellationToken.None)).Defaults);
     }
 
     [Fact]
