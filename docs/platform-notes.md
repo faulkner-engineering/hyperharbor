@@ -151,6 +151,14 @@ section for an area before changing it: most of these were learned from a failur
   "Continue with autoinstall?" at the console, since the seed cannot change the kernel command line.
 - The create job presses Space (Msvm_Keyboard.TypeKey) twelve times on the first boot only, to pass
   Windows media's "Press any key to boot from CD or DVD".
+- A first boot can still end with nothing installed (2026-10-25, laptop, build 26300 media, a second VM running): the
+  keys got Setup started, the guest reset itself 26 seconds later (cause unknown), the second boot's prompt timed
+  out with no key, the empty disk did not boot, and the VM sat at the firmware's boot summary ("The boot loader
+  failed") for an hour. Hyper-V logs each boot in Microsoft-Windows-Hyper-V-Worker-Admin: 18601 when the firmware
+  starts any boot loader (the DVD prompt included), 18603 when every boot device failed, and 18514 for a reset by the
+  guest; the VM ID is in the user data (<VmId>, upper case). The watcher now restarts a Windows install whose newest
+  boot event is 18603 and presses the key again, at most three times (WindowsSetupBootRecovery). 18603 cannot happen
+  once Windows is on the disk, so this never touches an installed system.
 - The watcher counts only time the VM runs toward Install:TimeoutMinutes, waits for the guest's OS and
   address in data exchange, then for a real RDP Connection Confirm (Windows) or SSH identification line
   (Linux), and marks the VM provisioned only after Remote Desktop answers again after setup. It then
@@ -158,6 +166,19 @@ section for an area before changing it: most of these were learned from a failur
   1, 2, 4, 8 minutes, then fail. A Linux profile without a desktop ends after SSH (no Remote Desktop).
 - Verified end to end on 2026-10-04 with a Windows 11 Pro install (TESTWINDOWSINSTALL), including Connect.
   Not yet with a real Ubuntu install.
+
+## Administrator windows (phase 28; verified 2026-10-25 on HyperHarbor-Test, Windows 11 build 26300)
+
+- Logon rights from PowerShell Direct are reliable: the guest compiles an LSA wrapper with Add-Type
+  (LsaAddAccountRights, LsaEnumerateAccountRights) and SeDenyNetworkLogonRight and SeDenyRemoteInteractiveLogonRight
+  read back set. Opening a window (create or enable, groups, rights, read back) took 2.6 s; closing took 2.3 s.
+- ADSI's IsMember compares ADsPaths, and a member's path includes the workgroup (WinNT://WORKGROUP/PC/user), so
+  IsMember("WinNT://PC/user") is False for a real member. The script compares objectSid of the group's members
+  instead, which also works when a group holds a SID that no longer resolves (Get-LocalGroupMember fails on those).
+- Script blocks run with Invoke-Command do not inherit the caller's $ErrorActionPreference; each admin script block
+  sets Stop itself, so a failed Add-LocalGroupMember throws instead of being skipped.
+- An open that fails leaves its close to a background task; a test process that exits right away leaves the account
+  enabled (it did once). The host service's sweep closes such a window within 30 seconds.
 
 ## Performance mode (Phase 10; Host.Core/Performance)
 

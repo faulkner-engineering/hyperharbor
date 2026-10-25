@@ -438,6 +438,47 @@ verified, and what was found along the way. User-facing changes per release are 
    component without its own button rules no longer shows the browser's default look.
    Not done: editing a profile in the library with no paired host at all (the editor needs a host's catalogs),
    choosing another library folder, cloud backup.
+28. Administrator access in Windows guests (2026-10-25; API 1.35.0; branch feature/guest-admin). Specified as "phase
+   25" when the user wrote it, before 25 to 27 were used. hh-<username> is a standard user, so it cannot answer a UAC
+   prompt; a short administrator window gives the User a one-time passphrase for their own guest administrator
+   account, approved through the existing host elevation. Windows guests only (Linux: 409 guestAdminUnsupported).
+   Design and the integrated version for later (guest agent over Hyper-V sockets, a credential provider tile in the
+   UAC prompt): [guest-elevation.md](guest-elevation.md).
+   - Account: hha-<username> (GuestAdminAccountName, beside the hh- and hhc- rules), full name "HyperHarbor
+     administrator for <username>", created on the first request through PowerShell Direct with the stored hhadmin
+     credential (VMs set up earlier need nothing new); in Administrators, not in Remote Desktop Users, password never
+     expires, SeDenyNetworkLogonRight and SeDenyRemoteInteractiveLogonRight (interactive logon stays, UAC needs it),
+     disabled whenever no window is open.
+   - GuestAdminService (Host.Core/Provisioning): open enables the account with a passphrase (PassphraseGenerator: four
+     capitalized words from the bundled PassphraseWords.txt, 1,118 words, and a digit, hyphenated; words containing a
+     part of the full name, such as "for" in Forest, are left out because Windows refuses them) for 10 minutes
+     (GuestAdminStore, guest-admin.json: the length, 2 to 30, and the windows that may still be enabled, never the
+     passphrase). Calls per VM and User are serialized; asking again while open returns the same passphrase. The
+     passphrase is a char array zeroed on close. Closing (DELETE, expiry timer, the VM stopping, or a host restart)
+     sets a random password (PasswordGenerator) and disables the account; when the guest cannot be reached the record
+     stays "close pending" and GuestAdminMonitorService's sweep (startup and every 30 seconds, not in a self-test run)
+     disables it once the guest answers. Closes the host makes itself are audited as closeGuestAdmin with the reason.
+   - API: POST /vms/{id}/guest-admin (elevated; 409 vmNotRunning, vmNotProvisioned, guestAdminUnsupported,
+     guestUnavailable), GET (no passphrase; closePending), DELETE (audited, not elevated: it only takes access away;
+     404 when none is open), PUT /host/guest-admin/settings (elevated). Audit summaries: account and expiry, plus the
+     close reason.
+   - Client: Administrator access… in the VM menu for running, set-up Windows VMs (hostSupports 1.35.0), through
+     withElevation, then GuestAdminDialog (account, passphrase in large monospace split into its words, countdown,
+     Done ends it, Close leaves it open until expiry and says so, Request again after it ends). No copy button: with
+     clipboard redirection the device's clipboard is readable inside the VM's session. The client has no VM detail
+     view, so the action is in the menu only. Rust: open_guest_admin, get_guest_admin, close_guest_admin
+     (GuestAdminWindow hides the passphrase in Debug and zeroes it on drop).
+   - Verified: unit tests with the fake guest (lazy creation, enable and disable, reuse, expiry, VM stop, startup sweep,
+     serialization, zeroing, Linux, settings range, passphrase never logged or persisted), API tests for the four
+     routes, Rust and Vitest tests. Live (GuestAdminLiveTests on HyperHarbor-Test, made by MachineProfileLiveTests with
+     HH_MACHINE_KEEP=1): the first run found the ADSI membership check wrong (see platform-notes.md, Administrator
+     windows); after the fix, open and close passed, with both logon rights set. The UAC prompt itself is the
+     user's manual check (development.md).
+   - Also fixed while making the test VM: a Windows install whose VM finds nothing to boot (Hyper-V event 18603) is
+     restarted with the boot key pressed again, up to three times (WindowsSetupBootRecovery in the install watcher;
+     platform-notes.md, Unattended installs). The test VM sat at the firmware's boot summary for an hour before this.
+     HyperVWorkerBootEvents was checked against the real log (HH_BOOT_EVENTS_LIVE with HH_LIVE_GUEST_VM and
+     HH_BOOT_FAILED_AT); the restart itself has unit tests only.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

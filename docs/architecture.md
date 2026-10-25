@@ -18,7 +18,10 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - Credentials: each User has one local VM account hh-<username> (local, never a Microsoft account), created
   by a one-time Provision VM flow. On each connect the host rotates its password via PowerShell Direct
   (serialized per VM and User, short reuse window), returns it to the requesting paired Device over mTLS,
-  and the client removes it from the OS credential store after launching RDP.
+  and the client removes it from the OS credential store after launching RDP. For UAC prompts inside a Windows
+  VM, each User also has a local administrator account hha-<username>, disabled except during a short
+  administrator window (GuestAdminService; elevated to open, one-time passphrase in host memory only, a random
+  password and disabled again when it ends). Design and the planned guest agent: [guest-elevation.md](guest-elevation.md).
 - Wake-on-LAN: readiness check with auto-fix, Test Wake, relay mode later
 - VM lifecycle: create from an ISO in the host's library, change compute settings, delete; long operations
   are jobs the client polls. Power actions, lifecycle jobs, and settings changes take a per-VM lock.
@@ -41,12 +44,16 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   Profiles/ (setup profiles: Catalogs, ProfileYamlReader/Writer, ProfileValidator, PackageAliasResolver,
   ExtensionIdParser, SetupProfileStore, AppxBaselines, AppxInventoryService, GuestProfileReader (PowerShell Direct
   scripts), PackageSearch (pwsh fallback), WingetIndex and WingetPackageSearch (the downloaded winget index, read
-  through WinSqlite over winsqlite3.dll), ExtensionResolver, ProfileCaptureService)
+  through WinSqlite over winsqlite3.dll), ExtensionResolver, ProfileCaptureService),
+  Provisioning/ (ProvisioningService, ConnectService, PasswordRotator, VmCredentialStore, GuestAccounts with
+  IGuestAccountManager, PowerShellDirectAccountManager (its Script and AdminScript), SshAccountManager; administrator
+  windows: GuestAdminService, GuestAdminStore (guest-admin.json), PassphraseGenerator with PassphraseWords.txt (embedded))
 - catalogs/*.yaml (packages, extensions, appx, tweaks, browsers) and schemas/profile.v1.schema.json at the repository
   root, embedded in Host.Core; they are data people read and edit, checked by CatalogTests and ProfileFormatTests
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
   elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/),
-  ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console).
+  ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console),
+  GuestAdminEndpoints and GuestAdminMonitorService (the administrator window sweep).
   It builds HyperHarbor.Host.exe (WinExe); Program.cs picks the mode with Installation/HostCommandLine (service,
   console run, --tray, launcher, install, uninstall, helpers). Installation/: HostInstaller (elevated steps),
   InstallCommand (elevates one copy of itself, relays progress through a result file), ServiceRegistration (SCM),

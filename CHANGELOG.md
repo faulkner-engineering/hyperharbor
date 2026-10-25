@@ -17,12 +17,18 @@ note anything that needs action, such as updating the host, a new elevation requ
   (hha-owner, named after you) and a one-time passphrase of four words and a digit, with a countdown. In the
   Windows prompt choose More choices, pick that account, and type the passphrase. Access ends after 10 minutes, when
   you choose Done, or when the VM stops; the host then disables the account again. The account is created the first
-  time you ask, can only answer administrator prompts (it cannot sign in over the network or Remote Desktop), and the
+  time you ask, cannot sign in over the network or Remote Desktop (only prompts and the VM's console), and the
   passphrase is never stored or put on the clipboard. Windows guests only; Linux VMs keep using sudo. Needs a host
   with API 1.35.0. The length is a host setting from 2 to 30 minutes (PUT /host/guest-admin/settings).
 - API 1.35.0 (host): administrator windows in Windows guests, a one-time passphrase for the User's own guest
   administrator account (hha-owner) to answer a UAC prompt. POST, GET, and DELETE /vms/{vmId}/guest-admin, PUT /host/guest-admin/settings, and the problem codes
   vmNotProvisioned, guestAdminUnsupported, and guestUnavailable.
+
+### Fixed
+- Creating a Windows VM with an unattended install no longer stops for good at the "No operating system was loaded"
+  screen when the VM resets before Windows Setup has written to the disk and misses the "Press any key to boot from CD
+  or DVD" prompt: the host now restarts it and presses the key again (up to three times), and otherwise fails the
+  install with an explanation instead of waiting out the three-hour timeout.
 
 ## [0.2.1] - 2026-10-23 (API 1.34.0)
 
