@@ -203,9 +203,13 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
         $inspect = {
             param($name, $lsa)
             $ErrorActionPreference = 'Stop'
-            function IsMember($groupSid, $member) {
+            # Compares SIDs: ADSI's IsMember compares paths, and a member's path includes the workgroup.
+            function IsMember($groupSid, $memberSid) {
                 $group = (New-Object System.Security.Principal.SecurityIdentifier $groupSid).Translate([System.Security.Principal.NTAccount]).Value.Split('\')[-1]
-                [bool]([ADSI]"WinNT://$env:COMPUTERNAME/$group,group").IsMember("WinNT://$env:COMPUTERNAME/$member")
+                $sids = @(([ADSI]"WinNT://$env:COMPUTERNAME/$group,group").Invoke('Members') | ForEach-Object {
+                    (New-Object System.Security.Principal.SecurityIdentifier ([byte[]]$_.GetType().InvokeMember('objectSid', 'GetProperty', $null, $_, $null)), 0).Value
+                })
+                $sids -contains $memberSid
             }
             $user = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
             if (-not $user) {
@@ -216,8 +220,8 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
             @{
                 exists = $true
                 enabled = [bool]$user.Enabled
-                inAdministrators = (IsMember 'S-1-5-32-544' $name)
-                inRemoteDesktopUsers = (IsMember 'S-1-5-32-555' $name)
+                inAdministrators = (IsMember 'S-1-5-32-544' $user.SID.Value)
+                inRemoteDesktopUsers = (IsMember 'S-1-5-32-555' $user.SID.Value)
                 deniedNetworkLogon = ($rights -contains 'SeDenyNetworkLogonRight')
                 deniedRemoteInteractiveLogon = ($rights -contains 'SeDenyRemoteInteractiveLogonRight')
             }
