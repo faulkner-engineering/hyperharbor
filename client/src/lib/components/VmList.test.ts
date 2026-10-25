@@ -67,6 +67,29 @@ describe("VmList row actions", () => {
     expect((await openMenu()).queryByRole("button", { name: "Capture setup profile…" })).toBeNull();
   });
 
+  it("offers Administrator access for running, set-up Windows VMs when the host has it, and reports which VM", async () => {
+    const onguestadmin = vi.fn();
+    const running = provisioned("running");
+    const { unmount } = render(VmList, { vms: [running], onguestadmin });
+
+    await fireEvent.click((await openMenu()).getByRole("button", { name: "Administrator access…" }));
+    expect(onguestadmin).toHaveBeenCalledWith(running);
+    unmount();
+
+    for (const other of [
+      provisioned("off"),
+      vm("running", { guestOs: { family: "windows", name: "Windows 11 Pro" } }),
+      { ...provisioned("running"), guestOs: { family: "linux" as const, name: "Ubuntu" } },
+    ]) {
+      const view = render(VmList, { vms: [other], onguestadmin });
+      expect((await openMenu()).queryByRole("button", { name: "Administrator access…" })).toBeNull();
+      view.unmount();
+    }
+
+    render(VmList, { vms: [running] });
+    expect((await openMenu()).queryByRole("button", { name: "Administrator access…" })).toBeNull();
+  });
+
   it("offers Move or copy only for off VMs, and only when the host has transfers", async () => {
     const ontransfer = vi.fn();
     const off = provisioned("off");

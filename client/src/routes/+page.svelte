@@ -22,6 +22,7 @@
     TransferApiVersion,
     RemoteDesktopApiVersion,
     HostLogsApiVersion,
+    GuestAdminApiVersion,
     downloadHostLogs,
     SetupProfilesApiVersion,
     MachineProfilesApiVersion,
@@ -75,6 +76,7 @@
   import ApplyMachineProfileDialog from "$lib/components/ApplyMachineProfileDialog.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
   import CameraDialog from "$lib/components/CameraDialog.svelte";
+  import GuestAdminDialog from "$lib/components/GuestAdminDialog.svelte";
   import MonitorsDialog from "$lib/components/MonitorsDialog.svelte";
   import Menu from "$lib/components/Menu.svelte";
   import { openHostRemoteDesktop } from "$lib/hostRemoteDesktop";
@@ -104,6 +106,8 @@
   let tuning = $state<Vm | null>(null);
   let choosingMonitors = $state<Vm | null>(null);
   let configuringCamera = $state<Vm | null>(null);
+  /** The VM whose administrator access dialog is open. */
+  let elevatingIn = $state<Vm | null>(null);
   let creating = $state(false);
   /** The machine profile chosen in New VM, which hands over to the profile's own create dialog. */
   let creatingFrom = $state<MachineProfileSummary | null>(null);
@@ -130,6 +134,7 @@
   // VMs are only fetched from paired hosts; others show the pairing panel instead.
   const pairedKey = $derived(selectedHost?.paired ? selectedHost.key : null);
   const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
+  const hostHasGuestAdmin = $derived(selectedHost ? hostSupports(selectedHost, GuestAdminApiVersion) : false);
   const hostHasLogs = $derived(selectedHost ? hostSupports(selectedHost, HostLogsApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
   const hostHasMachineProfiles = $derived(selectedHost ? hostSupports(selectedHost, MachineProfilesApiVersion) : false);
@@ -670,6 +675,7 @@
             onperformance={(vm) => (tuning = vm)}
             onmonitors={(vm) => (choosingMonitors = vm)}
             oncamera={(vm) => (configuringCamera = vm)}
+            onguestadmin={hostHasGuestAdmin ? (vm) => (elevatingIn = vm) : undefined}
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
             onreplacedisk={hostHasBackups ? (vm) => (replacingDisk = vm) : undefined}
             onapplyprofile={hostAppliesProfiles && !hostConsolidated ? (vm) => (applyingProfile = vm) : undefined}
@@ -719,6 +725,9 @@
         {/if}
         {#if configuringCamera}
           <CameraDialog host={selectedHost} vm={configuringCamera} onclose={() => (configuringCamera = null)} />
+        {/if}
+        {#if elevatingIn}
+          <GuestAdminDialog host={selectedHost} vm={elevatingIn} onclose={() => (elevatingIn = null)} />
         {/if}
         {#if creating && hostConsolidated}
           <CreateVmFromProfileDialog

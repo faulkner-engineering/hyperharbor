@@ -605,6 +605,40 @@ async fn connect_host(state: State<'_, AppState>, key: String) -> Result<(), Cli
     )
 }
 
+/// Opens an administrator window in a Windows guest (needs elevation), or returns the open one. The passphrase is
+/// for the frontend to show; nothing here stores it.
+#[tauri::command]
+async fn open_guest_admin(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<api::GuestAdminWindow, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.open_guest_admin(&host, &paired, &vm_id).await
+}
+
+/// Whether an administrator window is open in the VM. Returns the GuestAdminStatus.
+#[tauri::command]
+async fn get_guest_admin(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_guest_admin(&host, &paired, &vm_id).await
+}
+
+/// Ends the administrator window in the VM now.
+#[tauri::command]
+async fn close_guest_admin(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.close_guest_admin(&host, &paired, &vm_id).await
+}
+
 /// Allows Remote Desktop connections to the host (needs elevation). Returns the HostRemoteDesktop.
 #[tauri::command]
 async fn enable_host_remote_desktop(
@@ -3009,6 +3043,9 @@ pub fn run() {
             connect_vm,
             connect_host,
             enable_host_remote_desktop,
+            open_guest_admin,
+            get_guest_admin,
+            close_guest_admin,
             download_host_logs,
             open_console,
             list_monitors,

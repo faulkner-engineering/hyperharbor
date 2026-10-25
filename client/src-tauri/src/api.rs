@@ -26,6 +26,8 @@ const PROVISION_TIMEOUT: Duration = Duration::from_secs(25 * 60);
 const VM_CONNECT_TIMEOUT: Duration = Duration::from_secs(90);
 /// Opening a console grants access through Hyper-V and rotates a host account password; both are quick.
 const CONSOLE_OPEN_TIMEOUT: Duration = Duration::from_secs(30);
+/// An administrator window creates or enables a guest account over PowerShell Direct; the host allows 120 seconds.
+const GUEST_ADMIN_TIMEOUT: Duration = Duration::from_secs(150);
 /// Until the host answers a tunnel request; the tunnel itself has no time limit.
 const CONSOLE_TUNNEL_TIMEOUT: Duration = Duration::from_secs(15);
 /// ISO images are several gigabytes; a slow network can take hours.
@@ -183,6 +185,32 @@ const CONSOLE_UPGRADE_PROTOCOL: &str = "hyperharbor-console";
 /// An elevation token for one host. Kept only in memory, and never passed to the frontend.
 struct Elevation {
     token: zeroize::Zeroizing<String>,
+}
+
+/// Mirrors the GuestAdminWindow schema. The passphrase goes to the frontend to be shown, never to disk or the
+/// clipboard; Debug leaves it out, and it is zeroed when the value is dropped.
+#[derive(Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuestAdminWindow {
+    pub account_name: String,
+    pub passphrase: String,
+    pub expires_at: String,
+}
+
+impl std::fmt::Debug for GuestAdminWindow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GuestAdminWindow")
+            .field("account_name", &self.account_name)
+            .field("expires_at", &self.expires_at)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for GuestAdminWindow {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.passphrase.zeroize();
+    }
 }
 
 /// What the frontend may know about an elevation: when it ends.
@@ -446,6 +474,56 @@ impl ApiClient {
             )
             .await?;
         parse(response).await
+    }
+
+    /// POST /vms/{vmId}/guest-admin (needs elevation): an administrator window in a Windows guest, or the open one.
+    pub async fn open_guest_admin(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<GuestAdminWindow, ClientError> {
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &vm_path(vm_id, "guest-admin")?,
+                None,
+                Some(GUEST_ADMIN_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// GET /vms/{vmId}/guest-admin: whether a window is open, never the passphrase. Returns the GuestAdminStatus.
+    pub async fn get_guest_admin(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "guest-admin")?)
+            .await
+    }
+
+    /// DELETE /vms/{vmId}/guest-admin: ends the window; the host disables the account.
+    pub async fn close_guest_admin(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<(), ClientError> {
+        self.send_paired_with(
+            host,
+            paired,
+            reqwest::Method::DELETE,
+            &vm_path(vm_id, "guest-admin")?,
+            None,
+            Some(GUEST_ADMIN_TIMEOUT),
+        )
+        .await
+        .map(|_| ())
     }
 
     /// POST /vms/{vmId}/console: the host console account, a fresh password, and a tunnel ticket.
@@ -3097,6 +3175,112 @@ mod server_tests {
             );
         }
         assert!(server.requests().is_empty());
+    }
+
+    #[test]
+    fn guest_admin_window_parses_and_hides_the_passphrase() {
+        let window: GuestAdminWindow = serde_json::from_value(fixture("GuestAdminWindow")).unwrap();
+        assert_eq!(window.account_name, "hha-owner");
+        assert_eq!(window.passphrase, "Maple-River-Candle-Orbit-7");
+
+        let debug = format!("{window:?}");
+        assert!(!debug.contains("Maple"), "{debug}");
+        let status = fixture("GuestAdminStatus");
+        assert_eq!(status["open"], false);
+        assert!(status["expiresAt"].is_null());
+    }
+
+    #[tokio::test]
+    async fn guest_admin_routes_use_the_contract_paths_and_the_elevation_token() {
+        let server = TestServer::start("127.0.0.1:0", |request| {
+            match (request.method.as_str(), request.path.as_str()) {
+                ("POST", path) if path.ends_with("/auth/elevation") => Reply::json(
+                    200,
+                    r#"{"token":"admin-token","expiresAt":"2026-10-25T12:05:00Z"}"#,
+                ),
+                ("POST", path) if path.ends_with("/guest-admin") => {
+                    if request.header(ELEVATION_HEADER) == Some("admin-token") {
+                        Reply::json(
+                            200,
+                            r#"{"accountName":"hha-owner","passphrase":"Maple-River-Candle-Orbit-7","expiresAt":"2026-10-25T12:10:00Z"}"#,
+                        )
+                    } else {
+                        Reply::json(
+                            403,
+                            r#"{"title":"Elevation required","status":403,"detail":"Enter the passphrase.","code":"elevationRequired"}"#,
+                        )
+                    }
+                }
+                ("GET", path) if path.ends_with("/guest-admin") => Reply::json(
+                    200,
+                    r#"{"accountName":"hha-owner","open":true,"expiresAt":"2026-10-25T12:10:00Z","closePending":false}"#,
+                ),
+                ("DELETE", path) if path.ends_with("/guest-admin") => Reply::json(204, ""),
+                _ => Reply::json(500, "{}"),
+            }
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+
+        let refused = api.open_guest_admin(&target, &paired, VM_ID).await;
+        api.elevate(&target, &paired, "passphrase").await.unwrap();
+        let window = api.open_guest_admin(&target, &paired, VM_ID).await.unwrap();
+        let status = api.get_guest_admin(&target, &paired, VM_ID).await.unwrap();
+        api.close_guest_admin(&target, &paired, VM_ID)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            refused.unwrap_err().problem_code(),
+            Some(ELEVATION_REQUIRED)
+        );
+        assert_eq!(window.passphrase, "Maple-River-Candle-Orbit-7");
+        assert_eq!(window.expires_at, "2026-10-25T12:10:00Z");
+        assert_eq!(status["open"], true);
+        let requests = server.requests();
+        let path = format!("{API_BASE_PATH}/vms/{VM_ID}/guest-admin");
+        let routes: Vec<(&str, &str)> = requests
+            .iter()
+            .map(|request| (request.method.as_str(), request.path.as_str()))
+            .collect();
+        assert_eq!(
+            routes,
+            [
+                ("POST", path.as_str()),
+                ("POST", format!("{API_BASE_PATH}/auth/elevation").as_str()),
+                ("POST", path.as_str()),
+                ("GET", path.as_str()),
+                ("DELETE", path.as_str()),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn closing_a_window_that_is_not_open_reports_the_hosts_detail() {
+        let server = TestServer::start("127.0.0.1:0", |_| {
+            Reply::json(
+                404,
+                r#"{"title":"No administrator window","status":404,"detail":"No administrator window is open in this VM for you."}"#,
+            )
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+
+        let result = api.close_guest_admin(&target, &paired, VM_ID).await;
+
+        assert!(
+            matches!(&result, Err(ClientError::Api { status: 404, message, .. }) if message.contains("No administrator window is open")),
+            "{result:?}"
+        );
+        let invalid = api
+            .open_guest_admin(&target, &paired, "../auth/elevation")
+            .await;
+        assert!(
+            matches!(invalid, Err(ClientError::InvalidVmId)),
+            "{invalid:?}"
+        );
     }
 
     fn vector(name: &str) -> Vec<u8> {

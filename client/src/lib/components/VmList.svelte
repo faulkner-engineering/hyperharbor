@@ -19,6 +19,8 @@
     onmonitors?: (vm: Vm) => void;
     /** Camera sharing settings for a Windows VM; leave unset to hide the entry. */
     oncamera?: (vm: Vm) => void;
+    /** A short administrator window in a running, set-up Windows VM (hosts with API 1.35.0); leave unset to hide it. */
+    onguestadmin?: (vm: Vm) => void;
     /** Capture a setup profile from a running Windows VM; leave unset for hosts without setup profiles. */
     oncapture?: (vm: Vm) => void;
     /** Apply a setup profile to a running Windows VM; leave unset for hosts that cannot. */
@@ -44,6 +46,7 @@
     onperformance,
     onmonitors,
     oncamera,
+    onguestadmin,
     oncapture,
     onapplyprofile,
     onapplymachine,
@@ -206,6 +209,13 @@
                   type="button"
                   disabled={consoleVmId !== null}
                   onclick={() => onconsole?.(vm)}>{consoleVmId === vm.id ? "Opening console…" : "Console"}</button
+                >
+              {/if}
+              {#if onguestadmin && vm.state === "running" && vm.guestOs.family === "windows" && vm.provisioned}
+                <button
+                  type="button"
+                  title="A one-time passphrase for the Windows administrator prompt in this VM"
+                  onclick={() => onguestadmin(vm)}>Administrator access…</button
                 >
               {/if}
               {#if vm.state === "running"}

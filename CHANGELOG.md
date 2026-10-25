@@ -11,6 +11,15 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Added
+- Administrator access in Windows VMs. The account you connect with is a standard user, so it cannot answer a
+  Windows administrator prompt (installing software, changing settings). Choose Administrator access… in a running
+  VM's menu and enter the admin passphrase: the client shows your HyperHarbor administrator account in that VM
+  (hha-owner, named after you) and a one-time passphrase of four words and a digit, with a countdown. In the
+  Windows prompt choose More choices, pick that account, and type the passphrase. Access ends after 10 minutes, when
+  you choose Done, or when the VM stops; the host then disables the account again. The account is created the first
+  time you ask, can only answer administrator prompts (it cannot sign in over the network or Remote Desktop), and the
+  passphrase is never stored or put on the clipboard. Windows guests only; Linux VMs keep using sudo. Needs a host
+  with API 1.35.0. The length is a host setting from 2 to 30 minutes (PUT /host/guest-admin/settings).
 - API 1.35.0 (host): administrator windows in Windows guests, a one-time passphrase for the User's own guest
   administrator account (hha-owner) to answer a UAC prompt. POST, GET, and DELETE /vms/{vmId}/guest-admin, PUT /host/guest-admin/settings, and the problem codes
   vmNotProvisioned, guestAdminUnsupported, and guestUnavailable.
