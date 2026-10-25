@@ -118,3 +118,18 @@ public static class VmAccountName
         return name.Length > MaxLength ? name[..MaxLength].TrimEnd('-') : name;
     }
 }
+
+/// <summary>
+/// Builds the local administrator account names for administrator windows in Windows guests: "hha-" plus the user
+/// name, cleaned like <see cref="VmAccountName"/> and within the same 20-character limit (hh-owner signs in over
+/// Remote Desktop; hha-owner only answers User Account Control prompts).
+/// </summary>
+public static class GuestAdminAccountName
+{
+    public const string Prefix = "hha-";
+
+    public static string For(string userName) => VmAccountName.Build(Prefix, userName);
+
+    /// <summary>The account's full name, which the User Account Control prompt shows.</summary>
+    public static string FullName(string userName) => $"HyperHarbor administrator for {userName}";
+}

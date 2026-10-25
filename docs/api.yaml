@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.34.0
+  version: 1.35.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -343,6 +343,36 @@ paths:
           $ref: "#/components/responses/ElevationRequired"
         "409":
           $ref: "#/components/responses/Conflict"
+
+  /host/guest-admin/settings:
+    put:
+      tags: [Host]
+      operationId: setGuestAdminSettings
+      summary: Change how long an administrator window in a guest stays open.
+      description: |
+        Since 1.35.0. The length applies to windows opened from now on; open windows keep their expiry.
+      security:
+        - mutualTLS: []
+          elevation: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestAdminSettings"
+      responses:
+        "200":
+          description: The settings were saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestAdminSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
 
   /host/logs/bundle:
     post:
@@ -1796,6 +1826,108 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: The VM is not provisioned for this User, is not running, or has no address.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "502":
+          $ref: "#/components/responses/GuestOperationFailed"
+        "503":
+          $ref: "#/components/responses/GuestUnavailable"
+
+  /vms/{vmId}/guest-admin:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [VMs]
+      operationId: getGuestAdmin
+      summary: Get whether an administrator window is open in the VM for the calling User.
+      description: |
+        Since 1.35.0. Never returns the passphrase. `closePending` is true when a window ended while the host could
+        not reach the guest (the VM stopped, or the host restarted); the host disables the account as soon as the
+        guest answers again.
+      responses:
+        "200":
+          description: The User's administrator window in the VM.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestAdminStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [VMs]
+      operationId: openGuestAdmin
+      summary: Open a short administrator window in a Windows guest.
+      description: |
+        Since 1.35.0. Windows guests only. Gives the calling User a one-time passphrase for their own local
+        administrator account in the guest, for example `hha-owner`, to type into a User Account Control prompt.
+        The host creates the account on first use through PowerShell Direct with the VM's stored administrator
+        credential: a member of Administrators, not of Remote Desktop Users, denied network and Remote Desktop
+        sign-in, and disabled whenever no window is open. Opening a window enables it and sets the passphrase;
+        the window ends at `expiresAt` (10 minutes by default, see `PUT /host/guest-admin/settings`), when the
+        User ends it, or when the VM stops, and the host then sets a random password and disables the account.
+
+        Calling this again while a window is open returns the same passphrase and expiry. The passphrase is kept
+        only in host memory and never logged; clients must not persist it. The response is sent with
+        `Cache-Control: no-store`.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "200":
+          description: The window is open.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestAdminWindow"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            The VM is not running (`code: vmNotRunning`), is not set up for this User or has no stored administrator
+            credential (`code: vmNotProvisioned`), runs Linux (`code: guestAdminUnsupported`), or PowerShell Direct
+            cannot reach the guest yet (`code: guestUnavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: The guest rejected the stored administrator credential.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "502":
+          $ref: "#/components/responses/GuestOperationFailed"
+    delete:
+      tags: [VMs]
+      operationId: closeGuestAdmin
+      summary: End the calling User's administrator window in the VM now.
+      description: |
+        Since 1.35.0. Sets a random password on the account and disables it. When the guest cannot be reached the
+        host forgets the passphrase anyway, answers with the guest error, and disables the account as soon as the
+        guest answers again (`closePending` in `GET`).
+      responses:
+        "204":
+          description: The window ended and the account is disabled.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The guest rejected the stored administrator credential.
           content:
             application/problem+json:
               schema:
@@ -4164,7 +4296,8 @@ components:
             `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
             `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
             `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`,
-            `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`, `wingetUnavailable`.
+            `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`, `wingetUnavailable`,
+            `vmNotProvisioned`, `guestAdminUnsupported`, `guestUnavailable`.
         errors:
           type: array
           description: Field-level validation problems (400).
@@ -4914,6 +5047,54 @@ components:
           oneOf:
             - $ref: "#/components/schemas/MachineConnection"
             - type: "null"
+
+    GuestAdminWindow:
+      type: object
+      description: Since 1.35.0. An open administrator window in a Windows guest.
+      required: [accountName, passphrase, expiresAt]
+      properties:
+        accountName:
+          type: string
+          description: The User's local administrator account in the guest, for example "hha-owner".
+        passphrase:
+          type: string
+          description: |
+            Four capitalized words and a digit separated by hyphens, for example "Maple-River-Candle-Orbit-7", for the
+            User to type into the guest's User Account Control prompt. Valid until `expiresAt` or until the window is
+            ended. Clients must not persist it or put it on the clipboard.
+        expiresAt:
+          type: string
+          format: date-time
+
+    GuestAdminStatus:
+      type: object
+      description: Since 1.35.0. The calling User's administrator window in a VM; never the passphrase.
+      required: [accountName, open, expiresAt, closePending]
+      properties:
+        accountName:
+          type: string
+          description: The User's local administrator account in the guest, for example "hha-owner".
+        open:
+          type: boolean
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the open window ends; null when none is open.
+        closePending:
+          type: boolean
+          description: A window ended while the guest could not be reached; the account is disabled when it answers.
+
+    GuestAdminSettings:
+      type: object
+      description: Since 1.35.0.
+      required: [windowMinutes]
+      properties:
+        windowMinutes:
+          type: integer
+          minimum: 2
+          maximum: 30
+          default: 10
+          description: How long an administrator window stays open.
 
     ConsoleSession:
       type: object

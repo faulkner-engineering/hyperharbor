@@ -222,6 +222,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/host/guest-admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change how long an administrator window in a guest stays open.
+         * @description Since 1.35.0. The length applies to windows opened from now on; open windows keep their expiry.
+         */
+        put: operations["setGuestAdminSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/host/logs/bundle": {
         parameters: {
             query?: never;
@@ -1082,6 +1102,51 @@ export interface paths {
          */
         post: operations["connectVm"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/guest-admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get whether an administrator window is open in the VM for the calling User.
+         * @description Since 1.35.0. Never returns the passphrase. `closePending` is true when a window ended while the host could
+         *     not reach the guest (the VM stopped, or the host restarted); the host disables the account as soon as the
+         *     guest answers again.
+         */
+        get: operations["getGuestAdmin"];
+        put?: never;
+        /**
+         * Open a short administrator window in a Windows guest.
+         * @description Since 1.35.0. Windows guests only. Gives the calling User a one-time passphrase for their own local
+         *     administrator account in the guest, for example `hha-owner`, to type into a User Account Control prompt.
+         *     The host creates the account on first use through PowerShell Direct with the VM's stored administrator
+         *     credential: a member of Administrators, not of Remote Desktop Users, denied network and Remote Desktop
+         *     sign-in, and disabled whenever no window is open. Opening a window enables it and sets the passphrase;
+         *     the window ends at `expiresAt` (10 minutes by default, see `PUT /host/guest-admin/settings`), when the
+         *     User ends it, or when the VM stops, and the host then sets a random password and disables the account.
+         *
+         *     Calling this again while a window is open returns the same passphrase and expiry. The passphrase is kept
+         *     only in host memory and never logged; clients must not persist it. The response is sent with
+         *     `Cache-Control: no-store`.
+         */
+        post: operations["openGuestAdmin"];
+        /**
+         * End the calling User's administrator window in the VM now.
+         * @description Since 1.35.0. Sets a random password on the account and disables it. When the guest cannot be reached the
+         *     host forgets the passphrase anyway, answers with the guest error, and disables the account as soon as the
+         *     guest answers again (`closePending` in `GET`).
+         */
+        delete: operations["closeGuestAdmin"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2499,7 +2564,8 @@ export interface components {
              *     `elevationRequired`, `elevationUnavailable`, `incorrectPassphrase`, `tooManyAttempts`,
              *     `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
              *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`,
-             *     `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`, `wingetUnavailable`.
+             *     `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`, `wingetUnavailable`,
+             *     `vmNotProvisioned`, `guestAdminUnsupported`, `guestUnavailable`.
              */
             code?: string;
             /** @description Field-level validation problems (400). */
@@ -2988,6 +3054,40 @@ export interface components {
              *     when it has none. A device's own monitor choice for the VM wins over these.
              */
             defaults?: components["schemas"]["MachineConnection"] | null;
+        };
+        /** @description Since 1.35.0. An open administrator window in a Windows guest. */
+        GuestAdminWindow: {
+            /** @description The User's local administrator account in the guest, for example "hha-owner". */
+            accountName: string;
+            /**
+             * @description Four capitalized words and a digit separated by hyphens, for example "Maple-River-Candle-Orbit-7", for the
+             *     User to type into the guest's User Account Control prompt. Valid until `expiresAt` or until the window is
+             *     ended. Clients must not persist it or put it on the clipboard.
+             */
+            passphrase: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        /** @description Since 1.35.0. The calling User's administrator window in a VM; never the passphrase. */
+        GuestAdminStatus: {
+            /** @description The User's local administrator account in the guest, for example "hha-owner". */
+            accountName: string;
+            open: boolean;
+            /**
+             * Format: date-time
+             * @description When the open window ends; null when none is open.
+             */
+            expiresAt: string | null;
+            /** @description A window ended while the guest could not be reached; the account is disabled when it answers. */
+            closePending: boolean;
+        };
+        /** @description Since 1.35.0. */
+        GuestAdminSettings: {
+            /**
+             * @description How long an administrator window stays open.
+             * @default 10
+             */
+            windowMinutes: number;
         };
         ConsoleSession: {
             /** @description Opens tunnels with `POST /vms/{vmId}/console/tunnel`. Clients must not persist it. */
@@ -4964,6 +5064,33 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    setGuestAdminSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuestAdminSettings"];
+            };
+        };
+        responses: {
+            /** @description The settings were saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestAdminSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+        };
+    };
     downloadHostLogs: {
         parameters: {
             query?: never;
@@ -6459,6 +6586,115 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description The VM is not provisioned for this User, is not running, or has no address. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+            503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    getGuestAdmin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The User's administrator window in the VM. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestAdminStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    openGuestAdmin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The window is open. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestAdminWindow"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not running (`code: vmNotRunning`), is not set up for this User or has no stored administrator
+             *     credential (`code: vmNotProvisioned`), runs Linux (`code: guestAdminUnsupported`), or PowerShell Direct
+             *     cannot reach the guest yet (`code: guestUnavailable`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The guest rejected the stored administrator credential. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+        };
+    };
+    closeGuestAdmin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The window ended and the account is disabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The guest rejected the stored administrator credential. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

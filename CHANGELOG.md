@@ -10,6 +10,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- API 1.35.0 (host): administrator windows in Windows guests, a one-time passphrase for the User's own guest
+  administrator account (hha-owner) to answer a UAC prompt. POST, GET, and DELETE /vms/{vmId}/guest-admin, PUT /host/guest-admin/settings, and the problem codes
+  vmNotProvisioned, guestAdminUnsupported, and guestUnavailable.
+
 ## [0.2.1] - 2026-10-23 (API 1.34.0)
 
 Machine profiles and the Library. One kind of profile now describes a whole VM (hardware, account, display, backups,

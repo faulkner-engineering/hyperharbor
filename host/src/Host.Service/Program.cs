@@ -237,6 +237,13 @@ builder.Services.AddSingleton(services => new PasswordRotator(
     TimeSpan.FromSeconds(builder.Configuration.GetValue("Rdp:ReuseWindowSeconds", (int)PasswordRotator.DefaultReuseWindow.TotalSeconds)),
     services.GetRequiredService<ILogger<PasswordRotator>>()));
 builder.Services.AddSingleton<ConnectService>();
+builder.Services.AddSingleton(new GuestAdminStore(dataDirectory));
+builder.Services.AddSingleton<GuestAdminService>();
+if (selfTest is null)
+{
+    // A self-test run on a copy of the data must not reach into the real host's guests.
+    builder.Services.AddHostedService<GuestAdminMonitorService>();
+}
 
 builder.Services.AddOptions<ConsoleOptions>()
     .Bind(builder.Configuration.GetSection(ConsoleOptions.SectionName))
@@ -663,6 +670,7 @@ app.UseRemoteUseTracking();
 app.MapHostEndpoints();
 app.MapAuthEndpoints();
 app.MapVmEndpoints();
+app.MapGuestAdminEndpoints();
 app.MapConsoleEndpoints();
 app.MapUnattendEndpoints();
 app.MapSetupProfileEndpoints();
