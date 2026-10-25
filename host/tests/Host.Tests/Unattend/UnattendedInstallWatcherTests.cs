@@ -581,7 +581,7 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         }
     }
 
-    private sealed class FakeMedia : IVmMedia
+    internal sealed class FakeMedia : IVmMedia
     {
         public List<(Guid VmId, string Path)> Ejected { get; } = [];
 

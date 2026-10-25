@@ -336,6 +336,8 @@ builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<Unat
 builder.Services.AddSingleton<IRemoteAccessProbe>(new TcpRemoteAccessProbe());
 builder.Services.AddSingleton<IVmMedia, CimVmMedia>();
 builder.Services.AddSingleton(builder.Configuration.GetSection(InstallWatcherOptions.SectionName).Get<InstallWatcherOptions>() ?? new InstallWatcherOptions());
+builder.Services.AddSingleton<IVmBootEvents, HyperVWorkerBootEvents>();
+builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<WindowsSetupBootRecovery>(services));
 builder.Services.AddSingleton<UnattendedInstallWatcher>();
 if (selfTest is null)
 {
