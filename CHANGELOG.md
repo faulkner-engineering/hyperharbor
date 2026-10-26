@@ -10,6 +10,15 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-25 (API 1.35.0)
+
+Administrator access in Windows VMs. The account you connect with is a standard user; now you can ask for a short
+administrator window from the client and type a one-time passphrase into the Windows administrator prompt. The client
+also draws its own title bar, and unattended Windows installs and host updates recover from two failures that used to
+stop them. Update the host for administrator access (API 1.35.0): with an older host the menu entry stays hidden.
+Hosts updating from 0.2.1 can rarely fail to prepare this update; see Fixed. The host updates itself to this version
+when it is on the stable channel with automatic updates on; installed clients update at their next check.
+
 ### Added
 - Administrator access in Windows VMs. The account you connect with is a standard user, so it cannot answer a
   Windows administrator prompt (installing software, changing settings). Choose Administrator access… in a running

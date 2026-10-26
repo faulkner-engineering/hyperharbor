@@ -16,6 +16,10 @@ section for an area before changing it: most of these were learned from a failur
 - Installer and service changes need UAC prompts, so live install tests need the user at the PC.
 - Copying an ACL: a FileSecurity read from one file is not written to another (only sections marked changed
   are persisted); go through Get/SetSecurityDescriptorBinaryForm. DataBackupTests check protected files.
+- Nothing may copy the data folder assuming no file is open: the winget index downloads into winget\ in the
+  background (at start and daily), and both the update self-test copy and test cleanup met its open .partial file
+  ("being used by another process", 2026-10-25; the flaky UpdateApiTests case). DataBackup leaves winget\ out, and
+  TestHost sets Winget:FetchAtStart=false so in-memory hosts never download it.
 - When a release changes how a store writes its file, raise DataFormat.Current and add the migration.
 - schtasks /Create without /XML makes tasks that start only on AC power (they sit "Queued" on battery).
 - System.Text.Json rejects a UTF-8 BOM in raw bytes; read hand-editable JSON through Utf8Json.ReadFile.
