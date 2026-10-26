@@ -33,7 +33,8 @@ $toolPaths = @(
     "$env:ProgramFiles\nodejs",
     "$env:USERPROFILE\.cargo\bin"
 )
-$env:Path = (($toolPaths | Where-Object { Test-Path $_ }) + $env:Path) -join ';'
+# @() keeps one match an array; a lone string would be joined onto PATH without a separator.
+$env:Path = (@($toolPaths | Where-Object { Test-Path $_ }) + $env:Path) -join ';'
 $env:DOTNET_NOLOGO = '1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 
