@@ -249,7 +249,7 @@
         </label>
         <label class="check">
           <input type="checkbox" bind:checked={exportFirst} disabled={exported} />
-          {exported ? "Disks exported" : "Export the disks to the host's backup folder first"}
+          {exported ? "Disks exported" : "Export the disks to the host's disk export folder first"}
         </label>
       </fieldset>
 

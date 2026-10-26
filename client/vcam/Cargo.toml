@@ -1,6 +1,6 @@
 [package]
 name = "hyperharbor-vcam"
-version = "0.2.2"
+version = "0.2.3"
 description = "HyperHarbor virtual camera source, loaded by the Windows Frame Server"
 authors = ["Faulkner Engineering LLC"]
 license = "Apache-2.0"

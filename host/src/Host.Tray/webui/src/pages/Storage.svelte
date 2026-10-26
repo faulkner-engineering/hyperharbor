@@ -24,9 +24,11 @@
     },
     {
       kind: "backup",
-      title: "VM backups",
+      title: "Disk exports",
       folder: view.backupFolder,
-      detail: "Disk exports a client starts without choosing a folder go here.",
+      detail:
+        "Copies of a stopped VM's disks (for example before Performance mode) go here when a client does not choose a folder. " +
+        "These are not the VM backups; those go to the targets set up from a client (Host menu, Backups).",
     },
   ]);
 </script>

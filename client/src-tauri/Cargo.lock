@@ -1572,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "hyperharbor-client"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -1609,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "hyperharbor-vcam"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "hyperharbor-vcam-protocol",
  "windows",
@@ -1618,7 +1618,7 @@ dependencies = [
 
 [[package]]
 name = "hyperharbor-vcam-protocol"
-version = "0.2.2"
+version = "0.2.3"
 
 [[package]]
 name = "iana-time-zone"

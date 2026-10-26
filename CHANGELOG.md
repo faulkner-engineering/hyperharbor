@@ -10,6 +10,25 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-25 (API 1.35.0)
+
+Two fixes in the client and a clearer name on the host. Adding a backup target no longer waits forever on a
+passphrase prompt hidden behind it, and the host window's folder for disk exports no longer calls itself "VM backups".
+No API change; the host updates itself to this version when it is on the stable channel with automatic updates on, and
+installed clients update at their next check.
+
+### Changed
+- The host window's "VM backups" folder is now called "Disk exports", because it never held VM backups: it is where
+  copies of a stopped VM's disks go (for example before turning on Performance mode) when the client does not choose
+  a folder. VM backups go to the backup targets you add from a client (Host menu, Backups). Its default is now
+  "HyperHarbor Disk Exports" in Public Documents; exports already made in "HyperHarbor Backups" stay there, and a
+  folder you chose yourself is kept.
+
+### Fixed
+- Adding a backup target (and any other step from the Backups panel that needs the admin passphrase) no longer sits
+  on "Working…" forever: the passphrase prompt opened behind the target dialog, where it could not be seen. The prompt
+  now always opens above other dialogs.
+
 ## [0.2.2] - 2026-10-25 (API 1.35.0)
 
 Administrator access in Windows VMs. The account you connect with is a standard user; now you can ask for a short

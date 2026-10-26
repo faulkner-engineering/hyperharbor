@@ -35,7 +35,7 @@
   }
 </script>
 
-<Dialog title="Admin passphrase">
+<Dialog title="Admin passphrase" above>
   <form onsubmit={submit}>
     <p class="muted">
       This change needs the admin passphrase set in the HyperHarbor tray on {host.displayName}. This device

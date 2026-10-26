@@ -289,7 +289,7 @@ public sealed partial class TrayWindowTests
                 [new TrayViewDevice(Id, "Laptop", "AB12CD34EF567890AB12CD34EF567890", time)],
                 new TrayViewFolder(@"D:\VMs", false),
                 @"D:\ISOs",
-                @"C:\Users\Public\Documents\HyperHarbor Backups",
+                @"C:\Users\Public\Documents\HyperHarbor Disk Exports",
                 true,
                 false,
                 update,

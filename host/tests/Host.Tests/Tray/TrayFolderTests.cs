@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HyperHarbor.Host.Tests.Tray;
 
-/// <summary>Moving the ISO library, the VM storage folder, and the backup folder from the tray, over a uniquely named pipe.</summary>
+/// <summary>Moving the ISO library, the VM storage folder, and the disk export folder from the tray, over a uniquely named pipe.</summary>
 public sealed class TrayFolderTests : IAsyncLifetime
 {
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "hyperharbor-tests", Guid.NewGuid().ToString("N"));

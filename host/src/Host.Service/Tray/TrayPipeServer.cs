@@ -704,7 +704,7 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
         var error = UseLocalFolder(request.Folder, @"D:\Backups", folder =>
         {
             settings.SetBackupFolder(folder);
-            _logger.LogInformation("The backup folder was changed to {Folder} from the tray.", folder);
+            _logger.LogInformation("The disk export folder was changed to {Folder} from the tray.", folder);
             AuditTrayAction("traySetBackupFolder", null, null, null, $"folder={folder}");
         });
         Broadcast(new BackupFolderMessage(backups.Folder, error));
