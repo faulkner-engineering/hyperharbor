@@ -507,6 +507,17 @@ verified, and what was found along the way. User-facing changes per release are 
    - Edge (the user: "I can't remove Edge from a Windows install"): Windows blocks it outside the EEA, so the user chose
      to hide it instead. Tweak system.hideEdge (policies only) and Microsoft.MicrosoftEdge.Stable rated keep with a
      note. Not done: forced removal, an EEA region at install, unpinning from the taskbar.
+   - Disk growth (the user: "built-in functionality for increasing the maximum size of a disk"): GET /vms/{id}/disks and
+     POST /vms/{id}/disks/grow (elevated, a growDisk job with diskGrowResult). VmDiskService (Host.Core/Lifecycle):
+     ResizeVirtualHardDisk through CimHyperVDisks; online for a VHDX on a Generation 2 VM, otherwise the VM off or
+     shutDownToApply (VmShutdown, now shared with VmComputeService). Blockers: checkpoints, differencing disks,
+     unreadable files, saved or paused VMs. PowerShellPartitionExtender extends the last partition when it is basic
+     NTFS: Mount-DiskImage on the host for an off VM (administrator only, so the installed service), or over
+     PowerShell Direct with the stored administrator for a running one (the guest disk is the one whose size matches).
+     Linux guests get the growpart, pvresize, and lvextend commands as a note; the user chose that over running them
+     over SSH. Client: Disk size… in the VM menu (hostSupports 1.36.0), DiskDialog. Verified: unit tests, and
+     DiskGrowLiveTests (HH_DISK_GROW_LIVE) grew a real VHDX from 1 to 2 GB through Hyper-V on the development VM. Not
+     yet run against a VM: online growth, and both partition extensions.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

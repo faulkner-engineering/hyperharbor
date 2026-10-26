@@ -1195,6 +1195,30 @@ async fn update_vm_compute(
         .await
 }
 
+#[tauri::command]
+async fn list_vm_disks(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.list_vm_disks(&host, &paired, &vm_id).await
+}
+
+#[tauri::command]
+async fn grow_vm_disk(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    request: api::GrowDiskRequest,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .grow_vm_disk(&host, &paired, &vm_id, &request)
+        .await
+}
+
 /// Event with the progress of an ISO upload: `{ pickId, sent, total }`.
 const ISO_UPLOAD_PROGRESS_EVENT: &str = "iso-upload-progress";
 
@@ -3106,6 +3130,8 @@ pub fn run() {
             apply_vm_setup_profile,
             get_vm_compute,
             update_vm_compute,
+            list_vm_disks,
+            grow_vm_disk,
             pick_iso_file,
             upload_iso,
             cancel_iso_upload,

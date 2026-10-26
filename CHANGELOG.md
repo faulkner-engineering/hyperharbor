@@ -13,6 +13,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 API 1.36.0.
 
 ### Added
+- Disk size… in a VM's menu grows a virtual hard disk. A Generation 2 VM's VHDX grows while the VM runs; anything else
+  needs the VM off, and the dialog offers to shut it down, grow the disk, and start it again. HyperHarbor also extends
+  the partition at the end of the disk (C: on the VMs it installs): inside a running Windows VM it uses the VM's
+  administrator, and for an off VM the installed host mounts the disk itself (a portable host cannot, and says so).
+  For Linux VMs it lists the commands that extend the file system. A disk never shrinks, and a VM with checkpoints
+  must have them merged first. Needs a host with this version.
 - Setup and machine profiles can make their browser the default in the VM: "Make <browser> the default browser" in
   the Browser section (`makeDefault: true` in YAML). Windows applies it at every sign-in, so the default browser
   cannot be changed inside the VM while the profile sets it. Needs a host with this version; older hosts do not show

@@ -1527,6 +1527,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/disks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List a VM's virtual hard disks with their sizes.
+         * @description Since 1.36.0. The disks attached to the VM's current configuration (not ISO images), in Hyper-V's order;
+         *     the first is usually the one Windows or Linux is installed on. `growBlocker` says why a disk cannot grow.
+         */
+        get: operations["listVmDisks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/disks/grow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Increase a virtual hard disk's maximum size, and the guest's partition on it.
+         * @description Since 1.36.0. Starts a `growDisk` job. A disk only grows; a smaller or equal size is a validation error. A
+         *     Generation 2 VM's VHDX grows while the VM runs. Otherwise the VM must be off: a running VM gets 409 with
+         *     `code: requiresShutdown` unless `shutDownToApply` is true, and then the job shuts the guest down, grows the
+         *     disk, and starts it again (never forcing it off). Saved and paused VMs, disks with checkpoints, and
+         *     differencing disks cannot grow (409, as `growBlocker` in `listVmDisks` says).
+         *
+         *     With `extendPartition` (true when absent), the job also extends the partition at the end of the disk when it
+         *     is NTFS: over PowerShell Direct with the VM's stored administrator while the guest runs, or by mounting the
+         *     disk on the host while the VM is off (the installed service only). Linux guests and anything that cannot be
+         *     extended get a note in `diskGrowResult` instead; the disk has still grown. A size the disk's drive does not
+         *     have room for is a resource warning, as for `createVm`.
+         */
+        post: operations["growVmDisk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/disks/export": {
         parameters: {
             query?: never;
@@ -3307,7 +3364,7 @@ export interface components {
             blockers: components["schemas"]["DeleteBlocker"][];
         };
         /** @enum {string} */
-        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm" | "mergeCheckpoints" | "applyMachineProfile";
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm" | "mergeCheckpoints" | "applyMachineProfile" | "growDisk";
         /** @enum {string} */
         VmJobState: "running" | "succeeded" | "failed";
         JobError: {
@@ -3338,6 +3395,61 @@ export interface components {
             restoreResult?: components["schemas"]["RestoreResult"] | null;
             /** @description What a `transferVm` job did, once it succeeded (API 1.24.0). Omitted for other jobs. */
             transferResult?: components["schemas"]["TransferResult"] | null;
+            /** @description What a `growDisk` job did, once it succeeded (API 1.36.0). Omitted for other jobs. */
+            diskGrowResult?: components["schemas"]["DiskGrowResult"] | null;
+        };
+        /** @description Since 1.36.0. A virtual hard disk attached to a VM. */
+        VmDisk: {
+            /** @description The disk file on the host; `growVmDisk` names the disk with it. */
+            path: string;
+            /**
+             * Format: int64
+             * @description The size the guest sees.
+             */
+            maximumSizeBytes: number;
+            /**
+             * Format: int64
+             * @description The space the file takes now (a dynamic disk grows into its maximum).
+             */
+            fileSizeBytes: number;
+            /** @description The disk can grow without shutting the VM down (a VHDX on a Generation 2 VM). */
+            growWhileRunning: boolean;
+            /** @description Why the disk cannot grow now, or null. */
+            growBlocker: components["schemas"]["DiskGrowBlocker"] | null;
+        };
+        /**
+         * @description `checkpoints`: the VM has checkpoints (merge them with `mergeVmCheckpoints` first). `differencing`: the disk is a
+         *     differencing disk. `notFound`: Hyper-V cannot read the file. `vmState`: the VM is saved or paused.
+         * @enum {string}
+         */
+        DiskGrowBlocker: "checkpoints" | "differencing" | "notFound" | "vmState";
+        /** @description Since 1.36.0. */
+        VmDiskList: {
+            /** Format: uuid */
+            vmId: string;
+            disks: components["schemas"]["VmDisk"][];
+        };
+        /** @description Since 1.36.0. */
+        GrowVmDiskRequest: {
+            /** @description A `path` from `listVmDisks`. */
+            path: string;
+            /** @description The new maximum size in GB (1024^3 bytes); larger than the disk's current size. */
+            sizeGb: number;
+            /** @description Also extend the guest's partition at the end of the disk; true when absent. */
+            extendPartition?: boolean;
+            /** @description For a running VM whose disk cannot grow while it runs, shut it down, grow, and start it again. */
+            shutDownToApply?: boolean;
+            acknowledgeWarnings?: boolean;
+        };
+        /** @description Since 1.36.0. What a `growDisk` job did. */
+        DiskGrowResult: {
+            path: string;
+            /** Format: int64 */
+            maximumSizeBytes: number;
+            /** @description The partition at the end of the disk now uses the new space. */
+            partitionExtended: boolean;
+            /** @description What the user still has to do, for example extend the file system in a Linux guest. */
+            note: string | null;
         };
         ApplySetupProfileRequest: {
             /** @description An `id` from `GET /setup-profiles`. */
@@ -7331,6 +7443,78 @@ export interface operations {
             /**
              * @description The VM is not off, has checkpoints and `deleteCheckpoints` is false, a disk is shared
              *     or cannot be deleted, or another operation is in progress on the VM.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    listVmDisks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The disks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmDiskList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    growVmDisk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowVmDiskRequest"];
+            };
+        };
+        responses: {
+            /** @description The job started. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM must be off (`code: requiresShutdown`), resource warnings to acknowledge, the disk cannot grow, the
+             *     VM is saved or paused, or another operation is in progress on it.
              */
             409: {
                 headers: {

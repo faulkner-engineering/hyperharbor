@@ -12,8 +12,6 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// </summary>
 public sealed class VmComputeService
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
-
     private readonly IVmInventory _inventory;
     private readonly IHyperVCompute _compute;
     private readonly IHyperVPowerInvoker _power;
@@ -131,27 +129,9 @@ public sealed class VmComputeService
 
     private async Task ShutDownApplyStartAsync(Guid vmId, string name, ComputeChange change, ComputeState desired, VmJobContext context)
     {
-        await _power.InvokeAsync(vmId, VmAction.Shutdown, context.Stopping).ConfigureAwait(false);
-
-        var deadline = _time.GetUtcNow() + TimeSpan.FromSeconds(_options.ShutdownTimeoutSeconds);
-        while (true)
-        {
-            var vm = await _inventory.GetAsync(vmId, context.Stopping).ConfigureAwait(false) ?? throw new VmNotFoundException(vmId);
-            if (vm.State == VmState.Off)
-            {
-                break;
-            }
-
-            if (_time.GetUtcNow() >= deadline)
-            {
-                throw new LifecycleConflictException(
-                    $"{name} did not shut down within {_options.ShutdownTimeoutSeconds} seconds, so the settings were not changed. It was not forced off.");
-            }
-
-            var elapsed = _options.ShutdownTimeoutSeconds - (deadline - _time.GetUtcNow()).TotalSeconds;
-            context.Report("Shutting down the guest", (int)(elapsed * 50 / Math.Max(1, _options.ShutdownTimeoutSeconds)));
-            await Task.Delay(PollInterval, _time, context.Stopping).ConfigureAwait(false);
-        }
+        await VmShutdown.ShutDownAsync(_power, _inventory, _time, _options.ShutdownTimeoutSeconds, vmId,
+            $"{name} did not shut down within {_options.ShutdownTimeoutSeconds} seconds, so the settings were not changed. It was not forced off.",
+            context).ConfigureAwait(false);
 
         context.Report("Applying settings", 60);
         await _compute.ApplyAsync(vmId, change, desired, context.Stopping).ConfigureAwait(false);

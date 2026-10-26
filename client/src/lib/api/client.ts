@@ -22,6 +22,10 @@ export type VirtualSwitch = components["schemas"]["VirtualSwitch"];
 export type VmComputeSettings = components["schemas"]["VmComputeSettings"];
 export type VmComputeUpdate = components["schemas"]["VmComputeUpdate"];
 export type ComputeSetting = components["schemas"]["ComputeSetting"];
+export type VmDisk = components["schemas"]["VmDisk"];
+export type VmDiskList = components["schemas"]["VmDiskList"];
+export type GrowVmDiskRequest = components["schemas"]["GrowVmDiskRequest"];
+export type DiskGrowResult = components["schemas"]["DiskGrowResult"];
 export type ValidationIssue = components["schemas"]["ValidationIssue"];
 export type ElevationStatus = components["schemas"]["ElevationStatus"];
 export type UnattendProfile = components["schemas"]["UnattendProfile"];
@@ -974,6 +978,15 @@ export const getVmCompute = (key: string, vmId: string) =>
 
 export const updateVmCompute = (key: string, vmId: string, request: UpdateComputeRequest) =>
   invoke<VmComputeUpdate>("update_vm_compute", { key, vmId, request });
+
+/** The API version that added listing and growing a VM's disks. */
+export const DiskGrowApiVersion = "1.36.0";
+
+export const listVmDisks = (key: string, vmId: string) => invoke<VmDiskList>("list_vm_disks", { key, vmId });
+
+/** Grows a disk (and the guest's partition on it); returns the growDisk job. Needs elevation. */
+export const growVmDisk = (key: string, vmId: string, request: GrowVmDiskRequest) =>
+  invoke<VmJob>("grow_vm_disk", { key, vmId, request: { extendPartition: true, ...request } });
 
 export const getVmPerformance = (key: string, vmId: string) =>
   invoke<VmPerformance>("get_vm_performance", { key, vmId });

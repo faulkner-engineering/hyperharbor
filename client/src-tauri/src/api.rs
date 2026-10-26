@@ -152,6 +152,19 @@ pub struct UpdateComputeRequest {
     pub acknowledge_warnings: bool,
 }
 
+/// Body of POST /vms/{vmId}/disks/grow (api.yaml GrowVmDiskRequest).
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrowDiskRequest {
+    pub path: String,
+    pub size_gb: u32,
+    pub extend_partition: bool,
+    #[serde(default)]
+    pub shut_down_to_apply: bool,
+    #[serde(default)]
+    pub acknowledge_warnings: bool,
+}
+
 /// The power actions in api.yaml VmAction.
 pub const VM_ACTIONS: [&str; 5] = ["start", "shutdown", "turnOff", "save", "restart"];
 
@@ -1282,6 +1295,34 @@ impl ApiClient {
             paired,
             reqwest::Method::PATCH,
             &vm_path(vm_id, "compute")?,
+            &to_body(request)?,
+        )
+        .await
+    }
+
+    /// GET /vms/{vmId}/disks.
+    pub async fn list_vm_disks(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "disks")?).await
+    }
+
+    /// POST /vms/{vmId}/disks/grow (needs elevation). Returns the growDisk job.
+    pub async fn grow_vm_disk(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        request: &GrowDiskRequest,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "disks/grow")?,
             &to_body(request)?,
         )
         .await
@@ -3761,6 +3802,10 @@ mod server_tests {
             to_body(&UpdateComputeRequest::default()).unwrap(),
             json!({ "shutDownToApply": false, "acknowledgeWarnings": false })
         );
+
+        let sample = fixture("GrowVmDiskRequest");
+        let grow: GrowDiskRequest = serde_json::from_value(sample.clone()).unwrap();
+        assert_eq!(to_body(&grow).unwrap(), sample);
     }
 
     #[test]

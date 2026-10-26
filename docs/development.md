@@ -30,6 +30,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   It starts the real service on a free loopback port, so it can run while a packaged host is running.
 - Live lifecycle (creates, changes, and deletes HyperHarbor-Test; ask first):
   HH_LIFECYCLE_LIVE=1 dotnet test HyperHarbor.sln --filter LifecycleLiveTests
+- Live disk growth (a 1 GB VHDX in a temporary folder, no VM):
+  HH_DISK_GROW_LIVE=1 dotnet test HyperHarbor.sln --filter DiskGrowLiveTests
 - Live Performance mode (same VM; GPU partition, storage move, export; ask first):
   HH_PERFORMANCE_LIVE=1 dotnet test HyperHarbor.sln --filter PerformanceLiveTests
 

@@ -434,6 +434,9 @@ if (isWindowsService && selfTest is null)
 builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<VmCreationService>(services, services.GetRequiredService<VmStorageLocation>()));
 builder.Services.AddSingleton<IHyperVCompute, CimHyperVCompute>();
 builder.Services.AddSingleton<VmComputeService>();
+builder.Services.AddSingleton<IHyperVDisks, CimHyperVDisks>();
+builder.Services.AddSingleton<IPartitionExtender, PowerShellPartitionExtender>();
+builder.Services.AddSingleton<VmDiskService>();
 
 // Performance mode: GPU partitioning and fixed resources for Windows VMs.
 builder.Services.AddSingleton(new PerformanceStore(dataDirectory));

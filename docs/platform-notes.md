@@ -396,6 +396,18 @@ section for an area before changing it: most of these were learned from a failur
   service runs as LocalSystem and applies them directly, with no tray approval. An unelevated console
   host still asks the tray as well. TestHost pins the unelevated WakeFixCoordinator path.
 
+## Growing disks (0.2.4)
+
+- Msvm_ImageManagementService.ResizeVirtualHardDisk(Path, MaxInternalSize) grows a VHDX; Hyper-V allows it on a running
+  VM only for a VHDX on a SCSI controller (every disk of a Generation 2 VM), and never while the VM has checkpoints.
+  GetVirtualHardDiskSettingData gives MaxInternalSize, Format (3 is VHDX), and ParentPath. Verified 2026-10-26 on a
+  bare VHDX (DiskGrowLiveTests); online growth on a running VM not yet.
+- HyperHarbor's autounattend puts EFI, MSR, and C: (Extend) on disk 0, with no recovery partition after C:, so C: is the
+  last partition and can grow. Windows installed from the console often puts a recovery partition after C:; the
+  extender then leaves it and says so.
+- Mount-DiskImage needs administrator rights, so only the installed service extends an off VM's partition. A running
+  guest sees the new size after Update-HostStorageCache; the extender waits up to 30 seconds for it.
+
 ## VM lifecycle (Phase 8)
 
 - Host.Core/Lifecycle: VmDeletionService, VmCreationService, VmComputeService, VmJobStore (in-memory jobs,

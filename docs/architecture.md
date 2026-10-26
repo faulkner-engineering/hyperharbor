@@ -39,7 +39,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile,
   DataDirectoryAccess: finds and repairs data files a portable host cannot open),
   Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService), Lifecycle/ (create, delete,
-  compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
+  compute, jobs, locks, ISO library, VmDiskService and VmDisks: listing and growing disks and extending the
+  partition), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
   VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants),
   Power/ (VM power actions; KeepAwake: the power request that keeps the host awake during remote use),
   Profiles/ (setup profiles: Catalogs, ProfileYamlReader/Writer, ProfileValidator, PackageAliasResolver,
