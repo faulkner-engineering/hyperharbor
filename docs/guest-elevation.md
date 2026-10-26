@@ -15,13 +15,17 @@ starts from it.
   its password never expires, it holds SeDenyNetworkLogonRight and SeDenyRemoteInteractiveLogonRight (it can answer
   UAC and sign in at the console, nothing else), and it is disabled whenever no window is open.
 - Opening a window (POST /vms/{id}/guest-admin, elevated) enables the account with a new passphrase (PassphraseGenerator:
-  four capitalized common words and a digit, hyphenated) for 10 minutes (PUT /host/guest-admin/settings, 2 to 30).
+  three capitalized common words and a digit, hyphenated) for 5 minutes (PUT /host/guest-admin/settings, 2 to 30).
   Asking again while it is open returns the same passphrase. The window ends at expiry, on DELETE, when the VM stops
   (the sweep every 30 seconds), or with the host process; the host then sets a random password and disables the
   account, at once or as soon as the guest answers again (guest-admin.json lists windows that may still be enabled,
   without the passphrase).
 - The client's Administrator access dialog shows the account, the passphrase split into its words, and a countdown.
   It has no copy button: with clipboard redirection on, the device's clipboard is readable inside the VM's session.
+  Instead a small card (src-tauri/src/guest_admin_overlay.rs, the overlay route) stays on top of every window, a
+  full-screen Remote Desktop session included, without taking the focus, so the passphrase can be read while typing it;
+  it goes away with the window. Passphrases were four words and windows 10 minutes until the first live use
+  (2026-10-25), when remembering the passphrase across the switch to Remote Desktop was the pain point.
 
 ## The integrated version (design, not built)
 
@@ -51,7 +55,7 @@ in the guest's UAC prompt let the host hand the passphrase straight to Windows a
    provider, which submits them to UAC (KERB_INTERACTIVE_UNLOCK_LOGON through GetSerialization). Nothing is shown
    or typed.
 6. The host closes the window as soon as the agent reports the prompt finished (or after a short limit, such as 30
-   seconds), instead of waiting out the 10 minutes.
+   seconds), instead of waiting out the 5 minutes.
 
 ### Hooks this phase leaves
 - GuestAdminService.OpenAsync takes a GuestAdminRequester, not an HTTP request: a host event opens a window the same

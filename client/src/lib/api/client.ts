@@ -315,6 +315,29 @@ export const getGuestAdmin = (key: string, vmId: string) => invoke<GuestAdminSta
 /** Ends the administrator window now; the host disables the account. */
 export const closeGuestAdmin = (key: string, vmId: string) => invoke<void>("close_guest_admin", { key, vmId });
 
+/** What the always-on-top passphrase card shows. Mirrors OverlayCard in src-tauri/src/guest_admin_overlay.rs. */
+export interface GuestAdminCard {
+  vmName: string;
+  accountName: string;
+  passphrase: string;
+  expiresAt: string;
+}
+
+/**
+ * Shows the passphrase card on top of every window, a full-screen Remote Desktop session included, without taking the
+ * focus, or updates the one showing. Resolves to false when the card could not be shown.
+ */
+export const showGuestAdminCard = (card: GuestAdminCard) => invoke<boolean>("show_guest_admin_overlay", { card });
+
+/** The card to show, or null once it was hidden. Used by the card's own window. */
+export const getGuestAdminCard = () => invoke<GuestAdminCard | null>("get_guest_admin_overlay");
+
+/** Hides the passphrase card and forgets the passphrase it held. */
+export const hideGuestAdminCard = () => invoke<void>("hide_guest_admin_overlay");
+
+/** Sent to the card's window when it should read its card again. */
+export const GuestAdminCardChangedEvent = "guest-admin-overlay-changed";
+
 /** What a VM's Remote Desktop session sees while its window is not in front. */
 export type UnfocusedBehavior = "freeze" | "blur" | "keepLive";
 

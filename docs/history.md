@@ -451,7 +451,7 @@ verified, and what was found along the way. User-facing changes per release are 
      disabled whenever no window is open.
    - GuestAdminService (Host.Core/Provisioning): open enables the account with a passphrase (PassphraseGenerator: four
      capitalized words from the bundled PassphraseWords.txt, 1,118 words, and a digit, hyphenated; words containing a
-     part of the full name, such as "for" in Forest, are left out because Windows refuses them) for 10 minutes
+     part of the full name, such as "for" in Forest, are left out because Windows refuses them) for 5 minutes
      (GuestAdminStore, guest-admin.json: the length, 2 to 30, and the windows that may still be enabled, never the
      passphrase). Calls per VM and User are serialized; asking again while open returns the same passphrase. The
      passphrase is a char array zeroed on close. Closing (DELETE, expiry timer, the VM stopping, or a host restart)
@@ -468,6 +468,13 @@ verified, and what was found along the way. User-facing changes per release are 
      clipboard redirection the device's clipboard is readable inside the VM's session. The client has no VM detail
      view, so the action is in the menu only. Rust: open_guest_admin, get_guest_admin, close_guest_admin
      (GuestAdminWindow hides the passphrase in Debug and zeroes it on drop).
+   - After the user's first live use on Faulkner Engineering LLC (it worked, but remembering the passphrase while
+     switching to the Remote Desktop window was annoying), they chose: three words and a digit (about 34 bits), a
+     5-minute default, and an always-on-top card. A topmost window was confirmed to draw over a full-screen mstsc
+     session without taking its focus (foreground stayed TscShellContainerClass) before building it. The card is a
+     second Tauri window (label guest-admin-overlay, route /overlay, no decorations, no taskbar button, focused false)
+     at the top right of the client's monitor (Remote Desktop's connection bar is at the top center); the passphrase
+     lives in the Rust OverlayState until hidden, zeroed on drop, and the card closes with the client.
    - Verified: unit tests with the fake guest (lazy creation, enable and disable, reuse, expiry, VM stop, startup sweep,
      serialization, zeroing, Linux, settings range, passphrase never logged or persisted), API tests for the four
      routes, Rust and Vitest tests. Live (GuestAdminLiveTests on HyperHarbor-Test, made by MachineProfileLiveTests with

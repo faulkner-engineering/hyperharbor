@@ -118,7 +118,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   have a copy; UI in lib/components/Library.svelte), camera/ (see below); client/src: SvelteKit SPA. The window has no Windows title bar
   (decorations off in tauri.conf.json); lib/components/TitleBar.svelte is the first row of the page grid, with its
   own window buttons (window permissions in capabilities/default.json), and overlays start below --titlebar-height
-  (app.css). Lifecycle UI:
+  (app.css). The administrator passphrase card is a second window (guest_admin_overlay.rs, routes/overlay, always on
+  top, never focused) that GuestAdminDialog shows and hides. Lifecycle UI:
   lib/lifecycle.svelte.ts (elevation prompt, job polling) and lib/components/*Dialog.svelte on a shared Dialog
 - Machine view (the setup profile editor's left pane; each tab is a section of targets.json): client/src/lib/machine:
   camera.ts (targetFor, rigFor, CameraRig: 900 ms eased fly, tilted rest orbit slowing with distance, cuts under reduced

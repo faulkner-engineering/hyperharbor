@@ -4,6 +4,7 @@ mod console;
 mod discovery;
 mod elevated;
 mod error;
+mod guest_admin_overlay;
 mod hosts;
 mod identity;
 mod library;
@@ -36,6 +37,8 @@ use crate::paired::{PairedHost, PairedHostStore};
 
 /// Event emitted to the frontend whenever the host list changes.
 const HOSTS_CHANGED_EVENT: &str = "hosts-changed";
+/// Tells the passphrase card to read its card again.
+const OVERLAY_CHANGED_EVENT: &str = "guest-admin-overlay-changed";
 
 struct AppState {
     hosts: Arc<HostRegistry>,
@@ -60,6 +63,8 @@ struct AppState {
     updates: update::service::UpdateService,
     /// Tailscale on this PC and the hosts found on the tailnet.
     tailnet: Arc<tailnet::TailnetService>,
+    /// The administrator passphrase card shown on top of every window, if any.
+    overlay: guest_admin_overlay::OverlayState,
     // Kept alive so mDNS browsing continues for the lifetime of the app.
     _mdns: Option<mdns_sd::ServiceDaemon>,
 }
@@ -637,6 +642,72 @@ async fn close_guest_admin(
 ) -> Result<(), ClientError> {
     let (host, paired) = state.paired_host(&key)?;
     state.api.close_guest_admin(&host, &paired, &vm_id).await
+}
+
+/// Shows the administrator passphrase card on top of every window (a full-screen Remote Desktop session included)
+/// without taking the focus, or updates the one showing. Returns false when the window could not be made; the
+/// dialog still shows the passphrase then.
+#[tauri::command]
+fn show_guest_admin_overlay(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    card: guest_admin_overlay::OverlayCard,
+) -> bool {
+    state.overlay.show(card);
+    if let Some(window) = app.get_webview_window(guest_admin_overlay::LABEL) {
+        let _ = window.emit(OVERLAY_CHANGED_EVENT, ());
+        return true;
+    }
+
+    let mut builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        guest_admin_overlay::LABEL,
+        tauri::WebviewUrl::App(guest_admin_overlay::ROUTE.into()),
+    )
+    .title("HyperHarbor administrator passphrase")
+    .inner_size(guest_admin_overlay::WIDTH, guest_admin_overlay::HEIGHT)
+    .decorations(false)
+    .resizable(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(false);
+    // The top-right corner of the monitor the client is on.
+    if let Some(monitor) = app
+        .get_webview_window("main")
+        .and_then(|main| main.current_monitor().ok().flatten())
+    {
+        let scale = monitor.scale_factor();
+        let (x, y) = guest_admin_overlay::position(
+            monitor.position().x,
+            monitor.position().y,
+            monitor.size().width,
+            scale,
+        );
+        builder = builder.position(f64::from(x) / scale, f64::from(y) / scale);
+    }
+
+    match builder.build() {
+        Ok(_) => true,
+        Err(error) => {
+            eprintln!("The passphrase card could not be shown: {error}");
+            false
+        }
+    }
+}
+
+/// The card the passphrase window shows, or None once it was hidden.
+#[tauri::command]
+fn get_guest_admin_overlay(state: State<'_, AppState>) -> Option<guest_admin_overlay::OverlayCard> {
+    state.overlay.current()
+}
+
+/// Forgets the passphrase card and closes its window.
+#[tauri::command]
+fn hide_guest_admin_overlay(app: tauri::AppHandle, state: State<'_, AppState>) {
+    state.overlay.clear();
+    if let Some(window) = app.get_webview_window(guest_admin_overlay::LABEL) {
+        let _ = window.close();
+    }
 }
 
 /// Allows Remote Desktop connections to the host (needs elevation). Returns the HostRemoteDesktop.
@@ -2911,6 +2982,7 @@ pub fn run() {
                         }),
                     )
                 },
+                overlay: guest_admin_overlay::OverlayState::default(),
                 _mdns: mdns,
             });
 
@@ -3046,6 +3118,9 @@ pub fn run() {
             open_guest_admin,
             get_guest_admin,
             close_guest_admin,
+            show_guest_admin_overlay,
+            get_guest_admin_overlay,
+            hide_guest_admin_overlay,
             download_host_logs,
             open_console,
             list_monitors,
@@ -3105,6 +3180,18 @@ pub fn run() {
             replace_vm_disk,
             export_vm_disks
         ])
+        // The passphrase card must not outlive the client window.
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                window.state::<AppState>().overlay.clear();
+                if let Some(card) = window
+                    .app_handle()
+                    .get_webview_window(guest_admin_overlay::LABEL)
+                {
+                    let _ = card.close();
+                }
+            }
+        })
         .build(tauri::generate_context!())
         .expect("error while building HyperHarbor client")
         .run(|app, event| {

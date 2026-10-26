@@ -1,6 +1,14 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { closeGuestAdmin, errorMessage, type GuestAdminWindow, type HostEntry, type Vm } from "$lib/api/client";
+  import {
+    closeGuestAdmin,
+    errorMessage,
+    hideGuestAdminCard,
+    showGuestAdminCard,
+    type GuestAdminWindow,
+    type HostEntry,
+    type Vm,
+  } from "$lib/api/client";
   import { formatLeft, guestAdminError, msLeft, passphraseParts, requestGuestAdmin } from "$lib/guestAdmin";
   import { ElevationCancelled } from "$lib/lifecycle.svelte";
   import Dialog from "./Dialog.svelte";
@@ -30,6 +38,12 @@
     access = null;
   }
 
+  /** Forgets the passphrase here and on the always-on-top card. */
+  function forgetEverywhere() {
+    forget();
+    hideGuestAdminCard().catch(() => {});
+  }
+
   async function request() {
     phase = "opening";
     error = null;
@@ -37,6 +51,8 @@
       access = await requestGuestAdmin(host.key, vm.id);
       now = Date.now();
       phase = "open";
+      // A card on top of every window, so the passphrase stays readable over a full-screen Remote Desktop session.
+      showGuestAdminCard({ vmName: vm.name, ...access }).catch(() => {});
     } catch (e) {
       if (e instanceof ElevationCancelled) {
         onclose();
@@ -51,10 +67,10 @@
     phase = "closing";
     try {
       await closeGuestAdmin(host.key, vm.id);
-      forget();
+      forgetEverywhere();
       onclose();
     } catch (e) {
-      forget();
+      forgetEverywhere();
       error = `${errorMessage(e)} HyperHarbor disables the account as soon as it can reach ${vm.name} again.`;
       phase = "failed";
     }
@@ -69,7 +85,7 @@
   function tick() {
     now = Date.now();
     if (access && msLeft(access.expiresAt, now) === 0) {
-      forget();
+      forgetEverywhere();
       phase = "ended";
     }
   }
@@ -105,7 +121,8 @@
       </dd>
     </dl>
     <p class="muted" role="timer" aria-live="off">
-      Ends in {formatLeft(left)}. Closing this dialog leaves administrator access open until {endsAt}; Done ends it now.
+      Ends in {formatLeft(left)}. The passphrase also stays in a card at the top right of your screen, above Remote
+      Desktop. Closing this dialog leaves administrator access open until {endsAt}; Done ends it now.
     </p>
     <div class="actions">
       <button type="button" onclick={closeLeavingOpen}>Close</button>

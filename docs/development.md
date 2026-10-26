@@ -121,7 +121,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   MachineProfileLiveTests with HH_MACHINE_KEEP=1 (HyperHarbor-Test, kept), then HH_GUEST_ADMIN_DATA=%LOCALAPPDATA%\HyperHarborHarness.
 - The UAC prompt itself is checked by hand (after a host and client with API 1.35.0 are running):
   1. Connect to a set-up Windows VM, and in the client choose the VM's menu > Administrator access…; enter the admin
-     passphrase if asked. The dialog shows hha-<username> and a passphrase of four words and a digit.
+     passphrase if asked. The dialog shows hha-<username> and a passphrase of three words and a digit, and a card with
+     the passphrase appears at the top right of the screen.
   2. In the VM, start something that needs elevation (right-click Terminal > Run as administrator, or open
      Computer Management). The UAC prompt asks for credentials: choose More choices, pick "HyperHarbor administrator
      for <username>", type the passphrase with its hyphens, and choose Yes. The program starts elevated.
