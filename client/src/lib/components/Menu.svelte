@@ -10,9 +10,11 @@
     variant?: "icon" | "button";
     /** Buttons, separated with <hr /> where useful. Choosing an enabled button closes the menu. */
     children: Snippet;
+    /** Called when the menu opens, for example to read state its entries show. */
+    onopen?: () => void;
   }
 
-  let { label, ariaLabel, title, variant = "icon", children }: Props = $props();
+  let { label, ariaLabel, title, variant = "icon", children, onopen }: Props = $props();
 
   // The element's own open state is used directly: <details> opens and closes itself from its summary.
   let root = $state<HTMLDetailsElement>();
@@ -37,7 +39,7 @@
 
 <svelte:window onclick={closeOnOutsideClick} onkeydown={closeOnEscape} />
 
-<details class="menu {variant}" bind:this={root}>
+<details class="menu {variant}" bind:this={root} ontoggle={() => root?.open && onopen?.()}>
   <summary aria-label={ariaLabel} {title}>{label}</summary>
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="menu-items" onclick={closeOnChoice}>

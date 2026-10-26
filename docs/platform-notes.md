@@ -16,6 +16,10 @@ section for an area before changing it: most of these were learned from a failur
 - Installer and service changes need UAC prompts, so live install tests need the user at the PC.
 - Copying an ACL: a FileSecurity read from one file is not written to another (only sections marked changed
   are persisted); go through Get/SetSecurityDescriptorBinaryForm. DataBackupTests check protected files.
+- Nothing may copy the data folder assuming no file is open: the winget index downloads into winget\ in the
+  background (at start and daily), and both the update self-test copy and test cleanup met its open .partial file
+  ("being used by another process", 2026-10-25; the flaky UpdateApiTests case). DataBackup leaves winget\ out, and
+  TestHost sets Winget:FetchAtStart=false so in-memory hosts never download it.
 - When a release changes how a store writes its file, raise DataFormat.Current and add the migration.
 - schtasks /Create without /XML makes tasks that start only on AC power (they sit "Queued" on battery).
 - System.Text.Json rejects a UTF-8 BOM in raw bytes; read hand-editable JSON through Utf8Json.ReadFile.
@@ -42,6 +46,21 @@ section for an area before changing it: most of these were learned from a failur
   (mDNS hosts report apiVersion; unknown versions pass and rely on hostOutdated).
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
+
+## Client windows (Tauri v2, 2026-10-25)
+
+- Making or closing a window inside a synchronous Tauri command deadlocks on Windows: the new window stays a blank white
+  box and the app's other commands stall (the passphrase card, first build). Such commands must be async;
+  window_command_tests in lib.rs checks it.
+- A second window that loads an app route (WebviewUrl::App("overlay")) needs that route prerendered
+  (routes/overlay/+page.ts), so build/overlay.html exists; adapter-static writes only index.html otherwise.
+- A window with always_on_top and focused(false) draws over a full-screen mstsc session without taking its focus
+  (the foreground stayed TscShellContainerClass). Keep such a card below title bar height: at the very top right it
+  covered a maximized window's close button.
+- Alt+F4 closes an undecorated window through Windows itself, even when the app's command channel is stuck.
+- A window's height in tauri.conf.json is its content height. With the native title bar the page had all 640 px; the
+  app's own bar (36 px) comes out of that, so the default height is 676 and the minimum 516 to keep the page's space.
+  The Create VM dialog is tuned to fit that space unscrolled; at 640 its buttons were cut off (checked by screenshot).
 
 ## Tray windows (WebView2, 2026-10-05)
 
@@ -151,6 +170,14 @@ section for an area before changing it: most of these were learned from a failur
   "Continue with autoinstall?" at the console, since the seed cannot change the kernel command line.
 - The create job presses Space (Msvm_Keyboard.TypeKey) twelve times on the first boot only, to pass
   Windows media's "Press any key to boot from CD or DVD".
+- A first boot can still end with nothing installed (2026-10-25, laptop, build 26300 media, a second VM running): the
+  keys got Setup started, the guest reset itself 26 seconds later (cause unknown), the second boot's prompt timed
+  out with no key, the empty disk did not boot, and the VM sat at the firmware's boot summary ("The boot loader
+  failed") for an hour. Hyper-V logs each boot in Microsoft-Windows-Hyper-V-Worker-Admin: 18601 when the firmware
+  starts any boot loader (the DVD prompt included), 18603 when every boot device failed, and 18514 for a reset by the
+  guest; the VM ID is in the user data (<VmId>, upper case). The watcher now restarts a Windows install whose newest
+  boot event is 18603 and presses the key again, at most three times (WindowsSetupBootRecovery). 18603 cannot happen
+  once Windows is on the disk, so this never touches an installed system.
 - The watcher counts only time the VM runs toward Install:TimeoutMinutes, waits for the guest's OS and
   address in data exchange, then for a real RDP Connection Confirm (Windows) or SSH identification line
   (Linux), and marks the VM provisioned only after Remote Desktop answers again after setup. It then
@@ -158,6 +185,19 @@ section for an area before changing it: most of these were learned from a failur
   1, 2, 4, 8 minutes, then fail. A Linux profile without a desktop ends after SSH (no Remote Desktop).
 - Verified end to end on 2026-10-04 with a Windows 11 Pro install (TESTWINDOWSINSTALL), including Connect.
   Not yet with a real Ubuntu install.
+
+## Administrator windows (phase 28; verified 2026-10-25 on HyperHarbor-Test, Windows 11 build 26300)
+
+- Logon rights from PowerShell Direct are reliable: the guest compiles an LSA wrapper with Add-Type
+  (LsaAddAccountRights, LsaEnumerateAccountRights) and SeDenyNetworkLogonRight and SeDenyRemoteInteractiveLogonRight
+  read back set. Opening a window (create or enable, groups, rights, read back) took 2.6 s; closing took 2.3 s.
+- ADSI's IsMember compares ADsPaths, and a member's path includes the workgroup (WinNT://WORKGROUP/PC/user), so
+  IsMember("WinNT://PC/user") is False for a real member. The script compares objectSid of the group's members
+  instead, which also works when a group holds a SID that no longer resolves (Get-LocalGroupMember fails on those).
+- Script blocks run with Invoke-Command do not inherit the caller's $ErrorActionPreference; each admin script block
+  sets Stop itself, so a failed Add-LocalGroupMember throws instead of being skipped.
+- An open that fails leaves its close to a background task; a test process that exits right away leaves the account
+  enabled (it did once). The host service's sweep closes such a window within 30 seconds.
 
 ## Performance mode (Phase 10; Host.Core/Performance)
 

@@ -66,6 +66,8 @@ export type ResolvedExtension = components["schemas"]["ResolvedExtension"];
 export type ProfileDraft = components["schemas"]["ProfileDraft"];
 export type DraftItem = components["schemas"]["DraftItem"];
 export type DraftBrowser = components["schemas"]["DraftBrowser"];
+export type GuestAdminWindow = components["schemas"]["GuestAdminWindow"];
+export type GuestAdminStatus = components["schemas"]["GuestAdminStatus"];
 
 /** Request bodies, as the Rust side expects them. */
 export interface DeleteVmRequest {
@@ -119,6 +121,10 @@ export const ProblemCodes = {
   backupFailed: "backupFailed",
   transferFailed: "transferFailed",
   transferInProgress: "transferInProgress",
+  vmNotRunning: "vmNotRunning",
+  vmNotProvisioned: "vmNotProvisioned",
+  guestAdminUnsupported: "guestAdminUnsupported",
+  guestUnavailable: "guestUnavailable",
 } as const;
 
 export interface WakeFixOutcome {
@@ -292,6 +298,45 @@ export const provisionVm = (
  */
 export const connectVm = (key: string, vmId: string, address: string, vmName?: string) =>
   invoke<string | null>("connect_vm", { key, vmId, address, vmName });
+
+/** The API version that added administrator windows in Windows guests. */
+export const GuestAdminApiVersion = "1.35.0";
+
+/**
+ * Opens a short administrator window in a Windows guest, or returns the open one: the account and a one-time
+ * passphrase for its User Account Control prompt. Needs elevation: run it inside withElevation. The passphrase is
+ * shown to the user and never stored.
+ */
+export const openGuestAdmin = (key: string, vmId: string) => invoke<GuestAdminWindow>("open_guest_admin", { key, vmId });
+
+/** Whether an administrator window is open in the VM, without the passphrase. */
+export const getGuestAdmin = (key: string, vmId: string) => invoke<GuestAdminStatus>("get_guest_admin", { key, vmId });
+
+/** Ends the administrator window now; the host disables the account. */
+export const closeGuestAdmin = (key: string, vmId: string) => invoke<void>("close_guest_admin", { key, vmId });
+
+/** What the always-on-top passphrase card shows. Mirrors OverlayCard in src-tauri/src/guest_admin_overlay.rs. */
+export interface GuestAdminCard {
+  vmName: string;
+  accountName: string;
+  passphrase: string;
+  expiresAt: string;
+}
+
+/**
+ * Shows the passphrase card on top of every window, a full-screen Remote Desktop session included, without taking the
+ * focus, or updates the one showing. Resolves to false when the card could not be shown.
+ */
+export const showGuestAdminCard = (card: GuestAdminCard) => invoke<boolean>("show_guest_admin_overlay", { card });
+
+/** The card to show, or null once it was hidden. Used by the card's own window. */
+export const getGuestAdminCard = () => invoke<GuestAdminCard | null>("get_guest_admin_overlay");
+
+/** Hides the passphrase card and forgets the passphrase it held. */
+export const hideGuestAdminCard = () => invoke<void>("hide_guest_admin_overlay");
+
+/** Sent to the card's window when it should read its card again. */
+export const GuestAdminCardChangedEvent = "guest-admin-overlay-changed";
 
 /** What a VM's Remote Desktop session sees while its window is not in front. */
 export type UnfocusedBehavior = "freeze" | "blur" | "keepLive";

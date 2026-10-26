@@ -456,6 +456,20 @@
     "decodePercent": 50,
     "computePercent": 40
   },
+  "GuestAdminSettings": {
+    "windowMinutes": 10
+  },
+  "GuestAdminStatus": {
+    "accountName": "hha-owner",
+    "open": false,
+    "expiresAt": null,
+    "closePending": true
+  },
+  "GuestAdminWindow": {
+    "accountName": "hha-owner",
+    "passphrase": "Maple-River-Orbit-7",
+    "expiresAt": "2026-10-03T12:05:00\u002B00:00"
+  },
   "GuestDriverStatus": {
     "vendor": "nvidia",
     "hostVersion": "32.0.15.6094",
@@ -492,7 +506,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.34.0",
+    "apiVersion": "1.35.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {

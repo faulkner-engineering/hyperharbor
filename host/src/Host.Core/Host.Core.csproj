@@ -33,6 +33,8 @@
     <EmbeddedResource Include="..\..\..\schemas\machine-profile.v1.schema.json" LogicalName="HyperHarbor.Schemas.machine-profile.v1.schema.json" />
     <!-- Profiles the host ships and applies itself (the Lean host action's host-gaming profile). -->
     <EmbeddedResource Include="..\..\..\profiles\*.yaml" LogicalName="HyperHarbor.Profiles.%(Filename)%(Extension)" />
+    <!-- Common English words for administrator window passphrases (PassphraseGenerator). -->
+    <EmbeddedResource Include="Provisioning\PassphraseWords.txt" LogicalName="HyperHarbor.Provisioning.PassphraseWords.txt" />
   </ItemGroup>
 
 </Project>

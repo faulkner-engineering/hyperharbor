@@ -58,6 +58,7 @@ public sealed class UnattendedInstallWatcher
     private readonly IAuditLog? _audit;
     private readonly Performance.IGuestPerformanceStarter? _performance;
     private readonly IGuestFileCopier? _files;
+    private readonly WindowsSetupBootRecovery? _bootRecovery;
     private readonly ConcurrentDictionary<Guid, Task> _configuring = new();
     private DateTimeOffset? _lastTick;
 
@@ -79,8 +80,10 @@ public sealed class UnattendedInstallWatcher
         VmOperationLocks? locks = null,
         IAuditLog? audit = null,
         Performance.IGuestPerformanceStarter? performance = null,
-        IGuestFileCopier? files = null)
+        IGuestFileCopier? files = null,
+        WindowsSetupBootRecovery? bootRecovery = null)
     {
+        _bootRecovery = bootRecovery;
         _performance = performance;
         _files = files;
         _appx = appx;
@@ -181,6 +184,19 @@ public sealed class UnattendedInstallWatcher
             if (install.State == UnattendedInstallState.AwaitingConfirmation)
             {
                 Save(install, install.State, "Installing Ubuntu. If the console asks \"Continue with autoinstall?\", type yes.");
+            }
+            else if (_bootRecovery is not null
+                && await _bootRecovery.RecoverAsync(install, cancellationToken).ConfigureAwait(false) is var recovery and not BootRecoveryResult.None)
+            {
+                if (recovery == BootRecoveryResult.GaveUp)
+                {
+                    Fail(install, "The VM found nothing to boot several times, so Windows Setup never started. Check that the image is a " +
+                        "Windows installation image, and open the console to see what the VM shows.");
+                }
+                else
+                {
+                    Save(install, UnattendedInstallState.Installing, "Starting Windows Setup again (the VM found nothing to boot)");
+                }
             }
             else
             {

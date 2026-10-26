@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.34.0";
+    public const string ApiVersion = "1.35.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -89,6 +89,15 @@ public static class ContractInfo
 
         /// <summary>409: a transfer was refused or failed; the detail says why.</summary>
         public const string TransferFailed = "transferFailed";
+
+        /// <summary>409: the VM is not set up for this User, or has no stored administrator credential.</summary>
+        public const string VmNotProvisioned = "vmNotProvisioned";
+
+        /// <summary>409: administrator windows are for Windows guests only.</summary>
+        public const string GuestAdminUnsupported = "guestAdminUnsupported";
+
+        /// <summary>409: PowerShell Direct cannot reach the guest yet (still starting, or integration services are off).</summary>
+        public const string GuestUnavailable = "guestUnavailable";
     }
 
     /// <summary>The Authorization scheme of the transferTicket security scheme: "HyperHarbor-Transfer &lt;ticket&gt;".</summary>

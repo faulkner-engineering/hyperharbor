@@ -56,6 +56,24 @@ public sealed class SshAccountManager : IGuestAccountManager
         await RunAsync(target, admin, ["setPassword", accountName], password, CommandTimeout, cancellationToken);
     }
 
+    // Administrator windows are for Windows guests; GuestAdminService refuses Linux VMs before calling these.
+    public Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken) =>
+        throw AdminUnsupported();
+
+    public Task<GuestAdminAccountState> EnableAdminAsync(
+        GuestTarget target,
+        GuestCredential admin,
+        string accountName,
+        string fullName,
+        string password,
+        CancellationToken cancellationToken) =>
+        throw AdminUnsupported();
+
+    public Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
+        throw AdminUnsupported();
+
+    private static GuestAccountConflictException AdminUnsupported() => new("Administrator windows are available for Windows guests only.");
+
     private sealed record ScriptResult(IReadOnlyDictionary<string, string> Values, string HostKey);
 
     private static async Task<ScriptResult> RunAsync(

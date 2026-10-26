@@ -4,6 +4,7 @@ mod console;
 mod discovery;
 mod elevated;
 mod error;
+mod guest_admin_overlay;
 mod hosts;
 mod identity;
 mod library;
@@ -36,6 +37,8 @@ use crate::paired::{PairedHost, PairedHostStore};
 
 /// Event emitted to the frontend whenever the host list changes.
 const HOSTS_CHANGED_EVENT: &str = "hosts-changed";
+/// Tells the passphrase card to read its card again.
+const OVERLAY_CHANGED_EVENT: &str = "guest-admin-overlay-changed";
 
 struct AppState {
     hosts: Arc<HostRegistry>,
@@ -60,6 +63,8 @@ struct AppState {
     updates: update::service::UpdateService,
     /// Tailscale on this PC and the hosts found on the tailnet.
     tailnet: Arc<tailnet::TailnetService>,
+    /// The administrator passphrase card shown on top of every window, if any.
+    overlay: guest_admin_overlay::OverlayState,
     // Kept alive so mDNS browsing continues for the lifetime of the app.
     _mdns: Option<mdns_sd::ServiceDaemon>,
 }
@@ -603,6 +608,111 @@ async fn connect_host(state: State<'_, AppState>, key: String) -> Result<(), Cli
         &rdp::file_directory(),
         Some(Box::new(move || drop(session))),
     )
+}
+
+/// Opens an administrator window in a Windows guest (needs elevation), or returns the open one. The passphrase is
+/// for the frontend to show; nothing here stores it.
+#[tauri::command]
+async fn open_guest_admin(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<api::GuestAdminWindow, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.open_guest_admin(&host, &paired, &vm_id).await
+}
+
+/// Whether an administrator window is open in the VM. Returns the GuestAdminStatus.
+#[tauri::command]
+async fn get_guest_admin(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.get_guest_admin(&host, &paired, &vm_id).await
+}
+
+/// Ends the administrator window in the VM now.
+#[tauri::command]
+async fn close_guest_admin(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<(), ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state.api.close_guest_admin(&host, &paired, &vm_id).await
+}
+
+/// Shows the administrator passphrase card on top of every window (a full-screen Remote Desktop session included)
+/// without taking the focus, or updates the one showing. Returns false when the window could not be made; the
+/// dialog still shows the passphrase then. Async on purpose: making a window in a synchronous command deadlocks
+/// on Windows (the new window stayed a white box and the client's other commands stalled, 2026-10-25).
+#[tauri::command]
+async fn show_guest_admin_overlay(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    card: guest_admin_overlay::OverlayCard,
+) -> Result<bool, ClientError> {
+    state.overlay.show(card);
+    if let Some(window) = app.get_webview_window(guest_admin_overlay::LABEL) {
+        let _ = window.emit(OVERLAY_CHANGED_EVENT, ());
+        return Ok(true);
+    }
+
+    let mut builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        guest_admin_overlay::LABEL,
+        tauri::WebviewUrl::App(guest_admin_overlay::ROUTE.into()),
+    )
+    .title("HyperHarbor administrator passphrase")
+    .inner_size(guest_admin_overlay::WIDTH, guest_admin_overlay::HEIGHT)
+    .decorations(false)
+    .resizable(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(false);
+    // The top-right corner of the monitor the client is on.
+    if let Some(monitor) = app
+        .get_webview_window("main")
+        .and_then(|main| main.current_monitor().ok().flatten())
+    {
+        let scale = monitor.scale_factor();
+        let (x, y) = guest_admin_overlay::position(
+            monitor.position().x,
+            monitor.position().y,
+            monitor.size().width,
+            scale,
+        );
+        builder = builder.position(f64::from(x) / scale, f64::from(y) / scale);
+    }
+
+    match builder.build() {
+        Ok(_) => Ok(true),
+        Err(error) => {
+            eprintln!("The passphrase card could not be shown: {error}");
+            Ok(false)
+        }
+    }
+}
+
+/// The card the passphrase window shows, or None once it was hidden.
+#[tauri::command]
+fn get_guest_admin_overlay(state: State<'_, AppState>) -> Option<guest_admin_overlay::OverlayCard> {
+    state.overlay.current()
+}
+
+/// Forgets the passphrase card and closes its window. Async for the same reason as show_guest_admin_overlay.
+#[tauri::command]
+async fn hide_guest_admin_overlay(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), ClientError> {
+    state.overlay.clear();
+    if let Some(window) = app.get_webview_window(guest_admin_overlay::LABEL) {
+        let _ = window.close();
+    }
+    Ok(())
 }
 
 /// Allows Remote Desktop connections to the host (needs elevation). Returns the HostRemoteDesktop.
@@ -2877,6 +2987,7 @@ pub fn run() {
                         }),
                     )
                 },
+                overlay: guest_admin_overlay::OverlayState::default(),
                 _mdns: mdns,
             });
 
@@ -3009,6 +3120,12 @@ pub fn run() {
             connect_vm,
             connect_host,
             enable_host_remote_desktop,
+            open_guest_admin,
+            get_guest_admin,
+            close_guest_admin,
+            show_guest_admin_overlay,
+            get_guest_admin_overlay,
+            hide_guest_admin_overlay,
             download_host_logs,
             open_console,
             list_monitors,
@@ -3068,6 +3185,18 @@ pub fn run() {
             replace_vm_disk,
             export_vm_disks
         ])
+        // The passphrase card must not outlive the client window.
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                window.state::<AppState>().overlay.clear();
+                if let Some(card) = window
+                    .app_handle()
+                    .get_webview_window(guest_admin_overlay::LABEL)
+                {
+                    let _ = card.close();
+                }
+            }
+        })
         .build(tauri::generate_context!())
         .expect("error while building HyperHarbor client")
         .run(|app, event| {
@@ -3112,5 +3241,34 @@ mod transfer_tests {
     fn at_most_sixteen_addresses_are_sent() {
         let offered: Vec<String> = (1..=20).map(|n| format!("10.0.0.{n}")).collect();
         assert_eq!(transfer_addresses(&offered, &list(&["10.0.1.1"])).len(), 16);
+    }
+}
+
+#[cfg(test)]
+mod window_command_tests {
+    /// Making or closing a window in a synchronous command deadlocks on Windows: the passphrase card stayed a white box
+    /// and the client's other commands stalled (2026-10-25). Every command that does either must be async.
+    #[test]
+    fn commands_that_make_or_close_windows_are_async() {
+        let source = include_str!("lib.rs");
+        let marker = concat!("#[tauri::", "command]");
+        let builder = concat!("WebviewWindow", "Builder");
+        let close = concat!(".clo", "se()");
+        let mut checked = 0;
+        for chunk in source.split(marker).skip(1) {
+            let signature = chunk
+                .lines()
+                .find(|line| line.contains("fn "))
+                .unwrap_or_default();
+            let body = &chunk[..chunk.find("\n}\n").unwrap_or(chunk.len())];
+            if body.contains(builder) || body.contains(close) {
+                checked += 1;
+                assert!(signature.contains("async fn"), "not async: {signature}");
+            }
+        }
+        assert!(
+            checked >= 2,
+            "expected the passphrase card's show and hide commands"
+        );
     }
 }

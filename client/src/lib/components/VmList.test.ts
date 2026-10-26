@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 
 import VmList from "./VmList.svelte";
 import type { Vm, VmState } from "$lib/api/client";
@@ -65,6 +65,64 @@ describe("VmList row actions", () => {
 
     render(VmList, { vms: [provisioned("off")], oncapture });
     expect((await openMenu()).queryByRole("button", { name: "Capture setup profile…" })).toBeNull();
+  });
+
+  it("shows open administrator access from the host, offers to end it, and reads it again when the menu opens", async () => {
+    const onguestadmin = vi.fn();
+    const onguestadminend = vi.fn();
+    const onmenuopen = vi.fn();
+    const running = provisioned("running");
+    const expiresAt = "2026-10-25T12:10:00Z";
+    render(VmList, {
+      vms: [running],
+      onguestadmin,
+      onguestadminend,
+      onmenuopen,
+      guestAdmin: { [running.id]: { accountName: "hha-owner", open: true, expiresAt, closePending: false } },
+    });
+
+    expect(screen.getByText(/^Admin until /)).toBeTruthy();
+    const menu = await openMenu();
+    // <details> fires toggle after the click, not during it.
+    await waitFor(() => expect(onmenuopen).toHaveBeenCalledWith(running));
+    await fireEvent.click(menu.getByRole("button", { name: "End administrator access" }));
+    expect(onguestadminend).toHaveBeenCalledWith(running);
+  });
+
+  it("leaves out the badge and End when no window is open", async () => {
+    const running = provisioned("running");
+    render(VmList, {
+      vms: [running],
+      onguestadmin: vi.fn(),
+      onguestadminend: vi.fn(),
+      guestAdmin: { [running.id]: { accountName: "hha-owner", open: false, expiresAt: null, closePending: false } },
+    });
+
+    expect(screen.queryByText(/^Admin until /)).toBeNull();
+    expect((await openMenu()).queryByRole("button", { name: "End administrator access" })).toBeNull();
+  });
+
+  it("offers Administrator access for running, set-up Windows VMs when the host has it, and reports which VM", async () => {
+    const onguestadmin = vi.fn();
+    const running = provisioned("running");
+    const { unmount } = render(VmList, { vms: [running], onguestadmin });
+
+    await fireEvent.click((await openMenu()).getByRole("button", { name: "Administrator access…" }));
+    expect(onguestadmin).toHaveBeenCalledWith(running);
+    unmount();
+
+    for (const other of [
+      provisioned("off"),
+      vm("running", { guestOs: { family: "windows", name: "Windows 11 Pro" } }),
+      { ...provisioned("running"), guestOs: { family: "linux" as const, name: "Ubuntu" } },
+    ]) {
+      const view = render(VmList, { vms: [other], onguestadmin });
+      expect((await openMenu()).queryByRole("button", { name: "Administrator access…" })).toBeNull();
+      view.unmount();
+    }
+
+    render(VmList, { vms: [running] });
+    expect((await openMenu()).queryByRole("button", { name: "Administrator access…" })).toBeNull();
   });
 
   it("offers Move or copy only for off VMs, and only when the host has transfers", async () => {

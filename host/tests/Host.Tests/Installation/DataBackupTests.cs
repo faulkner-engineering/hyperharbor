@@ -42,6 +42,22 @@ public sealed class DataBackupTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_backup, ".users.json.0123.tmp")));
     }
 
+    /// <summary>
+    /// The winget index downloads in the background; a copy that met its open .partial file failed with "being used by
+    /// another process", and the update self-test gave up on that version (the flaky UpdateApiTests case).
+    /// </summary>
+    [Fact]
+    public void Copy_SkipsTheWingetIndex_EvenWhileItDownloads()
+    {
+        var winget = Directory.CreateDirectory(Path.Combine(_data, Core.Profiles.WingetIndex.FolderName)).FullName;
+        using var download = new FileStream(Path.Combine(winget, "source-1.msix.partial"), FileMode.Create, FileAccess.Write, FileShare.None);
+
+        DataBackup.Copy(_data, _backup);
+
+        Assert.False(Directory.Exists(Path.Combine(_backup, Core.Profiles.WingetIndex.FolderName)));
+        Assert.True(File.Exists(Path.Combine(_backup, "users.json")));
+    }
+
     [Fact]
     public void Copy_KeepsAProtectedFilesAcl()
     {

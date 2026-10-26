@@ -29,6 +29,24 @@ public sealed record GuestAccountState(bool Exists, bool IsLocal, bool Enabled, 
     public bool IsReadyForRemoteDesktop => Exists && IsLocal && Enabled && RemoteDesktopAllowed;
 }
 
+/// <summary>A User's local administrator account in a Windows guest, used for administrator windows.</summary>
+/// <param name="InAdministrators">Member of Administrators (S-1-5-32-544).</param>
+/// <param name="InRemoteDesktopUsers">Member of Remote Desktop Users (S-1-5-32-555); it must never be.</param>
+/// <param name="DeniedNetworkLogon">Holds SeDenyNetworkLogonRight.</param>
+/// <param name="DeniedRemoteInteractiveLogon">Holds SeDenyRemoteInteractiveLogonRight.</param>
+public sealed record GuestAdminAccountState(
+    bool Exists,
+    bool Enabled,
+    bool InAdministrators,
+    bool InRemoteDesktopUsers,
+    bool DeniedNetworkLogon,
+    bool DeniedRemoteInteractiveLogon)
+{
+    /// <summary>The account can answer a User Account Control prompt and cannot sign in over the network or Remote Desktop.</summary>
+    public bool IsReadyForElevation =>
+        Exists && Enabled && InAdministrators && !InRemoteDesktopUsers && DeniedNetworkLogon && DeniedRemoteInteractiveLogon;
+}
+
 /// <summary>
 /// Manages a User's local account inside a guest. Every call authenticates to the guest with the
 /// stored administrator credential.
@@ -51,6 +69,26 @@ public interface IGuestAccountManager
         CancellationToken cancellationToken);
 
     Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken);
+
+    /// <summary>Windows only: the state of a User's administrator account.</summary>
+    Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Windows only: creates the administrator account when it is missing (a member of Administrators and not of
+    /// Remote Desktop Users, password never expires, denied network and Remote Desktop sign-in), then sets its
+    /// password and enables it. Returns its state afterwards.
+    /// </summary>
+    /// <exception cref="GuestAccountConflictException">An account with this name exists and is not local.</exception>
+    Task<GuestAdminAccountState> EnableAdminAsync(
+        GuestTarget target,
+        GuestCredential admin,
+        string accountName,
+        string fullName,
+        string password,
+        CancellationToken cancellationToken);
+
+    /// <summary>Windows only: disables the administrator account and sets its password. Does nothing when it does not exist.</summary>
+    Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken);
 }
 
 /// <summary>Sends each call to the manager for the guest's OS family.</summary>
@@ -79,6 +117,21 @@ public sealed class GuestAccountRouter : IGuestAccountManager
 
     public Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
         For(target).SetPasswordAsync(target, admin, accountName, password, cancellationToken);
+
+    public Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken) =>
+        For(target).InspectAdminAsync(target, admin, accountName, cancellationToken);
+
+    public Task<GuestAdminAccountState> EnableAdminAsync(
+        GuestTarget target,
+        GuestCredential admin,
+        string accountName,
+        string fullName,
+        string password,
+        CancellationToken cancellationToken) =>
+        For(target).EnableAdminAsync(target, admin, accountName, fullName, password, cancellationToken);
+
+    public Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
+        For(target).DisableAdminAsync(target, admin, accountName, password, cancellationToken);
 
     private IGuestAccountManager For(GuestTarget target) => target.Os switch
     {

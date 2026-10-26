@@ -8,6 +8,11 @@
   --hh-border: #e2ded5;
 }
 
+/* The app draws its own title bar (TitleBar.svelte); overlays start below it so the window stays movable. */
+:root {
+  --titlebar-height: 36px;
+}
+
 /* Terminal palette for the profile builder's machine view. Amber glows in the brand accent. */
 :root {
   --hh-crt-screen: #0b0d10;

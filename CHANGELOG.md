@@ -10,7 +10,52 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-25 (API 1.35.0)
+
+Administrator access in Windows VMs. The account you connect with is a standard user; now you can ask for a short
+administrator window from the client and type a one-time passphrase into the Windows administrator prompt. The client
+also draws its own title bar, and unattended Windows installs and host updates recover from two failures that used to
+stop them. Update the host for administrator access (API 1.35.0): with an older host the menu entry stays hidden.
+Hosts updating from 0.2.1 can rarely fail to prepare this update; see Fixed. The host updates itself to this version
+when it is on the stable channel with automatic updates on; installed clients update at their next check.
+
+### Added
+- Administrator access in Windows VMs. The account you connect with is a standard user, so it cannot answer a
+  Windows administrator prompt (installing software, changing settings). Choose Administrator access… in a running
+  VM's menu and enter the admin passphrase: the client shows your HyperHarbor administrator account in that VM
+  (hha-owner, named after you) and a one-time passphrase of three words and a digit, with a countdown. The
+  passphrase also shows in a small card at the top right of your screen that stays above every window, a full-screen
+  Remote Desktop session included, so you can read it while you type. In the Windows prompt choose More choices,
+  pick that account, and type the passphrase. Access ends after 5 minutes, when you choose Done, or when the VM
+  stops; the host then disables the account again and the card goes away. While access is open, the VM's row shows
+  "Admin until" and its menu offers End administrator access, also after the client restarts. Done closes the dialog
+  at once; if the host cannot be reached, a message says access still ends by itself. The account is created the first
+  time you ask, cannot sign in over the network or Remote Desktop (only prompts and the VM's console), and the
+  passphrase is never stored or put on the clipboard. Windows guests only; Linux VMs keep using sudo. Needs a host
+  with API 1.35.0. The length is a host setting from 2 to 30 minutes (PUT /host/guest-admin/settings).
+- API 1.35.0 (host): administrator windows in Windows guests, a one-time passphrase for the User's own guest
+  administrator account (hha-owner) to answer a UAC prompt. POST, GET, and DELETE /vms/{vmId}/guest-admin, PUT /host/guest-admin/settings, and the problem codes
+  vmNotProvisioned, guestAdminUnsupported, and guestUnavailable.
+
+### Changed
+- The client draws its own title bar: the HyperHarbor name over the sidebar and minimize, maximize, and close
+  buttons in the app's colors, in light and dark mode, instead of the separate Windows title bar. Drag the bar to
+  move the window and double-click it to maximize; dialogs open below it, so the window can still be moved or
+  closed with one open. Windows 11's snap layout menu no longer appears when you hover over maximize; Win+Z and
+  dragging the window to a screen edge still snap it.
+
 ### Fixed
+- Creating a Windows VM with an unattended install no longer stops for good at the "No operating system was loaded"
+  screen when the VM resets before Windows Setup has written to the disk and misses the "Press any key to boot from CD
+  or DVD" prompt: the host now restarts it and presses the key again (up to three times), and otherwise fails the
+  install with an explanation instead of waiting out the three-hour timeout.
+- A host update could fail to prepare if the host was downloading its package index at the same moment: the copy of
+  the data folder that tests the new version met the download in progress, and the host then skipped that version
+  until it restarted. The copy now leaves the package index out (it is a cache the host downloads again).
+  Action needed: the update to this version is still prepared by the host's current version, which has the old
+  copy, so it can rarely fail the same way. If a host's Updates panel stays on 0.2.1 with a "being used by another
+  process" message, restart the host service (or the PC) and it prepares the update again. Checking for updates
+  again does not retry the same version.
 - Scrollbars in the client, such as in the Create VM dialog and the sidebar, are thin and follow the light or dark
   theme instead of the bright default ones.
 - The Create VM dialog for a machine profile fits the client's default window size without scrolling.

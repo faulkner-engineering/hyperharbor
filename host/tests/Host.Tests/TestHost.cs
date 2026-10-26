@@ -46,6 +46,7 @@ internal sealed class TestHost : IDisposable
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
             .UseSetting("Discovery:Enabled", "false")
+            .UseSetting("Winget:FetchAtStart", "false")
             .UseSetting("DataDirectory", DataDirectory)
             .UseSetting("Lifecycle:IsoFolder", Path.Combine(DataDirectory, "isos"))
             .UseSetting("Tray:PipeName", "HyperHarbor.Tests." + Guid.NewGuid().ToString("N"))

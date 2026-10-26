@@ -237,6 +237,13 @@ builder.Services.AddSingleton(services => new PasswordRotator(
     TimeSpan.FromSeconds(builder.Configuration.GetValue("Rdp:ReuseWindowSeconds", (int)PasswordRotator.DefaultReuseWindow.TotalSeconds)),
     services.GetRequiredService<ILogger<PasswordRotator>>()));
 builder.Services.AddSingleton<ConnectService>();
+builder.Services.AddSingleton(new GuestAdminStore(dataDirectory));
+builder.Services.AddSingleton<GuestAdminService>();
+if (selfTest is null)
+{
+    // A self-test run on a copy of the data must not reach into the real host's guests.
+    builder.Services.AddHostedService<GuestAdminMonitorService>();
+}
 
 builder.Services.AddOptions<ConsoleOptions>()
     .Bind(builder.Configuration.GetSection(ConsoleOptions.SectionName))
@@ -329,6 +336,8 @@ builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<Unat
 builder.Services.AddSingleton<IRemoteAccessProbe>(new TcpRemoteAccessProbe());
 builder.Services.AddSingleton<IVmMedia, CimVmMedia>();
 builder.Services.AddSingleton(builder.Configuration.GetSection(InstallWatcherOptions.SectionName).Get<InstallWatcherOptions>() ?? new InstallWatcherOptions());
+builder.Services.AddSingleton<IVmBootEvents, HyperVWorkerBootEvents>();
+builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<WindowsSetupBootRecovery>(services));
 builder.Services.AddSingleton<UnattendedInstallWatcher>();
 if (selfTest is null)
 {
@@ -663,6 +672,7 @@ app.UseRemoteUseTracking();
 app.MapHostEndpoints();
 app.MapAuthEndpoints();
 app.MapVmEndpoints();
+app.MapGuestAdminEndpoints();
 app.MapConsoleEndpoints();
 app.MapUnattendEndpoints();
 app.MapSetupProfileEndpoints();
@@ -685,9 +695,13 @@ if (selfTest is not null)
 // After an update the screensaver file is a copy of the old version until this refreshes it.
 app.Services.GetRequiredService<AmbientService>().Refresh();
 
-// Fetch the winget package index once the host is up, so the first package search answers at once.
-app.Lifetime.ApplicationStarted.Register(() =>
-    _ = Task.Run(() => app.Services.GetRequiredService<WingetIndex>().CurrentAsync(CancellationToken.None)));
+// Fetch the winget package index once the host is up, so the first package search answers at once. In-memory test
+// hosts turn this off: each one downloaded the index from the internet into a temporary folder it then failed to delete.
+if (app.Configuration.GetValue("Winget:FetchAtStart", true))
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+        _ = Task.Run(() => app.Services.GetRequiredService<WingetIndex>().CurrentAsync(CancellationToken.None)));
+}
 
 await app.RunAsync();
 return 0;

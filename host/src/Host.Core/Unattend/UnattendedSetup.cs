@@ -38,10 +38,10 @@ public sealed partial class UnattendedSetup
     public const string MicrosoftUefiCaTemplateId = "272e7447-90a4-4563-a4b9-8e4ab00526ce";
 
     /// <summary>VK_SPACE.</summary>
-    public const int SpaceKey = 0x20;
+    public const int SpaceKey = WindowsBootKey.SpaceKey;
 
     /// <summary>Windows media wait about five seconds for a key; Space is pressed for longer than that.</summary>
-    public const int BootKeyPresses = 12;
+    public const int BootKeyPresses = WindowsBootKey.Presses;
 
     private readonly UnattendProfileStore _profiles;
     private readonly Profiles.SetupProfileStore? _setupProfiles;
@@ -329,23 +329,10 @@ public sealed partial class UnattendedSetup
     /// <summary>
     /// Windows media ask to "Press any key to boot from CD or DVD" and boot the next device after about
     /// five seconds. Space is pressed once a second for longer than that, on this first boot only, so later
-    /// restarts boot the installed system. Presses fail harmlessly while the VM is still starting.
+    /// restarts boot the installed system; WindowsSetupBootRecovery presses again if a boot finds nothing.
     /// </summary>
-    private async Task PressAnyKeyAsync(Guid vmId, CancellationToken cancellationToken)
-    {
-        for (var press = 0; press < BootKeyPresses; press++)
-        {
-            await Task.Delay(_keyInterval, _time, cancellationToken).ConfigureAwait(false);
-            try
-            {
-                await _keyboard.TypeKeyAsync(vmId, SpaceKey, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogDebug(ex, "A key press for VM {VmId} was not delivered.", vmId);
-            }
-        }
-    }
+    private Task PressAnyKeyAsync(Guid vmId, CancellationToken cancellationToken) =>
+        WindowsBootKey.PressAsync(_keyboard, vmId, _keyInterval, _time, _logger, cancellationToken);
 
     private void DeleteSeed(string path)
     {
