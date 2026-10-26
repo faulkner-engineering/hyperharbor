@@ -346,6 +346,12 @@ section for an area before changing it: most of these were learned from a failur
   Windows applies at every sign-in, also overriding the user's own change. ProgIds in catalogs/browsers.yaml:
   ChromeHTML, MSEdgeHTM, BraveHTML. Not yet verified on a live guest: the ProgIds, and whether a Brave that fell back
   to a per-user install (0x8A150010 retry) is registered for the User's account at all.
+- Edge cannot be removed outside the European Economic Area: Windows offers the uninstall only when the region chosen
+  at setup is in the EEA, and other apps need its WebView2 runtime. Forced removals are unsupported and Windows Update
+  can put Edge back. The tweak system.hideEdge only sets Edge and EdgeUpdate policies (StartupBoostEnabled,
+  BackgroundModeEnabled, HideFirstRunExperience, DefaultBrowserSettingEnabled, CreateDesktopShortcutDefault); the
+  taskbar pin needs a taskbar layout file and is left alone. A removal that finds no package counts as done (so
+  profiles can be applied again), so remove.appx never reports a name that matches nothing.
 - After a restart, GuestRestart counts Remote Desktop only after one check found it down (Windows answers for a few
   seconds after the request, and a guest reboot does not reset uptime): 60 checks of 15 seconds.
 - The User's account hive: loaded under HKU\<SID> while it is signed in, otherwise its NTUSER.DAT loaded under

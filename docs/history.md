@@ -504,6 +504,9 @@ verified, and what was found along the way. User-facing changes per release are 
      gained file writes for it. The user accepted that Windows reapplies it at every sign-in. Client: a checkbox in
      the Browser section (hostSupports 1.36.0); makeDefault is sent only when on, since older hosts reject unknown
      fields in machine profiles.
+   - Edge (the user: "I can't remove Edge from a Windows install"): Windows blocks it outside the EEA, so the user chose
+     to hide it instead. Tweak system.hideEdge (policies only) and Microsoft.MicrosoftEdge.Stable rated keep with a
+     note. Not done: forced removal, an EEA region at install, unpinning from the taskbar.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

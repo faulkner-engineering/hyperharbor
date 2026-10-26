@@ -64,6 +64,7 @@ public sealed class CatalogTests
         Assert.Equal(Catalogs.Appx.Count, Catalogs.Appx.Select(entry => entry.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.Equal(AppxRating.Keep, Catalogs.AppxIndex["Microsoft.WindowsStore"].Rating);
         Assert.Equal(AppxRating.Keep, Catalogs.AppxIndex["Microsoft.DesktopAppInstaller"].Rating);
+        Assert.Equal(AppxRating.Keep, Catalogs.AppxIndex["Microsoft.MicrosoftEdge.Stable"].Rating);
         Assert.Contains(Catalogs.Appx, entry => entry.Rating == AppxRating.Safe);
     }
 
@@ -89,6 +90,15 @@ public sealed class CatalogTests
             });
         });
         Assert.Equal(Catalogs.Tweaks.Count, Catalogs.Tweaks.Select(tweak => tweak.Id).Distinct().Count());
+    }
+
+    [Fact]
+    public void HideEdge_OnlySetsMachinePolicies()
+    {
+        var tweak = Catalogs.TweakIndex["system.hideEdge"];
+
+        Assert.All(tweak.Values, value => Assert.StartsWith(@"HKLM\SOFTWARE\Policies\Microsoft\Edge", value.Key, StringComparison.Ordinal));
+        Assert.Contains(tweak.Values, value => value.Name == "StartupBoostEnabled" && value.Value == "0");
     }
 
     [Fact]

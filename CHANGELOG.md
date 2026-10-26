@@ -17,6 +17,10 @@ API 1.36.0.
   the Browser section (`makeDefault: true` in YAML). Windows applies it at every sign-in, so the default browser
   cannot be changed inside the VM while the profile sets it. Needs a host with this version; older hosts do not show
   the option.
+- A tweak, "Keep Microsoft Edge out of the way", for VMs that use another browser. Windows does not allow uninstalling
+  Edge outside the European Economic Area, so it stops Edge starting with Windows, showing its first-run pages, asking
+  to be the default browser, and adding desktop shortcuts when it updates. Edge's taskbar pin and an existing desktop
+  shortcut stay. In the Remove section, Microsoft Edge is now rated keep and says why.
 
 ### Fixed
 - A portable host started with Start-HyperHarbor.ps1 by a standard Windows user no longer crashes at startup when
