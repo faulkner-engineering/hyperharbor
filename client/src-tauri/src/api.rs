@@ -3181,7 +3181,7 @@ mod server_tests {
     fn guest_admin_window_parses_and_hides_the_passphrase() {
         let window: GuestAdminWindow = serde_json::from_value(fixture("GuestAdminWindow")).unwrap();
         assert_eq!(window.account_name, "hha-owner");
-        assert_eq!(window.passphrase, "Maple-River-Candle-Orbit-7");
+        assert_eq!(window.passphrase, "Maple-River-Orbit-7");
 
         let debug = format!("{window:?}");
         assert!(!debug.contains("Maple"), "{debug}");

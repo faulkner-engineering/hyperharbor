@@ -20,7 +20,7 @@ public sealed partial class PassphraseGeneratorTests
     }
 
     [Fact]
-    public void Passphrase_IsFourCapitalizedWordsAndADigit()
+    public void Passphrase_IsThreeCapitalizedWordsAndADigit()
     {
         for (var i = 0; i < 200; i++)
         {
@@ -28,7 +28,7 @@ public sealed partial class PassphraseGeneratorTests
 
             Assert.Matches(Shape(), passphrase);
             var parts = passphrase.Split('-');
-            Assert.All(parts[..4], word => Assert.Contains(word.ToLowerInvariant(), PassphraseGenerator.Words));
+            Assert.All(parts[..3], word => Assert.Contains(word.ToLowerInvariant(), PassphraseGenerator.Words));
         }
     }
 
@@ -51,7 +51,7 @@ public sealed partial class PassphraseGeneratorTests
     public void Passphrase_LeavesOutWordsContainingPartsOfTheFullName()
     {
         Assert.Contains(PassphraseGenerator.Words, word => word.Contains("for", StringComparison.Ordinal));
-        Assert.False(PassphraseGenerator.MeetsWindowsComplexity("Forest-River-Candle-Orbit-7", Account, FullName));
+        Assert.False(PassphraseGenerator.MeetsWindowsComplexity("Forest-River-Orbit-7", Account, FullName));
 
         for (var i = 0; i < 500; i++)
         {
@@ -78,6 +78,6 @@ public sealed partial class PassphraseGeneratorTests
         Assert.Equal(100, passphrases.Count);
     }
 
-    [GeneratedRegex("^([A-Z][a-z]{3,7}-){4}[0-9]$")]
+    [GeneratedRegex("^([A-Z][a-z]{3,7}-){3}[0-9]$")]
     private static partial Regex Shape();
 }

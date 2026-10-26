@@ -1132,7 +1132,7 @@ export interface paths {
          *     The host creates the account on first use through PowerShell Direct with the VM's stored administrator
          *     credential: a member of Administrators, not of Remote Desktop Users, denied network and Remote Desktop
          *     sign-in, and disabled whenever no window is open. Opening a window enables it and sets the passphrase;
-         *     the window ends at `expiresAt` (10 minutes by default, see `PUT /host/guest-admin/settings`), when the
+         *     the window ends at `expiresAt` (5 minutes by default, see `PUT /host/guest-admin/settings`), when the
          *     User ends it, or when the VM stops, and the host then sets a random password and disables the account.
          *
          *     Calling this again while a window is open returns the same passphrase and expiry. The passphrase is kept
@@ -3060,7 +3060,7 @@ export interface components {
             /** @description The User's local administrator account in the guest, for example "hha-owner". */
             accountName: string;
             /**
-             * @description Four capitalized words and a digit separated by hyphens, for example "Maple-River-Candle-Orbit-7", for the
+             * @description Three capitalized words and a digit separated by hyphens, for example "Maple-River-Orbit-7", for the
              *     User to type into the guest's User Account Control prompt. Valid until `expiresAt` or until the window is
              *     ended. Clients must not persist it or put it on the clipboard.
              */
@@ -3085,7 +3085,7 @@ export interface components {
         GuestAdminSettings: {
             /**
              * @description How long an administrator window stays open.
-             * @default 10
+             * @default 5
              */
             windowMinutes: number;
         };

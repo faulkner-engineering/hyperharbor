@@ -8,7 +8,7 @@ import { withElevation } from "$lib/lifecycle.svelte";
 export const requestGuestAdmin = (key: string, vmId: string): Promise<GuestAdminWindow> =>
   withElevation(key, () => openGuestAdmin(key, vmId));
 
-/** The passphrase's words and its digit, shown one by one: "Maple-River-Candle-Orbit-7" has five parts. */
+/** The passphrase's words and its digit, shown one by one: "Maple-River-Orbit-7" has four parts. */
 export const passphraseParts = (passphrase: string): string[] => passphrase.split("-");
 
 /** Milliseconds until the window ends, never below zero. */

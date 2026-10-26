@@ -39,18 +39,20 @@ const vm: Vm = {
 const problem = (problemCode: string, message = "Refused.") => ({ code: "api", message, status: 409, problemCode, issues: [] });
 const elevationRequired = { code: "api", message: "Elevation required", status: 403, problemCode: "elevationRequired", issues: [] };
 
-function window(minutes = 10): GuestAdminWindow {
+function window(minutes = 5): GuestAdminWindow {
   return {
     accountName: "hha-owner",
-    passphrase: "Maple-River-Candle-Orbit-7",
+    passphrase: "Maple-River-Orbit-7",
     expiresAt: new Date(Date.now() + minutes * 60_000).toISOString(),
   };
 }
 
 /** Answers each command in turn from `responses[command]` (a value, a thrown problem, or a list of either). */
 function mockHost(responses: Record<string, unknown[]>) {
+  // The always-on-top card opens and closes without a host.
+  const card: Record<string, unknown[]> = { show_guest_admin_overlay: [true], hide_guest_admin_overlay: [undefined] };
   invoke.mockImplementation(async (command: string) => {
-    const queue = responses[command];
+    const queue = responses[command] ?? card[command];
     if (!queue?.length) throw new Error(`unexpected command ${command}`);
     const next = queue.length > 1 ? queue.shift() : queue[0];
     if (typeof next === "object" && next !== null && "problemCode" in next) throw next;
@@ -78,15 +80,18 @@ describe("GuestAdminDialog", () => {
     elevation.finish(true);
 
     expect(await screen.findByText("hha-owner")).toBeTruthy();
-    for (const part of ["Maple", "River", "Candle", "Orbit", "7"]) {
+    for (const part of ["Maple", "River", "Orbit", "7"]) {
       expect(screen.getByText(part)).toBeTruthy();
     }
     expect(screen.getByText(/choose/).textContent).toContain(
       "In the Windows prompt choose More choices, pick this account, and type the passphrase.",
     );
-    expect(screen.getByRole("timer").textContent).toMatch(/Ends in (10:00|9:5\d)\./);
+    expect(screen.getByRole("timer").textContent).toMatch(/Ends in (5:00|4:5\d)\./);
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
     expect(invoke).toHaveBeenCalledWith("open_guest_admin", { key: host.key, vmId: vm.id });
+    expect(invoke).toHaveBeenCalledWith("show_guest_admin_overlay", {
+      card: expect.objectContaining({ vmName: "Dev Box", accountName: "hha-owner", passphrase: "Maple-River-Orbit-7" }),
+    });
   });
 
   it("ends the window with Done", async () => {
@@ -97,6 +102,7 @@ describe("GuestAdminDialog", () => {
     await fireEvent.click(await screen.findByRole("button", { name: "Done" }));
 
     expect(invoke).toHaveBeenCalledWith("close_guest_admin", { key: host.key, vmId: vm.id });
+    expect(invoke).toHaveBeenCalledWith("hide_guest_admin_overlay");
     expect(onclose).toHaveBeenCalled();
   });
 
@@ -109,7 +115,8 @@ describe("GuestAdminDialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(onclose).toHaveBeenCalled();
-    expect(calls()).toEqual(["open_guest_admin"]);
+    // The card stays up with the window, for the Remote Desktop session.
+    expect(calls()).toEqual(["open_guest_admin", "show_guest_admin_overlay"]);
   });
 
   it("says when the window ended, hides the passphrase, and can request another", async () => {
@@ -124,7 +131,13 @@ describe("GuestAdminDialog", () => {
     expect(screen.queryByText("Maple")).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Request again" }));
     expect(await screen.findByText("Maple")).toBeTruthy();
-    expect(calls()).toEqual(["open_guest_admin", "open_guest_admin"]);
+    expect(calls()).toEqual([
+      "open_guest_admin",
+      "show_guest_admin_overlay",
+      "hide_guest_admin_overlay",
+      "open_guest_admin",
+      "show_guest_admin_overlay",
+    ]);
   });
 
   it("explains a Linux guest and a guest that is still starting", async () => {

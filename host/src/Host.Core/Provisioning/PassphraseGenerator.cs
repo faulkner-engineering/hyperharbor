@@ -3,15 +3,15 @@ using System.Security.Cryptography;
 namespace HyperHarbor.Host.Core.Provisioning;
 
 /// <summary>
-/// Generates passphrases for administrator windows: four words from a bundled list of common English words, each
-/// capitalized, then a digit, separated by hyphens (for example "Maple-River-Candle-Orbit-7"). A person can read one
+/// Generates passphrases for administrator windows: three words from a bundled list of common English words, each
+/// capitalized, then a digit, separated by hyphens (for example "Maple-River-Orbit-7"). A person can read one
 /// on one screen and type it on another. Upper and lower case letters, a digit, and a hyphen meet the default Windows
 /// complexity policy, which also refuses a password that contains the account name or a part of its full name;
 /// <see cref="Generate"/> leaves out words that would.
 /// </summary>
 public static class PassphraseGenerator
 {
-    public const int WordCount = 4;
+    public const int WordCount = 3;
 
     private const string ResourceName = "HyperHarbor.Provisioning.PassphraseWords.txt";
 

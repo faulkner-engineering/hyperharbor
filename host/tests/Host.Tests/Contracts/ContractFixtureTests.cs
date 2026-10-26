@@ -119,7 +119,7 @@ public class ContractFixtureTests
         ["ProvisionVmRequest"] = new ProvisionVmRequest("hhadmin", "Fixture-Admin1!", true, true, true),
         ["VmProvisioning"] = new VmProvisioning(VmId, "hh-owner", Time),
         ["VmConnection"] = new VmConnection("hh-owner","Fixture-Pass1!", "192.168.0.50", 3389, Time, GuestOsFamily.Windows),
-        ["GuestAdminWindow"] = new GuestAdminWindow("hha-owner", "Maple-River-Candle-Orbit-7", Time.AddMinutes(10)),
+        ["GuestAdminWindow"] = new GuestAdminWindow("hha-owner", "Maple-River-Orbit-7", Time.AddMinutes(5)),
 
         // Null on purpose: expiresAt is required but nullable.
         ["GuestAdminStatus"] = new GuestAdminStatus("hha-owner", false, null, true),

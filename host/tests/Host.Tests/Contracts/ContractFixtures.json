@@ -467,8 +467,8 @@
   },
   "GuestAdminWindow": {
     "accountName": "hha-owner",
-    "passphrase": "Maple-River-Candle-Orbit-7",
-    "expiresAt": "2026-10-03T12:10:00\u002B00:00"
+    "passphrase": "Maple-River-Orbit-7",
+    "expiresAt": "2026-10-03T12:05:00\u002B00:00"
   },
   "GuestDriverStatus": {
     "vendor": "nvidia",

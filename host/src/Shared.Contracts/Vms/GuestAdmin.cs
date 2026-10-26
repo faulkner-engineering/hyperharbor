@@ -26,5 +26,5 @@ public sealed record GuestAdminSettings([property: JsonRequired] int WindowMinut
 {
     public const int MinimumMinutes = 2;
     public const int MaximumMinutes = 30;
-    public const int DefaultMinutes = 10;
+    public const int DefaultMinutes = 5;
 }

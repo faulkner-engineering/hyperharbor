@@ -78,7 +78,7 @@ public sealed class GuestAdminServiceTests : IDisposable
     {
         var window = await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
         Assert.True(_guest.AdminAccounts[(VmId, "hha-owner")].Enabled);
-        Assert.Equal(_time.GetUtcNow().AddMinutes(10), window.ExpiresAt);
+        Assert.Equal(_time.GetUtcNow().AddMinutes(5), window.ExpiresAt);
         Assert.Equal(window.Passphrase, Assert.Single(_guest.AdminEnabled).Password);
 
         Assert.True(await Service.CloseAsync(VmId, _userId, CancellationToken.None));
@@ -96,7 +96,7 @@ public sealed class GuestAdminServiceTests : IDisposable
     public async Task OpenAgainWithinTheWindow_ReturnsTheSamePassphrase_WithoutASecondRotation()
     {
         var first = await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
-        _time.Advance(TimeSpan.FromMinutes(9));
+        _time.Advance(TimeSpan.FromMinutes(4));
 
         var second = await Service.OpenAsync(VmId, _userId, new GuestAdminRequester(Guid.NewGuid(), "Phone"), CancellationToken.None);
 
@@ -122,7 +122,7 @@ public sealed class GuestAdminServiceTests : IDisposable
         var buffer = Service.PassphraseBuffer(VmId, _userId)!;
         Assert.Equal(window.Passphrase, new string(buffer));
 
-        _time.Advance(TimeSpan.FromMinutes(10));
+        _time.Advance(TimeSpan.FromMinutes(5));
         await Service.WaitForBackgroundAsync();
 
         Assert.All(buffer, c => Assert.Equal('\0', c));
@@ -209,7 +209,7 @@ public sealed class GuestAdminServiceTests : IDisposable
     public async Task DeletedVm_IsForgotten()
     {
         await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
-        _time.Advance(TimeSpan.FromMinutes(10));
+        _time.Advance(TimeSpan.FromMinutes(5));
         _inventory.Vms.Clear();
 
         await Service.WaitForBackgroundAsync();
@@ -306,7 +306,7 @@ public sealed class GuestAdminServiceTests : IDisposable
         var window = await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
         Assert.DoesNotContain(window.Passphrase, window.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(window.Passphrase, File.ReadAllText(Path.Combine(_directory, GuestAdminStore.FileName)), StringComparison.Ordinal);
-        _time.Advance(TimeSpan.FromMinutes(10));
+        _time.Advance(TimeSpan.FromMinutes(5));
         await Service.WaitForBackgroundAsync();
 
         // A guest that echoes what it was given into its error output.
