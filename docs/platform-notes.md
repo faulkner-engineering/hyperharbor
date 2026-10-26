@@ -58,6 +58,9 @@ section for an area before changing it: most of these were learned from a failur
   (the foreground stayed TscShellContainerClass). Keep such a card below title bar height: at the very top right it
   covered a maximized window's close button.
 - Alt+F4 closes an undecorated window through Windows itself, even when the app's command channel is stuck.
+- A window's height in tauri.conf.json is its content height. With the native title bar the page had all 640 px; the
+  app's own bar (36 px) comes out of that, so the default height is 676 and the minimum 516 to keep the page's space.
+  The Create VM dialog is tuned to fit that space unscrolled; at 640 its buttons were cut off (checked by screenshot).
 
 ## Tray windows (WebView2, 2026-10-05)
 

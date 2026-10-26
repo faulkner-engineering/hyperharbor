@@ -15,9 +15,9 @@
         "label": "main",
         "title": "HyperHarbor",
         "width": 960,
-        "height": 640,
+        "height": 676,
         "minWidth": 640,
-        "minHeight": 480,
+        "minHeight": 516,
         "decorations": false
       }
     ],
