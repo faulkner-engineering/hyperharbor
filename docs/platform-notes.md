@@ -182,6 +182,13 @@ section for an area before changing it: most of these were learned from a failur
   "Continue with autoinstall?" at the console, since the seed cannot change the kernel command line.
 - The create job presses Space (Msvm_Keyboard.TypeKey) twelve times on the first boot only, to pass
   Windows media's "Press any key to boot from CD or DVD".
+- Turning a VM off (RequestStateChange 3) can return before it is off; a Start right after it fails with "Start is not
+  valid in the current state" (2026-10-26, nested Hyper-V). WindowsSetupBootRecovery retries Start for 30 seconds.
+- Windows' DVD boot loader (cdboot.efi in efisys.bin) needs the disc's ISO 9660 file system: a UDF-only image (IMAPI2
+  with FileSystemsToCreate 4) passes "Press any key", then the firmware falls through to PXE and logs 18603. IMAPI2
+  supports ISO 9660 interchange levels 1 and 2 only, so an 8 GB install.wim cannot go on such an image; export one
+  edition to install.esd first. On the same VM, Start-VM made an automatic checkpoint (AutomaticCheckpointsEnabled
+  is on for VMs HyperHarbor creates) while HyperHarbor's own CIM start did not; a checkpoint blocks growing the disk.
 - A first boot can still end with nothing installed (2026-10-25, laptop, build 26300 media, a second VM running): the
   keys got Setup started, the guest reset itself 26 seconds later (cause unknown), the second boot's prompt timed
   out with no key, the empty disk did not boot, and the VM sat at the firmware's boot summary ("The boot loader

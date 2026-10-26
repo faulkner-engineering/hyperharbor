@@ -139,16 +139,19 @@ public sealed class WindowsSetupBootRecovery
     private readonly TimeProvider _time;
     private readonly ILogger<WindowsSetupBootRecovery> _logger;
     private readonly TimeSpan _keyInterval;
+    private readonly TimeSpan _startRetryInterval;
     private readonly ConcurrentDictionary<Guid, int> _restarts = new();
 
     /// <param name="keyInterval">Time between key presses; one second unless a test shortens it.</param>
+    /// <param name="startRetryInterval">Time between attempts to start the VM after turning it off; two seconds unless a test shortens it.</param>
     public WindowsSetupBootRecovery(
         IVmBootEvents events,
         IHyperVPowerInvoker power,
         IVmKeyboard keyboard,
         TimeProvider time,
         ILogger<WindowsSetupBootRecovery> logger,
-        TimeSpan? keyInterval = null)
+        TimeSpan? keyInterval = null,
+        TimeSpan? startRetryInterval = null)
     {
         _events = events;
         _power = power;
@@ -156,6 +159,7 @@ public sealed class WindowsSetupBootRecovery
         _time = time;
         _logger = logger;
         _keyInterval = keyInterval ?? TimeSpan.FromSeconds(1);
+        _startRetryInterval = startRetryInterval ?? TimeSpan.FromSeconds(2);
     }
 
     /// <summary>Checks a Windows install still in Setup, and restarts its VM when it found nothing to boot.</summary>
@@ -180,8 +184,31 @@ public sealed class WindowsSetupBootRecovery
             restarts,
             MaxRestarts);
         await _power.InvokeAsync(install.VmId, VmAction.TurnOff, cancellationToken).ConfigureAwait(false);
-        await _power.InvokeAsync(install.VmId, VmAction.Start, cancellationToken).ConfigureAwait(false);
+        await StartWhenOffAsync(install.VmId, cancellationToken).ConfigureAwait(false);
         await WindowsBootKey.PressAsync(_keyboard, install.VmId, _keyInterval, _time, _logger, cancellationToken).ConfigureAwait(false);
         return BootRecoveryResult.Restarted;
     }
+
+    /// <summary>
+    /// Starts the VM once Hyper-V accepts it. Turning off can return before the VM is off, and Start is then refused as
+    /// "not valid in the current state" (seen 2026-10-26 on the development VM), so it is retried for a while.
+    /// </summary>
+    private async Task StartWhenOffAsync(Guid vmId, CancellationToken cancellationToken)
+    {
+        var deadline = _time.GetUtcNow() + StartRetryWindow;
+        while (true)
+        {
+            try
+            {
+                await _power.InvokeAsync(vmId, VmAction.Start, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (VmActionNotAllowedException) when (_time.GetUtcNow() < deadline)
+            {
+                await Task.Delay(_startRetryInterval, _time, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static readonly TimeSpan StartRetryWindow = TimeSpan.FromSeconds(30);
 }

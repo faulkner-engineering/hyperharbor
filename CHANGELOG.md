@@ -29,6 +29,8 @@ API 1.36.0.
   shortcut stay. In the Remove section, Microsoft Edge is now rated keep and says why.
 
 ### Fixed
+- A Windows install whose VM found nothing to boot is restarted again as intended. The host turned the VM off and
+  started it at once, which Hyper-V refused while the VM was still stopping, so the install stayed at "The VM is off".
 - A portable host started with Start-HyperHarbor.ps1 by a standard Windows user no longer crashes at startup when
   an administrator account approved the setup prompt. Setup gave the files it wrote (users.json and the console
   accounts) to that administrator, so the host could not read them. Setup, and Set up console access in the tray,
