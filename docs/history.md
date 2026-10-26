@@ -475,6 +475,13 @@ verified, and what was found along the way. User-facing changes per release are 
      second Tauri window (label guest-admin-overlay, route /overlay, no decorations, no taskbar button, focused false)
      at the top right of the client's monitor (Remote Desktop's connection bar is at the top center); the passphrase
      lives in the Rust OverlayState until hidden, zeroed on drop, and the card closes with the client.
+   - The first card build failed in the user's hands: a white box, and Done stuck on "Ending administrator access".
+     Cause: the show and hide commands were synchronous, and making a window in one deadlocks on Windows; the overlay
+     route was also not prerendered. Fixed (async commands, prerendered route) and checked with a throwaway build that
+     opened and hid the card at startup. The user then asked for docs/ui-principles.md and three of its principles
+     built: Done closes at once and reports failures as a toast; opening says it is slow after 20 seconds and offers
+     Close, and a late answer never shows the card; the VM list reads each window from the host (row badge "Admin
+     until", End administrator access in the menu, read again when the menu opens).
    - Verified: unit tests with the fake guest (lazy creation, enable and disable, reuse, expiry, VM stop, startup sweep,
      serialization, zeroing, Linux, settings range, passphrase never logged or persisted), API tests for the four
      routes, Rust and Vitest tests. Live (GuestAdminLiveTests on HyperHarbor-Test, made by MachineProfileLiveTests with

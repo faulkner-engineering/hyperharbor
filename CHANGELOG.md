@@ -27,7 +27,9 @@ when it is on the stable channel with automatic updates on; installed clients up
   passphrase also shows in a small card at the top right of your screen that stays above every window, a full-screen
   Remote Desktop session included, so you can read it while you type. In the Windows prompt choose More choices,
   pick that account, and type the passphrase. Access ends after 5 minutes, when you choose Done, or when the VM
-  stops; the host then disables the account again and the card goes away. The account is created the first
+  stops; the host then disables the account again and the card goes away. While access is open, the VM's row shows
+  "Admin until" and its menu offers End administrator access, also after the client restarts. Done closes the dialog
+  at once; if the host cannot be reached, a message says access still ends by itself. The account is created the first
   time you ask, cannot sign in over the network or Remote Desktop (only prompts and the VM's console), and the
   passphrase is never stored or put on the clipboard. Windows guests only; Linux VMs keep using sudo. Needs a host
   with API 1.35.0. The length is a host setting from 2 to 30 minutes (PUT /host/guest-admin/settings).

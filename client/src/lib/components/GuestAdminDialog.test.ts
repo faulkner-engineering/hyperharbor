@@ -7,6 +7,8 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import GuestAdminDialog from "./GuestAdminDialog.svelte";
 import { elevation } from "$lib/lifecycle.svelte";
+import { toasts } from "$lib/toasts.svelte";
+import { SLOW_AFTER_MS } from "$lib/guestAdmin";
 import type { GuestAdminWindow, HostEntry, Vm } from "$lib/api/client";
 
 const host: HostEntry = {
@@ -66,6 +68,7 @@ describe("GuestAdminDialog", () => {
   beforeEach(() => {
     invoke.mockReset();
     elevation.finish(false);
+    toasts.clear();
   });
 
   afterEach(() => {
@@ -159,5 +162,52 @@ describe("GuestAdminDialog", () => {
 
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("closes at once on Done even when the host never answers, and hides the card", async () => {
+    mockHost({ open_guest_admin: [window()] });
+    const never = new Promise(() => {});
+    const onclose = vi.fn();
+    render(GuestAdminDialog, { host, vm, onclose });
+    await screen.findByRole("button", { name: "Done" });
+    invoke.mockImplementation(async (command: string) => (command === "close_guest_admin" ? never : undefined));
+
+    await fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(onclose).toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith("hide_guest_admin_overlay");
+    expect(invoke).toHaveBeenCalledWith("close_guest_admin", { key: host.key, vmId: vm.id });
+  });
+
+  it("reports a Done the host refused as a toast", async () => {
+    mockHost({ open_guest_admin: [window()], close_guest_admin: [problem("guestUnavailable", "PowerShell Direct could not connect.")] });
+    const onchanged = vi.fn();
+    render(GuestAdminDialog, { host, vm, onclose: vi.fn(), onchanged });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    await waitFor(() => expect(toasts.items.map((toast) => toast.message).join()).toContain("could not be ended"));
+    expect(toasts.items[0].kind).toBe("error");
+    await waitFor(() => expect(onchanged).toHaveBeenCalledTimes(2));
+  });
+
+  it("offers to close when opening is slow, and never shows the card for a late answer", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let answer: (value: GuestAdminWindow) => void = () => {};
+    invoke.mockImplementation((command: string) =>
+      command === "open_guest_admin" ? new Promise<GuestAdminWindow>((resolve) => (answer = resolve)) : Promise.resolve(undefined),
+    );
+    const onclose = vi.fn();
+    render(GuestAdminDialog, { host, vm, onclose });
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(SLOW_AFTER_MS);
+    expect(screen.getByText(/taking longer than usual/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    answer(window());
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(onclose).toHaveBeenCalled();
+    expect(calls()).not.toContain("show_guest_admin_overlay");
   });
 });

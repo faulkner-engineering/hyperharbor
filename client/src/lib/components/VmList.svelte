@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { UnattendedInstallState, Vm, VmAction, VmState } from "$lib/api/client";
+  import type { GuestAdminStatus, UnattendedInstallState, Vm, VmAction, VmState } from "$lib/api/client";
   import Menu from "./Menu.svelte";
 
   interface Props {
@@ -21,6 +21,12 @@
     oncamera?: (vm: Vm) => void;
     /** A short administrator window in a running, set-up Windows VM (hosts with API 1.35.0); leave unset to hide it. */
     onguestadmin?: (vm: Vm) => void;
+    /** Ends an open administrator window from the menu. */
+    onguestadminend?: (vm: Vm) => void;
+    /** What the host said about each VM's administrator window, by VM ID; read again when a menu opens. */
+    guestAdmin?: Record<string, GuestAdminStatus>;
+    /** A VM's menu opened. */
+    onmenuopen?: (vm: Vm) => void;
     /** Capture a setup profile from a running Windows VM; leave unset for hosts without setup profiles. */
     oncapture?: (vm: Vm) => void;
     /** Apply a setup profile to a running Windows VM; leave unset for hosts that cannot. */
@@ -47,6 +53,9 @@
     onmonitors,
     oncamera,
     onguestadmin,
+    onguestadminend,
+    guestAdmin = {},
+    onmenuopen,
     oncapture,
     onapplyprofile,
     onapplymachine,
@@ -126,6 +135,10 @@
     return `${minutes}m`;
   }
 
+  function adminUntil(iso: string): string {
+    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
   function formatMemory(mb: number | null | undefined): string {
     if (mb === null || mb === undefined) return "";
     return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
@@ -153,6 +166,11 @@
         <tr>
           <td class="name">
             {vm.name}
+            {#if guestAdmin[vm.id]?.open && guestAdmin[vm.id]?.expiresAt}
+              <span class="admin" title="Administrator access is open in this VM; the account is disabled again when it ends."
+                >Admin until {adminUntil(guestAdmin[vm.id].expiresAt!)}</span
+              >
+            {/if}
             {#if vm.performanceMode}
               <span class="gpu" title="Performance mode: this VM has a share of the host's GPU">GPU</span>
             {/if}
@@ -203,7 +221,7 @@
                 onclick={() => onconsole?.(vm)}>{consoleVmId === vm.id ? "Opening…" : "Console"}</button
               >
             {/if}
-            <Menu label="⋮" ariaLabel="Actions for {vm.name}" title="More actions">
+            <Menu label="⋮" ariaLabel="Actions for {vm.name}" title="More actions" onopen={() => onmenuopen?.(vm)}>
               {#if (vm.state === "running" || vm.state === "paused") && primary !== "console"}
                 <button
                   type="button"
@@ -217,6 +235,9 @@
                   title="A one-time passphrase for the Windows administrator prompt in this VM"
                   onclick={() => onguestadmin(vm)}>Administrator access…</button
                 >
+                {#if guestAdmin[vm.id]?.open && onguestadminend}
+                  <button type="button" onclick={() => onguestadminend(vm)}>End administrator access</button>
+                {/if}
               {/if}
               {#if vm.state === "running"}
                 <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "shutdown")}>
@@ -301,6 +322,17 @@
 
   .name {
     font-weight: 600;
+  }
+
+  .admin {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: var(--warn-bg);
+    color: var(--warn-fg);
   }
 
   .gpu {

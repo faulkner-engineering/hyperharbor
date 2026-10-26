@@ -13,6 +13,7 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 - docs/pairing.md: the SPAKE2 pairing protocol.
 - docs/machine-profiles.md: the machine profile document, API, migration, and apply design (phase 26).
 - docs/guest-elevation.md: administrator windows in guests (phase 28) and the planned guest agent.
+- docs/ui-principles.md: how the client UI must behave so a failure never traps the user. Read before any UI change.
 
 ## Rules
 - MVP scope only. Do not implement later phases early.

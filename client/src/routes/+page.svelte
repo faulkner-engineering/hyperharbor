@@ -23,6 +23,11 @@
     RemoteDesktopApiVersion,
     HostLogsApiVersion,
     GuestAdminApiVersion,
+    getGuestAdmin,
+    getGuestAdminCard,
+    hideGuestAdminCard,
+    closeGuestAdmin,
+    type GuestAdminStatus,
     downloadHostLogs,
     SetupProfilesApiVersion,
     MachineProfilesApiVersion,
@@ -135,6 +140,51 @@
   const pairedKey = $derived(selectedHost?.paired ? selectedHost.key : null);
   const hostHasRemoteDesktop = $derived(selectedHost ? hostSupports(selectedHost, RemoteDesktopApiVersion) : false);
   const hostHasGuestAdmin = $derived(selectedHost ? hostSupports(selectedHost, GuestAdminApiVersion) : false);
+
+  /**
+   * Administrator windows as the host reports them, by VM ID. The host is the source of truth (docs/ui-principles.md):
+   * the list reads them whenever the VMs that can have one change, and again when a VM's menu opens, so a restarted
+   * client still shows an open window and can end it.
+   */
+  let guestAdmin = $state<Record<string, GuestAdminStatus>>({});
+  const guestAdminVmIds = $derived(
+    hostHasGuestAdmin && vms
+      ? vms
+          .filter((vm) => vm.state === "running" && vm.guestOs.family === "windows" && vm.provisioned)
+          .map((vm) => vm.id)
+          .join(",")
+      : "",
+  );
+
+  async function readGuestAdmin(key: string, vmId: string) {
+    try {
+      const status = await getGuestAdmin(key, vmId);
+      guestAdmin = { ...guestAdmin, [vmId]: status };
+    } catch {
+      // Shown as unknown; the menu reads it again when it opens.
+    }
+  }
+
+  $effect(() => {
+    const key = pairedKey;
+    const ids = guestAdminVmIds ? guestAdminVmIds.split(",") : [];
+    if (key) for (const id of ids) readGuestAdmin(key, id);
+  });
+
+  /** Ends a window from the VM's menu. Never waits: the result arrives as a toast. */
+  function endGuestAdmin(vm: Vm) {
+    const key = pairedKey;
+    if (!key) return;
+    getGuestAdminCard()
+      .then((card) => {
+        if (card?.vmName === vm.name) return hideGuestAdminCard();
+      })
+      .catch(() => {});
+    closeGuestAdmin(key, vm.id)
+      .then(() => toasts.show(`Administrator access to ${vm.name} ended.`))
+      .catch((error) => toasts.error(errorMessage(error)))
+      .finally(() => readGuestAdmin(key, vm.id));
+  }
   const hostHasLogs = $derived(selectedHost ? hostSupports(selectedHost, HostLogsApiVersion) : false);
   const hostHasSetupProfiles = $derived(selectedHost ? hostSupports(selectedHost, SetupProfilesApiVersion) : false);
   const hostHasMachineProfiles = $derived(selectedHost ? hostSupports(selectedHost, MachineProfilesApiVersion) : false);
@@ -676,6 +726,9 @@
             onmonitors={(vm) => (choosingMonitors = vm)}
             oncamera={(vm) => (configuringCamera = vm)}
             onguestadmin={hostHasGuestAdmin ? (vm) => (elevatingIn = vm) : undefined}
+            onguestadminend={hostHasGuestAdmin ? endGuestAdmin : undefined}
+            {guestAdmin}
+            onmenuopen={(vm) => pairedKey && hostHasGuestAdmin && guestAdminVmIds.includes(vm.id) && readGuestAdmin(pairedKey, vm.id)}
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
             onreplacedisk={hostHasBackups ? (vm) => (replacingDisk = vm) : undefined}
             onapplyprofile={hostAppliesProfiles && !hostConsolidated ? (vm) => (applyingProfile = vm) : undefined}
@@ -727,7 +780,12 @@
           <CameraDialog host={selectedHost} vm={configuringCamera} onclose={() => (configuringCamera = null)} />
         {/if}
         {#if elevatingIn}
-          <GuestAdminDialog host={selectedHost} vm={elevatingIn} onclose={() => (elevatingIn = null)} />
+          <GuestAdminDialog
+            host={selectedHost}
+            vm={elevatingIn}
+            onclose={() => (elevatingIn = null)}
+            onchanged={() => pairedKey && elevatingIn && readGuestAdmin(pairedKey, elevatingIn.id)}
+          />
         {/if}
         {#if creating && hostConsolidated}
           <CreateVmFromProfileDialog

@@ -8,6 +8,9 @@ import { withElevation } from "$lib/lifecycle.svelte";
 export const requestGuestAdmin = (key: string, vmId: string): Promise<GuestAdminWindow> =>
   withElevation(key, () => openGuestAdmin(key, vmId));
 
+/** After this long without an answer, opening says so and offers to close (docs/ui-principles.md, deadlines). */
+export const SLOW_AFTER_MS = 20_000;
+
 /** The passphrase's words and its digit, shown one by one: "Maple-River-Orbit-7" has four parts. */
 export const passphraseParts = (passphrase: string): string[] => passphrase.split("-");
 
