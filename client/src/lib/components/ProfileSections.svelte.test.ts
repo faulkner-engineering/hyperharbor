@@ -259,9 +259,9 @@ describe("BrowserSection", () => {
     { id: "edge", name: "Microsoft Edge", wingetId: "Microsoft.Edge", alias: "edge" },
   ];
 
-  function open(browserApp = "Google.Chrome") {
+  function open(browserApp = "Google.Chrome", apiVersion = host.apiVersion) {
     const props = $state({
-      host,
+      host: { ...host, apiVersion },
       browsers,
       browser: browsers.find((item) => item.wingetId === browserApp) ?? null,
       browserPolicies: [],
@@ -269,12 +269,27 @@ describe("BrowserSection", () => {
       browserApp,
       extensions: [] as ProfileItem[],
       policies: new SvelteMap<string, string>(),
+      makeDefault: false,
       selected: null,
       onselect: vi.fn(),
     });
     render(BrowserSection, props);
     return props;
   }
+
+  it("offers making the browser the default only on hosts that support it", async () => {
+    const props = open("Google.Chrome", "1.36.0");
+
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Make Google Chrome the default browser" }));
+
+    expect(props.makeDefault).toBe(true);
+  });
+
+  it("hides the default browser choice from older hosts", () => {
+    open("Google.Chrome", "1.35.0");
+
+    expect(screen.queryByRole("checkbox", { name: /default browser/ })).toBeNull();
+  });
 
   it("looks up a pasted store link from the filter box", async () => {
     answer({

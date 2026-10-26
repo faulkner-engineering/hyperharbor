@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.35.0
+  version: 1.36.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -5985,6 +5985,12 @@ components:
           description: Browser policies by friendly key from the browser catalog; values as text.
           additionalProperties:
             type: string
+        makeDefault:
+          type: boolean
+          description: |
+            Since 1.36.0. VM profiles only; false when absent. Makes the browser the default for web links and .htm
+            and .html files through Windows' default associations policy, which applies at every sign-in, so the
+            default cannot be changed inside the VM while the profile's setting is there.
 
     MachineProfile:
       type: object

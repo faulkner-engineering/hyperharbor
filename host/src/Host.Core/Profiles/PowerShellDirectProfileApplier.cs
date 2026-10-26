@@ -58,6 +58,7 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
     public async Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(
         Guid vmId,
         GuestCredential admin,
+        IReadOnlyList<FileWrite> files,
         IReadOnlyList<RegistryWrite> writes,
         string? userAccount,
         CancellationToken cancellationToken)
@@ -68,6 +69,7 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
             admin.UserName,
             admin.Password,
             account = userAccount,
+            files = files.Select(file => new { item = file.Item, path = file.Path, contents = file.Contents }),
             writes = writes.Select(write => new
             {
                 item = write.Item,
@@ -79,7 +81,7 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
             }),
         }, SettingsTimeout, cancellationToken).ConfigureAwait(false);
 
-        // A tweak can write several values; it counts as one item, applied only when all of them were written.
+        // A tweak can write several values (and a file); it counts as one item, applied only when all were written.
         return ParseItems(result)
             .GroupBy(item => item.Item, StringComparer.Ordinal)
             .Select(group => group.FirstOrDefault(item => !item.Ok) ?? group.First())
@@ -288,10 +290,20 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
     /// </summary>
     internal const string SettingsScript = Connect + """
         try {
-            $result = Invoke-Command -Session $session -ArgumentList @($request.writes), $request.account -ScriptBlock {
-                param($writes, $account)
+            $result = Invoke-Command -Session $session -ArgumentList @($request.writes), $request.account, @($request.files) -ScriptBlock {
+                param($writes, $account, $files)
                 $items = @()
                 $loadedHives = @()
+
+                # Files first: a value can name one (the default associations policy names its file).
+                foreach ($file in $files) {
+                    try {
+                        [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName([string]$file.path)) | Out-Null
+                        [IO.File]::WriteAllText([string]$file.path, [string]$file.contents, (New-Object Text.UTF8Encoding $false))
+                        $items += @{ item = $file.item; ok = $true }
+                    }
+                    catch { $items += @{ item = $file.item; ok = $false; error = $_.Exception.Message } }
+                }
 
                 # reg.exe writes its errors to stderr, which must not end the script, so its exit code is checked.
                 function Load($name, $file) {

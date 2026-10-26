@@ -72,6 +72,12 @@ public sealed class BrowserCatalogEntry
     public string UserData { get; set; } = "";
     public string UpdateUrl { get; set; } = "";
     public string? EdgeUpdateUrl { get; set; }
+
+    /// <summary>The ProgId the browser registers for web links and HTML files, for the default associations policy.</summary>
+    public string ProgId { get; set; } = "";
+
+    /// <summary>The application name Windows shows for that ProgId.</summary>
+    public string ApplicationName { get; set; } = "";
 }
 
 public sealed class BrowserPolicyEntry

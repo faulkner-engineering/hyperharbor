@@ -10,6 +10,14 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+API 1.36.0.
+
+### Added
+- Setup and machine profiles can make their browser the default in the VM: "Make <browser> the default browser" in
+  the Browser section (`makeDefault: true` in YAML). Windows applies it at every sign-in, so the default browser
+  cannot be changed inside the VM while the profile sets it. Needs a host with this version; older hosts do not show
+  the option.
+
 ### Fixed
 - A portable host started with Start-HyperHarbor.ps1 by a standard Windows user no longer crashes at startup when
   an administrator account approved the setup prompt. Setup gave the files it wrote (users.json and the console

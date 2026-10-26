@@ -84,7 +84,7 @@ backup:
 install: [Valve.Steam, Discord.Discord]   # the software sections, unchanged from setup profiles
 remove: { appx: [Microsoft.BingNews], capabilities: [], features: [] }
 tweaks: [{ id: explorer.showFileExtensions }]
-browser: { app: { id: Brave.Brave }, extensions: [], policies: {} }
+browser: { app: { id: Brave.Brave }, extensions: [], policies: {}, makeDefault: true }   # makeDefault since 1.36.0
 ```
 
 ### Where each field comes from

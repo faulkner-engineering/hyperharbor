@@ -71,7 +71,8 @@ public class ContractFixtureTests
         new ProfileBrowser(
             new ProfileItem("Brave.Brave", "Brave"),
             [new ProfileItem("cjpalhdlnbpafiamejdnhcphjbkeiagm", "uBlock Origin")],
-            new Dictionary<string, string> { ["passwordManager"] = "false" }));
+            new Dictionary<string, string> { ["passwordManager"] = "false" },
+            MakeDefault: true));
 
     private static readonly SetupProfile HostProfileSample = new(
         "Host gaming",

@@ -41,6 +41,8 @@ export class SoftwareDraft {
   custom = $state<{ registry: RegistryTweak; name?: string }[]>([]);
   browserApp = $state("");
   extensions = $state<ProfileItem[]>([]);
+  /** Make the browser the default (hosts with DefaultBrowserApiVersion). */
+  makeDefault = $state(false);
   readonly policies = new SvelteMap<string, string>();
 
   catalog = $state<SetupProfileCatalog | null>(null);
@@ -69,6 +71,7 @@ export class SoftwareDraft {
     this.custom = (start.tweaks ?? []).flatMap((tweak) => (tweak.registry ? [{ registry: tweak.registry, name: tweak.name }] : []));
     this.browserApp = start.browser?.app.id ?? "";
     this.extensions = start.browser?.extensions ?? [];
+    this.makeDefault = start.browser?.makeDefault ?? false;
     this.policies.clear();
     for (const [key, value] of Object.entries(start.browser?.policies ?? {})) this.policies.set(key, value);
   }
@@ -102,6 +105,8 @@ export class SoftwareDraft {
             app: { id: browser.wingetId, name: browser.name },
             extensions: this.extensions,
             policies: Object.fromEntries([...this.policies].filter(([key]) => this.browserPolicies.some((policy) => policy.key === key))),
+            // Only when set: hosts before 1.36.0 do not know the field.
+            ...(this.makeDefault ? { makeDefault: true } : {}),
           }
         : undefined,
     };

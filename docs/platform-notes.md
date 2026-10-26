@@ -339,6 +339,13 @@ section for an area before changing it: most of these were learned from a failur
 - Remove-WindowsCapability for MathRecognizer reported no restart. HKCU tweaks go to the Default user hive
   (C:\Users\Default\NTUSER.DAT under HKU\HyperHarborDefault), since the User's account has not signed in yet.
   ExtensionSettings is one REG_SZ JSON value under the browser's policy key.
+- Default browser (browser.makeDefault, 0.2.4): Windows 11's UserChoice Protection Driver (UCPD) stops other programs
+  from writing the http and https UserChoice keys, and their hash ties them to the user, so a script cannot choose
+  the default browser. The supported way is the policy "Set a default associations configuration file"
+  (HKLM\SOFTWARE\Policies\Microsoft\Windows\System, DefaultAssociationsConfiguration = path to an XML file), which
+  Windows applies at every sign-in, also overriding the user's own change. ProgIds in catalogs/browsers.yaml:
+  ChromeHTML, MSEdgeHTM, BraveHTML. Not yet verified on a live guest: the ProgIds, and whether a Brave that fell back
+  to a per-user install (0x8A150010 retry) is registered for the User's account at all.
 - After a restart, GuestRestart counts Remote Desktop only after one check found it down (Windows answers for a few
   seconds after the request, and a guest reboot does not reset uptime): 60 checks of 15 seconds.
 - The User's account hive: loaded under HKU\<SID> while it is signed in, otherwise its NTUSER.DAT loaded under

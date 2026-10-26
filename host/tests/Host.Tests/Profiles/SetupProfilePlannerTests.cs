@@ -36,6 +36,46 @@ public sealed class SetupProfilePlannerTests
     }
 
     [Fact]
+    public void MakeDefault_WritesTheAssociationsFile_AndThePolicyThatNamesIt()
+    {
+        var plan = Planner.Plan(Profile(browser: new(new("brave"), null, null, MakeDefault: true)));
+
+        var file = Assert.Single(plan.Files!);
+        Assert.Equal("Brave as the default browser", file.Item);
+        Assert.Equal(@"C:\ProgramData\HyperHarbor\DefaultAssociations.xml", file.Path);
+        var associations = System.Xml.Linq.XDocument.Parse(file.Contents).Root!.Elements("Association").ToList();
+        Assert.Equal([".htm", ".html", "http", "https"], associations.Select(association => (string)association.Attribute("Identifier")!));
+        Assert.All(associations, association =>
+        {
+            Assert.Equal("BraveHTML", (string)association.Attribute("ProgId")!);
+            Assert.Equal("Brave", (string)association.Attribute("ApplicationName")!);
+        });
+
+        var policy = Assert.Single(plan.Registry, write => write.Item == file.Item);
+        Assert.Equal(new RegistryWrite(file.Item, RegistryTarget.Machine, @"SOFTWARE\Policies\Microsoft\Windows\System", "DefaultAssociationsConfiguration", "string", file.Path), policy);
+        Assert.Equal(2, plan.ItemCount);
+    }
+
+    [Fact]
+    public void WithoutMakeDefault_NoAssociationsAreWritten()
+    {
+        var plan = Planner.Plan(Profile(browser: new(new("brave"), null, null)));
+
+        Assert.Empty(plan.Files!);
+        Assert.DoesNotContain(plan.Registry, write => write.Name == "DefaultAssociationsConfiguration");
+    }
+
+    [Fact]
+    public void EveryCatalogBrowser_HasAProgIdForTheDefaultAssociations()
+    {
+        Assert.All(Catalogs.Default.Browsers, browser =>
+        {
+            Assert.NotEmpty(browser.ProgId);
+            Assert.NotEmpty(browser.ApplicationName);
+        });
+    }
+
+    [Fact]
     public void Tweaks_ExpandToRegistryValues_AndHkcuGoesToTheDefaultUserHive()
     {
         var plan = Planner.Plan(Profile(tweaks:

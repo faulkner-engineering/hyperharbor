@@ -3612,6 +3612,12 @@ export interface components {
             policies?: {
                 [key: string]: string;
             };
+            /**
+             * @description Since 1.36.0. VM profiles only; false when absent. Makes the browser the default for web links and .htm
+             *     and .html files through Windows' default associations policy, which applies at every sign-in, so the
+             *     default cannot be changed inside the VM while the profile's setting is there.
+             */
+            makeDefault?: boolean;
         };
         /**
          * @description Since 1.27.0. A whole VM in one document: account, display, firmware, compute, GPU share, network,

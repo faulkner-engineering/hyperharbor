@@ -299,6 +299,9 @@ export const provisionVm = (
 export const connectVm = (key: string, vmId: string, address: string, vmName?: string) =>
   invoke<string | null>("connect_vm", { key, vmId, address, vmName });
 
+/** The API version that added browser.makeDefault to setup and machine profiles. */
+export const DefaultBrowserApiVersion = "1.36.0";
+
 /** The API version that added administrator windows in Windows guests. */
 export const GuestAdminApiVersion = "1.35.0";
 

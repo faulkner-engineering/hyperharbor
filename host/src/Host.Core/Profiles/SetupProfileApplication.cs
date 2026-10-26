@@ -20,6 +20,7 @@ public interface IGuestProfileApplier
         IReadOnlyList<ProfileItem> features,
         CancellationToken cancellationToken);
 
+    /// <param name="files">Written before the registry values; an item with a file and values succeeds only when all do.</param>
     /// <param name="userAccount">
     /// The User's account in the VM (for example hh-owner). HKCU values go to the Default user hive, and also to this
     /// account's hive when it already has a profile; null for the Default user hive only.
@@ -27,6 +28,7 @@ public interface IGuestProfileApplier
     Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(
         Guid vmId,
         GuestCredential admin,
+        IReadOnlyList<FileWrite> files,
         IReadOnlyList<RegistryWrite> writes,
         string? userAccount,
         CancellationToken cancellationToken);
@@ -69,10 +71,11 @@ public sealed class SetupProfileApplication(SetupProfilePlanner planner, IGuestP
                 results.AddRange(await applier.RemoveAsync(vmId, admin, plan.Appx, plan.Capabilities, plan.Features, cancellationToken).ConfigureAwait(false));
             }
 
-            if (plan.Registry.Count > 0)
+            var files = plan.Files ?? [];
+            if (plan.Registry.Count + files.Count > 0)
             {
                 report($"Applying {profile.Name}: writing settings");
-                results.AddRange(await applier.WriteSettingsAsync(vmId, admin, plan.Registry, userAccount, cancellationToken).ConfigureAwait(false));
+                results.AddRange(await applier.WriteSettingsAsync(vmId, admin, files, plan.Registry, userAccount, cancellationToken).ConfigureAwait(false));
             }
         }
         catch (Exception ex) when (GuestErrors.IsGuestError(ex))

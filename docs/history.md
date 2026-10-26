@@ -493,6 +493,17 @@ verified, and what was found along the way. User-facing changes per release are 
      platform-notes.md, Unattended installs). The test VM sat at the firmware's boot summary for an hour before this.
      HyperVWorkerBootEvents was checked against the real log (HH_BOOT_EVENTS_LIVE with HH_LIVE_GUEST_VM and
      HH_BOOT_FAILED_AT); the restart itself has unit tests only.
+29. Release 0.2.4 (2026-10-26; API 1.36.0; branch release/0.2.4). The user's notes from a weekend of use, gathered
+   into one release with the Remote Desktop window titles.
+   - Portable host data access: Start-HyperHarbor.ps1's elevated setup ran as the administrator who approved UAC and
+     locked a standard user out of users.json (platform-notes.md, General). --setup-console --for-user, repair of
+     existing files, and a clear message from the host. Verified live on the development VM (hh-owner, hha-owner).
+   - Default browser (the user: "I can't set Brave as the default browser"): browser.makeDefault in setup and machine
+     profiles, VM profiles only. The planner writes C:\ProgramData\HyperHarbor\DefaultAssociations.xml (http, https,
+     .htm, .html to the catalog's progId) and the DefaultAssociationsConfiguration policy naming it; the settings step
+     gained file writes for it. The user accepted that Windows reapplies it at every sign-in. Client: a checkbox in
+     the Browser section (hostSupports 1.36.0); makeDefault is sent only when on, since older hosts reject unknown
+     fields in machine profiles.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

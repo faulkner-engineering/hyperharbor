@@ -154,6 +154,11 @@ public static partial class ProfileYamlWriter
                     lines.Add($"    {key}: {PolicyValue(value, policyTypes?.GetValueOrDefault(key))}");
                 }
             }
+
+            if (browser.MakeDefault)
+            {
+                lines.Add("  makeDefault: true");
+            }
         }
     }
 
@@ -414,7 +419,7 @@ public static class ProfileYamlReader
         }
 
         var browser = node as YamlMappingNode ?? throw new ProfileFormatException($"Line {node.Start.Line}: browser must be a mapping.");
-        CheckKeys(browser, ["app", "extensions", "policies"], "browser");
+        CheckKeys(browser, ["app", "extensions", "policies", "makeDefault"], "browser");
         var app = Child(browser, "app") as YamlScalarNode ?? throw new ProfileFormatException($"Line {browser.Start.Line}: browser needs app, the browser's winget id or alias.");
 
         Dictionary<string, string>? policies = null;
@@ -433,10 +438,18 @@ public static class ProfileYamlReader
             }
         }
 
+        var makeDefault = false;
+        if (Child(browser, "makeDefault") is { } makeDefaultNode
+            && (makeDefaultNode is not YamlScalarNode { Value: { } flag } || !bool.TryParse(flag, out makeDefault)))
+        {
+            throw new ProfileFormatException($"Line {makeDefaultNode.Start.Line}: makeDefault is true or false.");
+        }
+
         return new ProfileBrowser(
             new ProfileItem(app.Value ?? "", comments.GetValueOrDefault(app.Start.Line)),
             Items(browser, "extensions", comments),
-            policies);
+            policies,
+            makeDefault);
     }
 
     internal static List<ProfileItem>? Items(YamlMappingNode parent, string key, IReadOnlyDictionary<long, string> comments)
