@@ -24,6 +24,13 @@ note anything that needs action, such as updating the host, a new elevation requ
   administrator account (hha-owner) to answer a UAC prompt. POST, GET, and DELETE /vms/{vmId}/guest-admin, PUT /host/guest-admin/settings, and the problem codes
   vmNotProvisioned, guestAdminUnsupported, and guestUnavailable.
 
+### Changed
+- The client draws its own title bar: the HyperHarbor name over the sidebar and minimize, maximize, and close
+  buttons in the app's colors, in light and dark mode, instead of the separate Windows title bar. Drag the bar to
+  move the window and double-click it to maximize; dialogs open below it, so the window can still be moved or
+  closed with one open. Windows 11's snap layout menu no longer appears when you hover over maximize; Win+Z and
+  dragging the window to a screen edge still snap it.
+
 ### Fixed
 - Creating a Windows VM with an unattended install no longer stops for good at the "No operating system was loaded"
   screen when the VM resets before Windows Setup has written to the disk and misses the "Press any key to boot from CD

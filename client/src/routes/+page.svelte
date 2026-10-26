@@ -80,7 +80,7 @@
   import MonitorsDialog from "$lib/components/MonitorsDialog.svelte";
   import Menu from "$lib/components/Menu.svelte";
   import { openHostRemoteDesktop } from "$lib/hostRemoteDesktop";
-  import BrandMark from "$lib/brand/BrandMark.svelte";
+  import TitleBar from "$lib/components/TitleBar.svelte";
   import { toasts } from "$lib/toasts.svelte";
   import { setupResultMessage } from "$lib/setupProfiles";
 
@@ -466,8 +466,8 @@
 </script>
 
 <div class="app">
+  <TitleBar />
   <aside>
-    <h1><BrandMark size="1.4em" decorative />HyperHarbor</h1>
     <button type="button" class="library" class:selected={showLibrary} aria-pressed={showLibrary} onclick={() => (showLibrary = true)}>
       <span class="library-name">Library</span>
       <span class="library-meta">ISOs and profiles on this device</span>
@@ -871,6 +871,7 @@
   .app {
     display: grid;
     grid-template-columns: 260px 1fr;
+    grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
     height: 100vh;
   }
 
@@ -882,14 +883,6 @@
     border-right: 1px solid var(--border);
     background: var(--surface);
     overflow-y: auto;
-  }
-
-  h1 {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin: 0;
-    font-size: 1.2rem;
   }
 
   main {

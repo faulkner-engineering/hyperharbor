@@ -29,7 +29,7 @@
 <style>
   .backdrop {
     position: fixed;
-    inset: 0;
+    inset: var(--titlebar-height, 0px) 0 0 0;
     display: grid;
     place-items: center;
     background: rgb(0 0 0 / 0.35);
@@ -38,7 +38,7 @@
 
   .dialog {
     width: min(480px, calc(100vw - 2rem));
-    max-height: calc(100vh - 2rem);
+    max-height: calc(100vh - var(--titlebar-height, 0px) - 2rem);
     overflow-y: auto;
     padding: 1.25rem;
     border-radius: 8px;
@@ -53,7 +53,7 @@
 
   .dialog.xl {
     width: min(1100px, calc(100vw - 2rem));
-    height: min(820px, calc(100vh - 2rem));
+    height: min(820px, calc(100vh - var(--titlebar-height, 0px) - 2rem));
     display: flex;
     flex-direction: column;
   }
@@ -82,7 +82,7 @@
     --glow: color-mix(in srgb, var(--accent) 35%, transparent);
     position: relative;
     width: calc(100vw - 1.5rem);
-    height: calc(100vh - 1.5rem);
+    height: calc(100vh - var(--titlebar-height, 0px) - 1.5rem);
     max-height: none;
     display: flex;
     flex-direction: column;

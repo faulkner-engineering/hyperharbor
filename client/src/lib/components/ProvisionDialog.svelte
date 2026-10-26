@@ -109,7 +109,7 @@
 <style>
   .backdrop {
     position: fixed;
-    inset: 0;
+    inset: var(--titlebar-height, 0px) 0 0 0;
     display: grid;
     place-items: center;
     background: rgb(0 0 0 / 0.35);
