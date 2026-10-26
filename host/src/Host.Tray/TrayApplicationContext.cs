@@ -374,7 +374,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 break;
             case BackupFolderMessage backupFolder:
                 _backupFolder = backupFolder.Folder;
-                FolderReported("backup", backupFolder.Error, "Backup folder changed", $"Disk exports go to {backupFolder.Folder}.");
+                FolderReported("backup", backupFolder.Error, "Disk export folder changed", $"Disk exports go to {backupFolder.Folder}.");
                 break;
             case AdminPassphraseStatusMessage status:
                 OnPassphraseStatus(status);

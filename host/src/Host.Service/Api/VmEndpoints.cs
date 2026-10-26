@@ -60,7 +60,7 @@ public static class VmEndpoints
             .RequireElevation();
 
         vms.MapPost("/{vmId:guid}/disks/export", ExportDisksAsync).WithName("exportVmDisks")
-            .Audited<ExportDisksRequest>(request => $"destination={request.DestinationFolder ?? "backup folder"}")
+            .Audited<ExportDisksRequest>(request => $"destination={request.DestinationFolder ?? "disk export folder"}")
             .RequireElevation();
 
         vms.MapPost("/{vmId:guid}/checkpoints/merge", MergeCheckpointsAsync).WithName("mergeVmCheckpoints")

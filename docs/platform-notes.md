@@ -227,8 +227,10 @@ section for an area before changing it: most of these were learned from a failur
   command line. Guest setup needs HyperHarbor's administrator credential (409 credentialRequired).
 - Drift: the guest record keeps the copied driver version; GET performance compares it with the host's.
 - Disk export (VmDiskExportService): off VMs only, copies the whole checkpoint chain, never ISOs, removes an
-  incomplete export. The default folder is the tray's backup folder (BackupFolder in host-settings.json,
-  default Public Documents\HyperHarbor Backups).
+  incomplete export. The default folder is the tray's disk export folder (Storage, Disk exports; still BackupFolder in
+  host-settings.json), default Public Documents\HyperHarbor Disk Exports. Until 0.2.3 the tray called it "VM backups"
+  and the default was Public Documents\HyperHarbor Backups, which made people look there for the Kopia backups; those
+  go to backup targets.
 - Pre-shutdown: GpuVmShutdownCoordinator shuts guests down and never turns a VM off. As a Windows service,
   PreshutdownServiceLifetime sets ServiceBase._acceptedCommands (PreshutdownServiceLifetimeTests fail if
   .NET renames it); not yet tried through a real Windows shutdown. In console mode the tray's ShutdownGuard (a

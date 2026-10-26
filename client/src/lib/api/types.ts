@@ -1540,10 +1540,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Copy an off VM's virtual hard disks to a backup folder.
+         * Copy an off VM's virtual hard disks to a folder on the host.
          * @description Starts an `exportDisks` job that copies the VM's virtual hard disks (never ISO images) into a
          *     new folder named after the VM and the host's local time, for example `Dev-20261004-1830`,
-         *     under `destinationFolder` or the backup folder set in the host's tray. A disk with checkpoints
+         *     under `destinationFolder` or the disk export folder set in the host window (Storage). A disk with checkpoints
          *     is copied with its whole chain; the copies still name the original parent disks. The VM must
          *     be off (`code` is `vmMustBeOff` otherwise), and the destination volume must have room for every
          *     file. An incomplete export is removed.
@@ -3280,7 +3280,7 @@ export interface components {
             confirmName: string;
         };
         ExportDisksRequest: {
-            /** @description A fully qualified folder on the host. Null or absent uses the backup folder set in the tray. */
+            /** @description A fully qualified folder on the host. Null or absent uses the disk export folder set in the host window. */
             destinationFolder?: string | null;
         };
         /** @enum {string} */

@@ -39,11 +39,15 @@ public sealed class FileDiskCopier : IDiskCopier
     }
 }
 
-/// <summary>Where disk exports go when a request names no folder: the tray's choice, else "HyperHarbor Backups" in Public Documents.</summary>
+/// <summary>
+/// Where disk exports go when a request names no folder: the tray's choice (Storage, Disk exports), else "HyperHarbor Disk
+/// Exports" in Public Documents. Not where VM backups go: those go to backup targets. The setting is still called
+/// BackupFolder in host-settings.json; until 0.2.3 the default folder was "HyperHarbor Backups", and exports made there stay.
+/// </summary>
 public sealed class BackupLocation(HostSettingsStore settings)
 {
     public static string DefaultFolder =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments), "HyperHarbor Backups");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments), "HyperHarbor Disk Exports");
 
     public string Folder => settings.BackupFolder is { Length: > 0 } chosen ? chosen : DefaultFolder;
 }
@@ -86,7 +90,7 @@ public sealed class VmDiskExportService
     }
 
     /// <summary>Checks the VM and the destination, then starts a job that copies the disks.</summary>
-    /// <param name="destinationFolder">A fully qualified folder, or null for the backup folder.</param>
+    /// <param name="destinationFolder">A fully qualified folder, or null for the disk export folder.</param>
     /// <exception cref="VmNotFoundException">There is no such VM.</exception>
     /// <exception cref="LifecycleConflictException">The VM is not off (code vmMustBeOff), has no disks, or the destination lacks space.</exception>
     /// <exception cref="LifecycleValidationException">The destination is not a fully qualified path.</exception>
