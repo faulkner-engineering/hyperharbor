@@ -336,10 +336,15 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
-    margin: 0.75rem 0 0.25rem;
-    padding: 0.6rem 0.8rem;
+    margin: 0.5rem 0 0;
+    padding: 0.5rem 0.8rem;
     border: 1px solid var(--border);
     border-radius: 6px;
+  }
+
+  /* The fieldset's gap already spaces it; kept tight so the dialog fits a 640-pixel-high window unscrolled. */
+  .hardware .muted {
+    margin: 0;
   }
 
   .hardware legend {

@@ -56,6 +56,10 @@ when it is on the stable channel with automatic updates on; installed clients up
   copy, so it can rarely fail the same way. If a host's Updates panel stays on 0.2.1 with a "being used by another
   process" message, restart the host service (or the PC) and it prepares the update again. Checking for updates
   again does not retry the same version.
+- Scrollbars in the client, such as in the Create VM dialog and the sidebar, are thin and follow the light or dark
+  theme instead of the bright default ones.
+- The Create VM dialog for a machine profile fits the client's default window size without scrolling.
+- The "In library" badge on the ISO library and Profiles tabs no longer breaks across two lines in a narrow name cell.
 
 ## [0.2.1] - 2026-10-23 (API 1.34.0)
 
