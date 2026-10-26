@@ -59,6 +59,23 @@ public sealed class SecurityStoreTests : IDisposable
     }
 
     [Fact]
+    public void ProtectedFile_HostAccount_GetsFullControlInPlaceOfTheCurrentAccount()
+    {
+        // Checked on the ACL itself: writing a file for another account needs administrator rights (the elevated
+        // helper has them through Administrators), since the writer must still replace the file it created.
+        var hostAccount = new SecurityIdentifier("S-1-5-21-1111111111-2222222222-3333333333-1001");
+        using var current = WindowsIdentity.GetCurrent();
+
+        var rules = ProtectedFile.CreateSecurity(hostAccount: hostAccount)
+            .GetAccessRules(true, true, typeof(SecurityIdentifier))
+            .Cast<FileSystemAccessRule>()
+            .ToList();
+        Assert.Contains(rules, rule => rule.IdentityReference.Equals(hostAccount) && rule.FileSystemRights == FileSystemRights.FullControl);
+        Assert.DoesNotContain(rules, rule => rule.IdentityReference.Equals(current.User));
+        Assert.Contains(rules, rule => rule.IdentityReference.Equals(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null)));
+    }
+
+    [Fact]
     public void ProtectedFile_OpenAppend_GrantsReadersReadOnly()
     {
         var reader = new SecurityIdentifier("S-1-5-21-1111111111-2222222222-3333333333-1001");

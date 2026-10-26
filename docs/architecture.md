@@ -36,7 +36,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - docs/api.yaml: OpenAPI 3.1 contract, the source of truth for host and client
 - host/src/Shared.Contracts: DTOs mirroring api.yaml; ContractJson holds the wire JSON options
 - host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/,
-  Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile),
+  Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile,
+  DataDirectoryAccess: finds and repairs data files a portable host cannot open),
   Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService), Lifecycle/ (create, delete,
   compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
   VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants),
@@ -53,6 +54,7 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
   elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/),
   ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console),
+  Security/UnreadableData (the portable host's message when it cannot open its data),
   GuestAdminEndpoints and GuestAdminMonitorService (the administrator window sweep).
   It builds HyperHarbor.Host.exe (WinExe); Program.cs picks the mode with Installation/HostCommandLine (service,
   console run, --tray, launcher, install, uninstall, helpers). Installation/: HostInstaller (elevated steps),

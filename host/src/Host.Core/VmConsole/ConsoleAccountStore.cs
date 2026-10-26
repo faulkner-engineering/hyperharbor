@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text.Json;
 using HyperHarbor.Host.Core.Security;
 using HyperHarbor.Host.Core.Users;
@@ -34,12 +35,15 @@ public sealed class ConsoleAccountStore
     private static readonly byte[] Entropy = "HyperHarbor host console accounts v1"u8.ToArray();
 
     private readonly string _path;
+    private readonly SecurityIdentifier? _hostAccount;
     private readonly object _gate = new();
 
-    public ConsoleAccountStore(string dataDirectory)
+    /// <param name="hostAccount">The account the host runs as, when the elevated setup command writes for it (<see cref="ProtectedFile"/>).</param>
+    public ConsoleAccountStore(string dataDirectory, SecurityIdentifier? hostAccount = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
         _path = Path.Combine(dataDirectory, FileName);
+        _hostAccount = hostAccount;
     }
 
     public ConsoleCredential? Find(Guid userId)
@@ -117,7 +121,7 @@ public sealed class ConsoleAccountStore
         var plain = JsonSerializer.SerializeToUtf8Bytes(credentials);
         try
         {
-            ProtectedFile.WriteAllBytes(_path, ProtectedData.Protect(plain, Entropy, DataProtectionScope.LocalMachine));
+            ProtectedFile.WriteAllBytes(_path, ProtectedData.Protect(plain, Entropy, DataProtectionScope.LocalMachine), _hostAccount);
         }
         finally
         {

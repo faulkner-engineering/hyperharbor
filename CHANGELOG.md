@@ -10,6 +10,14 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- A portable host started with Start-HyperHarbor.ps1 by a standard Windows user no longer crashes at startup when
+  an administrator account approved the setup prompt. Setup gave the files it wrote (users.json and the console
+  accounts) to that administrator, so the host could not read them. Setup, and Set up console access in the tray,
+  now write them for the signed-in user. If a host is already affected, run Start-HyperHarbor.ps1 again and
+  approve its prompt: it notices the locked files and restores access. A host that still cannot open its data says
+  which file and how to fix it instead of exiting without a message. The installed service is not affected.
+
 ### Changed
 - Remote Desktop windows the client opens are titled with the VM's name instead of only its IP address, so several
   sessions are easy to tell apart in the taskbar ("Dev Box - 192.168.0.50 - Remote Desktop Connection"). Console

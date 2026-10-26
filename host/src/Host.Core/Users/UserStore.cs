@@ -1,3 +1,4 @@
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using HyperHarbor.Host.Core.Security;
@@ -22,14 +23,17 @@ public sealed class UserStore
 
     private readonly string _path;
     private readonly TimeProvider _time;
+    private readonly SecurityIdentifier? _hostAccount;
     private readonly object _gate = new();
     private List<User>? _users;
 
-    public UserStore(string dataDirectory, TimeProvider? time = null)
+    /// <param name="hostAccount">The account the host runs as, when an elevated helper writes for it (<see cref="ProtectedFile"/>).</param>
+    public UserStore(string dataDirectory, TimeProvider? time = null, SecurityIdentifier? hostAccount = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
         _path = Path.Combine(dataDirectory, FileName);
         _time = time ?? TimeProvider.System;
+        _hostAccount = hostAccount;
     }
 
     public IReadOnlyList<User> List()
@@ -64,7 +68,7 @@ public sealed class UserStore
 
             var user = new User(Guid.NewGuid(), DefaultUserName, VmAccountName.For(DefaultUserName), _time.GetUtcNow());
             users.Add(user);
-            ProtectedFile.WriteAllBytes(_path, JsonSerializer.SerializeToUtf8Bytes(users, JsonOptions));
+            ProtectedFile.WriteAllBytes(_path, JsonSerializer.SerializeToUtf8Bytes(users, JsonOptions), _hostAccount);
             return user;
         }
     }

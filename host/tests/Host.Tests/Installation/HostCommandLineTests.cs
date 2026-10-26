@@ -22,6 +22,8 @@ public sealed class HostCommandLineTests
     [InlineData(nameof(HostMode.ApplyWakeFixes), "--apply-wake-fixes", "wol-nic,wol-sleep")]
     [InlineData(nameof(HostMode.ConsoleSetup), "--setup-console")]
     [InlineData(nameof(HostMode.ConsoleSetup), "--remove-console", "C:\\data", "C:\\result.txt")]
+    [InlineData(nameof(HostMode.ConsoleSetup), "--setup-console", "--for-user=S-1-5-21-1-2-3-1001", "C:\\data", "C:\\result.txt")]
+    [InlineData(nameof(HostMode.ConsoleSetup), "--setup-console", "--for-user=not-a-sid")]
     [InlineData(nameof(HostMode.ListVms), "--DataDirectory", "C:\\data", "--list-vms")]
     [InlineData(nameof(HostMode.Host), "--Api:Port=48444")]
     [InlineData(nameof(HostMode.Host), "--DataDirectory", "C:\\data")]

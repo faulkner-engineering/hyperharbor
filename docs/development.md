@@ -55,10 +55,12 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - The script refuses to run while anything is running from dist/ (Windows locks the exe).
 - After `HyperHarbor.Host.exe uninstall` (data kept), %ProgramData%\HyperHarbor keeps the installed service's ACL
   (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts dies on data-format.json
-  (UnauthorizedAccessException, in the Application event log only). Start dist\host\HyperHarbor.Host.exe run elevated
+  (it now says which file it cannot open and exits with code 3). Start dist\host\HyperHarbor.Host.exe run elevated
   instead (seen on the laptop 2026-10-21); the tray from Start-HyperHarbor.ps1 connects to it.
 - dist\host\Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
-  Hyper-V Administrators membership), then starts "HyperHarbor.Host.exe run" and "--tray". Builds are unsigned.
+  Hyper-V Administrators membership, console account), then starts "HyperHarbor.Host.exe run" and "--tray". It asks
+  for elevation again when the current account cannot open a file in the data folder, and setup restores access
+  (--setup-console --for-user). Builds are unsigned.
 - Verified on 2026-10-02: packaged host plus client paired and listed VMs across machines.
 - package.ps1 also writes dist\latest.json with "HyperHarbor.Host.exe write-update-manifest" (the code that
   reads manifests writes it; a prerelease version goes to the beta channel).

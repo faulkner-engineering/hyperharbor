@@ -173,12 +173,15 @@ public static class WakeFixHelper
 
 /// <summary>
 /// Command-line switches for the elevated console account helper:
-/// --setup-console [data directory] [result file] and --remove-console [data directory] [result file].
+/// --setup-console|--remove-console [--for-user=SID] [data directory] [result file].
 /// </summary>
 public static class ConsoleSetupHelper
 {
     public const string SetupSwitch = "--setup-console";
     public const string RemoveSwitch = "--remove-console";
+
+    /// <summary>Followed by a SID: the account a portable host runs as, which the helper's files must belong to.</summary>
+    public const string ForUserOption = "--for-user=";
 
     /// <summary>The DPAPI-protected credential file the helper writes in the data directory; its presence means console access is set up.</summary>
     public const string AccountsFileName = "console-accounts.json.protected";

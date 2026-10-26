@@ -14,7 +14,13 @@ internal static class InstalledService
     /// True when the installed host service is running. It shuts Performance mode VMs down itself on
     /// SERVICE_CONTROL_PRESHUTDOWN, so the tray does not need to hold up a Windows shutdown.
     /// </summary>
-    public static bool IsRunning()
+    public static bool IsRunning() => Query(service => NativeMethods.QueryServiceStatus(service, out var status) && status.CurrentState == ServiceRunning);
+
+    /// <summary>True when the host service is registered, running or not.</summary>
+    public static bool IsInstalled() => Query(_ => true);
+
+    /// <returns>False when the service control manager or the service cannot be opened.</returns>
+    private static bool Query(Func<IntPtr, bool> read)
     {
         var manager = NativeMethods.OpenSCManager(null, null, ScManagerConnect);
         if (manager == IntPtr.Zero)
@@ -32,7 +38,7 @@ internal static class InstalledService
 
             try
             {
-                return NativeMethods.QueryServiceStatus(service, out var status) && status.CurrentState == ServiceRunning;
+                return read(service);
             }
             finally
             {

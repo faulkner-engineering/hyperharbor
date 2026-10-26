@@ -29,6 +29,13 @@ section for an area before changing it: most of these were learned from a failur
 - Pairing secrets (PIN, w, x, y, K) must never be logged or persisted. Change the protocol only via docs/pairing.md,
   regenerate vectors with HH_WRITE_SPAKE2_VECTORS=1, and confirm the Rust tests still pass.
 - Files under %ProgramData%\HyperHarbor that grant access (certificate, paired devices) go through ProtectedFile.
+- ProtectedFile gives full control to SYSTEM, Administrators, and the writing account. An elevated helper runs as
+  whichever administrator approved the UAC prompt; for a standard user that is another account, so before 0.2.4 the
+  users.json and console-accounts.json.protected that Start-HyperHarbor.ps1's setup wrote locked the portable host
+  out (UnauthorizedAccessException on users.json, exit code 82; seen 2026-10-26 with hh-owner approving as
+  hha-owner). The helper now takes --for-user=<SID> from portable callers (never while the service is installed),
+  writes for that account, and first restores its access to existing files (DataDirectoryAccess). A portable host
+  that still cannot open a data file says which and exits with code 3.
 - Other LAN devices need an inbound firewall rule for TCP 48443. The packaged host's start script creates it;
   a dev run from source does not.
 - mDNS on the host goes through DnsServiceRegister (dnsapi.dll). Do not bind UDP 5353 in the host.
@@ -150,8 +157,9 @@ section for an area before changing it: most of these were learned from a failur
 - Logging on creates a host profile (C:\Users\<name>); removing the account does not remove it.
 - mstsc shows an "unknown publisher" prompt for the unsigned .rdp file the first time.
 - Implementation (9.1): the console account hhc-<user> is created by the elevated helper
-  `HyperHarbor.Host.exe --setup-console [data dir] [result file]` (tray: Set up console access; the installer
-  and Start-HyperHarbor.ps1 run it when console-accounts.json.protected is missing) and removed with
+  `HyperHarbor.Host.exe --setup-console [--for-user=SID] [data dir] [result file]` (tray: Set up console access;
+  the installer and Start-HyperHarbor.ps1 run it when console-accounts.json.protected is missing, and the script
+  also when a data file cannot be opened) and removed with
   --remove-console. It denies interactive, Remote Desktop, batch, and service logon; network logon stays.
 - TestServer cannot upgrade connections (IsUpgradableRequest is always false), so the API tests stop at 426
   and ConsoleTunnelTests run the tunnel handler on real Kestrel with an echo server for VMMS.

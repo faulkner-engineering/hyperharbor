@@ -11,7 +11,12 @@ namespace HyperHarbor.Host.Core.Security;
 public static class ProtectedFile
 {
     /// <summary>Atomically replaces <paramref name="path"/> with <paramref name="contents"/>.</summary>
-    public static void WriteAllBytes(string path, ReadOnlySpan<byte> contents)
+    /// <param name="hostAccount">
+    /// The account the host runs as, when another account writes the file for it: an elevated helper runs as
+    /// whichever administrator approved the UAC prompt, which for a standard user is a different account.
+    /// Null means the current account.
+    /// </param>
+    public static void WriteAllBytes(string path, ReadOnlySpan<byte> contents, SecurityIdentifier? hostAccount = null)
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
         Directory.CreateDirectory(directory);
@@ -25,7 +30,7 @@ public static class ProtectedFile
                 FileShare.None,
                 bufferSize: 4096,
                 FileOptions.WriteThrough,
-                CreateSecurity()))
+                CreateSecurity(hostAccount: hostAccount)))
             {
                 stream.Write(contents);
             }
@@ -62,12 +67,13 @@ public static class ProtectedFile
     }
 
     /// <summary>The ACL for new files. Exposed for tests.</summary>
-    internal static FileSecurity CreateSecurity(IReadOnlyCollection<SecurityIdentifier>? readers = null)
+    /// <param name="hostAccount">Gets full control in place of the current account; null means the current account.</param>
+    internal static FileSecurity CreateSecurity(IReadOnlyCollection<SecurityIdentifier>? readers = null, SecurityIdentifier? hostAccount = null)
     {
         var security = new FileSecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
 
-        foreach (var identity in AllowedIdentities())
+        foreach (var identity in AllowedIdentities(hostAccount))
         {
             security.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, AccessControlType.Allow));
         }
@@ -80,10 +86,16 @@ public static class ProtectedFile
         return security;
     }
 
-    private static IEnumerable<IdentityReference> AllowedIdentities()
+    private static IEnumerable<IdentityReference> AllowedIdentities(SecurityIdentifier? hostAccount)
     {
         yield return new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
         yield return new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+
+        if (hostAccount is not null)
+        {
+            yield return hostAccount;
+            yield break;
+        }
 
         using var current = WindowsIdentity.GetCurrent();
         if (current.User is { } user)
