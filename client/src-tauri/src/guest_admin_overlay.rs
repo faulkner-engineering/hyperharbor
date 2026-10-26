@@ -14,8 +14,10 @@ pub const ROUTE: &str = "overlay";
 /// Logical size of the card.
 pub const WIDTH: f64 = 360.0;
 pub const HEIGHT: f64 = 104.0;
-/// Logical distance from the monitor's top-right corner. Remote Desktop's connection bar sits at the top center.
+/// Logical distance from the monitor's right edge. Remote Desktop's connection bar sits at the top center.
 const MARGIN: f64 = 24.0;
+/// Logical distance from the top: below a maximized window's title bar, so the card never covers its close button.
+const TOP: f64 = 64.0;
 
 /// What the card shows.
 #[derive(Clone, Deserialize, Serialize)]
@@ -64,13 +66,14 @@ impl OverlayState {
     }
 }
 
-/// Where the card goes, in physical pixels: the top-right corner of the monitor, inside the margin.
+/// Where the card goes, in physical pixels: near the monitor's top-right corner, below title bar height.
 pub fn position(monitor_x: i32, monitor_y: i32, monitor_width: u32, scale: f64) -> (i32, i32) {
     let width = (WIDTH * scale).round() as i32;
     let margin = (MARGIN * scale).round() as i32;
+    let top = (TOP * scale).round() as i32;
     (
         monitor_x + monitor_width as i32 - width - margin,
-        monitor_y + margin,
+        monitor_y + top,
     )
 }
 
@@ -108,11 +111,11 @@ mod tests {
 
     #[test]
     fn the_card_sits_in_the_top_right_corner_of_its_monitor() {
-        assert_eq!(position(0, 0, 1920, 1.0), (1920 - 360 - 24, 24));
+        assert_eq!(position(0, 0, 1920, 1.0), (1920 - 360 - 24, 64));
         // A second monitor to the left, at 150 percent.
         assert_eq!(
             position(-2560, -200, 2560, 1.5),
-            (-2560 + 2560 - 540 - 36, -200 + 36)
+            (-2560 + 2560 - 540 - 36, -200 + 96)
         );
     }
 }

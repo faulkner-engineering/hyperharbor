@@ -646,17 +646,18 @@ async fn close_guest_admin(
 
 /// Shows the administrator passphrase card on top of every window (a full-screen Remote Desktop session included)
 /// without taking the focus, or updates the one showing. Returns false when the window could not be made; the
-/// dialog still shows the passphrase then.
+/// dialog still shows the passphrase then. Async on purpose: making a window in a synchronous command deadlocks
+/// on Windows (the new window stayed a white box and the client's other commands stalled, 2026-10-25).
 #[tauri::command]
-fn show_guest_admin_overlay(
+async fn show_guest_admin_overlay(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     card: guest_admin_overlay::OverlayCard,
-) -> bool {
+) -> Result<bool, ClientError> {
     state.overlay.show(card);
     if let Some(window) = app.get_webview_window(guest_admin_overlay::LABEL) {
         let _ = window.emit(OVERLAY_CHANGED_EVENT, ());
-        return true;
+        return Ok(true);
     }
 
     let mut builder = tauri::WebviewWindowBuilder::new(
@@ -687,10 +688,10 @@ fn show_guest_admin_overlay(
     }
 
     match builder.build() {
-        Ok(_) => true,
+        Ok(_) => Ok(true),
         Err(error) => {
             eprintln!("The passphrase card could not be shown: {error}");
-            false
+            Ok(false)
         }
     }
 }
@@ -701,13 +702,17 @@ fn get_guest_admin_overlay(state: State<'_, AppState>) -> Option<guest_admin_ove
     state.overlay.current()
 }
 
-/// Forgets the passphrase card and closes its window.
+/// Forgets the passphrase card and closes its window. Async for the same reason as show_guest_admin_overlay.
 #[tauri::command]
-fn hide_guest_admin_overlay(app: tauri::AppHandle, state: State<'_, AppState>) {
+async fn hide_guest_admin_overlay(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), ClientError> {
     state.overlay.clear();
     if let Some(window) = app.get_webview_window(guest_admin_overlay::LABEL) {
         let _ = window.close();
     }
+    Ok(())
 }
 
 /// Allows Remote Desktop connections to the host (needs elevation). Returns the HostRemoteDesktop.
@@ -3236,5 +3241,34 @@ mod transfer_tests {
     fn at_most_sixteen_addresses_are_sent() {
         let offered: Vec<String> = (1..=20).map(|n| format!("10.0.0.{n}")).collect();
         assert_eq!(transfer_addresses(&offered, &list(&["10.0.1.1"])).len(), 16);
+    }
+}
+
+#[cfg(test)]
+mod window_command_tests {
+    /// Making or closing a window in a synchronous command deadlocks on Windows: the passphrase card stayed a white box
+    /// and the client's other commands stalled (2026-10-25). Every command that does either must be async.
+    #[test]
+    fn commands_that_make_or_close_windows_are_async() {
+        let source = include_str!("lib.rs");
+        let marker = concat!("#[tauri::", "command]");
+        let builder = concat!("WebviewWindow", "Builder");
+        let close = concat!(".clo", "se()");
+        let mut checked = 0;
+        for chunk in source.split(marker).skip(1) {
+            let signature = chunk
+                .lines()
+                .find(|line| line.contains("fn "))
+                .unwrap_or_default();
+            let body = &chunk[..chunk.find("\n}\n").unwrap_or(chunk.len())];
+            if body.contains(builder) || body.contains(close) {
+                checked += 1;
+                assert!(signature.contains("async fn"), "not async: {signature}");
+            }
+        }
+        assert!(
+            checked >= 2,
+            "expected the passphrase card's show and hide commands"
+        );
     }
 }

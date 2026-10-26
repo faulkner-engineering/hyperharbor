@@ -47,6 +47,18 @@ section for an area before changing it: most of these were learned from a failur
 - UI automation of the client: WebView2 inputs ignore SendKeys when the window is not foreground; set
   values with UI Automation ValuePattern instead.
 
+## Client windows (Tauri v2, 2026-10-25)
+
+- Making or closing a window inside a synchronous Tauri command deadlocks on Windows: the new window stays a blank white
+  box and the app's other commands stall (the passphrase card, first build). Such commands must be async;
+  window_command_tests in lib.rs checks it.
+- A second window that loads an app route (WebviewUrl::App("overlay")) needs that route prerendered
+  (routes/overlay/+page.ts), so build/overlay.html exists; adapter-static writes only index.html otherwise.
+- A window with always_on_top and focused(false) draws over a full-screen mstsc session without taking its focus
+  (the foreground stayed TscShellContainerClass). Keep such a card below title bar height: at the very top right it
+  covered a maximized window's close button.
+- Alt+F4 closes an undecorated window through Windows itself, even when the app's command channel is stuck.
+
 ## Tray windows (WebView2, 2026-10-05)
 
 - WebWindow.PlaceOn sizes the window for its monitor's DPI (GetDpiForMonitor) within the work area (WindowFit)
