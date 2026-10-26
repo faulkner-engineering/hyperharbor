@@ -11,15 +11,20 @@
     terminal?: boolean;
     /** The terminal glow color, a CSS color; the brand amber when left out. */
     accent?: string;
+    /**
+     * Above every other dialog, whatever their order on the page: for prompts another dialog waits on (the admin
+     * passphrase). Otherwise a dialog opened later in the page covers it, and the one waiting looks stuck.
+     */
+    above?: boolean;
     children: Snippet;
   }
 
-  let { title, wide = false, xl = false, terminal = false, accent, children }: Props = $props();
+  let { title, wide = false, xl = false, terminal = false, accent, above = false, children }: Props = $props();
 
   const titleId = $props.id();
 </script>
 
-<div class="backdrop" class:terminal role="presentation">
+<div class="backdrop" class:terminal class:above role="presentation">
   <div class="dialog" class:wide class:xl class:terminal style:--accent={accent} role="dialog" aria-modal="true" aria-labelledby={titleId}>
     <h3 id={titleId}>{title}</h3>
     {@render children()}
@@ -34,6 +39,11 @@
     place-items: center;
     background: rgb(0 0 0 / 0.35);
     z-index: 10;
+  }
+
+  /* Below the title bar (60) and toasts (50), above every other dialog (10). */
+  .backdrop.above {
+    z-index: 20;
   }
 
   .dialog {

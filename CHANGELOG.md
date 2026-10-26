@@ -10,6 +10,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- Adding a backup target (and any other step from the Backups panel that needs the admin passphrase) no longer sits
+  on "Working…" forever: the passphrase prompt opened behind the target dialog, where it could not be seen. The prompt
+  now always opens above other dialogs.
+
 ## [0.2.2] - 2026-10-25 (API 1.35.0)
 
 Administrator access in Windows VMs. The account you connect with is a standard user; now you can ask for a short
