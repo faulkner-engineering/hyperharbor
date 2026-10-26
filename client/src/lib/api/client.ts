@@ -294,7 +294,7 @@ export const provisionVm = (
 /**
  * Opens Remote Desktop to a provisioned VM. Resolves once mstsc has been launched, with something to
  * tell the user (for example that camera sharing is unavailable), or null. `vmName` names the VM's
- * virtual camera.
+ * virtual camera and titles the Remote Desktop window.
  */
 export const connectVm = (key: string, vmId: string, address: string, vmName?: string) =>
   invoke<string | null>("connect_vm", { key, vmId, address, vmName });
@@ -434,9 +434,10 @@ export const setCameraShutter = (key: string, vmId: string, closed: boolean) =>
 /**
  * Opens the VM's console (its screen, also before an OS is installed) in mstsc through the host.
  * Resolves once mstsc has been launched. Fails with problem code consoleSetupRequired when the host
- * has not set up console access.
+ * has not set up console access. `vmName` titles the Remote Desktop window.
  */
-export const openConsole = (key: string, vmId: string) => invoke<void>("open_console", { key, vmId });
+export const openConsole = (key: string, vmId: string, vmName?: string) =>
+  invoke<void>("open_console", { key, vmId, vmName });
 
 /** A monitor of this device, in physical pixels. Mirrors Monitor in src-tauri/src/monitors.rs. */
 export interface Monitor {

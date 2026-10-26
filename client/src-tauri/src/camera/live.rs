@@ -277,6 +277,7 @@ fn the_client_gives_two_vm_sessions_their_own_cameras() {
         let end_key = key.clone();
         let pid = rdp::launch(
             &connection,
+            Some(name),
             &MonitorLayout::Single,
             &prepared.redirect,
             &directory,

@@ -261,7 +261,8 @@ async fn provision_vm(
 ///
 /// Windows guests also get the camera: on Windows 11 a virtual camera of their own (so several VMs
 /// can show video at once), otherwise the physical camera for one VM at a time. `vm_name` names the
-/// virtual camera. The result is something to tell the user (camera sharing unavailable, say), if any.
+/// virtual camera and titles the session window. The result is something to tell the user (camera
+/// sharing unavailable, say), if any.
 #[tauri::command]
 async fn connect_vm(
     state: State<'_, AppState>,
@@ -318,7 +319,10 @@ async fn connect_vm(
         }
     } else {
         let service = state.camera.clone();
-        let (prepare_key, name) = (camera_key.clone(), vm_name.unwrap_or_else(|| "VM".into()));
+        let (prepare_key, name) = (
+            camera_key.clone(),
+            vm_name.clone().unwrap_or_else(|| "VM".into()),
+        );
         // Creating a virtual camera takes a moment and talks to Windows, so not on the async runtime.
         tauri::async_runtime::spawn_blocking(move || service.prepare(&prepare_key, &name))
             .await
@@ -329,6 +333,7 @@ async fn connect_vm(
     let end_key = camera_key.clone();
     let launched = rdp::launch(
         &connection,
+        vm_name.as_deref(),
         &layout,
         &prepared.redirect,
         &rdp::file_directory(),
@@ -604,6 +609,7 @@ async fn connect_host(state: State<'_, AppState>, key: String) -> Result<(), Cli
     rdp::launch_host(
         &address,
         port,
+        &host.display_name,
         &layout,
         &rdp::file_directory(),
         Some(Box::new(move || drop(session))),
@@ -786,16 +792,18 @@ fn set_monitor_choice(
 }
 
 /// Opens the VM's console (its video output, also before an OS is installed) in mstsc, through
-/// tunnels to the host. Works for any running VM; it does not need the VM to be set up.
+/// tunnels to the host. Works for any running VM; it does not need the VM to be set up. `vm_name`
+/// titles the session window.
 #[tauri::command]
 async fn open_console(
     state: State<'_, AppState>,
     key: String,
     vm_id: String,
+    vm_name: Option<String>,
 ) -> Result<(), ClientError> {
     let (host, paired) = state.paired_host(&key)?;
     let session = state.sessions.begin(&key);
-    console::open(state.api.clone(), host, paired, vm_id, session).await
+    console::open(state.api.clone(), host, paired, vm_id, vm_name, session).await
 }
 
 #[tauri::command]

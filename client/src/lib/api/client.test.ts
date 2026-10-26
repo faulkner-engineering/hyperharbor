@@ -98,10 +98,10 @@ describe("commands", () => {
     expect(invoke).toHaveBeenCalledWith("get_camera_status");
   });
 
-  it("openConsole passes the host key and VM", async () => {
-    await openConsole("mdns:host", "vm-1");
+  it("openConsole passes the host key, VM, and VM name", async () => {
+    await openConsole("mdns:host", "vm-1", "Dev Box");
 
-    expect(invoke).toHaveBeenCalledWith("open_console", { key: "mdns:host", vmId: "vm-1" });
+    expect(invoke).toHaveBeenCalledWith("open_console", { key: "mdns:host", vmId: "vm-1", vmName: "Dev Box" });
   });
 });
 

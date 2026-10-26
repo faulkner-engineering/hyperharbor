@@ -10,6 +10,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Changed
+- Remote Desktop windows the client opens are titled with the VM's name instead of only its IP address, so several
+  sessions are easy to tell apart in the taskbar ("Dev Box - 192.168.0.50 - Remote Desktop Connection"). Console
+  windows read "<VM name> (console)", and a maintenance session on the host uses the host's name.
+
 ## [0.2.3] - 2026-10-25 (API 1.35.0)
 
 Two fixes in the client and a clearer name on the host. Adding a backup target no longer waits forever on a

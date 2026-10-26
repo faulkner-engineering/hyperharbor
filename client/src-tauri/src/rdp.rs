@@ -6,6 +6,7 @@
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
@@ -22,6 +23,11 @@ pub const CREDENTIAL_COMMENT: &str = "HyperHarbor temporary credential";
 /// enough for the first-connection certificate prompt, which appears before the credential is used.
 const SESSION_WAIT: Duration = Duration::from_secs(120);
 const REACHABILITY_TIMEOUT: Duration = Duration::from_secs(2);
+/// The longest window name kept in an .rdp file name.
+const MAX_WINDOW_NAME: usize = 80;
+
+/// Numbers the folders that hold this process's .rdp files, so two launches never share a file.
+static LAUNCH_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// Mirrors the GuestOsFamily schema.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -275,9 +281,11 @@ pub fn is_valid_host_address(address: &str) -> bool {
 
 /// Opens Remote Desktop to the host for maintenance. Nothing is written to the credential store;
 /// the .rdp file is removed once the session window opens. `on_exit` runs after mstsc exits.
+/// `name` (the host's name) titles the session window.
 pub fn launch_host(
     address: &str,
     port: u16,
+    name: &str,
     monitors: &MonitorLayout,
     file_directory: &Path,
     on_exit: Option<Box<dyn FnOnce() + Send>>,
@@ -288,10 +296,7 @@ pub fn launch_host(
     start(
         Launch {
             credential: None,
-            file_name: format!(
-                "hyperharbor-host-{}.rdp",
-                address.replace([':', '/', '\\', '%'], "-")
-            ),
+            window_name: name.to_string(),
             contents: host_rdp_file(address, port, monitors),
             window_title_key: address.to_string(),
         },
@@ -310,18 +315,23 @@ pub struct LaunchCredential<'a> {
 
 /// What to launch: an optional temporary credential, an .rdp file, and the text that appears in
 /// the title of mstsc's session window once it has connected.
+///
+/// mstsc titles the session window "<file name> - <address> - Remote Desktop Connection", so the
+/// file is named after `window_name` (made safe as a file name by `window_file_name`).
 pub struct Launch<'a> {
     pub credential: Option<LaunchCredential<'a>>,
-    pub file_name: String,
+    pub window_name: String,
     pub contents: String,
     pub window_title_key: String,
 }
 
 /// Writes the credential, launches mstsc, and removes the credential and file in the background once
 /// the session has opened (or mstsc exits, or the wait times out). `on_exit` runs after mstsc exits.
-/// `camera` is the camera redirection the .rdp file asks for. Returns the mstsc process id.
+/// `camera` is the camera redirection the .rdp file asks for. `vm_name` titles the session window;
+/// without it, the address does. Returns the mstsc process id.
 pub fn launch(
     connection: &VmConnection,
+    vm_name: Option<&str>,
     monitors: &MonitorLayout,
     camera: &CameraRedirect,
     file_directory: &Path,
@@ -335,10 +345,7 @@ pub fn launch(
                 user_name: &connection.user_name,
                 password: &connection.password,
             }),
-            file_name: format!(
-                "hyperharbor-{}.rdp",
-                connection.address.replace([':', '/', '\\'], "-")
-            ),
+            window_name: vm_name.unwrap_or(&connection.address).to_string(),
             contents: rdp_file(
                 &connection.address,
                 connection.port,
@@ -377,8 +384,16 @@ pub fn start(
         }
     };
 
-    let file = file_directory.join(&launch.file_name);
-    let started = std::fs::write(&file, &launch.contents)
+    // A folder of its own per launch: the file is named after the window, and two sessions can
+    // share a window name.
+    let folder = file_directory.join(format!(
+        "hyperharbor-{}-{}",
+        std::process::id(),
+        LAUNCH_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let file = folder.join(window_file_name(&launch.window_name, "HyperHarbor") + ".rdp");
+    let started = std::fs::create_dir_all(&folder)
+        .and_then(|_| std::fs::write(&file, &launch.contents))
         .map_err(|e| ClientError::RdpFailed(e.to_string()))
         .and_then(|_| {
             // Signed with a trusted certificate, the file opens without Windows' security dialog
@@ -399,7 +414,7 @@ pub fn start(
             std::thread::spawn(move || {
                 wait_for_session(&mut child, &key);
                 remove_credential();
-                let _ = std::fs::remove_file(&file);
+                let _ = std::fs::remove_dir_all(&folder);
                 if let Some(on_exit) = on_exit {
                     let _ = child.wait();
                     on_exit();
@@ -409,9 +424,47 @@ pub fn start(
         }
         Err(error) => {
             remove_credential();
-            let _ = std::fs::remove_file(&file);
+            let _ = std::fs::remove_dir_all(&folder);
             Err(error)
         }
+    }
+}
+
+/// `name` as an .rdp file name without the extension, or `fallback` when nothing usable is left.
+/// Characters Windows does not allow in file names become spaces, runs of spaces become one, and
+/// trailing dots and spaces are dropped (Windows would drop them itself). Device names such as CON
+/// cannot name a file, so they get the fallback.
+pub fn window_file_name(name: &str, fallback: &str) -> String {
+    const NOT_IN_FILE_NAMES: [char; 9] = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    let replaced: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || NOT_IN_FILE_NAMES.contains(&c) {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    let mut cleaned = replaced.split_whitespace().collect::<Vec<_>>().join(" ");
+    if let Some((cut, _)) = cleaned.char_indices().nth(MAX_WINDOW_NAME) {
+        cleaned.truncate(cut);
+    }
+    let cleaned = cleaned.trim_end_matches(['.', ' ']);
+    let stem = cleaned.split('.').next().unwrap_or_default().trim_end();
+    let numbered_device = stem.len() == 4
+        && stem.is_ascii()
+        && ["COM", "LPT"]
+            .iter()
+            .any(|device| stem[..3].eq_ignore_ascii_case(device))
+        && stem.as_bytes()[3].is_ascii_digit();
+    let device = ["CON", "PRN", "AUX", "NUL"]
+        .iter()
+        .any(|device| stem.eq_ignore_ascii_case(device));
+    if cleaned.is_empty() || device || numbered_device {
+        fallback.to_string()
+    } else {
+        cleaned.to_string()
     }
 }
 
@@ -600,7 +653,7 @@ mod windows {
     }
 
     /// True when a visible window of the process has a title containing `needle`. mstsc titles the
-    /// session window "<address> - Remote Desktop Connection" once the connection is open.
+    /// session window "<file name> - <address> - Remote Desktop Connection" once the connection is open.
     pub fn has_window_title_containing(process_id: u32, needle: &str) -> bool {
         let mut search = Search {
             process_id,
@@ -989,6 +1042,7 @@ mod tests {
 
         let result = launch(
             &connection(address, "hh-owner"),
+            Some("Test VM"),
             &MonitorLayout::Single,
             &CameraRedirect::AllPhysical,
             &directory,
@@ -1000,6 +1054,47 @@ mod tests {
         assert!(matches!(result, Err(ClientError::InvalidResponse(_))));
         assert!(!credentials::exists(&format!("TERMSRV/{address}")));
         assert_eq!(files, 0);
+    }
+
+    #[test]
+    fn window_names_become_safe_file_names() {
+        assert_eq!(window_file_name("Dev Box", "x"), "Dev Box");
+        assert_eq!(window_file_name("Ubuntu 24.04", "x"), "Ubuntu 24.04");
+        assert_eq!(
+            window_file_name(r#"a/b\c:d*e?f"g<h>i|j"#, "x"),
+            "a b c d e f g h i j"
+        );
+        assert_eq!(
+            window_file_name("Line\r\nbreak\ttab", "x"),
+            "Line break tab"
+        );
+        assert_eq!(window_file_name("  spaced   out  ", "x"), "spaced out");
+        assert_eq!(window_file_name("Trailing dots...", "x"), "Trailing dots");
+        assert_eq!(window_file_name("192.168.0.50", "x"), "192.168.0.50");
+        assert_eq!(window_file_name("fe80::1", "x"), "fe80 1");
+        assert_eq!(window_file_name("Café 東京", "x"), "Café 東京");
+    }
+
+    #[test]
+    fn unusable_window_names_get_the_fallback() {
+        for name in [
+            "", "   ", "...", "///", "CON", "nul", "Com1", "LPT9.txt", "aux ",
+        ] {
+            assert_eq!(window_file_name(name, "fallback"), "fallback", "{name:?}");
+        }
+        assert_eq!(window_file_name("Console", "fallback"), "Console");
+        assert_eq!(window_file_name("COM10", "fallback"), "COM10");
+        assert_eq!(window_file_name("Côm1", "fallback"), "Côm1");
+        assert_eq!(window_file_name("a€", "fallback"), "a€");
+    }
+
+    #[test]
+    fn long_window_names_are_cut() {
+        let name = "é".repeat(MAX_WINDOW_NAME + 20);
+        assert_eq!(
+            window_file_name(&name, "x").chars().count(),
+            MAX_WINDOW_NAME
+        );
     }
 
     #[test]

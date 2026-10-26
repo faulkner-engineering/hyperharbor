@@ -111,6 +111,10 @@ section for an area before changing it: most of these were learned from a failur
 - Guest error text reaches logs and problem details. ProvisioningService and PasswordRotator pass it
   through GuestErrors.Sanitize (secrets replaced, control characters removed, length capped).
 - The client validates VmConnection (IP address, plain account name) before writing the .rdp file.
+- mstsc titles a session window "<.rdp file name> - <address> - Remote Desktop Connection", so the client names
+  the file after the VM (rdp::window_file_name makes the name safe for a file) and writes each launch's file to
+  its own folder under %TEMP%, since two sessions can share a name. The address stays in the title, which is
+  how the client tells that the session window opened. (2026-10-26; not yet verified live.)
 - The host sends the bare account name (hh-owner), not .\hh-owner: mstsc adds ".\" itself, and a doubled
   ".\.\hh-owner" fails as an unknown user (guest event 4625, substatus 0xc0000064) and prompts for a password.
 - Add-LocalGroupMember takes the group by -SID 'S-1-5-32-555' and the member as the LocalUser object

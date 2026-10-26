@@ -170,7 +170,7 @@
   async function openNewVmConsole() {
     if (!job?.vmId) return;
     try {
-      await openConsole(host.key, job.vmId);
+      await openConsole(host.key, job.vmId, name.trim());
       toasts.show(`Opening the console of ${name.trim()}…`);
     } catch (e) {
       toasts.error(errorMessage(e));

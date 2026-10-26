@@ -377,7 +377,7 @@
     if (selectedKey === null) return;
     consoleVmId = vm.id;
     try {
-      await openConsole(selectedKey, vm.id);
+      await openConsole(selectedKey, vm.id, vm.name);
       toasts.show(`Opening the console of ${vm.name}…`);
     } catch (error) {
       toasts.error(
