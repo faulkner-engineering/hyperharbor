@@ -29,6 +29,13 @@ note anything that needs action, such as updating the host, a new elevation requ
   screen when the VM resets before Windows Setup has written to the disk and misses the "Press any key to boot from CD
   or DVD" prompt: the host now restarts it and presses the key again (up to three times), and otherwise fails the
   install with an explanation instead of waiting out the three-hour timeout.
+- A host update could fail to prepare if the host was downloading its package index at the same moment: the copy of
+  the data folder that tests the new version met the download in progress, and the host then skipped that version
+  until it restarted. The copy now leaves the package index out (it is a cache the host downloads again).
+  Action needed: the update to this version is still prepared by the host's current version, which has the old
+  copy, so it can rarely fail the same way. If a host's Updates panel stays on 0.2.1 with a "being used by another
+  process" message, restart the host service (or the PC) and it prepares the update again. Checking for updates
+  again does not retry the same version.
 
 ## [0.2.1] - 2026-10-23 (API 1.34.0)
 

@@ -695,9 +695,13 @@ if (selfTest is not null)
 // After an update the screensaver file is a copy of the old version until this refreshes it.
 app.Services.GetRequiredService<AmbientService>().Refresh();
 
-// Fetch the winget package index once the host is up, so the first package search answers at once.
-app.Lifetime.ApplicationStarted.Register(() =>
-    _ = Task.Run(() => app.Services.GetRequiredService<WingetIndex>().CurrentAsync(CancellationToken.None)));
+// Fetch the winget package index once the host is up, so the first package search answers at once. In-memory test
+// hosts turn this off: each one downloaded the index from the internet into a temporary folder it then failed to delete.
+if (app.Configuration.GetValue("Winget:FetchAtStart", true))
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+        _ = Task.Run(() => app.Services.GetRequiredService<WingetIndex>().CurrentAsync(CancellationToken.None)));
+}
 
 await app.RunAsync();
 return 0;

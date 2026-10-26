@@ -108,7 +108,7 @@ public sealed class UpdateApiTests : IDisposable
         _host!.Services.GetRequiredService<UpdateSettings>().Save(new UpdatePreferences("stable", UpdateMode.Notify, null));
         var coordinator = _host.Services.GetRequiredService<UpdateCoordinator>();
         await coordinator.TickAsync(CancellationToken.None);
-        Assert.Equal(UpdateActivity.Ready, coordinator.Status.Activity);
+        Assert.True(coordinator.Status.Activity == UpdateActivity.Ready, $"{coordinator.Status}");
 
         var install = await SendElevatedAsync(HttpMethod.Post, "/api/v1/host/update/install", null);
         Assert.Equal(HttpStatusCode.Accepted, install.StatusCode);

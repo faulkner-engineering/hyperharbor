@@ -20,6 +20,10 @@ public static class DataBackup
 
         // Kopia configuration and caches: large, and rebuilt by connecting to the repository again.
         "backup",
+
+        // The downloaded winget index: a cache fetched again daily, and written in the background at any time, so a copy
+        // taken during a download failed on the open .partial file (the update self-test then gave up on that version).
+        Profiles.WingetIndex.FolderName,
     };
 
     /// <summary>Copies the data directory to <paramref name="destination"/>, which must not exist yet.</summary>
