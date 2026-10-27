@@ -36,7 +36,7 @@ public sealed class SetupProfilePlannerTests
     }
 
     [Fact]
-    public void MakeDefault_WritesTheAssociationsFile_AndThePolicyThatNamesIt()
+    public void MakeDefault_WritesTheAssociationsFile_ForImportIntoTheFirstSignInDefaults()
     {
         var plan = Planner.Plan(Profile(browser: new(new("brave"), null, null, MakeDefault: true)));
 
@@ -51,8 +51,9 @@ public sealed class SetupProfilePlannerTests
             Assert.Equal("Brave", (string)association.Attribute("ApplicationName")!);
         });
 
-        var policy = Assert.Single(plan.Registry, write => write.Item == file.Item);
-        Assert.Equal(new RegistryWrite(file.Item, RegistryTarget.Machine, @"SOFTWARE\Policies\Microsoft\Windows\System", "DefaultAssociationsConfiguration", "string", file.Path), policy);
+        Assert.True(file.ImportDefaultApps);
+        // The policy that names a file is read only on domain or Entra joined PCs, so it is not written.
+        Assert.DoesNotContain(plan.Registry, write => write.Name == "DefaultAssociationsConfiguration");
         Assert.Equal(2, plan.ItemCount);
     }
 

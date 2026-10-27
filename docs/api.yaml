@@ -6162,8 +6162,10 @@ components:
           type: boolean
           description: |
             Since 1.36.0. VM profiles only; false when absent. Makes the browser the default for web links and .htm
-            and .html files through Windows' default associations policy, which applies at every sign-in, so the
-            default cannot be changed inside the VM while the profile's setting is there.
+            and .html files for accounts that have not signed in yet: the host adds it to the default associations
+            Windows gives each new account at its first sign-in. An account that has signed in keeps its own choice,
+            and anyone can change the default inside the VM afterwards. (0.2.4-beta.1 used Windows' default associations
+            policy instead, which Windows reads only on domain or Microsoft Entra joined PCs.)
 
     MachineProfile:
       type: object

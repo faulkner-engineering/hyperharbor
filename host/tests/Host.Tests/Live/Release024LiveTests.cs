@@ -58,8 +58,11 @@ public sealed class Release024LiveTests(ITestOutputHelper output)
 
             var browser = await GuestAsync(BrowserScript, vmId, admin);
             Log("Browser: " + browser.ToJsonString());
-            Assert.Equal(@"C:\ProgramData\HyperHarbor\DefaultAssociations.xml", (string?)browser["policy"]);
+            // Merged into the defaults Windows gives new accounts at their first sign-in; the policy is no longer written.
+            Assert.Null((string?)browser["policy"]);
             Assert.Contains("ProgId=\"BraveHTML\"", (string?)browser["associations"], StringComparison.Ordinal);
+            Assert.Contains("BraveHTML", (string?)browser["oemHttp"], StringComparison.Ordinal);
+            Assert.True((int)browser["oemEntries"]! > 50, "The first-sign-in defaults lost the image's other entries.");
             Assert.True((bool)browser["braveProgId"]!, "BraveHTML is not registered for all users; Brave may have installed per user.");
             Assert.Equal(0, (int?)browser["startupBoost"]);
             Assert.Equal(1, (int?)browser["hideFirstRun"]);
@@ -198,7 +201,7 @@ public sealed class Release024LiveTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task<Guid> CreateAsync(LiveHostHarness host, Action<string> log)
+    internal static async Task<Guid> CreateAsync(LiveHostHarness host, Action<string> log)
     {
         var iso = Environment.GetEnvironmentVariable("HH_SPIKE_ISO")!;
         var inspection = await host.GetJsonAsync($"/api/v1/isos/{Uri.EscapeDataString(iso)}/inspection");
@@ -252,22 +255,29 @@ public sealed class Release024LiveTests(ITestOutputHelper output)
 
         """;
 
-    /// <summary>The default associations policy and file, Brave's machine-wide ProgId, and two Edge policies.</summary>
+    /// <summary>
+    /// The browser's associations file, the defaults Windows gives new accounts (OEMDefaultAssociations.xml), whether the
+    /// old policy is set, Brave's machine-wide ProgId, and two Edge policies.
+    /// </summary>
     private const string BrowserScript = Connect + """
         $result = Invoke-Command -Session $session -ScriptBlock {
             $system = Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -ErrorAction SilentlyContinue
             $edge = Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -ErrorAction SilentlyContinue
             $file = 'C:\ProgramData\HyperHarbor\DefaultAssociations.xml'
+            $oem = Join-Path $env:SystemRoot 'System32\OEMDefaultAssociations.xml'
+            $oemXml = if (Test-Path $oem) { [xml][IO.File]::ReadAllText($oem) } else { $null }
             [pscustomobject]@{
                 policy = $system.DefaultAssociationsConfiguration
-                associations = if (Test-Path $file) { [string](Get-Content $file -Raw) } else { $null }
+                associations = if (Test-Path $file) { [IO.File]::ReadAllText($file) } else { $null }
+                oemHttp = if ($oemXml) { [string](@($oemXml.DefaultAssociations.Association | Where-Object Identifier -eq 'http') | Select-Object -First 1).ProgId } else { $null }
+                oemEntries = if ($oemXml) { @($oemXml.DefaultAssociations.Association).Count } else { 0 }
                 braveProgId = Test-Path 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\BraveHTML'
                 startupBoost = $edge.StartupBoostEnabled
                 hideFirstRun = $edge.HideFirstRunExperience
             }
         }
         Remove-PSSession $session
-        @{ ok = $true; result = ($result | Select-Object policy, associations, braveProgId, startupBoost, hideFirstRun) } | ConvertTo-Json -Compress -Depth 4
+        @{ ok = $true; result = ($result | Select-Object policy, associations, oemHttp, oemEntries, braveProgId, startupBoost, hideFirstRun) } | ConvertTo-Json -Compress -Depth 4
         """;
 
     /// <summary>What partition 3 is, which drive letter the last partition has, and where Windows RE lives.</summary>

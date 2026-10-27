@@ -69,7 +69,7 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
             admin.UserName,
             admin.Password,
             account = userAccount,
-            files = files.Select(file => new { item = file.Item, path = file.Path, contents = file.Contents }),
+            files = files.Select(file => new { item = file.Item, path = file.Path, contents = file.Contents, importDefaultApps = file.ImportDefaultApps }),
             writes = writes.Select(write => new
             {
                 item = write.Item,
@@ -295,11 +295,41 @@ public sealed class PowerShellDirectProfileApplier : IGuestProfileApplier
                 $items = @()
                 $loadedHives = @()
 
-                # Files first: a value can name one (the default associations policy names its file).
+                # Windows gives each new account the OEM default associations (System32\OEMDefaultAssociations.xml) at
+                # its first sign-in. DISM's import replaces that file, so the file's associations are merged into it
+                # first. Not into /Export-DefaultAppAssociations: that exports the administrator's own associations,
+                # about half as many (157 against 83, 2026-10-27).
+                function ImportDefaultApps($path) {
+                    $ErrorActionPreference = 'Continue'
+                    $current = Join-Path $env:SystemRoot 'System32\OEMDefaultAssociations.xml'
+                    $merged = Join-Path $env:TEMP 'HyperHarborDefaultApps-merged.xml'
+                    Remove-Item -LiteralPath $merged -Force -ErrorAction SilentlyContinue
+                    $ours = New-Object Xml.XmlDocument
+                    $ours.Load($path)
+                    if (Test-Path -LiteralPath $current) {
+                        $base = New-Object Xml.XmlDocument
+                        $base.Load($current)
+                        foreach ($association in @($ours.DocumentElement.SelectNodes('Association'))) {
+                            foreach ($old in @($base.DocumentElement.SelectNodes('Association') | Where-Object { $_.GetAttribute('Identifier') -eq $association.GetAttribute('Identifier') })) {
+                                [void]$base.DocumentElement.RemoveChild($old)
+                            }
+                            [void]$base.DocumentElement.AppendChild($base.ImportNode($association, $true))
+                        }
+                    }
+                    else { $base = $ours }
+                    $base.Save($merged)
+                    $output = dism.exe /Online /English "/Import-DefaultAppAssociations:$merged" 2>&1 | Out-String
+                    $code = $LASTEXITCODE
+                    Remove-Item -LiteralPath $merged -Force -ErrorAction SilentlyContinue
+                    if ($code -ne 0) { throw "DISM could not import the default apps (exit code $code). $($output.Trim())" }
+                }
+
+                # Files first: a value can name one.
                 foreach ($file in $files) {
                     try {
                         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName([string]$file.path)) | Out-Null
                         [IO.File]::WriteAllText([string]$file.path, [string]$file.contents, (New-Object Text.UTF8Encoding $false))
+                        if ($file.importDefaultApps) { ImportDefaultApps ([string]$file.path) }
                         $items += @{ item = $file.item; ok = $true }
                     }
                     catch { $items += @{ item = $file.item; ok = $false; error = $_.Exception.Message } }
