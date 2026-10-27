@@ -208,11 +208,17 @@ select:focus {
   outline: none;
 }
 
+/*
+ * Reduced motion (also the default in many Remote Desktop sessions): transitions finish at once, and animations run
+ * once instead of forever. A 1 ms duration alone kept infinite ones looping, so spinners and the sliding progress bar
+ * raced at a thousand times their speed. The spinner then rests as an open ring; ProgressBar draws its own still bar.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     transition-duration: 1ms !important;
     animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
