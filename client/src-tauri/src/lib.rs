@@ -12,6 +12,8 @@ mod monitors;
 mod paired;
 mod rdp;
 mod rdp_trust;
+#[cfg(test)]
+mod session_live;
 mod sessions;
 mod spake2;
 mod store_search;

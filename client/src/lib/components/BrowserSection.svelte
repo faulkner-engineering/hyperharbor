@@ -146,7 +146,7 @@
       <input type="checkbox" bind:checked={makeDefault} />
       Make {browser.name} the default browser
     </label>
-    <p class="muted hint">Windows applies this at every sign-in, so the default browser cannot be changed inside the VM.</p>
+    <p class="muted hint">For accounts that have not signed in yet, as on a new VM. It can still be changed inside the VM.</p>
   {/if}
   <Tabs
     label="Browser settings"

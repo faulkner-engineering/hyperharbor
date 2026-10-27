@@ -25,7 +25,11 @@ public sealed record RegistryWrite(string Item, RegistryTarget Target, string Ke
 
 /// <summary>A text file to write in the guest (UTF-8), and the item it belongs to. Written before the registry values.</summary>
 /// <param name="Path">An absolute path in the guest.</param>
-public sealed record FileWrite(string Item, string Path, string Contents);
+/// <param name="ImportDefaultApps">
+/// The file holds default associations to merge into the ones Windows gives each new account at its first sign-in
+/// (DISM's /Import-DefaultAppAssociations).
+/// </param>
+public sealed record FileWrite(string Item, string Path, string Contents, bool ImportDefaultApps = false);
 
 /// <summary>A package to install, with the name the results use.</summary>
 public sealed record PackageInstall(string Item, string Id, PackageSource Source);
@@ -45,7 +49,8 @@ public sealed record ApplyPlan(
     IReadOnlyList<FileWrite>? Files = null)
 {
     public int ItemCount =>
-        Packages.Count + Appx.Count + Capabilities.Count + Features.Count + Registry.Select(write => write.Item).Distinct().Count()
+        Packages.Count + Appx.Count + Capabilities.Count + Features.Count
+        + Registry.Select(write => write.Item).Concat((Files ?? []).Select(file => file.Item)).Distinct().Count()
         + (Services?.Count ?? 0) + (Programs?.Count ?? 0);
 }
 
@@ -114,8 +119,7 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
             if (settings.MakeDefault && !isHost)
             {
                 var item = $"{browser.Name} as the default browser";
-                files.Add(new FileWrite(item, DefaultAssociationsPath, DefaultAssociations(browser)));
-                registry.Add(new RegistryWrite(item, RegistryTarget.Machine, DefaultAssociationsPolicyKey, "DefaultAssociationsConfiguration", "string", DefaultAssociationsPath));
+                files.Add(new FileWrite(item, DefaultAssociationsPath, DefaultAssociations(browser), ImportDefaultApps: true));
             }
         }
 
@@ -134,20 +138,19 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
     }
 
     /// <summary>
-    /// Where the default associations file goes in the guest. The policy names a path, and Windows reads the file at
-    /// every sign-in, so it must stay there. HyperHarbor's VMs install Windows on C:.
+    /// Where the browser's default associations are written in the guest before they are merged into Windows' own
+    /// (it stays there, so what was imported can be read back). HyperHarbor's VMs install Windows on C:.
     /// </summary>
     internal const string DefaultAssociationsPath = @"C:\ProgramData\HyperHarbor\DefaultAssociations.xml";
-
-    /// <summary>The policy "Set a default associations configuration file" (HKLM).</summary>
-    internal const string DefaultAssociationsPolicyKey = @"SOFTWARE\Policies\Microsoft\Windows\System";
 
     /// <summary>The web link and HTML file types the default browser takes over.</summary>
     internal static readonly string[] BrowserAssociations = [".htm", ".html", "http", "https"];
 
     /// <summary>
-    /// The default associations file. On Windows 11 the UserChoice protection driver stops anything but Windows from
-    /// choosing the default browser, so this policy is the supported way; Windows applies it at every sign-in.
+    /// The browser's default associations. On Windows 11 the UserChoice protection driver stops anything but Windows
+    /// from choosing the default browser, and the policy "Set a default associations configuration file" is read only
+    /// on domain or Microsoft Entra joined PCs (not HyperHarbor's VMs; seen 2026-10-27). So the applier merges these
+    /// into the OEM default associations, which Windows gives each account at its first sign-in.
     /// </summary>
     internal static string DefaultAssociations(BrowserCatalogEntry browser)
     {

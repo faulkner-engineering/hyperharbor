@@ -134,7 +134,15 @@ section for an area before changing it: most of these were learned from a failur
 - mstsc titles a session window "<.rdp file name> - <address> - Remote Desktop Connection", so the client names
   the file after the VM (rdp::window_file_name makes the name safe for a file) and writes each launch's file to
   its own folder under %TEMP%, since two sessions can share a name. The address stays in the title, which is
-  how the client tells that the session window opened. (2026-10-26; not yet verified live.)
+  how the client tells that the session window opened. (2026-10-26.) Verified live 2026-10-27: the address in the
+  title includes the port from "full address" ("HyperHarbor-Test - 172.31.215.11:3389 - Remote Desktop Connection"),
+  so the client leaves the port out when it is 3389 (rdp_endpoint) and the title reads "<VM name> - <IP>".
+- Live test harness findings (SessionLiveTests, 2026-10-27): a CertHash value under HKCU\Software\Microsoft\Terminal
+  Server Client\Servers\<address> with the presented certificate's SHA-1 did not stop mstsc's "could not be
+  authenticated" dialog, and Win32_TSGeneralSetting.SSLCertificateSHA1Hash matched the served certificate anyway; the
+  test answers Yes in the dialog. During a user's first sign-in, PowerShell Direct refused the stored administrator for
+  a while ("The credential is invalid"), then accepted it again. Through Invoke-Command, a string gains PSComputerName
+  (and from Get-Content, PSPath), so ConvertTo-Json writes it as an object; read files with [IO.File]::ReadAllText.
 - The host sends the bare account name (hh-owner), not .\hh-owner: mstsc adds ".\" itself, and a doubled
   ".\.\hh-owner" fails as an unknown user (guest event 4625, substatus 0xc0000064) and prompts for a password.
 - Add-LocalGroupMember takes the group by -SID 'S-1-5-32-555' and the member as the LocalUser object
@@ -364,11 +372,21 @@ section for an area before changing it: most of these were learned from a failur
   ExtensionSettings is one REG_SZ JSON value under the browser's policy key.
 - Default browser (browser.makeDefault, 0.2.4): Windows 11's UserChoice Protection Driver (UCPD) stops other programs
   from writing the http and https UserChoice keys, and their hash ties them to the user, so a script cannot choose
-  the default browser. The supported way is the policy "Set a default associations configuration file"
-  (HKLM\SOFTWARE\Policies\Microsoft\Windows\System, DefaultAssociationsConfiguration = path to an XML file), which
-  Windows applies at every sign-in, also overriding the user's own change. ProgIds in catalogs/browsers.yaml:
-  ChromeHTML, MSEdgeHTM, BraveHTML. Not yet verified on a live guest: the ProgIds, and whether a Brave that fell back
-  to a per-user install (0x8A150010 retry) is registered for the User's account at all.
+  the default browser. ProgIds in catalogs/browsers.yaml: ChromeHTML, MSEdgeHTM, BraveHTML.
+  The policy "Set a default associations configuration file" (DefaultAssociationsConfiguration), which 0.2.4-beta.1
+  used, does nothing on HyperHarbor's VMs: Windows reads it only on domain-joined (Group Policy) or Microsoft Entra
+  joined (ApplicationDefaults CSP) PCs. Seen 2026-10-27 with SessionLiveTests on Windows 11 build 26300: with the
+  policy and its file in place before hh-owner's first sign-in, links opened in Edge, and Shell-Core/AppDefaults logged
+  no policy step at any sign-in. At the first one ("First logon of new user") it applied only the OEM defaults
+  ("AppDefaults-ApplyOEMDefaultAssociations - apply dll resource", then "- apply xml file", which set http and https
+  to MSEdgeHTM); later ones logged only "AppDefaults-Logon-UserProfileLoaded".
+  So the applier now merges the browser's four associations into that xml file,
+  C:\Windows\System32\OEMDefaultAssociations.xml (owned by TrustedInstaller, so through
+  `Dism /Online /Import-DefaultAppAssociations`, which replaces the whole file). It merges into the file itself:
+  /Export-DefaultAppAssociations exports the administrator's own associations instead (83 entries against the
+  image's 157). This reaches only accounts that have not signed in yet, as on a new VM; one that has keeps its choice,
+  and the default can be changed in the VM afterwards. Verified 2026-10-27 on a new VM (SessionLiveTests): after
+  hh-owner's first sign-in, http and https resolved to BraveHTML, with a hashed UserChoice Windows wrote itself.
 - Edge cannot be removed outside the European Economic Area: Windows offers the uninstall only when the region chosen
   at setup is in the EEA, and other apps need its WebView2 runtime. Forced removals are unsupported and Windows Update
   can put Edge back. The tweak system.hideEdge only sets Edge and EdgeUpdate policies (StartupBoostEnabled,
