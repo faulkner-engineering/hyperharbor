@@ -326,6 +326,20 @@ public sealed class VmCreationService
                 _unattended!.RollBack(install, vmId);
             }
 
+            // Hyper-V leaves the VM's empty folders behind, and the next create with the same name would refuse the
+            // folder as not empty. Only a folder holding nothing but empty Hyper-V folders is removed.
+            if (blueprint.ConfigurationFolder is { } folder)
+            {
+                try
+                {
+                    _files.DeleteEmptyVmFolder(folder);
+                }
+                catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning(cleanup, "Could not remove the empty folder {Folder} of {Name}.", folder, blueprint.Name);
+                }
+            }
+
             throw;
         }
     }

@@ -30,6 +30,8 @@ API 1.36.0.
   shortcut stay. In the Remove section, Microsoft Edge is now rated keep and says why.
 
 ### Fixed
+- Creating a VM again with the same name after a creation failed (for example for lack of memory) works: the host now
+  removes the empty folders the failed attempt left, instead of refusing the name because its folder was "not empty".
 - Brave no longer turns your extensions off, and browsers no longer lose sign-ins and saved passwords, after you
   connect to a Windows VM. Each Connect gives the VM account a new password, and the host used to reset it, which made
   everything Windows had encrypted for the account (with DPAPI) unreadable; Brave took that as its settings being
