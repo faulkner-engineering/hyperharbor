@@ -186,6 +186,10 @@ section for an area before changing it: most of these were learned from a failur
 - DiscUtils pads the Joliet volume label with ASCII spaces (U+2020 in UCS-2); SeedIso rewrites it, because
   cloud-init finds the seed only by the label CIDATA. Extensionless Joliet names read back from DiscUtils
   with a trailing period (user-data.); Linux strips it. Not yet verified with a real Ubuntu install.
+- Msvm_Keyboard.TypeText sends nothing the Ubuntu 24.04 installer's console shows, while TypeKey works (Enter, and
+  letters as virtual-key codes 0x59 0x45 0x53 for "yes"); checked 2026-10-27. The host reports awaitingConfirmation from
+  the start of a Linux install, so keys sent at once land in GRUB's menu instead ("e" opens its editor and the boot
+  stops); the menu times out after about 30 seconds.
 - Linux installers need the Microsoft UEFI CA Secure Boot template (also for console installs). Ubuntu asks
   "Continue with autoinstall?" at the console, since the seed cannot change the kernel command line.
 - The create job presses Space (Msvm_Keyboard.TypeKey) twelve times on the first boot only, to pass
