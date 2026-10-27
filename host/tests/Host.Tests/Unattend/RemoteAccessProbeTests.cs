@@ -37,7 +37,7 @@ public sealed class RemoteAccessProbeTests : IDisposable
         var garbage = Serve(async stream => await stream.WriteAsync("HTTP/1.1 400 Bad Request\r\n\r\n"u8.ToArray()));
 
         Assert.True(await Probe(rdp: confirming).RdpAnswersAsync("127.0.0.1", CancellationToken.None));
-        Assert.False(await Probe(rdp: silent).RdpAnswersAsync("127.0.0.1", CancellationToken.None));
+        Assert.False(await Probe(rdp: silent, timeout: Silence).RdpAnswersAsync("127.0.0.1", CancellationToken.None));
         Assert.False(await Probe(rdp: garbage).RdpAnswersAsync("127.0.0.1", CancellationToken.None));
         Assert.False(await Probe(rdp: ClosedPort()).RdpAnswersAsync("127.0.0.1", CancellationToken.None));
     }
@@ -51,7 +51,7 @@ public sealed class RemoteAccessProbeTests : IDisposable
 
         Assert.True(await Probe(ssh: ssh).SshAnswersAsync("127.0.0.1", CancellationToken.None));
         Assert.True(await Probe(ssh: preamble).SshAnswersAsync("127.0.0.1", CancellationToken.None));
-        Assert.False(await Probe(ssh: silent).SshAnswersAsync("127.0.0.1", CancellationToken.None));
+        Assert.False(await Probe(ssh: silent, timeout: Silence).SshAnswersAsync("127.0.0.1", CancellationToken.None));
     }
 
     [Fact]
@@ -65,10 +65,16 @@ public sealed class RemoteAccessProbeTests : IDisposable
         });
 
         Assert.False(await Probe(rdp: ssh).RdpAnswersAsync("127.0.0.1", CancellationToken.None));
-        Assert.False(await Probe(ssh: rdp).SshAnswersAsync("127.0.0.1", CancellationToken.None));
+        // The RDP server waits for a request the SSH probe never sends, so this one waits out the timeout.
+        Assert.False(await Probe(ssh: rdp, timeout: Silence).SshAnswersAsync("127.0.0.1", CancellationToken.None));
     }
 
-    private static TcpRemoteAccessProbe Probe(int rdp = 1, int ssh = 1) => new(rdp, ssh, TimeSpan.FromMilliseconds(500));
+    /// <summary>How long a probe waits for a server that never answers. Only those cases wait it out.</summary>
+    private static readonly TimeSpan Silence = TimeSpan.FromMilliseconds(500);
+
+    /// <param name="timeout">Generous by default: on a busy CI runner a loopback accept and reply took over 500 ms
+    /// (2026-10-27), and a probe that should succeed must not fail on time.</param>
+    private static TcpRemoteAccessProbe Probe(int rdp = 1, int ssh = 1, TimeSpan? timeout = null) => new(rdp, ssh, timeout ?? TimeSpan.FromSeconds(10));
 
     /// <summary>Listens on a free loopback port and runs <paramref name="behave"/> for each connection.</summary>
     private int Serve(Func<NetworkStream, Task> behave)
