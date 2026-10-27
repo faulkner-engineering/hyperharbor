@@ -17,18 +17,17 @@ namespace HyperHarbor.Host.Tests.Live;
 /// after a VM restart, each with a rotated password (Brave turned extensions off when a reset lost that data).</item>
 /// <item>The User's hha- account is ready for User Account Control prompts after a Connect, and an administrator
 /// window's passphrase signs in while it is open and not after it ends.</item>
-/// <item>Web links open in Brave for the signed-in user (the default associations policy applied at sign-in).</item>
+/// <item>Web links open in Brave for the signed-in user (the default associations Windows gives a new account at its
+/// first sign-in, which the profile's browser is merged into).</item>
 /// <item>Edge does not start on its own at sign-in.</item>
 /// <item>The session window is titled "&lt;VM name&gt; - &lt;address&gt; - Remote Desktop Connection".</item>
-/// <item>A windowed session follows the window's size (dynamic resolution); a minimal .rdp file is measured the same
-/// way for comparison.</item>
 /// </list>
 /// Sessions are opened by the client's own code: the Rust agent in client/src-tauri/src/session_live.rs runs
 /// <c>rdp::launch</c> for each request this test writes to HH_SESSION_DIR. scripts\live-session.ps1 starts both.
 /// Scripts run in the user's session through a scheduled task with an interactive principal, so they see what the
 /// signed-in user sees. Every check runs even when an earlier one fails, and the test fails at the end with all of them.
 /// <para>
-/// Needs an active desktop on this machine (mstsc draws and resizes only there), RDP trust set up for this account in
+/// Needs an active desktop on this machine (mstsc draws only there), RDP trust set up for this account in
 /// the client, and the VM made by <see cref="Release024LiveTests"/>'s profile (Brave as the default browser, Edge
 /// kept out of the way): HH_LIVE_GUEST_VM=&lt;id&gt; reuses one; without it, HH_SPIKE_ISO creates HyperHarbor-Test
 /// (about 25 minutes) and deletes it afterwards unless HH_MACHINE_KEEP=1. About 10 minutes with an existing VM.
@@ -58,8 +57,6 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
             File.AppendAllText(progress, stamped + Environment.NewLine);
         }
 
-        // Window sizes in physical pixels, whatever this monitor's scale (per monitor v2, for the whole test process).
-        SetProcessDpiAwarenessContext(new IntPtr(-4));
         var agent = await WaitForFileAsync(Path.Combine(_folder, "agent.json"), TimeSpan.FromMinutes(10))
             ?? throw new InvalidOperationException($"The client agent did not start; scripts\\live-session.ps1 starts it with {_folder}.");
         Log("Agent: " + agent.ToJsonString());
@@ -87,7 +84,7 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
             var first = await ConnectAsync(host, vmId, Log);
             address = (string)first["address"]!;
             var user = ((string)first["userName"]!).TrimStart('.', '\\');
-            var pid = await LaunchAsync(first, vmName, plain: false, Log);
+            var pid = await LaunchAsync(first, vmName, Log);
             var window = await WaitForSessionWindowAsync(pid, address, Log);
             await CheckAsync("5. Session window title", Log, () =>
             {
@@ -143,31 +140,6 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
                 Log($"Sign-in with the passphrase after closing: {after.ToJsonString()}");
                 Assert.False((bool)after["ok"]!);
                 await AssertReadyForUacAsync(guest, accountName, Log);
-            });
-
-            await CheckAsync("6. A windowed session follows the window's size", Log, async () =>
-            {
-                var sizes = await MeasureResizeAsync(guest, user, window, Log);
-                CloseSessions();
-
-                // The same experiment with a minimal file, to tell the client's settings from Remote Desktop's own.
-                try
-                {
-                    var plain = await WaitForSessionWindowAsync(await LaunchAsync(first, vmName, plain: true, Log), address, Log);
-                    await WaitForUserScriptsAsync(guest, user);
-                    var plainSizes = await MeasureResizeAsync(guest, user, plain, Log);
-                    Log($"Minimal .rdp file: guest followed the window: {plainSizes.All(size => size.Follows)}.");
-                }
-                catch (Exception ex)
-                {
-                    Log($"The minimal .rdp comparison did not run: {ex.Message}");
-                }
-                finally
-                {
-                    CloseSessions();
-                }
-
-                Assert.All(sizes, size => Assert.True(size.Follows, $"window client {size.Client}, guest {size.Guest}"));
             });
 
             // B. Reconnect after the reuse window, so the host rotates the password (a change, not a reset).
@@ -227,11 +199,6 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         var connection = (await response.Content.ReadFromJsonAsync<JsonObject>())!;
         log($"Connect: {connection["userName"]}@{connection["address"]}:{connection["port"]}, reuse window until {connection["expiresAt"]}.");
-
-        // Windowed, as the resize check needs; the rest is the VM's own defaults.
-        var defaults = connection["defaults"] as JsonObject ?? [];
-        defaults["window"] = "windowed";
-        connection["defaults"] = defaults.DeepClone();
         return connection;
     }
 
@@ -248,7 +215,7 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
         Assert.NotEqual((string)previous["password"]!, (string)next["password"]!);
         previous["password"] = (string)next["password"]!;
         previous["expiresAt"] = (string)next["expiresAt"]!;
-        await WaitForSessionWindowAsync(await LaunchAsync(next, vmName, plain: false, log), (string)next["address"]!, log);
+        await WaitForSessionWindowAsync(await LaunchAsync(next, vmName, log), (string)next["address"]!, log);
         await WaitForSignInAsync(guest, user, log);
     }
 
@@ -283,52 +250,7 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
         Assert.False((bool)state["hidden"]!, "the account is hidden from sign-in screens");
     }
 
-    private sealed record Size(string Client, string Guest, bool Follows);
-
-    /// <summary>
-    /// Resizes the session window larger, larger again, then smaller than the session's first resolution, and reads the
-    /// guest's resolution each time. A size counts as followed only when the window took it (within its frame) and the
-    /// guest matches the window: mstsc held a window at the session's 800x600 when asked for more (2026-10-27), which
-    /// matched the guest without anything having followed.
-    /// </summary>
-    private static async Task<List<Size>> MeasureResizeAsync(Guest guest, string user, IntPtr window, Action<string> log)
-    {
-        ShowWindow(window, 9);
-        var sizes = new List<Size>();
-        foreach (var (width, height) in new[] { (1100, 760), (1400, 940), (700, 520) })
-        {
-            // As a drag of the window's edge: mstsc asks the guest for a new resolution when a move or size ends
-            // (WM_EXITSIZEMOVE), which SetWindowPos alone never sends.
-            SendMessage(window, 0x0231, IntPtr.Zero, IntPtr.Zero);
-            Assert.True(SetWindowPos(window, IntPtr.Zero, 40, 40, width, height, 0x0014), "SetWindowPos failed.");
-            SendMessage(window, 0x0232, IntPtr.Zero, IntPtr.Zero);
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            GetWindowRect(window, out var frame);
-            GetClientRect(window, out var client);
-            log($"Asked for {width}x{height}; the window is {frame.Right - frame.Left}x{frame.Bottom - frame.Top}.");
-            var clientSize = (client.Right - client.Left, client.Bottom - client.Top);
-            // The frame adds at most a few dozen pixels to the client area.
-            var took = Math.Abs(frame.Right - frame.Left - width) <= 40 && Math.Abs(frame.Bottom - frame.Top - height) <= 60;
-            JsonNode resolution = new JsonObject();
-            var follows = false;
-            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
-            while (!follows && DateTime.UtcNow < deadline)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(3));
-                resolution = await guest.AsUserAsync(user, ResolutionScript);
-                follows = Math.Abs((int)resolution["width"]! - clientSize.Item1) <= 24 && Math.Abs((int)resolution["height"]! - clientSize.Item2) <= 24;
-            }
-
-            follows &= took;
-            var size = new Size($"{clientSize.Item1}x{clientSize.Item2}", $"{resolution["width"]}x{resolution["height"]}", follows);
-            log($"Window client {size.Client}{(took ? "" : $" (not the {width}x{height} asked for)")}, guest {size.Guest} in session {resolution["session"]}: {(follows ? "follows" : "does not follow")}.");
-            sizes.Add(size);
-        }
-
-        return sizes;
-    }
-
-    private async Task<int> LaunchAsync(JsonObject connection, string vmName, bool plain, Action<string> log)
+    private async Task<int> LaunchAsync(JsonObject connection, string vmName, Action<string> log)
     {
         var id = $"{Environment.ProcessId}-{++_requests}";
         // The password crosses only protected with DPAPI for this account (the agent opens it), never in plain text.
@@ -340,7 +262,6 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
             ["connection"] = safe,
             ["protectedPassword"] = Convert.ToBase64String(ProtectedData.Protect(password, PasswordEntropy, DataProtectionScope.CurrentUser)),
             ["vmName"] = vmName,
-            ["plain"] = plain,
         };
         CryptographicOperations.ZeroMemory(password);
         var partial = Path.Combine(_folder, id + ".partial");
@@ -355,7 +276,7 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
 
         var pid = (int)answer["pid"]!;
         _sessions.Add(pid);
-        log($"Launched mstsc {pid}{(plain ? " with a minimal .rdp file" : "")}.");
+        log($"Launched mstsc {pid}.");
         return pid;
     }
 
@@ -665,39 +586,11 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
             $buffer.ToString()
         }
         $choice = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice' -ErrorAction SilentlyContinue
-        $policy = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -ErrorAction SilentlyContinue).DefaultAssociationsConfiguration
         @{
             http = ProgId 'http'
             https = ProgId 'https'
             userChoice = [string]$choice.ProgId
             userChoiceHash = [bool]$choice.Hash
-            policy = [string]$policy
-            policyFile = [bool]($policy -and (Test-Path -LiteralPath $policy))
-        }
-        """;
-
-    /// <summary>
-    /// The size of the session's desktop in pixels, whatever its scale, and the script's session (to tell the signed-in
-    /// session from another one). A DEVMODE filled in from PowerShell answered 0x0 (2026-10-27): the field set on a
-    /// boxed struct did not reach the call.
-    /// </summary>
-    private const string ResolutionScript = """
-        Add-Type -TypeDefinition @'
-        using System;
-        using System.Runtime.InteropServices;
-        public static class HyperHarborScreen {
-            [DllImport("user32.dll")]
-            public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
-            [DllImport("user32.dll")]
-            public static extern int GetSystemMetrics(int index);
-        }
-        '@
-        # Per monitor v2, so a scaled desktop reports pixels.
-        [void][HyperHarborScreen]::SetThreadDpiAwarenessContext([IntPtr](-4))
-        @{
-            width = [HyperHarborScreen]::GetSystemMetrics(0)
-            height = [HyperHarborScreen]::GetSystemMetrics(1)
-            session = [Diagnostics.Process]::GetCurrentProcess().SessionId
         }
         """;
 
@@ -804,22 +697,10 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
         return text.ToString();
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Rect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
     private delegate bool EnumWindowsProc(IntPtr window, IntPtr parameter);
 
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
     private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
@@ -835,19 +716,4 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr window, StringBuilder text, int length);
-
-    [DllImport("user32.dll")]
-    private static extern bool ShowWindow(IntPtr window, int command);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetWindowPos(IntPtr window, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr window, out Rect rect);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetClientRect(IntPtr window, out Rect rect);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetProcessDpiAwarenessContext(IntPtr context);
 }

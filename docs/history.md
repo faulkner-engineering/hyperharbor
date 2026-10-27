@@ -501,7 +501,9 @@ verified, and what was found along the way. User-facing changes per release are 
    - Default browser (the user: "I can't set Brave as the default browser"): browser.makeDefault in setup and machine
      profiles, VM profiles only. The planner writes C:\ProgramData\HyperHarbor\DefaultAssociations.xml (http, https,
      .htm, .html to the catalog's progId) and the DefaultAssociationsConfiguration policy naming it; the settings step
-     gained file writes for it. The user accepted that Windows reapplies it at every sign-in. Client: a checkbox in
+     gained file writes for it. The user accepted that Windows reapplies it at every sign-in. (Replaced on 2026-10-27:
+     Windows ignores that policy outside a domain, so the file is merged into the OEM default associations with DISM,
+     for accounts that have not signed in yet; decided with the user.) Client: a checkbox in
      the Browser section (hostSupports 1.36.0); makeDefault is sent only when on, since older hosts reject unknown
      fields in machine profiles.
    - Edge (the user: "I can't remove Edge from a Windows install"): Windows blocks it outside the EEA, so the user chose

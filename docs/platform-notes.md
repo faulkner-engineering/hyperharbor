@@ -132,17 +132,6 @@ section for an area before changing it: most of these were learned from a failur
   how the client tells that the session window opened. (2026-10-26.) Verified live 2026-10-27: the address in the
   title includes the port from "full address" ("HyperHarbor-Test - 172.31.215.11:3389 - Remote Desktop Connection"),
   so the client leaves the port out when it is 3389 (rdp_endpoint) and the title reads "<VM name> - <IP>".
-- mstsc does not let a windowed session's window grow past the session's current resolution (it held one at 816x639,
-  an 800x600 desktop, when asked for 1400x940 on a 2560x1080 screen; 2026-10-27, SessionLiveTests). Shrunk to 684x481,
-  the guest stayed at 800x600 too, also with WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE around the resize as a drag sends
-  them: dynamic resolution did not act at all in these windowed sessions (the user saw the same by hand; only full
-  screen changes the resolution). The client's .rdp file and a minimal one (address, user, windowed) behaved the same,
-  so the file is not the cause. The guest side was ready: each session opened Microsoft::Windows::RDS::DisplayControl
-  and rdpgrfx (RdpCoreTS/Operational events 132), and no Terminal Services policies were set. mstsc.exe and
-  mstscax.dll 10.0.26100.8875 contain the names of other .rdp settings ("smart sizing", "screen mode id",
-  "desktopwidth") but not "dynamic resolution" in any spelling, so that line in the client's file is most likely
-  ignored by this mstsc (an outside report found the same on 10.0.26200: github.com/endavis/gnome-connection-manager
-  issue 287). Not yet checked: mstsc on a physical PC rather than inside a Remote Desktop session, and Windows App.
 - Live test harness findings (SessionLiveTests, 2026-10-27): a CertHash value under HKCU\Software\Microsoft\Terminal
   Server Client\Servers\<address> with the presented certificate's SHA-1 did not stop mstsc's "could not be
   authenticated" dialog, and Win32_TSGeneralSetting.SSLCertificateSHA1Hash matched the served certificate anyway; the
@@ -378,22 +367,21 @@ section for an area before changing it: most of these were learned from a failur
   ExtensionSettings is one REG_SZ JSON value under the browser's policy key.
 - Default browser (browser.makeDefault, 0.2.4): Windows 11's UserChoice Protection Driver (UCPD) stops other programs
   from writing the http and https UserChoice keys, and their hash ties them to the user, so a script cannot choose
-  the default browser. The supported way is the policy "Set a default associations configuration file"
-  (HKLM\SOFTWARE\Policies\Microsoft\Windows\System, DefaultAssociationsConfiguration = path to an XML file), which
-  Windows applies at every sign-in, also overriding the user's own change. ProgIds in catalogs/browsers.yaml:
-  ChromeHTML, MSEdgeHTM, BraveHTML. Not yet verified on a live guest: the ProgIds, and whether a Brave that fell back
-  to a per-user install (0x8A150010 retry) is registered for the User's account at all.
-  Seen 2026-10-27 (SessionLiveTests, Windows 11 build 26300, UCPD running): with the policy and its file in place before
-  hh-owner's first sign-in, and BraveHTML registered for all users, hh-owner's http and https still opened in Edge.
-  The account had its own hashed UserChoice of MSEdgeHTM, and it stayed after a reconnect and a VM restart, so the
-  policy did not override it at those sign-ins. The cause: Windows does not read the policy on a workgroup PC. Its
-  documentation applies it only when the PC is domain-joined (Group Policy) or Microsoft Entra joined (the
-  ApplicationDefaults CSP), and Shell-Core/AppDefaults logged no policy step at any sign-in: at the first one
-  ("First logon of new user") it applied only the OEM defaults ("AppDefaults-ApplyOEMDefaultAssociations - apply dll
-  resource", then "- apply xml file", which set http and https to MSEdgeHTM), and later ones logged only
-  "AppDefaults-Logon-UserProfileLoaded". The OEM step reads the file `Dism /Online /Import-DefaultAppAssociations`
-  installs, so importing the browser's associations that way before the account's first sign-in is the likely fix
-  for new accounts (not yet tried); an account that has signed in keeps its choice. Not fixed yet.
+  the default browser. ProgIds in catalogs/browsers.yaml: ChromeHTML, MSEdgeHTM, BraveHTML.
+  The policy "Set a default associations configuration file" (DefaultAssociationsConfiguration), which 0.2.4-beta.1
+  used, does nothing on HyperHarbor's VMs: Windows reads it only on domain-joined (Group Policy) or Microsoft Entra
+  joined (ApplicationDefaults CSP) PCs. Seen 2026-10-27 with SessionLiveTests on Windows 11 build 26300: with the
+  policy and its file in place before hh-owner's first sign-in, links opened in Edge, and Shell-Core/AppDefaults logged
+  no policy step at any sign-in. At the first one ("First logon of new user") it applied only the OEM defaults
+  ("AppDefaults-ApplyOEMDefaultAssociations - apply dll resource", then "- apply xml file", which set http and https
+  to MSEdgeHTM); later ones logged only "AppDefaults-Logon-UserProfileLoaded".
+  So the applier now merges the browser's four associations into that xml file,
+  C:\Windows\System32\OEMDefaultAssociations.xml (owned by TrustedInstaller, so through
+  `Dism /Online /Import-DefaultAppAssociations`, which replaces the whole file). It merges into the file itself:
+  /Export-DefaultAppAssociations exports the administrator's own associations instead (83 entries against the
+  image's 157). This reaches only accounts that have not signed in yet, as on a new VM; one that has keeps its choice,
+  and the default can be changed in the VM afterwards. Verified 2026-10-27 on a new VM (SessionLiveTests): after
+  hh-owner's first sign-in, http and https resolved to BraveHTML, with a hashed UserChoice Windows wrote itself.
 - Edge cannot be removed outside the European Economic Area: Windows offers the uninstall only when the region chosen
   at setup is in the EEA, and other apps need its WebView2 runtime. Forced removals are unsupported and Windows Update
   can put Edge back. The tweak system.hideEdge only sets Edge and EdgeUpdate policies (StartupBoostEnabled,

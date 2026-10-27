@@ -11,6 +11,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Fixed
+- "Make <browser> the default browser" in setup and machine profiles now works. In 0.2.4-beta.1 it set a Windows
+  policy that Windows reads only on PCs joined to a domain, so web links still opened in Edge. The host now adds the
+  browser to the defaults Windows gives each new account at its first sign-in. That makes it apply to accounts that
+  have not signed in yet, as on a new VM, and the default can be changed inside the VM afterwards (before, it was
+  meant to be reapplied at every sign-in). For a VM whose account already signed in, choose the browser once in
+  Windows Settings > Apps > Default apps. Needs a host with this version.
 - Remote Desktop windows are titled "<VM name> - <address> - Remote Desktop Connection" as intended; the address no
   longer ends in ":3389". The port still shows when a connection uses another one. Client only.
 

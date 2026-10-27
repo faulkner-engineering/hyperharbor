@@ -8,10 +8,9 @@
 //!
 //! It watches the folder for `<id>.launch.json` requests: `connection` (a VmConnection without
 //! its password), `protectedPassword` (the password protected with DPAPI for this Windows account
-//! and `ENTROPY`, in base64, so no file ever holds it in plain text), `vmName`, and `plain` (true
-//! opens a minimal .rdp file instead of the client's, for comparisons). Each request is deleted as
-//! soon as it is read and answered in `<id>.launched.json` with `pid` (mstsc's process id) or
-//! `error`. It stops when `done` appears in the folder, or after an hour.
+//! and `ENTROPY`, in base64, so no file ever holds it in plain text), and `vmName`. Each request is
+//! deleted as soon as it is read and answered in `<id>.launched.json` with `pid` (mstsc's process
+//! id) or `error`. It stops when `done` appears in the folder, or after an hour.
 #![cfg(test)]
 
 use crate::camera::CameraRedirect;
@@ -34,8 +33,6 @@ struct LaunchRequest {
     connection: serde_json::Value,
     protected_password: String,
     vm_name: String,
-    #[serde(default)]
-    plain: bool,
 }
 
 impl LaunchRequest {
@@ -100,41 +97,8 @@ mod dpapi {
     }
 }
 
-/// The lines `mstsc /v:<address>` would use from a default profile, plus the sign-in lines the
-/// temporary credential needs. Compared with the client's file, it tells whether a behavior comes
-/// from the client's settings or from Remote Desktop itself.
-fn plain_file(connection: &rdp::VmConnection) -> String {
-    [
-        format!("full address:s:{}:{}", connection.address, connection.port),
-        format!("username:s:{}", connection.user_name),
-        "prompt for credentials:i:0".to_string(),
-        "screen mode id:i:1".to_string(),
-    ]
-    .join("\r\n")
-        + "\r\n"
-}
-
 fn launch(request: &LaunchRequest) -> Result<u32, String> {
     let connection = &request.connection()?;
-    if request.plain {
-        connection.validate().map_err(|e| e.to_string())?;
-        return rdp::start(
-            rdp::Launch {
-                credential: Some(rdp::LaunchCredential {
-                    host: &connection.address,
-                    user_name: &connection.user_name,
-                    password: &connection.password,
-                }),
-                window_name: format!("{} (plain)", request.vm_name),
-                contents: plain_file(connection),
-                window_title_key: connection.address.clone(),
-            },
-            &rdp::file_directory(),
-            None,
-        )
-        .map_err(|e| e.to_string());
-    }
-
     // As Connect does on a device without a monitor choice and without a virtual camera.
     let layout = connection
         .defaults
@@ -201,10 +165,7 @@ fn serve_session_launches() {
                         serde_json::from_slice::<LaunchRequest>(&text).map_err(|e| e.to_string())
                     })
                     .and_then(|request| {
-                        println!(
-                            "{id}: launching {} (plain: {})",
-                            request.vm_name, request.plain
-                        );
+                        println!("{id}: launching {}", request.vm_name);
                         launch(&request)
                     });
                 match result {
@@ -222,23 +183,6 @@ fn serve_session_launches() {
 
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_plain_file_signs_in_without_the_clients_settings() {
-        let connection: rdp::VmConnection = serde_json::from_value(serde_json::json!({
-            "userName": r".\hh-owner",
-            "password": "secret",
-            "address": "192.168.0.50",
-            "port": 3389,
-        }))
-        .unwrap();
-        let file = plain_file(&connection);
-
-        assert!(file.starts_with("full address:s:192.168.0.50:3389\r\n"));
-        assert!(file.contains("prompt for credentials:i:0"));
-        assert!(!file.contains("dynamic resolution"));
-        assert!(!file.contains("secret"));
-    }
 
     #[test]
     fn a_request_carries_the_password_only_protected() {

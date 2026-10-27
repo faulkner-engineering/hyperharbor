@@ -145,10 +145,10 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   folder; passwords cross it only protected with DPAPI for the account. Checks: DPAPI data and Brave's key open after
   a reconnect and after a VM restart (each with a rotated password); hha- is ready for UAC and the passphrase works
   only while a window is open; http and https open in Brave; Edge does not start at sign-in; the session window's
-  title; a windowed session follows its window's size (also measured with a minimal .rdp file, for comparison).
+  title.
   Scripts run in the user's session through a scheduled task with an interactive principal. Every check runs, and
   the test fails at the end with all failures; the log is %TEMP%\hyperharbor-session-progress.log.
-  Needs: an active desktop on this machine (stay connected; mstsc does not draw or resize otherwise), and RDP trust set
+  Needs: an active desktop on this machine (stay connected; mstsc does not draw otherwise), and RDP trust set
   up for this account in the client (otherwise mstsc stops at its security dialog). The test answers Yes to the
   certificate warning for the VM itself. Not covered: the UAC prompt's own tile (it is on the secure desktop) and
   console window titles.
