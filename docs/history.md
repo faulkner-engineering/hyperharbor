@@ -527,6 +527,9 @@ verified, and what was found along the way. User-facing changes per release are 
      account's password, which loses its DPAPI data (proven in the guest: a change kept protected data, a reset did
      not). The user agreed to store the current password (VmAccountPasswordStore, DPAPI) and change it instead;
      CLAUDE.md's rule changed with it. PasswordChangeLiveTests checks the real script (change, wrong password resets).
+   - UAC account (the user: "it would be nice if it was always just there"): hha-<username> stays enabled with a random
+     password between windows (LockAdminAsync replaces DisableAdminAsync), and Connect creates or enables it in the
+     background (EnsureListedAsync). Verified with GuestAdminLiveTests on HyperHarbor-Test.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

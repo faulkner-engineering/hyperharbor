@@ -319,7 +319,7 @@ export const openGuestAdmin = (key: string, vmId: string) => invoke<GuestAdminWi
 /** Whether an administrator window is open in the VM, without the passphrase. */
 export const getGuestAdmin = (key: string, vmId: string) => invoke<GuestAdminStatus>("get_guest_admin", { key, vmId });
 
-/** Ends the administrator window now; the host disables the account. */
+/** Ends the administrator window now; the host replaces the passphrase with a random password. */
 export const closeGuestAdmin = (key: string, vmId: string) => invoke<void>("close_guest_admin", { key, vmId });
 
 /** What the always-on-top passphrase card shows. Mirrors OverlayCard in src-tauri/src/guest_admin_overlay.rs. */

@@ -19,9 +19,9 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   by a one-time Provision VM flow. On each connect the host rotates its password via PowerShell Direct
   (serialized per VM and User, short reuse window), returns it to the requesting paired Device over mTLS,
   and the client removes it from the OS credential store after launching RDP. For UAC prompts inside a Windows
-  VM, each User also has a local administrator account hha-<username>, disabled except during a short
-  administrator window (GuestAdminService; elevated to open, one-time passphrase in host memory only, a random
-  password and disabled again when it ends). Design and the planned guest agent: [guest-elevation.md](guest-elevation.md).
+  VM, each User also has a local administrator account hha-<username>, always listed in UAC prompts
+  but usable only during a short administrator window (GuestAdminService; elevated to open, one-time passphrase in
+  host memory only, a random password nobody keeps otherwise). Design and the planned guest agent: [guest-elevation.md](guest-elevation.md).
 - Wake-on-LAN: readiness check with auto-fix, Test Wake, relay mode later
 - VM lifecycle: create from an ISO in the host's library, change compute settings, delete; long operations
   are jobs the client polls. Power actions, lifecycle jobs, and settings changes take a per-VM lock.

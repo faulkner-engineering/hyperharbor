@@ -46,6 +46,11 @@ API 1.36.0.
   which file and how to fix it instead of exiting without a message. The installed service is not affected.
 
 ### Changed
+- Your administrator account in a Windows VM (hha-<username>) is now always offered in User Account Control prompts,
+  so you no longer have to cancel a prompt, open Administrator access in the client, and start again: open
+  Administrator access while the prompt waits, then type the passphrase. Between windows the account keeps a random
+  password nobody knows, and it still cannot sign in over the network or Remote Desktop. It is created at the next
+  Connect for VMs set up earlier.
 - Remote Desktop windows the client opens are titled with the VM's name instead of only its IP address, so several
   sessions are easy to tell apart in the taskbar ("Dev Box - 192.168.0.50 - Remote Desktop Connection"). Console
   windows read "<VM name> (console)", and a maintenance session on the host uses the host's name.

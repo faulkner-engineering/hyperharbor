@@ -15,7 +15,7 @@ namespace HyperHarbor.Host.Tests.Provisioning;
 /// credential for. The credential and the VM's setup are read from the host's data folder (run elevated), or from
 /// HH_GUEST_ADMIN_DATA (for example the live harness's folder). Window records go to a temporary folder, so the host's
 /// own guest-admin.json is not touched. It creates the User's hha- account in the guest on first run and leaves it
-/// there, disabled. HH_GUEST_ADMIN_LIVE=1 and HH_LIVE_GUEST_VM=&lt;VM id&gt;. About a minute.
+/// there, enabled with a random password (so User Account Control keeps offering it). HH_GUEST_ADMIN_LIVE=1 and HH_LIVE_GUEST_VM=&lt;VM id&gt;. About a minute.
 /// </summary>
 public sealed class GuestAdminLiveTests(ITestOutputHelper output) : IDisposable
 {
@@ -24,7 +24,7 @@ public sealed class GuestAdminLiveTests(ITestOutputHelper output) : IDisposable
     public void Dispose() => Directory.Delete(_records, recursive: true);
 
     [EnvironmentFact("HH_GUEST_ADMIN_LIVE", "HH_LIVE_GUEST_VM")]
-    public async Task Live_OpenEnablesAnAdministratorOnly_CloseDisablesIt()
+    public async Task Live_OpenEnablesAnAdministratorOnly_CloseLocksIt()
     {
         var vmId = Guid.Parse(Environment.GetEnvironmentVariable("HH_LIVE_GUEST_VM")!);
         var data = Environment.GetEnvironmentVariable("HH_GUEST_ADMIN_DATA") is { Length: > 0 } folder ? folder : HostIdentityStore.DefaultDataDirectory;
@@ -65,9 +65,11 @@ public sealed class GuestAdminLiveTests(ITestOutputHelper output) : IDisposable
 
         var closed = await guest.InspectAdminAsync(target, admin, window.AccountName, CancellationToken.None);
         output.WriteLine($"After close: {closed}");
-        Assert.True(closed.Exists);
-        Assert.False(closed.Enabled);
-        Assert.True(closed.InAdministrators);
+        Assert.True(closed.IsReadyForElevation);
+
+        // Already listed: nothing to change, so no guest write.
+        await service.EnsureListedAsync(vmId, userId, CancellationToken.None);
+        Assert.True((await guest.InspectAdminAsync(target, admin, window.AccountName, CancellationToken.None)).IsReadyForElevation);
     }
 
     private sealed class NullAuditLog : IAuditLog

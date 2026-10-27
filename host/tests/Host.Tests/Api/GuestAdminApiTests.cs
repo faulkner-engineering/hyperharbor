@@ -80,7 +80,7 @@ public sealed class GuestAdminApiTests : IDisposable
         // Ending a window needs no elevation: it only takes access away.
         var close = await _client.DeleteAsync(Route);
         Assert.Equal(HttpStatusCode.NoContent, close.StatusCode);
-        Assert.Single(_host.Guest.AdminDisabled);
+        Assert.Single(_host.Guest.AdminLocked);
         var closed = (await _client.GetFromJsonAsync<JsonObject>(Route))!;
         Assert.False((bool?)closed["open"]);
         Assert.Null((string?)closed["expiresAt"]);
@@ -174,7 +174,7 @@ public sealed class GuestAdminApiTests : IDisposable
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         var secrets = _host.Guest.AdminEnabled.Select(enabled => enabled.Password)
-            .Concat(_host.Guest.AdminDisabled.Select(disabled => disabled.Password))
+            .Concat(_host.Guest.AdminLocked.Select(disabled => disabled.Password))
             .Append("Adm1n!")
             .ToArray();
         Assert.All(secrets, secret => Assert.DoesNotContain(secret, body, StringComparison.Ordinal));

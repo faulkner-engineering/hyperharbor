@@ -70,9 +70,9 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
         return ParseAdminState(result);
     }
 
-    public async Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
+    public async Task LockAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
     {
-        await RunAdminAsync(new { operation = "disableAdmin", vmId = target.VmId, admin.UserName, admin.Password, accountName, accountPassword = password }, cancellationToken);
+        await RunAdminAsync(new { operation = "lockAdmin", vmId = target.VmId, admin.UserName, admin.Password, accountName, accountPassword = password }, cancellationToken);
     }
 
     internal static GuestAdminAccountState ParseAdminState(JsonNode? result) => new(
@@ -256,12 +256,13 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
             Enable-LocalUser -Name $name
         }
 
-        $disable = {
+        # Ends a window: a new random password, and the account stays enabled so UAC keeps offering it.
+        $lock = {
             param($name, [securestring]$password)
             $ErrorActionPreference = 'Stop'
             if (-not (Get-LocalUser -Name $name -ErrorAction SilentlyContinue)) { return }
-            Disable-LocalUser -Name $name
             Set-LocalUser -Name $name -Password $password
+            Enable-LocalUser -Name $name
         }
 
         try {
@@ -271,8 +272,8 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
                     Invoke-Command -Session $session -ScriptBlock $enable -ArgumentList $request.accountName, $request.fullName, (Secure $request.accountPassword), $lsa
                     $result = Invoke-Command -Session $session -ScriptBlock $inspect -ArgumentList $request.accountName, $lsa
                 }
-                'disableAdmin' {
-                    Invoke-Command -Session $session -ScriptBlock $disable -ArgumentList $request.accountName, (Secure $request.accountPassword)
+                'lockAdmin' {
+                    Invoke-Command -Session $session -ScriptBlock $lock -ArgumentList $request.accountName, (Secure $request.accountPassword)
                     $result = $null
                 }
                 default { throw "Unknown operation $($request.operation)." }

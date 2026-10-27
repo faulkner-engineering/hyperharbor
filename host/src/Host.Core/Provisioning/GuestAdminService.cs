@@ -33,9 +33,10 @@ public static class GuestAdminAudit
 /// <summary>
 /// Short administrator windows inside Windows guests. Each User has a local administrator account in each VM
 /// (<see cref="GuestAdminAccountName"/>), created on first use through PowerShell Direct with the VM's stored
-/// administrator credential and disabled whenever no window is open. Opening a window enables it with a one-time
-/// passphrase for the User to type into a User Account Control prompt; closing it (expiry, the User, the VM stopping,
-/// or a host restart) sets a random password and disables it.
+/// administrator credential, and kept enabled with a random password nobody knows while no window is open, so User
+/// Account Control prompts always offer it (<see cref="EnsureListedAsync"/>, after each Connect). Opening a window sets
+/// a one-time passphrase for the User to type into the prompt; closing it (expiry, the User, the VM stopping, or a host
+/// restart) sets a new random password. It cannot sign in over the network or Remote Desktop.
 /// <para>
 /// Windows for the same VM and User are serialized, and opening one while it is open returns the same passphrase.
 /// The passphrase lives only in memory, as a char array zeroed when the window ends; it is never logged or persisted.
@@ -87,7 +88,7 @@ public sealed class GuestAdminService : IDisposable
         _time = time;
         _logger = logger;
 
-        // Windows an earlier run left open: their passphrases ended with that process, so each account is disabled
+        // Windows an earlier run left open: their passphrases ended with that process, so each account is locked
         // as soon as its guest answers.
         foreach (var record in _store.List().Where(record => !record.ClosePending))
         {
@@ -174,8 +175,8 @@ public sealed class GuestAdminService : IDisposable
             var expiresAt = now + TimeSpan.FromMinutes(_store.WindowMinutes);
             var record = new GuestAdminRecord(vmId, userId, accountName, expiresAt, requester.DeviceId, requester.DeviceName);
 
-            // Recorded before the guest call, so an account this process enables and never gets to disable is
-            // disabled after a restart.
+            // Recorded before the guest call, so a passphrase this process sets and never gets to replace is
+            // replaced after a restart.
             _store.Save(record);
             var passphrase = PassphraseGenerator.Generate(accountName, fullName);
             GuestAdminAccountState state;
@@ -223,10 +224,10 @@ public sealed class GuestAdminService : IDisposable
         }
     }
 
-    /// <summary>Ends the open window now: forgets the passphrase, then disables the account in the guest.</summary>
+    /// <summary>Ends the open window now: forgets the passphrase, then replaces it in the guest.</summary>
     /// <returns>False when no window is open.</returns>
     /// <exception cref="VmNotFoundException">No VM has this ID.</exception>
-    /// <exception cref="GuestUnavailableException">The guest could not be reached; the account is disabled once it answers.</exception>
+    /// <exception cref="GuestUnavailableException">The guest could not be reached; the passphrase is replaced once it answers.</exception>
     /// <exception cref="GuestCredentialRejectedException">The guest rejected the stored administrator credential.</exception>
     /// <exception cref="GuestOperationException">The guest command failed; it is tried again later.</exception>
     public async Task<bool> CloseAsync(Guid vmId, Guid userId, CancellationToken cancellationToken)
@@ -249,11 +250,11 @@ public sealed class GuestAdminService : IDisposable
             var record = MarkPending(vmId, userId, GuestAdminCloseReason.User);
             if (record is null || vm.State != VmState.Running)
             {
-                // Nothing in the guest to reach now; the sweep disables the account when the VM runs again.
+                // Nothing in the guest to reach now; the sweep replaces the passphrase when the VM runs again.
                 return true;
             }
 
-            await DisableAsync(record, cancellationToken);
+            await LockAsync(record, cancellationToken);
             _store.Remove(vmId, userId);
             _logger.LogInformation("Closed the administrator window for {Account} on {Name} ({VmId}) at the User's request.", record.AccountName, vm.Name, vmId);
             return true;
@@ -265,7 +266,7 @@ public sealed class GuestAdminService : IDisposable
     }
 
     /// <summary>
-    /// Ends windows that expired or whose VM stopped, and disables the accounts of ended windows whose guests answer
+    /// Ends windows that expired or whose VM stopped, and replaces the passphrases of ended windows whose guests answer
     /// again. The host service calls it at startup and every <see cref="SweepInterval"/>.
     /// </summary>
     public async Task SweepAsync(CancellationToken cancellationToken)
@@ -279,7 +280,7 @@ public sealed class GuestAdminService : IDisposable
                     await EndIfStaleAsync(record, entry, cancellationToken);
                 }
 
-                await TryDisableAsync(record.VmId, record.UserId, cancellationToken);
+                await TryLockAsync(record.VmId, record.UserId, cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -371,8 +372,8 @@ public sealed class GuestAdminService : IDisposable
         }
     }
 
-    /// <summary>Disables the account of an ended window when its guest runs; otherwise leaves it for the next sweep.</summary>
-    private async Task TryDisableAsync(Guid vmId, Guid userId, CancellationToken cancellationToken)
+    /// <summary>Locks the account of an ended window when its guest runs; otherwise leaves it for the next sweep.</summary>
+    private async Task TryLockAsync(Guid vmId, Guid userId, CancellationToken cancellationToken)
     {
         var entry = _entries.GetOrAdd((vmId, userId), _ => new Entry());
         await entry.Gate.WaitAsync(cancellationToken);
@@ -398,7 +399,7 @@ public sealed class GuestAdminService : IDisposable
 
             try
             {
-                await DisableAsync(record, cancellationToken);
+                await LockAsync(record, cancellationToken);
             }
             catch (GuestUnavailableException)
             {
@@ -407,12 +408,12 @@ public sealed class GuestAdminService : IDisposable
             }
             catch (Exception ex) when (GuestErrors.IsGuestError(ex))
             {
-                _logger.LogWarning("Could not disable {Account} on {Name} ({VmId}); trying again later. {Error}", record.AccountName, vm.Name, vmId, ex.Message);
+                _logger.LogWarning("Could not end the window for {Account} on {Name} ({VmId}); trying again later. {Error}", record.AccountName, vm.Name, vmId, ex.Message);
                 return;
             }
 
             _store.Remove(vmId, userId);
-            _logger.LogInformation("Disabled {Account} on {Name} ({VmId}) after its administrator window ended ({Reason}).", record.AccountName, vm.Name, vmId, record.CloseReason);
+            _logger.LogInformation("Locked {Account} on {Name} ({VmId}) after its administrator window ended ({Reason}).", record.AccountName, vm.Name, vmId, record.CloseReason);
             WriteAudit(record, vm.Name);
         }
         finally
@@ -421,20 +422,20 @@ public sealed class GuestAdminService : IDisposable
         }
     }
 
-    /// <summary>Sets a random password and disables the account. Throws the sanitized guest error.</summary>
-    private async Task DisableAsync(GuestAdminRecord record, CancellationToken cancellationToken)
+    /// <summary>Sets a random password, leaving the account enabled. Throws the sanitized guest error.</summary>
+    private async Task LockAsync(GuestAdminRecord record, CancellationToken cancellationToken)
     {
         var admin = _credentials.Find(record.VmId);
         var account = _provisioning.Find(record.VmId, record.UserId);
         if (admin is null || account is null)
         {
-            throw new GuestOperationException($"The VM no longer has a stored administrator credential, so {record.AccountName} cannot be disabled. Set the VM up again.");
+            throw new GuestOperationException($"The VM no longer has a stored administrator credential, so the window for {record.AccountName} cannot be ended. Set the VM up again.");
         }
 
         var password = PasswordGenerator.Generate();
         try
         {
-            await _guest.DisableAdminAsync(account.ToTarget(null), admin, record.AccountName, password, cancellationToken);
+            await _guest.LockAdminAsync(account.ToTarget(null), admin, record.AccountName, password, cancellationToken);
         }
         catch (Exception ex) when (GuestErrors.IsGuestError(ex))
         {
@@ -455,7 +456,68 @@ public sealed class GuestAdminService : IDisposable
         return record;
     }
 
-    /// <summary>Under the entry's gate: marks a window that failed to open as ended and disables it in the background.</summary>
+    /// <summary>
+    /// Makes sure the User's administrator account is in the guest and enabled, so User Account Control prompts offer it
+    /// before any window opens. A missing or disabled account (VMs set up before 0.2.4 disabled it between windows) is
+    /// created or enabled with a random password nobody keeps. Does nothing for Linux guests, VMs not set up for the
+    /// User, or while a window is open; guest errors are logged, since this only ever runs after something else worked.
+    /// </summary>
+    public async Task EnsureListedAsync(Guid vmId, Guid userId, CancellationToken cancellationToken)
+    {
+        if (_provisioning.Find(vmId, userId) is not { } account
+            || account.GuestOs == GuestOsFamily.Linux
+            || _credentials.Find(vmId) is not { } admin
+            || _users.Find(userId) is not { } user)
+        {
+            return;
+        }
+
+        var accountName = GuestAdminAccountName.For(user.Name);
+        var target = account.ToTarget(null);
+        var entry = _entries.GetOrAdd((vmId, userId), _ => new Entry());
+        await entry.Gate.WaitAsync(cancellationToken);
+        var password = PasswordGenerator.Generate();
+        try
+        {
+            if (entry.IsOpen(_time.GetUtcNow()) || (await _guest.InspectAdminAsync(target, admin, accountName, cancellationToken)).IsReadyForElevation)
+            {
+                return;
+            }
+
+            await _guest.EnableAdminAsync(target, admin, accountName, GuestAdminAccountName.FullName(user.Name), password, cancellationToken);
+            _logger.LogInformation("Made {Account} available to User Account Control prompts on VM {VmId}.", accountName, vmId);
+        }
+        catch (Exception ex) when (GuestErrors.IsGuestError(ex))
+        {
+            _logger.LogWarning("Could not make {Account} available on VM {VmId}: {Error}", accountName, vmId, GuestErrors.Clean(ex.Message, admin.Password, password));
+        }
+        finally
+        {
+            entry.Gate.Release();
+        }
+    }
+
+    /// <summary><see cref="EnsureListedAsync"/> in the background, for a caller (Connect) that must not wait for it.</summary>
+    public void EnsureListedLater(Guid vmId, Guid userId)
+    {
+        var task = Task.Run(async () =>
+        {
+            try
+            {
+                await EnsureListedAsync(vmId, userId, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not make the administrator account available on VM {VmId}.", vmId);
+            }
+        });
+        lock (_backgroundGate)
+        {
+            _background = Task.WhenAll(_background, task);
+        }
+    }
+
+    /// <summary>Under the entry's gate: marks a window that failed to open as ended and locks it in the background.</summary>
     private void CloseLater(GuestAdminRecord record, string reason)
     {
         _store.Save(record with { ClosePending = true, CloseReason = reason });
@@ -468,11 +530,11 @@ public sealed class GuestAdminService : IDisposable
         {
             try
             {
-                await TryDisableAsync(vmId, userId, CancellationToken.None);
+                await TryLockAsync(vmId, userId, CancellationToken.None);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Could not disable the administrator account on VM {VmId}; the next check tries again.", vmId);
+                _logger.LogWarning(ex, "Could not lock the administrator account on VM {VmId}; the next check tries again.", vmId);
             }
         });
         lock (_backgroundGate)
@@ -500,7 +562,7 @@ public sealed class GuestAdminService : IDisposable
         }
         catch (AuditUnavailableException ex)
         {
-            _logger.LogError(ex, "Could not write the audit entry for disabling {Account} on VM {VmId}.", record.AccountName, record.VmId);
+            _logger.LogError(ex, "Could not write the audit entry for locking {Account} on VM {VmId}.", record.AccountName, record.VmId);
         }
     }
 

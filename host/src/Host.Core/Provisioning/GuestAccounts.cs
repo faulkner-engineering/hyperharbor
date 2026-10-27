@@ -101,8 +101,11 @@ public interface IGuestAccountManager
         string password,
         CancellationToken cancellationToken);
 
-    /// <summary>Windows only: disables the administrator account and sets its password. Does nothing when it does not exist.</summary>
-    Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken);
+    /// <summary>
+    /// Windows only: ends an administrator window by setting a random password the host forgets. The account stays
+    /// enabled, so User Account Control prompts keep offering it. Does nothing when it does not exist.
+    /// </summary>
+    Task LockAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken);
 }
 
 /// <summary>Sends each call to the manager for the guest's OS family.</summary>
@@ -147,8 +150,8 @@ public sealed class GuestAccountRouter : IGuestAccountManager
         CancellationToken cancellationToken) =>
         For(target).EnableAdminAsync(target, admin, accountName, fullName, password, cancellationToken);
 
-    public Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
-        For(target).DisableAdminAsync(target, admin, accountName, password, cancellationToken);
+    public Task LockAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
+        For(target).LockAdminAsync(target, admin, accountName, password, cancellationToken);
 
     private IGuestAccountManager For(GuestTarget target) => target.Os switch
     {

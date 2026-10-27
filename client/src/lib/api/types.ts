@@ -1120,8 +1120,8 @@ export interface paths {
         /**
          * Get whether an administrator window is open in the VM for the calling User.
          * @description Since 1.35.0. Never returns the passphrase. `closePending` is true when a window ended while the host could
-         *     not reach the guest (the VM stopped, or the host restarted); the host disables the account as soon as the
-         *     guest answers again.
+         *     not reach the guest (the VM stopped, or the host restarted); the host replaces the passphrase with a random
+         *     password as soon as the guest answers again.
          */
         get: operations["getGuestAdmin"];
         put?: never;
@@ -1131,9 +1131,10 @@ export interface paths {
          *     administrator account in the guest, for example `hha-owner`, to type into a User Account Control prompt.
          *     The host creates the account on first use through PowerShell Direct with the VM's stored administrator
          *     credential: a member of Administrators, not of Remote Desktop Users, denied network and Remote Desktop
-         *     sign-in, and disabled whenever no window is open. Opening a window enables it and sets the passphrase;
-         *     the window ends at `expiresAt` (5 minutes by default, see `PUT /host/guest-admin/settings`), when the
-         *     User ends it, or when the VM stops, and the host then sets a random password and disables the account.
+         *     sign-in. Since 1.36.0 it stays enabled with a random password between windows, so User Account Control
+         *     prompts always offer it (before that it was disabled). Opening a window sets the passphrase; the window
+         *     ends at `expiresAt` (5 minutes by default, see `PUT /host/guest-admin/settings`), when the User ends it, or
+         *     when the VM stops, and the host then sets a random password.
          *
          *     Calling this again while a window is open returns the same passphrase and expiry. The passphrase is kept
          *     only in host memory and never logged; clients must not persist it. The response is sent with
@@ -1142,9 +1143,9 @@ export interface paths {
         post: operations["openGuestAdmin"];
         /**
          * End the calling User's administrator window in the VM now.
-         * @description Since 1.35.0. Sets a random password on the account and disables it. When the guest cannot be reached the
-         *     host forgets the passphrase anyway, answers with the guest error, and disables the account as soon as the
-         *     guest answers again (`closePending` in `GET`).
+         * @description Since 1.35.0. Sets a random password on the account (since 1.36.0 it stays enabled). When the guest cannot
+         *     be reached the host forgets the passphrase anyway, answers with the guest error, and sets the random password
+         *     as soon as the guest answers again (`closePending` in `GET`).
          */
         delete: operations["closeGuestAdmin"];
         options?: never;

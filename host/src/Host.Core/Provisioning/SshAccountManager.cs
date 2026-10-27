@@ -76,7 +76,7 @@ public sealed class SshAccountManager : IGuestAccountManager
         CancellationToken cancellationToken) =>
         throw AdminUnsupported();
 
-    public Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
+    public Task LockAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
         throw AdminUnsupported();
 
     private static GuestAccountConflictException AdminUnsupported() => new("Administrator windows are available for Windows guests only.");

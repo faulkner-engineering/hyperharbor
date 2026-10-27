@@ -106,7 +106,7 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
 
     public List<(Guid VmId, string Account, string Password)> AdminEnabled { get; } = [];
 
-    public List<(Guid VmId, string Account, string Password)> AdminDisabled { get; } = [];
+    public List<(Guid VmId, string Account, string Password)> AdminLocked { get; } = [];
 
     /// <summary>Thrown by the administrator calls only, when set (the other calls keep working).</summary>
     public Exception? AdminFailure { get; set; }
@@ -146,17 +146,13 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
         }
     }
 
-    public async Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
+    public async Task LockAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
     {
         await EnterAdmin(target, admin, password);
         lock (_gate)
         {
-            if (AdminAccounts.TryGetValue((target.VmId, accountName), out var state))
-            {
-                AdminAccounts[(target.VmId, accountName)] = state with { Enabled = false };
-            }
-
-            AdminDisabled.Add((target.VmId, accountName, password));
+            // Like the guest: a new password, and the account stays enabled so UAC keeps offering it.
+            AdminLocked.Add((target.VmId, accountName, password));
         }
     }
 

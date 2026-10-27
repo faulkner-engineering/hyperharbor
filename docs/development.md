@@ -121,7 +121,7 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   Windows VM that HyperHarbor set up (its credential and setup come from the host's data folder, so run elevated, or
   from HH_GUEST_ADMIN_DATA, for example the harness folder). It opens a window, checks over PowerShell Direct that
   hha-owner is enabled, in Administrators, not in Remote Desktop Users, and denied network and Remote Desktop sign-in,
-  closes it, and checks it is disabled. The account stays in the VM, disabled. A throwaway VM for it:
+  closes it, and checks it is still ready for UAC (enabled, with a new random password). The account stays in the VM. A throwaway VM for it:
   MachineProfileLiveTests with HH_MACHINE_KEEP=1 (HyperHarbor-Test, kept), then HH_GUEST_ADMIN_DATA=%LOCALAPPDATA%\HyperHarborHarness.
 - The UAC prompt itself is checked by hand (after a host and client with API 1.35.0 are running):
   1. Connect to a set-up Windows VM, and in the client choose the VM's menu > Administrator access…; enter the admin
@@ -130,8 +130,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   2. In the VM, start something that needs elevation (right-click Terminal > Run as administrator, or open
      Computer Management). The UAC prompt asks for credentials: choose More choices, pick "HyperHarbor administrator
      for <username>", type the passphrase with its hyphens, and choose Yes. The program starts elevated.
-  3. Choose Done in the client. Start another elevated program in the VM: the HyperHarbor account is no longer
-     offered (it is disabled), and typing hha-<username> with the old passphrase fails.
+  3. Choose Done in the client. Start another elevated program in the VM: the HyperHarbor account is still offered
+     (since 0.2.4 it stays enabled), and typing the old passphrase fails.
   4. Open a window again and let it run out (set 2 minutes with PUT /host/guest-admin/settings to wait less): the
      dialog says it ended, and step 3's checks hold. Also check that `mstsc` to the VM as hha-<username> with the
      passphrase is refused while the window is open (SeDenyRemoteInteractiveLogonRight), and so is
