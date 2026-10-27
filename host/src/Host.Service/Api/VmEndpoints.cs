@@ -59,6 +59,12 @@ public static class VmEndpoints
             .Audited<VmDeleteRequest>(request => $"deleteDisks={request.DeleteDisks}, deleteCheckpoints={request.DeleteCheckpoints}")
             .RequireElevation();
 
+        vms.MapGet("/{vmId:guid}/disks", ListDisksAsync).WithName("listVmDisks");
+        vms.MapPost("/{vmId:guid}/disks/grow", GrowDiskAsync).WithName("growVmDisk")
+            .Audited<GrowVmDiskRequest>(request =>
+                $"path={request.Path}, sizeGb={request.SizeGb}, extendPartition={request.ExtendPartition}, shutDownToApply={request.ShutDownToApply}")
+            .RequireElevation();
+
         vms.MapPost("/{vmId:guid}/disks/export", ExportDisksAsync).WithName("exportVmDisks")
             .Audited<ExportDisksRequest>(request => $"destination={request.DestinationFolder ?? "disk export folder"}")
             .RequireElevation();
@@ -177,6 +183,21 @@ public static class VmEndpoints
         CancellationToken cancellationToken)
     {
         var job = await deletion.StartAsync(vmId, context.User.UserId(), request, context.CompletionAuditor(), cancellationToken);
+        context.Audit()!.JobId = job.Id;
+        return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
+    }
+
+    private static async Task<Ok<VmDiskList>> ListDisksAsync(Guid vmId, VmDiskService disks, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await disks.ListAsync(vmId, cancellationToken));
+
+    private static async Task<Accepted<VmJob>> GrowDiskAsync(
+        Guid vmId,
+        GrowVmDiskRequest request,
+        VmDiskService disks,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var job = await disks.GrowAsync(vmId, context.User.UserId(), request, context.CompletionAuditor(), cancellationToken);
         context.Audit()!.JobId = job.Id;
         return TypedResults.Accepted(JobEndpoints.Location(job.Id), job.ToContract());
     }

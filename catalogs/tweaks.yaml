@@ -165,6 +165,40 @@
       type: dword
       value: "1"
       default: null
+- id: system.hideEdge
+  name: Keep Microsoft Edge out of the way
+  category: system
+  note: >-
+    Windows does not let Edge be uninstalled outside the European Economic Area, and other apps need its WebView2
+    runtime. This stops Edge starting with Windows, its first-run pages, asking to be the default browser, and new
+    desktop shortcuts when it updates. Pair it with another browser made the default. Its taskbar pin and an
+    existing desktop shortcut stay.
+  values:
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Edge
+      name: StartupBoostEnabled
+      type: dword
+      value: "0"
+      default: null
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Edge
+      name: BackgroundModeEnabled
+      type: dword
+      value: "0"
+      default: null
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Edge
+      name: HideFirstRunExperience
+      type: dword
+      value: "1"
+      default: null
+    - key: HKLM\SOFTWARE\Policies\Microsoft\Edge
+      name: DefaultBrowserSettingEnabled
+      type: dword
+      value: "0"
+      default: null
+    - key: HKLM\SOFTWARE\Policies\Microsoft\EdgeUpdate
+      name: CreateDesktopShortcutDefault
+      type: dword
+      value: "0"
+      default: null
 - id: start.disableSearchHighlights
   name: Turn off search highlights
   category: start

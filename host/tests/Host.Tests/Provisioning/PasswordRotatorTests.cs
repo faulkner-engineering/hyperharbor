@@ -15,13 +15,15 @@ public sealed class PasswordRotatorTests : IDisposable
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);
     private readonly FakeGuestAccountManager _guest = new();
     private readonly VmCredentialStore _credentials;
+    private readonly VmAccountPasswordStore _passwords;
     private readonly PasswordRotator _rotator;
 
     public PasswordRotatorTests()
     {
         _credentials = new VmCredentialStore(_directory);
+        _passwords = new VmAccountPasswordStore(_directory);
         _credentials.Save(VmId, new GuestCredential("Administrator", "Adm1n!"));
-        _rotator = new PasswordRotator(_guest, _credentials, _time, TimeSpan.FromSeconds(60), NullLogger<PasswordRotator>.Instance);
+        _rotator = new PasswordRotator(_guest, _credentials, _passwords, _time, TimeSpan.FromSeconds(60), NullLogger<PasswordRotator>.Instance);
     }
 
     public void Dispose()
@@ -42,6 +44,59 @@ public sealed class PasswordRotatorTests : IDisposable
         Assert.Equal((VmId, "hh-owner", result.Password), (vmId, account, password));
         Assert.Equal(_time.GetUtcNow() + TimeSpan.FromSeconds(60), result.ExpiresAt);
         Assert.Equal(new GuestCredential("Administrator", "Adm1n!"), Assert.Single(_guest.AdminCredentialsUsed));
+    }
+
+    [Fact]
+    public async Task WithAStoredPassword_ChangesIt_AndStoresTheNewOne()
+    {
+        _passwords.Save(VmId, UserId, "previous-password");
+        _guest.AcceptedCurrentPasswords.Add("previous-password");
+
+        var result = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+
+        Assert.Equal((VmId, "hh-owner", "previous-password", result.Password), Assert.Single(_guest.PasswordsChanged));
+        Assert.Equal(result.Password, _passwords.Find(VmId, UserId));
+    }
+
+    [Fact]
+    public async Task WithoutAStoredPassword_Resets_ThenLaterRotationsChange()
+    {
+        var first = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+        Assert.Empty(_guest.PasswordsChanged);
+        Assert.Equal(first.Password, _passwords.Find(VmId, UserId));
+        _guest.AcceptedCurrentPasswords.Add(first.Password);
+
+        _time.Advance(TimeSpan.FromSeconds(60));
+        var second = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+
+        Assert.Equal((VmId, "hh-owner", first.Password, second.Password), Assert.Single(_guest.PasswordsChanged));
+    }
+
+    [Fact]
+    public async Task AStoredPasswordTheGuestRejects_IsReplacedByTheReset()
+    {
+        _passwords.Save(VmId, UserId, "stale-password");
+
+        var result = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+
+        Assert.Single(_guest.PasswordsChanged);
+        Assert.Equal(result.Password, _passwords.Find(VmId, UserId));
+    }
+
+    [Fact]
+    public void ThePasswordStore_KeepsEachUser_AndForgetsAVm()
+    {
+        var other = Guid.NewGuid();
+        _passwords.Save(VmId, UserId, "one");
+        _passwords.Save(VmId, other, "two");
+        _passwords.Save(Guid.NewGuid(), UserId, "three");
+
+        Assert.Equal("two", new VmAccountPasswordStore(_directory).Find(VmId, other));
+        _passwords.RemoveVm(VmId);
+        Assert.Null(_passwords.Find(VmId, UserId));
+        Assert.Null(_passwords.Find(VmId, other));
+        Assert.Contains("vm-account-passwords.json.protected", Directory.GetFiles(_directory).Select(Path.GetFileName));
+        Assert.DoesNotContain("three", File.ReadAllText(Path.Combine(_directory, "vm-account-passwords.json.protected")), StringComparison.Ordinal);
     }
 
     [Fact]

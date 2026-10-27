@@ -30,6 +30,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   It starts the real service on a free loopback port, so it can run while a packaged host is running.
 - Live lifecycle (creates, changes, and deletes HyperHarbor-Test; ask first):
   HH_LIFECYCLE_LIVE=1 dotnet test HyperHarbor.sln --filter LifecycleLiveTests
+- Live disk growth (a 1 GB VHDX in a temporary folder, no VM):
+  HH_DISK_GROW_LIVE=1 dotnet test HyperHarbor.sln --filter DiskGrowLiveTests
 - Live Performance mode (same VM; GPU partition, storage move, export; ask first):
   HH_PERFORMANCE_LIVE=1 dotnet test HyperHarbor.sln --filter PerformanceLiveTests
 
@@ -55,10 +57,12 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - The script refuses to run while anything is running from dist/ (Windows locks the exe).
 - After `HyperHarbor.Host.exe uninstall` (data kept), %ProgramData%\HyperHarbor keeps the installed service's ACL
   (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts dies on data-format.json
-  (UnauthorizedAccessException, in the Application event log only). Start dist\host\HyperHarbor.Host.exe run elevated
+  (it now says which file it cannot open and exits with code 3). Start dist\host\HyperHarbor.Host.exe run elevated
   instead (seen on the laptop 2026-10-21); the tray from Start-HyperHarbor.ps1 connects to it.
 - dist\host\Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
-  Hyper-V Administrators membership), then starts "HyperHarbor.Host.exe run" and "--tray". Builds are unsigned.
+  Hyper-V Administrators membership, console account), then starts "HyperHarbor.Host.exe run" and "--tray". It asks
+  for elevation again when the current account cannot open a file in the data folder, and setup restores access
+  (--setup-console --for-user). Builds are unsigned.
 - Verified on 2026-10-02: packaged host plus client paired and listed VMs across machines.
 - package.ps1 also writes dist\latest.json with "HyperHarbor.Host.exe write-update-manifest" (the code that
   reads manifests writes it; a prerelease version goes to the beta channel).
@@ -117,7 +121,7 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   Windows VM that HyperHarbor set up (its credential and setup come from the host's data folder, so run elevated, or
   from HH_GUEST_ADMIN_DATA, for example the harness folder). It opens a window, checks over PowerShell Direct that
   hha-owner is enabled, in Administrators, not in Remote Desktop Users, and denied network and Remote Desktop sign-in,
-  closes it, and checks it is disabled. The account stays in the VM, disabled. A throwaway VM for it:
+  closes it, and checks it is still ready for UAC (enabled, with a new random password). The account stays in the VM. A throwaway VM for it:
   MachineProfileLiveTests with HH_MACHINE_KEEP=1 (HyperHarbor-Test, kept), then HH_GUEST_ADMIN_DATA=%LOCALAPPDATA%\HyperHarborHarness.
 - The UAC prompt itself is checked by hand (after a host and client with API 1.35.0 are running):
   1. Connect to a set-up Windows VM, and in the client choose the VM's menu > Administrator access…; enter the admin
@@ -126,8 +130,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   2. In the VM, start something that needs elevation (right-click Terminal > Run as administrator, or open
      Computer Management). The UAC prompt asks for credentials: choose More choices, pick "HyperHarbor administrator
      for <username>", type the passphrase with its hyphens, and choose Yes. The program starts elevated.
-  3. Choose Done in the client. Start another elevated program in the VM: the HyperHarbor account is no longer
-     offered (it is disabled), and typing hha-<username> with the old passphrase fails.
+  3. Choose Done in the client. Start another elevated program in the VM: the HyperHarbor account is still offered
+     (since 0.2.4 it stays enabled), and typing the old passphrase fails.
   4. Open a window again and let it run out (set 2 minutes with PUT /host/guest-admin/settings to wait less): the
      dialog says it ended, and step 3's checks hold. Also check that `mstsc` to the VM as hha-<username> with the
      passphrase is refused while the window is open (SeDenyRemoteInteractiveLogonRight), and so is

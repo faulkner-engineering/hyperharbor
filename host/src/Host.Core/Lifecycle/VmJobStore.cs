@@ -13,6 +13,7 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// <param name="SetupResult">What an applySetupProfile job did.</param>
 /// <param name="RestoreResult">What a restore job did.</param>
 /// <param name="TransferResult">What a transfer job did.</param>
+/// <param name="DiskGrowResult">What a growDisk job did.</param>
 public sealed record VmJobSnapshot(
     Guid Id,
     VmJobKind Kind,
@@ -27,7 +28,8 @@ public sealed record VmJobSnapshot(
     string? ErrorDetail,
     Shared.Contracts.Unattend.SetupProfileResult? SetupResult = null,
     Shared.Contracts.Backup.RestoreResult? RestoreResult = null,
-    Shared.Contracts.Transfers.TransferResult? TransferResult = null);
+    Shared.Contracts.Transfers.TransferResult? TransferResult = null,
+    Shared.Contracts.Vms.DiskGrowResult? DiskGrowResult = null);
 
 /// <summary>Handed to a job's work so it can report progress.</summary>
 public sealed class VmJobContext
@@ -64,6 +66,9 @@ public sealed class VmJobContext
 
     /// <summary>Records what a transfer job did, for the job's snapshot.</summary>
     public void ReportTransferResult(Shared.Contracts.Transfers.TransferResult result) => _store.SetTransferResult(_jobId, result);
+
+    /// <summary>Records what a growDisk job did, for the job's snapshot.</summary>
+    public void ReportDiskGrowResult(Shared.Contracts.Vms.DiskGrowResult result) => _store.SetDiskGrowResult(_jobId, result);
 }
 
 /// <summary>
@@ -225,6 +230,7 @@ public sealed class VmJobStore : IDisposable
         VmJobKind.RestoreHostState => "restoring the host state",
         VmJobKind.TransferVm => "transferring the virtual machine",
         VmJobKind.MergeCheckpoints => "merging checkpoints",
+        VmJobKind.GrowDisk => "growing a disk",
         _ => kind.ToString(),
     };
 
@@ -257,6 +263,17 @@ public sealed class VmJobStore : IDisposable
             if (_jobs.TryGetValue(jobId, out var entry))
             {
                 entry.Snapshot = entry.Snapshot with { TransferResult = result, UpdatedAt = _time.GetUtcNow() };
+            }
+        }
+    }
+
+    internal void SetDiskGrowResult(Guid jobId, Shared.Contracts.Vms.DiskGrowResult result)
+    {
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue(jobId, out var entry))
+            {
+                entry.Snapshot = entry.Snapshot with { DiskGrowResult = result, UpdatedAt = _time.GetUtcNow() };
             }
         }
     }

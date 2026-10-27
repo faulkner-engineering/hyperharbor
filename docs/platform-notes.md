@@ -29,6 +29,13 @@ section for an area before changing it: most of these were learned from a failur
 - Pairing secrets (PIN, w, x, y, K) must never be logged or persisted. Change the protocol only via docs/pairing.md,
   regenerate vectors with HH_WRITE_SPAKE2_VECTORS=1, and confirm the Rust tests still pass.
 - Files under %ProgramData%\HyperHarbor that grant access (certificate, paired devices) go through ProtectedFile.
+- ProtectedFile gives full control to SYSTEM, Administrators, and the writing account. An elevated helper runs as
+  whichever administrator approved the UAC prompt; for a standard user that is another account, so before 0.2.4 the
+  users.json and console-accounts.json.protected that Start-HyperHarbor.ps1's setup wrote locked the portable host
+  out (UnauthorizedAccessException on users.json, exit code 82; seen 2026-10-26 with hh-owner approving as
+  hha-owner). The helper now takes --for-user=<SID> from portable callers (never while the service is installed),
+  writes for that account, and first restores its access to existing files (DataDirectoryAccess). A portable host
+  that still cannot open a data file says which and exits with code 3.
 - Other LAN devices need an inbound firewall rule for TCP 48443. The packaged host's start script creates it;
   a dev run from source does not.
 - mDNS on the host goes through DnsServiceRegister (dnsapi.dll). Do not bind UDP 5353 in the host.
@@ -106,11 +113,23 @@ section for an area before changing it: most of these were learned from a failur
   provision or rotation is not repeated.
 - TERMSRV credentials the client writes are Generic, session-scoped, and tagged "HyperHarbor temporary
   credential"; startup cleanup removes only tagged entries (users may have their own TERMSRV entries).
+- An administrator's reset of an account's password (Set-LocalUser -Password, NetUserSetInfo) makes the account's DPAPI
+  data unreadable ("Key not valid for use in specified state"); a change from the old password (ADSI
+  IADsUser.ChangePassword, as any caller, with the account signed out) keeps it. Checked 2026-10-26 on a Windows 11
+  26100 guest with a scheduled task as the account (Start-Process -Credential fails in a PowerShell Direct session with
+  0xC0000142). Chromium-based browsers keep their encryption key with DPAPI and check their settings with it, so a reset
+  logs them out and Brave disables extensions as "changed by another program". PasswordRotator therefore changes the
+  password from the one VmAccountPasswordStore kept, and falls back to a reset (logged with the guest's reason) when that
+  fails; hh- accounts are created with UserMayNotChangePassword, which the change clears first.
 - Secrets: ProvisionVmRequest, VmConnection, GuestCredential, RotatedPassword, and the Rust VmConnection
   override ToString or Debug to hide passwords. Keep it that way for any new type that holds one.
 - Guest error text reaches logs and problem details. ProvisioningService and PasswordRotator pass it
   through GuestErrors.Sanitize (secrets replaced, control characters removed, length capped).
 - The client validates VmConnection (IP address, plain account name) before writing the .rdp file.
+- mstsc titles a session window "<.rdp file name> - <address> - Remote Desktop Connection", so the client names
+  the file after the VM (rdp::window_file_name makes the name safe for a file) and writes each launch's file to
+  its own folder under %TEMP%, since two sessions can share a name. The address stays in the title, which is
+  how the client tells that the session window opened. (2026-10-26; not yet verified live.)
 - The host sends the bare account name (hh-owner), not .\hh-owner: mstsc adds ".\" itself, and a doubled
   ".\.\hh-owner" fails as an unknown user (guest event 4625, substatus 0xc0000064) and prompts for a password.
 - Add-LocalGroupMember takes the group by -SID 'S-1-5-32-555' and the member as the LocalUser object
@@ -146,8 +165,9 @@ section for an area before changing it: most of these were learned from a failur
 - Logging on creates a host profile (C:\Users\<name>); removing the account does not remove it.
 - mstsc shows an "unknown publisher" prompt for the unsigned .rdp file the first time.
 - Implementation (9.1): the console account hhc-<user> is created by the elevated helper
-  `HyperHarbor.Host.exe --setup-console [data dir] [result file]` (tray: Set up console access; the installer
-  and Start-HyperHarbor.ps1 run it when console-accounts.json.protected is missing) and removed with
+  `HyperHarbor.Host.exe --setup-console [--for-user=SID] [data dir] [result file]` (tray: Set up console access;
+  the installer and Start-HyperHarbor.ps1 run it when console-accounts.json.protected is missing, and the script
+  also when a data file cannot be opened) and removed with
   --remove-console. It denies interactive, Remote Desktop, batch, and service logon; network logon stays.
 - TestServer cannot upgrade connections (IsUpgradableRequest is always false), so the API tests stop at 426
   and ConsoleTunnelTests run the tunnel handler on real Kestrel with an echo server for VMMS.
@@ -166,10 +186,20 @@ section for an area before changing it: most of these were learned from a failur
 - DiscUtils pads the Joliet volume label with ASCII spaces (U+2020 in UCS-2); SeedIso rewrites it, because
   cloud-init finds the seed only by the label CIDATA. Extensionless Joliet names read back from DiscUtils
   with a trailing period (user-data.); Linux strips it. Not yet verified with a real Ubuntu install.
+- Msvm_Keyboard.TypeText sends nothing the Ubuntu 24.04 installer's console shows, while TypeKey works (Enter, and
+  letters as virtual-key codes 0x59 0x45 0x53 for "yes"); checked 2026-10-27. The host reports awaitingConfirmation from
+  the start of a Linux install, so keys sent at once land in GRUB's menu instead ("e" opens its editor and the boot
+  stops); the menu times out after about 30 seconds.
 - Linux installers need the Microsoft UEFI CA Secure Boot template (also for console installs). Ubuntu asks
   "Continue with autoinstall?" at the console, since the seed cannot change the kernel command line.
 - The create job presses Space (Msvm_Keyboard.TypeKey) twelve times on the first boot only, to pass
   Windows media's "Press any key to boot from CD or DVD".
+- Turning a VM off (RequestStateChange 3) can return before it is off; a Start right after it fails with "Start is not
+  valid in the current state" (2026-10-26, nested Hyper-V). WindowsSetupBootRecovery retries Start for 30 seconds.
+- Windows' DVD boot loader (cdboot.efi in efisys.bin) reads UDF 1.02 but not UDF 2.50: an IMAPI2 image with
+  UDFRevision 0x250 passes "Press any key", then the firmware falls through to PXE and logs 18603. The same files as
+  UDF 1.02 (IMAPI2's default, and what Microsoft's media use) install. On the same VM, Start-VM made an automatic checkpoint (AutomaticCheckpointsEnabled
+  is on for VMs HyperHarbor creates) while HyperHarbor's own CIM start did not; a checkpoint blocks growing the disk.
 - A first boot can still end with nothing installed (2026-10-25, laptop, build 26300 media, a second VM running): the
   keys got Setup started, the guest reset itself 26 seconds later (cause unknown), the second boot's prompt timed
   out with no key, the empty disk did not boot, and the VM sat at the firmware's boot summary ("The boot loader
@@ -327,6 +357,19 @@ section for an area before changing it: most of these were learned from a failur
 - Remove-WindowsCapability for MathRecognizer reported no restart. HKCU tweaks go to the Default user hive
   (C:\Users\Default\NTUSER.DAT under HKU\HyperHarborDefault), since the User's account has not signed in yet.
   ExtensionSettings is one REG_SZ JSON value under the browser's policy key.
+- Default browser (browser.makeDefault, 0.2.4): Windows 11's UserChoice Protection Driver (UCPD) stops other programs
+  from writing the http and https UserChoice keys, and their hash ties them to the user, so a script cannot choose
+  the default browser. The supported way is the policy "Set a default associations configuration file"
+  (HKLM\SOFTWARE\Policies\Microsoft\Windows\System, DefaultAssociationsConfiguration = path to an XML file), which
+  Windows applies at every sign-in, also overriding the user's own change. ProgIds in catalogs/browsers.yaml:
+  ChromeHTML, MSEdgeHTM, BraveHTML. Not yet verified on a live guest: the ProgIds, and whether a Brave that fell back
+  to a per-user install (0x8A150010 retry) is registered for the User's account at all.
+- Edge cannot be removed outside the European Economic Area: Windows offers the uninstall only when the region chosen
+  at setup is in the EEA, and other apps need its WebView2 runtime. Forced removals are unsupported and Windows Update
+  can put Edge back. The tweak system.hideEdge only sets Edge and EdgeUpdate policies (StartupBoostEnabled,
+  BackgroundModeEnabled, HideFirstRunExperience, DefaultBrowserSettingEnabled, CreateDesktopShortcutDefault); the
+  taskbar pin needs a taskbar layout file and is left alone. A removal that finds no package counts as done (so
+  profiles can be applied again), so remove.appx never reports a name that matches nothing.
 - After a restart, GuestRestart counts Remote Desktop only after one check found it down (Windows answers for a few
   seconds after the request, and a guest reboot does not reset uptime): 60 checks of 15 seconds.
 - The User's account hive: loaded under HKU\<SID> while it is signed in, otherwise its NTUSER.DAT loaded under
@@ -370,6 +413,18 @@ section for an area before changing it: most of these were learned from a failur
 - Wake-on-LAN fixes need elevation too (API 1.8.0, decided 2026-10-04): the installed
   service runs as LocalSystem and applies them directly, with no tray approval. An unelevated console
   host still asks the tray as well. TestHost pins the unelevated WakeFixCoordinator path.
+
+## Growing disks (0.2.4)
+
+- Msvm_ImageManagementService.ResizeVirtualHardDisk(Path, MaxInternalSize) grows a VHDX; Hyper-V allows it on a running
+  VM only for a VHDX on a SCSI controller (every disk of a Generation 2 VM), and never while the VM has checkpoints.
+  GetVirtualHardDiskSettingData gives MaxInternalSize, Format (3 is VHDX), and ParentPath. Verified 2026-10-26 on a
+  bare VHDX (DiskGrowLiveTests); online growth on a running VM not yet.
+- HyperHarbor's autounattend puts EFI, MSR, and C: (Extend) on disk 0, with no recovery partition after C:, so C: is the
+  last partition and can grow. Windows installed from the console often puts a recovery partition after C:; the
+  extender then leaves it and says so.
+- Mount-DiskImage needs administrator rights, so only the installed service extends an off VM's partition. A running
+  guest sees the new size after Update-HostStorageCache; the extender waits up to 30 seconds for it.
 
 ## VM lifecycle (Phase 8)
 

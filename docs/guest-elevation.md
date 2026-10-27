@@ -13,12 +13,15 @@ starts from it.
   itself. GuestAdminService creates it on the first request through PowerShell Direct with the stored hhadmin
   credential, so VMs set up before this phase need nothing new. It is in Administrators, not in Remote Desktop Users,
   its password never expires, it holds SeDenyNetworkLogonRight and SeDenyRemoteInteractiveLogonRight (it can answer
-  UAC and sign in at the console, nothing else), and it is disabled whenever no window is open.
+  UAC and sign in at the console, nothing else). Since 0.2.4 it stays enabled with a random password nobody keeps while
+  no window is open, so the UAC prompt always lists it (the user asked: "if I don't have the admin password enabled on
+  the client I have to cancel the prompt"); each Connect to a Windows VM creates or enables it in the background
+  (GuestAdminService.EnsureListedAsync). Before 0.2.4 it was disabled between windows.
 - Opening a window (POST /vms/{id}/guest-admin, elevated) enables the account with a new passphrase (PassphraseGenerator:
   three capitalized common words and a digit, hyphenated) for 5 minutes (PUT /host/guest-admin/settings, 2 to 30).
   Asking again while it is open returns the same passphrase. The window ends at expiry, on DELETE, when the VM stops
-  (the sweep every 30 seconds), or with the host process; the host then sets a random password and disables the
-  account, at once or as soon as the guest answers again (guest-admin.json lists windows that may still be enabled,
+  (the sweep every 30 seconds), or with the host process; the host then sets a random password (the account stays
+  enabled), at once or as soon as the guest answers again (guest-admin.json lists windows that may still be enabled,
   without the passphrase).
 - The client's Administrator access dialog shows the account, the passphrase split into its words, and a countdown.
   It has no copy button: with clipboard redirection on, the device's clipboard is readable inside the VM's session.

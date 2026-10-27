@@ -187,6 +187,13 @@
   publisher: Microsoft
   rating: keep
   note: Provides winget, which setup profiles use to install packages.
+- name: Microsoft.MicrosoftEdge.Stable
+  friendlyName: Microsoft Edge
+  publisher: Microsoft
+  rating: keep
+  note: >-
+    Windows refuses to remove Edge outside the European Economic Area, and other apps need its WebView2 runtime. Use
+    the tweak "Keep Microsoft Edge out of the way" and make another browser the default instead.
 - name: Microsoft.SecHealthUI
   friendlyName: Windows Security
   publisher: Microsoft

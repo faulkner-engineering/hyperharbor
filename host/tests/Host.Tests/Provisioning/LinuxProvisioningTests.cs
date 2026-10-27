@@ -28,7 +28,7 @@ public sealed class LinuxProvisioningTests : IDisposable
         _userId = users.GetOrCreateDefault().UserId;
         var credentials = new VmCredentialStore(_directory);
         _provisioning = new ProvisioningStore(_directory);
-        _rotator = new PasswordRotator(_guest, credentials, TimeProvider.System, TimeSpan.FromSeconds(60), NullLogger<PasswordRotator>.Instance);
+        _rotator = new PasswordRotator(_guest, credentials, new VmAccountPasswordStore(_directory), TimeProvider.System, TimeSpan.FromSeconds(60), NullLogger<PasswordRotator>.Instance);
         _service = new ProvisioningService(_inventory, users, _guest, credentials, _provisioning, TimeProvider.System, NullLogger<ProvisioningService>.Instance);
         _defaults = new Core.Profiles.VmConnectionDefaultsStore(_directory);
         _connect = new ConnectService(_inventory, _provisioning, _rotator, NullLogger<ConnectService>.Instance, defaults: _defaults);

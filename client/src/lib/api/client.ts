@@ -22,6 +22,10 @@ export type VirtualSwitch = components["schemas"]["VirtualSwitch"];
 export type VmComputeSettings = components["schemas"]["VmComputeSettings"];
 export type VmComputeUpdate = components["schemas"]["VmComputeUpdate"];
 export type ComputeSetting = components["schemas"]["ComputeSetting"];
+export type VmDisk = components["schemas"]["VmDisk"];
+export type VmDiskList = components["schemas"]["VmDiskList"];
+export type GrowVmDiskRequest = components["schemas"]["GrowVmDiskRequest"];
+export type DiskGrowResult = components["schemas"]["DiskGrowResult"];
 export type ValidationIssue = components["schemas"]["ValidationIssue"];
 export type ElevationStatus = components["schemas"]["ElevationStatus"];
 export type UnattendProfile = components["schemas"]["UnattendProfile"];
@@ -294,10 +298,13 @@ export const provisionVm = (
 /**
  * Opens Remote Desktop to a provisioned VM. Resolves once mstsc has been launched, with something to
  * tell the user (for example that camera sharing is unavailable), or null. `vmName` names the VM's
- * virtual camera.
+ * virtual camera and titles the Remote Desktop window.
  */
 export const connectVm = (key: string, vmId: string, address: string, vmName?: string) =>
   invoke<string | null>("connect_vm", { key, vmId, address, vmName });
+
+/** The API version that added browser.makeDefault to setup and machine profiles. */
+export const DefaultBrowserApiVersion = "1.36.0";
 
 /** The API version that added administrator windows in Windows guests. */
 export const GuestAdminApiVersion = "1.35.0";
@@ -312,7 +319,7 @@ export const openGuestAdmin = (key: string, vmId: string) => invoke<GuestAdminWi
 /** Whether an administrator window is open in the VM, without the passphrase. */
 export const getGuestAdmin = (key: string, vmId: string) => invoke<GuestAdminStatus>("get_guest_admin", { key, vmId });
 
-/** Ends the administrator window now; the host disables the account. */
+/** Ends the administrator window now; the host replaces the passphrase with a random password. */
 export const closeGuestAdmin = (key: string, vmId: string) => invoke<void>("close_guest_admin", { key, vmId });
 
 /** What the always-on-top passphrase card shows. Mirrors OverlayCard in src-tauri/src/guest_admin_overlay.rs. */
@@ -434,9 +441,10 @@ export const setCameraShutter = (key: string, vmId: string, closed: boolean) =>
 /**
  * Opens the VM's console (its screen, also before an OS is installed) in mstsc through the host.
  * Resolves once mstsc has been launched. Fails with problem code consoleSetupRequired when the host
- * has not set up console access.
+ * has not set up console access. `vmName` titles the Remote Desktop window.
  */
-export const openConsole = (key: string, vmId: string) => invoke<void>("open_console", { key, vmId });
+export const openConsole = (key: string, vmId: string, vmName?: string) =>
+  invoke<void>("open_console", { key, vmId, vmName });
 
 /** A monitor of this device, in physical pixels. Mirrors Monitor in src-tauri/src/monitors.rs. */
 export interface Monitor {
@@ -970,6 +978,15 @@ export const getVmCompute = (key: string, vmId: string) =>
 
 export const updateVmCompute = (key: string, vmId: string, request: UpdateComputeRequest) =>
   invoke<VmComputeUpdate>("update_vm_compute", { key, vmId, request });
+
+/** The API version that added listing and growing a VM's disks. */
+export const DiskGrowApiVersion = "1.36.0";
+
+export const listVmDisks = (key: string, vmId: string) => invoke<VmDiskList>("list_vm_disks", { key, vmId });
+
+/** Grows a disk (and the guest's partition on it); returns the growDisk job. Needs elevation. */
+export const growVmDisk = (key: string, vmId: string, request: GrowVmDiskRequest) =>
+  invoke<VmJob>("grow_vm_disk", { key, vmId, request: { extendPartition: true, ...request } });
 
 export const getVmPerformance = (key: string, vmId: string) =>
   invoke<VmPerformance>("get_vm_performance", { key, vmId });

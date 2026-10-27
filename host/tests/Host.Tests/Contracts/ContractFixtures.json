@@ -336,6 +336,12 @@
     "scope": "deleteDisksOrCheckpoints",
     "message": "C:\\VMs\\Base.vhdx is also used by Web."
   },
+  "DiskGrowResult": {
+    "path": "D:\\VMs\\Dev\\Virtual Hard Disks\\Dev.vhdx",
+    "maximumSizeBytes": 137438953472,
+    "partitionExtended": false,
+    "note": "In the VM, extend the last partition and its file system."
+  },
   "DraftBrowser": {
     "app": "Brave.Brave",
     "name": "Brave",
@@ -456,6 +462,13 @@
     "decodePercent": 50,
     "computePercent": 40
   },
+  "GrowVmDiskRequest": {
+    "path": "D:\\VMs\\Dev\\Virtual Hard Disks\\Dev.vhdx",
+    "sizeGb": 128,
+    "extendPartition": true,
+    "shutDownToApply": true,
+    "acknowledgeWarnings": false
+  },
   "GuestAdminSettings": {
     "windowMinutes": 10
   },
@@ -506,7 +519,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.35.0",
+    "apiVersion": "1.36.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {
@@ -1039,7 +1052,8 @@
     ],
     "policies": {
       "passwordManager": "false"
-    }
+    },
+    "makeDefault": true
   },
   "ProfileDraft": {
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
@@ -1324,7 +1338,8 @@
       ],
       "policies": {
         "passwordManager": "false"
-      }
+      },
+      "makeDefault": true
     }
   },
   "SetupProfileCatalog": {
@@ -1561,7 +1576,8 @@
         ],
         "policies": {
           "passwordManager": "false"
-        }
+        },
+        "makeDefault": true
       }
     }
   },
@@ -1973,6 +1989,25 @@
     "deleteDisks": true,
     "deleteCheckpoints": true,
     "confirmName": "Ubuntu Dev"
+  },
+  "VmDisk": {
+    "path": "D:\\VMs\\Dev\\Virtual Hard Disks\\Dev.vhdx",
+    "maximumSizeBytes": 68719476736,
+    "fileSizeBytes": 21474836480,
+    "growWhileRunning": true,
+    "growBlocker": null
+  },
+  "VmDiskList": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "disks": [
+      {
+        "path": "D:\\VMs\\Dev\\Virtual Hard Disks\\Dev.vhdx",
+        "maximumSizeBytes": 68719476736,
+        "fileSizeBytes": 21474836480,
+        "growWhileRunning": true,
+        "growBlocker": "checkpoints"
+      }
+    ]
   },
   "VmGuestOs": {
     "family": "unknown",

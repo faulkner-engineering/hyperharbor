@@ -10,6 +10,57 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.4-beta.1] - 2026-10-27 (API 1.36.0)
+
+A beta of 0.2.4: growing a VM's disk, a default browser and a quieter Edge in setup profiles, browser data that survives
+Connect, an administrator account that UAC always offers, and Remote Desktop windows named after their VM. Update both
+the host and the client; the new options need a host with API 1.36.0.
+
+### Added
+- Disk size… in a VM's menu grows a virtual hard disk. A Generation 2 VM's VHDX grows while the VM runs; anything else
+  needs the VM off, and the dialog offers to shut it down, grow the disk, and start it again. HyperHarbor also extends
+  C: (the partition at the end of the disk): inside a running Windows VM it uses the VM's administrator, and moves the
+  recovery partition Windows Setup puts after C: to the end first; for an off VM the installed host mounts the disk
+  itself (a portable host cannot, and says so). New Windows VMs get their recovery partition before C:, so C: is last.
+  For Linux VMs it lists the commands that extend the file system. A disk never shrinks, and a VM with checkpoints
+  must have them merged first. Needs a host with this version.
+- Setup and machine profiles can make their browser the default in the VM: "Make <browser> the default browser" in
+  the Browser section (`makeDefault: true` in YAML). Windows applies it at every sign-in, so the default browser
+  cannot be changed inside the VM while the profile sets it. Needs a host with this version; older hosts do not show
+  the option.
+- A tweak, "Keep Microsoft Edge out of the way", for VMs that use another browser. Windows does not allow uninstalling
+  Edge outside the European Economic Area, so it stops Edge starting with Windows, showing its first-run pages, asking
+  to be the default browser, and adding desktop shortcuts when it updates. Edge's taskbar pin and an existing desktop
+  shortcut stay. In the Remove section, Microsoft Edge is now rated keep and says why.
+
+### Fixed
+- Creating a VM again with the same name after a creation failed (for example for lack of memory) works: the host now
+  removes the empty folders the failed attempt left, instead of refusing the name because its folder was "not empty".
+- Brave no longer turns your extensions off, and browsers no longer lose sign-ins and saved passwords, after you
+  connect to a Windows VM. Each Connect gives the VM account a new password, and the host used to reset it, which made
+  everything Windows had encrypted for the account (with DPAPI) unreadable; Brave took that as its settings being
+  changed by another program. The host now changes the password from the previous one, which keeps that data, and so
+  stores the current password, encrypted with machine-scope DPAPI, beside the VM's administrator credential. The first
+  Connect after updating still resets it once.
+- A Windows install whose VM found nothing to boot is restarted again as intended. The host turned the VM off and
+  started it at once, which Hyper-V refused while the VM was still stopping, so the install stayed at "The VM is off".
+- A portable host started with Start-HyperHarbor.ps1 by a standard Windows user no longer crashes at startup when
+  an administrator account approved the setup prompt. Setup gave the files it wrote (users.json and the console
+  accounts) to that administrator, so the host could not read them. Setup, and Set up console access in the tray,
+  now write them for the signed-in user. If a host is already affected, run Start-HyperHarbor.ps1 again and
+  approve its prompt: it notices the locked files and restores access. A host that still cannot open its data says
+  which file and how to fix it instead of exiting without a message. The installed service is not affected.
+
+### Changed
+- Your administrator account in a Windows VM (hha-<username>) is now always offered in User Account Control prompts,
+  so you no longer have to cancel a prompt, open Administrator access in the client, and start again: open
+  Administrator access while the prompt waits, then type the passphrase. Between windows the account keeps a random
+  password nobody knows, and it still cannot sign in over the network or Remote Desktop. It is created at the next
+  Connect for VMs set up earlier.
+- Remote Desktop windows the client opens are titled with the VM's name instead of only its IP address, so several
+  sessions are easy to tell apart in the taskbar ("Dev Box - 192.168.0.50 - Remote Desktop Connection"). Console
+  windows read "<VM name> (console)", and a maintenance session on the host uses the host's name.
+
 ## [0.2.3] - 2026-10-25 (API 1.35.0)
 
 Two fixes in the client and a clearer name on the host. Adding a backup target no longer waits forever on a

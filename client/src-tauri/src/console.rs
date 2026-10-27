@@ -109,12 +109,14 @@ pub fn console_rdp_file(port: u16, user_name: &str, pcb: &str) -> String {
 
 /// Opens the VM's console: asks the host for a session, starts the loopback listener, and launches
 /// mstsc against it.
-/// `in_use` keeps the host listed as in use until mstsc exits.
+/// `vm_name` titles the session window ("<name> (console)"). `in_use` keeps the host listed as in
+/// use until mstsc exits.
 pub async fn open(
     api: Arc<ApiClient>,
     host: HostEntry,
     paired: PairedHost,
     vm_id: String,
+    vm_name: Option<String>,
     in_use: SessionGuard,
 ) -> Result<(), ClientError> {
     let session = api.open_console(&host, &paired, &vm_id).await?;
@@ -140,7 +142,10 @@ pub async fn open(
                 user_name: &session.user_name,
                 password: &session.password,
             }),
-            file_name: format!("hyperharbor-console-{port}.rdp"),
+            window_name: match vm_name {
+                Some(name) => format!("{} (console)", rdp::window_file_name(&name, "VM")),
+                None => "Console".to_string(),
+            },
             contents: console_rdp_file(port, &session.user_name, &session.pcb),
             window_title_key: format!("127.0.0.1:{port}"),
         },

@@ -47,6 +47,38 @@ public sealed class WindowsSetupBootRecoveryTests : IDisposable
         Assert.Equal(Install().StartedAt, _events.AskedSince);
     }
 
+    [Fact]
+    public async Task AStartRefusedWhileTheVmIsStillTurningOff_IsRetried()
+    {
+        _events.Outcome = VmBootOutcome.NothingToBoot;
+        var power = new StillStoppingPower(refusals: 2);
+        var recovery = new WindowsSetupBootRecovery(_events, power, _keyboard, _time, NullLogger<WindowsSetupBootRecovery>.Instance, TimeSpan.Zero, TimeSpan.Zero);
+
+        Assert.Equal(BootRecoveryResult.Restarted, await recovery.RecoverAsync(Install(), CancellationToken.None));
+
+        Assert.Equal([VmAction.TurnOff, VmAction.Start, VmAction.Start, VmAction.Start], power.Calls);
+        Assert.Equal(WindowsBootKey.Presses, _keyboard.Presses.Count);
+    }
+
+    /// <summary>Refuses Start a number of times, as Hyper-V does while a turned-off VM is still stopping.</summary>
+    private sealed class StillStoppingPower(int refusals) : HyperHarbor.Host.Core.Power.IHyperVPowerInvoker
+    {
+        private int _refusals = refusals;
+
+        public List<VmAction> Calls { get; } = [];
+
+        public Task InvokeAsync(Guid vmId, VmAction action, CancellationToken cancellationToken)
+        {
+            Calls.Add(action);
+            if (action == VmAction.Start && _refusals-- > 0)
+            {
+                throw new HyperHarbor.Host.Core.Power.VmActionNotAllowedException(action, null, "Hyper-V reported that Start is not valid in the current state.");
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
     [Theory]
     [InlineData(VmBootOutcome.Booted)]
     [InlineData(VmBootOutcome.Unknown)]

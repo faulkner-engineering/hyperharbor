@@ -97,10 +97,12 @@ public sealed record RegistryTweak(
 /// <param name="App">The browser's winget id or alias (Chrome, Edge, or Brave).</param>
 /// <param name="Extensions">Chrome Web Store ids, or edge:&lt;id&gt; for the Edge Add-ons store.</param>
 /// <param name="Policies">Friendly policy keys from the browser catalog, with values as text (true, false, numbers, or text).</param>
+/// <param name="MakeDefault">Since 1.36.0, VM profiles only: the default browser through the default associations policy.</param>
 public sealed record ProfileBrowser(
     [property: JsonRequired] ProfileItem App,
     IReadOnlyList<ProfileItem>? Extensions,
-    IReadOnlyDictionary<string, string>? Policies);
+    IReadOnlyDictionary<string, string>? Policies,
+    bool MakeDefault = false);
 
 /// <summary>A saved setup profile as listed. Schema: SetupProfileSummary.</summary>
 /// <param name="Id">The file name on the host, without .yaml.</param>

@@ -34,6 +34,7 @@
     ProfilesConsolidatedApiVersion,
     MachineProfileVmsApiVersion,
     MachineProfileApplyApiVersion,
+    DiskGrowApiVersion,
     ApplySetupProfileApiVersion,
     BackupApiVersion,
     GameAwareApiVersion,
@@ -67,6 +68,7 @@
   import CreateVmDialog from "$lib/components/CreateVmDialog.svelte";
   import CreateVmFromProfileDialog from "$lib/components/CreateVmFromProfileDialog.svelte";
   import ComputeDialog from "$lib/components/ComputeDialog.svelte";
+  import DiskDialog from "$lib/components/DiskDialog.svelte";
   import PerformanceDialog from "$lib/components/PerformanceDialog.svelte";
   import GpuWarnings from "$lib/components/GpuWarnings.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
@@ -108,6 +110,7 @@
   let deleting = $state<Vm | null>(null);
   let transferring = $state<Vm | null>(null);
   let editing = $state<Vm | null>(null);
+  let growing = $state<Vm | null>(null);
   let tuning = $state<Vm | null>(null);
   let choosingMonitors = $state<Vm | null>(null);
   let configuringCamera = $state<Vm | null>(null);
@@ -224,6 +227,7 @@
     deleting = null;
     transferring = null;
     editing = null;
+    growing = null;
     tuning = null;
     choosingMonitors = null;
     configuringCamera = null;
@@ -377,7 +381,7 @@
     if (selectedKey === null) return;
     consoleVmId = vm.id;
     try {
-      await openConsole(selectedKey, vm.id);
+      await openConsole(selectedKey, vm.id, vm.name);
       toasts.show(`Opening the console of ${vm.name}…`);
     } catch (error) {
       toasts.error(
@@ -433,6 +437,7 @@
     deleting = null;
     transferring = null;
     editing = null;
+    growing = null;
     tuning = null;
     creating = false;
     creatingFrom = null;
@@ -722,6 +727,7 @@
             onprovision={(vm) => (provisioning = vm)}
             onaction={requestAction}
             onsettings={(vm) => (editing = vm)}
+            ondisks={hostSupports(selectedHost, DiskGrowApiVersion) ? (vm) => (growing = vm) : undefined}
             onperformance={(vm) => (tuning = vm)}
             onmonitors={(vm) => (choosingMonitors = vm)}
             oncamera={(vm) => (configuringCamera = vm)}
@@ -769,6 +775,9 @@
         {/if}
         {#if editing}
           <ComputeDialog host={selectedHost} vm={editing} onclose={lifecycleClosed} />
+        {/if}
+        {#if growing}
+          <DiskDialog host={selectedHost} vm={growing} onclose={lifecycleClosed} />
         {/if}
         {#if tuning}
           <PerformanceDialog host={selectedHost} vm={tuning} onclose={lifecycleClosed} />

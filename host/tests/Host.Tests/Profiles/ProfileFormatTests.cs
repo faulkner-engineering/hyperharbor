@@ -132,7 +132,8 @@ public sealed class ProfileYamlTests
         new ProfileBrowser(
             new("Brave.Brave", "Brave"),
             [new("cjpalhdlnbpafiamejdnhcphjbkeiagm", "uBlock Origin"), new("edge:odfafepnkmbhccpbejgmiehpchacaeak", "uBlock Origin for Edge")],
-            new Dictionary<string, string> { ["homepage"] = "https://start.duckduckgo.com", ["passwordManager"] = "false", ["restoreOnStartup"] = "5" }));
+            new Dictionary<string, string> { ["homepage"] = "https://start.duckduckgo.com", ["passwordManager"] = "false", ["restoreOnStartup"] = "5" },
+            MakeDefault: true));
 
     [Fact]
     public void AWrittenProfile_ReadsBackUnchanged_IncludingTheNamesInComments()
@@ -314,6 +315,26 @@ public sealed class ProfileValidatorTests
         var error = Assert.Throws<LifecycleValidationException>(() => _validator.Normalize(profile));
 
         Assert.Contains("does not apply to Google Chrome", Assert.Single(error.Errors).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MakeDefault_IsKept_ForVmProfiles_AndRefusedForHostProfiles()
+    {
+        var browser = new ProfileBrowser(new("Brave.Brave"), null, null, MakeDefault: true);
+
+        Assert.True(_validator.Normalize(new SetupProfile("x", null, null, null, null, browser)).Browser!.MakeDefault);
+        var error = Assert.Throws<LifecycleValidationException>(() => _validator.Normalize(new SetupProfile("x", null, null, null, null, browser, ProfileTarget.Host)));
+        Assert.Equal("browser.makeDefault", Assert.Single(error.Errors).Field);
+    }
+
+    [Theory]
+    [InlineData("maybe")]
+    [InlineData("[true]")]
+    public void MakeDefault_MustBeTrueOrFalse(string value)
+    {
+        var yaml = $"schemaVersion: 1\nname: x\nbrowser:\n  app: Brave.Brave\n  makeDefault: {value}\n";
+
+        Assert.Throws<ProfileFormatException>(() => ProfileYamlReader.Read(yaml));
     }
 }
 

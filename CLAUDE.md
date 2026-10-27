@@ -25,7 +25,9 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 - When a phase adds or changes behavior worth knowing later, record it in the matching docs/ file (history.md for the
   phase, platform-notes.md for platform findings, architecture.md for new files and parts), not here.
 - Never store VM passwords in plaintext. Never bind the API to 0.0.0.0 without mTLS.
-- Rotated VM passwords live in host memory only for the reuse window and are never logged or persisted.
+- Rotated VM passwords are never logged. The current one is stored only with DPAPI through ProtectedFile
+  (VmAccountPasswordStore), so the next rotation can change it rather than reset it (a reset loses the account's DPAPI
+  data; decided with the user 2026-10-26).
   VM admin credentials for provisioning are stored only with DPAPI through ProtectedFile.
 - Pairing secrets (PIN, w, x, y, K) and transfer tickets must never be logged or persisted. Audit summaries must never
   contain a secret. Types that hold a secret override ToString or Debug to hide it.

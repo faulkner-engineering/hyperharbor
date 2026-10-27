@@ -19,6 +19,7 @@ public sealed class ConnectService
     private readonly ILogger<ConnectService> _logger;
     private readonly Performance.PerformanceStore? _performance;
     private readonly Profiles.VmConnectionDefaultsStore? _defaults;
+    private readonly GuestAdminService? _guestAdmin;
 
     public ConnectService(
         IVmInventory inventory,
@@ -26,8 +27,10 @@ public sealed class ConnectService
         PasswordRotator rotator,
         ILogger<ConnectService> logger,
         Performance.PerformanceStore? performance = null,
-        Profiles.VmConnectionDefaultsStore? defaults = null)
+        Profiles.VmConnectionDefaultsStore? defaults = null,
+        GuestAdminService? guestAdmin = null)
     {
+        _guestAdmin = guestAdmin;
         _performance = performance;
         _defaults = defaults;
         _inventory = inventory;
@@ -53,6 +56,13 @@ public sealed class ConnectService
             ?? throw new GuestAccountConflictException($"{vm.Name} has not reported a network address yet. Wait for it to finish starting.");
 
         var rotated = await _rotator.GetPasswordAsync(account.ToTarget(address), userId, account.AccountName, cancellationToken);
+
+        // So the first User Account Control prompt in the session already offers the User's administrator account.
+        if (account.GuestOs != GuestOsFamily.Linux)
+        {
+            _guestAdmin?.EnsureListedLater(vmId, userId);
+        }
+
         _logger.LogInformation(
             "Issued Remote Desktop credentials for {Account} on {Name} ({VmId}) to {Device}.",
             account.AccountName,

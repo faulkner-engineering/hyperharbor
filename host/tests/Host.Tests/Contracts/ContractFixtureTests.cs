@@ -71,7 +71,8 @@ public class ContractFixtureTests
         new ProfileBrowser(
             new ProfileItem("Brave.Brave", "Brave"),
             [new ProfileItem("cjpalhdlnbpafiamejdnhcphjbkeiagm", "uBlock Origin")],
-            new Dictionary<string, string> { ["passwordManager"] = "false" }));
+            new Dictionary<string, string> { ["passwordManager"] = "false" },
+            MakeDefault: true));
 
     private static readonly SetupProfile HostProfileSample = new(
         "Host gaming",
@@ -177,6 +178,10 @@ public class ContractFixtureTests
         ["GpuDriverWarning"] = new GpuDriverWarning("nvlddmkm", 153, 2, Time, "Display driver nvlddmkm stopped responding and has successfully recovered."),
         ["GuestSetupRequest"] = new GuestSetupRequest(DriversOnly: true),
         ["ExportDisksRequest"] = new ExportDisksRequest(@"D:\Backups"),
+        ["VmDisk"] = new VmDisk(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 68719476736, 21474836480, true, null),
+        ["VmDiskList"] = new VmDiskList(VmId, [new VmDisk(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 68719476736, 21474836480, true, DiskGrowBlocker.Checkpoints)]),
+        ["GrowVmDiskRequest"] = new GrowVmDiskRequest(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 128, true, true, false),
+        ["DiskGrowResult"] = new DiskGrowResult(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 137438953472, false, "In the VM, extend the last partition and its file system."),
         ["HostGpu"] = new HostGpu([new HostGpuDevice("Intel(R) UHD Graphics", GpuVendor.Intel, "30.0.101.1122", true, 32, null)], []),
         ["BackupSchedule"] = new BackupSchedule("02:00", [DayOfWeek.Monday, DayOfWeek.Thursday]),
         ["BackupRetention"] = new BackupRetention(7, 4, 6),

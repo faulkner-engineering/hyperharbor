@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Xml.Linq;
 using HyperHarbor.Shared.Contracts.Profiles;
 
 namespace HyperHarbor.Host.Core.Profiles;
@@ -22,6 +23,10 @@ public enum RegistryTarget
 /// <param name="Type">dword, qword, string, or absent (delete the value).</param>
 public sealed record RegistryWrite(string Item, RegistryTarget Target, string Key, string Name, string Type, string Value);
 
+/// <summary>A text file to write in the guest (UTF-8), and the item it belongs to. Written before the registry values.</summary>
+/// <param name="Path">An absolute path in the guest.</param>
+public sealed record FileWrite(string Item, string Path, string Contents);
+
 /// <summary>A package to install, with the name the results use.</summary>
 public sealed record PackageInstall(string Item, string Id, PackageSource Source);
 
@@ -36,7 +41,8 @@ public sealed record ApplyPlan(
     IReadOnlyList<ProfileService>? Services = null,
     ProfileStartup? Startup = null,
     ProfilePower? Power = null,
-    IReadOnlyList<ProfileItem>? Programs = null)
+    IReadOnlyList<ProfileItem>? Programs = null,
+    IReadOnlyList<FileWrite>? Files = null)
 {
     public int ItemCount =>
         Packages.Count + Appx.Count + Capabilities.Count + Features.Count + Registry.Select(write => write.Item).Distinct().Count()
@@ -77,6 +83,7 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
         }
 
         var registry = new List<RegistryWrite>();
+        var files = new List<FileWrite>();
         foreach (var tweak in profile.Tweaks ?? [])
         {
             if (tweak.Id is { } id)
@@ -103,6 +110,13 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
             {
                 registry.Add(extensions);
             }
+
+            if (settings.MakeDefault && !isHost)
+            {
+                var item = $"{browser.Name} as the default browser";
+                files.Add(new FileWrite(item, DefaultAssociationsPath, DefaultAssociations(browser)));
+                registry.Add(new RegistryWrite(item, RegistryTarget.Machine, DefaultAssociationsPolicyKey, "DefaultAssociationsConfiguration", "string", DefaultAssociationsPath));
+            }
         }
 
         return new ApplyPlan(
@@ -115,7 +129,34 @@ public sealed class SetupProfilePlanner(Catalogs catalogs)
             profile.Services,
             profile.Startup,
             profile.Power,
-            profile.Remove?.Programs);
+            profile.Remove?.Programs,
+            files);
+    }
+
+    /// <summary>
+    /// Where the default associations file goes in the guest. The policy names a path, and Windows reads the file at
+    /// every sign-in, so it must stay there. HyperHarbor's VMs install Windows on C:.
+    /// </summary>
+    internal const string DefaultAssociationsPath = @"C:\ProgramData\HyperHarbor\DefaultAssociations.xml";
+
+    /// <summary>The policy "Set a default associations configuration file" (HKLM).</summary>
+    internal const string DefaultAssociationsPolicyKey = @"SOFTWARE\Policies\Microsoft\Windows\System";
+
+    /// <summary>The web link and HTML file types the default browser takes over.</summary>
+    internal static readonly string[] BrowserAssociations = [".htm", ".html", "http", "https"];
+
+    /// <summary>
+    /// The default associations file. On Windows 11 the UserChoice protection driver stops anything but Windows from
+    /// choosing the default browser, so this policy is the supported way; Windows applies it at every sign-in.
+    /// </summary>
+    internal static string DefaultAssociations(BrowserCatalogEntry browser)
+    {
+        var associations = new XElement("DefaultAssociations", BrowserAssociations.Select(identifier => new XElement(
+            "Association",
+            new XAttribute("Identifier", identifier),
+            new XAttribute("ProgId", browser.ProgId),
+            new XAttribute("ApplicationName", browser.ApplicationName))));
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + associations + "\n";
     }
 
     private void AddPackage(List<PackageInstall> packages, List<string> problems, ProfileItem item)

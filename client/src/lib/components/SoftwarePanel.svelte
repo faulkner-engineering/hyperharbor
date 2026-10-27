@@ -45,6 +45,7 @@
     bind:browserApp={draft.browserApp}
     bind:extensions={draft.extensions}
     policies={draft.policies}
+    bind:makeDefault={draft.makeDefault}
     {selected}
     {onselect}
   />

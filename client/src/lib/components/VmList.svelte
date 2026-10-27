@@ -15,6 +15,8 @@
     onprovision?: (vm: Vm) => void;
     onaction?: (vm: Vm, action: VmAction) => void;
     onsettings?: (vm: Vm) => void;
+    /** Grow a disk (hosts with API 1.36.0); leave unset to hide the entry. */
+    ondisks?: (vm: Vm) => void;
     onperformance?: (vm: Vm) => void;
     onmonitors?: (vm: Vm) => void;
     /** Camera sharing settings for a Windows VM; leave unset to hide the entry. */
@@ -49,6 +51,7 @@
     onprovision,
     onaction,
     onsettings,
+    ondisks,
     onperformance,
     onmonitors,
     oncamera,
@@ -262,6 +265,9 @@
               {/if}
               <hr />
               <button type="button" onclick={() => onsettings?.(vm)}>Settings…</button>
+              {#if ondisks && (vm.state === "running" || vm.state === "off")}
+                <button type="button" onclick={() => ondisks(vm)}>Disk size…</button>
+              {/if}
               {#if vm.guestOs.family !== "linux"}
                 <button type="button" onclick={() => onperformance?.(vm)}>Performance mode…</button>
               {/if}

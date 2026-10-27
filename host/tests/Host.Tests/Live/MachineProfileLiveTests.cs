@@ -180,7 +180,7 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
         Assert.True((bool)check["wallpaperCopied"]!);
     }
 
-    private static async Task<JsonObject> WaitForJobAsync(LiveHostHarness host, JsonObject job, Action<string> log)
+    internal static async Task<JsonObject> WaitForJobAsync(LiveHostHarness host, JsonObject job, Action<string> log)
     {
         var lastStep = "";
         while ((string?)job["state"] == "running")
@@ -199,7 +199,7 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
         return job;
     }
 
-    private static async Task WaitUntilReadyAsync(LiveHostHarness host, Guid vmId, Action<string> log)
+    internal static async Task WaitUntilReadyAsync(LiveHostHarness host, Guid vmId, Action<string> log)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(90);
         string? last = "";
@@ -234,7 +234,7 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task DeleteAsync(LiveHostHarness host, Guid vmId, Action<string> log)
+    internal static async Task DeleteAsync(LiveHostHarness host, Guid vmId, Action<string> log)
     {
         log("Deleting the VM.");
 

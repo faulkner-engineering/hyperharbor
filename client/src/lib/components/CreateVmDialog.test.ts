@@ -236,7 +236,7 @@ describe("CreateVmDialog unattended install", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await fireEvent.click(await screen.findByRole("button", { name: "Console" }));
 
-    expect(invoke).toHaveBeenCalledWith("open_console", { key: host.key, vmId: job.vmId });
+    expect(invoke).toHaveBeenCalledWith("open_console", { key: host.key, vmId: job.vmId, vmName: "Dev Box" });
   });
 
   it("explains when the image cannot be installed automatically and blocks Create", async () => {

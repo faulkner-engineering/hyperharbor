@@ -57,8 +57,22 @@ public sealed class AutounattendBuilderTests
         Assert.Equal("/IMAGE/NAME", (string?)metaData.Element(Ns + "Key"));
         Assert.Equal("Windows 11 Pro", (string?)metaData.Element(Ns + "Value"));
         Assert.Equal("VK7JG-NPHTM-C97JM-9MPGT-3V66T", (string?)setup.Descendants(Ns + "ProductKey").Single().Element(Ns + "Key"));
-        Assert.Equal(["EFI", "MSR", "Primary"], setup.Descendants(Ns + "CreatePartition").Select(partition => (string)partition.Element(Ns + "Type")!));
-        Assert.Equal("3", (string?)setup.Descendants(Ns + "InstallTo").Single().Element(Ns + "PartitionID"));
+        Assert.Equal(["EFI", "MSR", "Primary", "Primary"], setup.Descendants(Ns + "CreatePartition").Select(partition => (string)partition.Element(Ns + "Type")!));
+        Assert.Equal("4", (string?)setup.Descendants(Ns + "InstallTo").Single().Element(Ns + "PartitionID"));
+    }
+
+    [Fact]
+    public void PutsTheRecoveryPartitionBeforeC_SoCIsLastAndCanGrow()
+    {
+        var (_, document) = Build();
+        var setup = Component(document, "windowsPE", "Microsoft-Windows-Setup");
+
+        var created = setup.Descendants(Ns + "CreatePartition").ToList();
+        Assert.Equal("1024", (string?)created[2].Element(Ns + "Size"));
+        Assert.Equal("true", (string?)created[3].Element(Ns + "Extend"));
+        var modified = setup.Descendants(Ns + "ModifyPartition").ToDictionary(partition => (string)partition.Element(Ns + "PartitionID")!);
+        Assert.Equal("DE94BBA4-06D1-4D40-A16A-BFD50179D6AC", (string?)modified["3"].Element(Ns + "TypeID"));
+        Assert.Equal("C", (string?)modified["4"].Element(Ns + "Letter"));
     }
 
     [Fact]

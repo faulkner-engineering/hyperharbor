@@ -60,6 +60,67 @@ public sealed class GuestAdminServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task EnsureListed_CreatesTheAccountWithAPasswordNobodyGets_ThenLeavesItAlone()
+    {
+        await Service.EnsureListedAsync(VmId, _userId, CancellationToken.None);
+        await Service.EnsureListedAsync(VmId, _userId, CancellationToken.None);
+
+        Assert.Equal((VmId, "hha-owner", "HyperHarbor administrator for owner"), Assert.Single(_guest.AdminCreated));
+        var (_, _, password) = Assert.Single(_guest.AdminEnabled);
+        Assert.Equal(24, password.Length);
+        Assert.Null(_store.Find(VmId, _userId));
+        Assert.True(_guest.AdminAccounts[(VmId, "hha-owner")].IsReadyForElevation);
+    }
+
+    [Fact]
+    public async Task Connecting_MakesTheAccountAvailableInTheBackground()
+    {
+        _inventory.Vms[0] = FakeVmInventory.CreateVm(VmId, "Dev Box", VmState.Running, address: "192.168.0.50");
+        using var rotator = new PasswordRotator(_guest, _credentials, new VmAccountPasswordStore(_directory), _time, TimeSpan.FromSeconds(60), Microsoft.Extensions.Logging.Abstractions.NullLogger<PasswordRotator>.Instance);
+        var connect = new ConnectService(_inventory, _provisioning, rotator, Microsoft.Extensions.Logging.Abstractions.NullLogger<ConnectService>.Instance, guestAdmin: Service);
+
+        await connect.ConnectAsync(VmId, _userId, "Laptop", CancellationToken.None);
+        await Service.WaitForBackgroundAsync();
+
+        Assert.Equal((VmId, "hha-owner", "HyperHarbor administrator for owner"), Assert.Single(_guest.AdminCreated));
+    }
+
+    [Fact]
+    public async Task EnsureListed_LeavesAnOpenWindowsPassphrase()
+    {
+        var window = await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
+
+        await Service.EnsureListedAsync(VmId, _userId, CancellationToken.None);
+
+        Assert.Equal([window.Passphrase], _guest.AdminEnabled.Select(enabled => enabled.Password));
+    }
+
+    [Fact]
+    public async Task EnsureListed_SkipsLinuxAndVmsNotSetUp()
+    {
+        var other = Guid.NewGuid();
+        _provisioning.Save(new ProvisionedAccount(other, _userId, "hh-owner", _time.GetUtcNow(), _time.GetUtcNow(), GuestOs: GuestOsFamily.Linux));
+        _credentials.Save(other, Admin);
+
+        await Service.EnsureListedAsync(other, _userId, CancellationToken.None);
+        await Service.EnsureListedAsync(Guid.NewGuid(), _userId, CancellationToken.None);
+
+        Assert.Empty(_guest.AdminCredentialsUsed);
+    }
+
+    [Fact]
+    public async Task ClosingAWindow_LeavesTheAccountEnabled_WithANewPassword()
+    {
+        var window = await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
+
+        Assert.True(await Service.CloseAsync(VmId, _userId, CancellationToken.None));
+
+        var (_, _, password) = Assert.Single(_guest.AdminLocked);
+        Assert.NotEqual(window.Passphrase, password);
+        Assert.True(_guest.AdminAccounts[(VmId, "hha-owner")].Enabled);
+    }
+
+    [Fact]
     public async Task FirstWindow_CreatesTheAccount_LaterWindowsReuseIt()
     {
         var first = await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
@@ -74,7 +135,7 @@ public sealed class GuestAdminServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Open_EnablesWithThePassphrase_Close_DisablesWithARandomPassword()
+    public async Task Open_EnablesWithThePassphrase_Close_LocksWithARandomPassword()
     {
         var window = await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
         Assert.True(_guest.AdminAccounts[(VmId, "hha-owner")].Enabled);
@@ -83,8 +144,8 @@ public sealed class GuestAdminServiceTests : IDisposable
 
         Assert.True(await Service.CloseAsync(VmId, _userId, CancellationToken.None));
 
-        Assert.False(_guest.AdminAccounts[(VmId, "hha-owner")].Enabled);
-        var disabled = Assert.Single(_guest.AdminDisabled);
+        Assert.True(_guest.AdminAccounts[(VmId, "hha-owner")].Enabled);
+        var disabled = Assert.Single(_guest.AdminLocked);
         Assert.Equal("hha-owner", disabled.Account);
         Assert.NotEqual(window.Passphrase, disabled.Password);
         Assert.Null(_store.Find(VmId, _userId));
@@ -116,7 +177,7 @@ public sealed class GuestAdminServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Expiry_ZeroesThePassphrase_AndDisablesTheAccount()
+    public async Task Expiry_ZeroesThePassphrase_AndLocksTheAccount()
     {
         var window = await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
         var buffer = Service.PassphraseBuffer(VmId, _userId)!;
@@ -127,7 +188,7 @@ public sealed class GuestAdminServiceTests : IDisposable
 
         Assert.All(buffer, c => Assert.Equal('\0', c));
         Assert.Null(Service.PassphraseBuffer(VmId, _userId));
-        Assert.False(_guest.AdminAccounts[(VmId, "hha-owner")].Enabled);
+        Assert.NotEmpty(_guest.AdminLocked);
         Assert.Null(_store.Find(VmId, _userId));
         var entry = Assert.Single(_audit.Entries);
         Assert.Equal((GuestAdminAudit.CloseAction, AuditOutcome.Succeeded, VmId, _userId, Laptop.DeviceId), (entry.Action, entry.Outcome, entry.VmId, entry.UserId, entry.DeviceId));
@@ -149,7 +210,7 @@ public sealed class GuestAdminServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task VmStopping_EndsTheWindow_AndTheAccountIsDisabledWhenTheVmRunsAgain()
+    public async Task VmStopping_EndsTheWindow_AndTheAccountIsLockedWhenTheVmRunsAgain()
     {
         await Service.OpenAsync(VmId, _userId, Laptop, CancellationToken.None);
         _inventory.SetState(VmId, VmState.Off);
@@ -159,12 +220,12 @@ public sealed class GuestAdminServiceTests : IDisposable
         var status = await Service.GetStatusAsync(VmId, _userId, CancellationToken.None);
         Assert.Equal(new GuestAdminStatus("hha-owner", false, null, true), status);
         Assert.Null(Service.PassphraseBuffer(VmId, _userId));
-        Assert.Empty(_guest.AdminDisabled);
+        Assert.Empty(_guest.AdminLocked);
 
         _inventory.SetState(VmId, VmState.Running);
         await Service.SweepAsync(CancellationToken.None);
 
-        Assert.Single(_guest.AdminDisabled);
+        Assert.Single(_guest.AdminLocked);
         Assert.False((await Service.GetStatusAsync(VmId, _userId, CancellationToken.None)).ClosePending);
         Assert.EndsWith("reason=vmStopped", Assert.Single(_audit.Entries).Detail);
     }
@@ -182,7 +243,7 @@ public sealed class GuestAdminServiceTests : IDisposable
 
         await Service.SweepAsync(CancellationToken.None);
 
-        Assert.False(_guest.AdminAccounts[(VmId, "hha-owner")].Enabled);
+        Assert.NotEmpty(_guest.AdminLocked);
         Assert.Null(_store.Find(VmId, _userId));
         Assert.EndsWith("reason=hostStartup", Assert.Single(_audit.Entries).Detail);
     }
@@ -215,7 +276,7 @@ public sealed class GuestAdminServiceTests : IDisposable
         await Service.WaitForBackgroundAsync();
 
         Assert.Null(_store.Find(VmId, _userId));
-        Assert.Empty(_guest.AdminDisabled);
+        Assert.Empty(_guest.AdminLocked);
     }
 
     [Fact]
@@ -265,7 +326,7 @@ public sealed class GuestAdminServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task UnverifiedAccount_FailsTheOpen_AndIsDisabled()
+    public async Task UnverifiedAccount_FailsTheOpen_AndIsLocked()
     {
         _guest.AdminInRemoteDesktopUsers = true;
 
@@ -273,7 +334,7 @@ public sealed class GuestAdminServiceTests : IDisposable
         await Service.WaitForBackgroundAsync();
 
         Assert.Contains("in Remote Desktop Users: True", error.Message, StringComparison.Ordinal);
-        Assert.False(_guest.AdminAccounts[(VmId, "hha-owner")].Enabled);
+        Assert.NotEmpty(_guest.AdminLocked);
         Assert.Null(_store.Find(VmId, _userId));
         Assert.EndsWith("reason=openFailed", Assert.Single(_audit.Entries).Detail);
     }

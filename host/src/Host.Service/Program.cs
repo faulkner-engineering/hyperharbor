@@ -57,6 +57,7 @@ using Microsoft.Extensions.Options;
 // HyperHarbor.Host.exe is the service, the tray, the installer, and the elevated helpers (HostCommandLine).
 var isWindowsService = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService();
 SelfTestRun? selfTest = null;
+var ownConsoleWindow = false;
 if (!isWindowsService)
 {
     // A Windows executable has no console: commands that print attach to the terminal that started them.
@@ -107,6 +108,7 @@ if (!isWindowsService)
         case HostMode.Host when !redirected:
             // A console run gets its own window, which outlives the terminal or script that started it.
             ConsoleAttachment.OpenWindow();
+            ownConsoleWindow = true;
             break;
     }
 }
@@ -159,6 +161,19 @@ IReadOnlyCollection<System.Security.Principal.SecurityIdentifier> logReaders = t
 
 // Other local accounts must not be able to plant files the service would trust (the installer does this too).
 var untrustedDataEntries = isWindowsService ? DataDirectoryAcl.Secure(dataDirectory, trayUser) : [];
+
+// A portable host runs as the signed-in user; files an elevated helper wrote as another administrator can lock it out.
+if (!isWindowsService && DataDirectoryAccess.FindUnreadable(dataDirectory) is { Count: > 0 } unreadable)
+{
+    Console.Error.WriteLine(UnreadableData.Describe(dataDirectory, unreadable));
+    if (ownConsoleWindow)
+    {
+        Console.Error.WriteLine("Press Enter to close this window.");
+        Console.ReadLine();
+    }
+
+    return UnreadableData.ExitCode;
+}
 
 // Migrates older data and refuses data a newer version wrote, before any store reads it.
 DataFormat.EnsureCurrent(dataDirectory);
@@ -227,12 +242,14 @@ builder.Services.AddSingleton<AmbientService>();
 builder.Services.AddSingleton<GameReadyService>();
 
 builder.Services.AddSingleton(new VmCredentialStore(dataDirectory));
+builder.Services.AddSingleton(new VmAccountPasswordStore(dataDirectory));
 builder.Services.AddSingleton(new ProvisioningStore(dataDirectory));
 builder.Services.AddSingleton<IGuestAccountManager>(new GuestAccountRouter(new PowerShellDirectAccountManager(), new SshAccountManager()));
 builder.Services.AddSingleton<ProvisioningService>();
 builder.Services.AddSingleton(services => new PasswordRotator(
     services.GetRequiredService<IGuestAccountManager>(),
     services.GetRequiredService<VmCredentialStore>(),
+    services.GetRequiredService<VmAccountPasswordStore>(),
     services.GetRequiredService<TimeProvider>(),
     TimeSpan.FromSeconds(builder.Configuration.GetValue("Rdp:ReuseWindowSeconds", (int)PasswordRotator.DefaultReuseWindow.TotalSeconds)),
     services.GetRequiredService<ILogger<PasswordRotator>>()));
@@ -419,6 +436,9 @@ if (isWindowsService && selfTest is null)
 builder.Services.AddSingleton(services => ActivatorUtilities.CreateInstance<VmCreationService>(services, services.GetRequiredService<VmStorageLocation>()));
 builder.Services.AddSingleton<IHyperVCompute, CimHyperVCompute>();
 builder.Services.AddSingleton<VmComputeService>();
+builder.Services.AddSingleton<IHyperVDisks, CimHyperVDisks>();
+builder.Services.AddSingleton<IPartitionExtender, PowerShellPartitionExtender>();
+builder.Services.AddSingleton<VmDiskService>();
 
 // Performance mode: GPU partitioning and fixed resources for Windows VMs.
 builder.Services.AddSingleton(new PerformanceStore(dataDirectory));

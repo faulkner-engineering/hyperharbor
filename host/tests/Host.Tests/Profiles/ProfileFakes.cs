@@ -167,11 +167,14 @@ internal sealed class FakeGuestProfileApplier : IGuestProfileApplier
 
     public List<RegistryWrite> Writes { get; } = [];
 
-    public Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(Guid vmId, GuestCredential admin, IReadOnlyList<RegistryWrite> writes, string? userAccount, CancellationToken cancellationToken)
+    public List<FileWrite> Files { get; } = [];
+
+    public Task<IReadOnlyList<ApplyItemResult>> WriteSettingsAsync(Guid vmId, GuestCredential admin, IReadOnlyList<FileWrite> files, IReadOnlyList<RegistryWrite> writes, string? userAccount, CancellationToken cancellationToken)
     {
         UserAccounts.Add(userAccount);
+        Files.AddRange(files);
         Writes.AddRange(writes);
-        return Run("settings", admin, writes.Select(write => write.Item).Distinct().ToList());
+        return Run("settings", admin, files.Select(file => file.Item).Concat(writes.Select(write => write.Item)).Distinct().ToList());
     }
 
     private Task<IReadOnlyList<ApplyItemResult>> Run(string step, GuestCredential admin, List<string> items)

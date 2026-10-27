@@ -493,6 +493,43 @@ verified, and what was found along the way. User-facing changes per release are 
      platform-notes.md, Unattended installs). The test VM sat at the firmware's boot summary for an hour before this.
      HyperVWorkerBootEvents was checked against the real log (HH_BOOT_EVENTS_LIVE with HH_LIVE_GUEST_VM and
      HH_BOOT_FAILED_AT); the restart itself has unit tests only.
+29. Release 0.2.4 (2026-10-26; API 1.36.0; branch release/0.2.4). The user's notes from a weekend of use, gathered
+   into one release with the Remote Desktop window titles.
+   - Portable host data access: Start-HyperHarbor.ps1's elevated setup ran as the administrator who approved UAC and
+     locked a standard user out of users.json (platform-notes.md, General). --setup-console --for-user, repair of
+     existing files, and a clear message from the host. Verified live on the development VM (hh-owner, hha-owner).
+   - Default browser (the user: "I can't set Brave as the default browser"): browser.makeDefault in setup and machine
+     profiles, VM profiles only. The planner writes C:\ProgramData\HyperHarbor\DefaultAssociations.xml (http, https,
+     .htm, .html to the catalog's progId) and the DefaultAssociationsConfiguration policy naming it; the settings step
+     gained file writes for it. The user accepted that Windows reapplies it at every sign-in. Client: a checkbox in
+     the Browser section (hostSupports 1.36.0); makeDefault is sent only when on, since older hosts reject unknown
+     fields in machine profiles.
+   - Edge (the user: "I can't remove Edge from a Windows install"): Windows blocks it outside the EEA, so the user chose
+     to hide it instead. Tweak system.hideEdge (policies only) and Microsoft.MicrosoftEdge.Stable rated keep with a
+     note. Not done: forced removal, an EEA region at install, unpinning from the taskbar.
+   - Disk growth (the user: "built-in functionality for increasing the maximum size of a disk"): GET /vms/{id}/disks and
+     POST /vms/{id}/disks/grow (elevated, a growDisk job with diskGrowResult). VmDiskService (Host.Core/Lifecycle):
+     ResizeVirtualHardDisk through CimHyperVDisks; online for a VHDX on a Generation 2 VM, otherwise the VM off or
+     shutDownToApply (VmShutdown, now shared with VmComputeService). Blockers: checkpoints, differencing disks,
+     unreadable files, saved or paused VMs. PowerShellPartitionExtender extends the last partition when it is basic
+     NTFS: Mount-DiskImage on the host for an off VM (administrator only, so the installed service), or over
+     PowerShell Direct with the stored administrator for a running one (the guest disk is the one whose size matches).
+     Linux guests get the growpart, pvresize, and lvextend commands as a note; the user chose that over running them
+     over SSH. Client: Disk size… in the VM menu (hostSupports 1.36.0), DiskDialog. Verified: unit tests, and
+     DiskGrowLiveTests (HH_DISK_GROW_LIVE) grew a real VHDX from 1 to 2 GB through Hyper-V on the development VM. Not
+     yet run against a VM: online growth, and both partition extensions.
+   - Recovery partition (found by Release024LiveTests): Windows Setup on build 26300 media shrank C: and added its own
+     0.87 GB recovery partition after it, so C: never grew. The user chose both fixes: the autounattend now makes a 1 GB
+     recovery partition before C: (partition 4), and in a running guest the extender moves an existing one to the end
+     (KB5028997: reagentc /disable, delete, extend, recreate, reagentc /enable). Verified live: C: 39 to 55 GB with
+     Windows RE enabled in the new partition 4.
+   - Brave extensions (the user: "each time I restart the VM Brave resets my extension"): every Connect reset the VM
+     account's password, which loses its DPAPI data (proven in the guest: a change kept protected data, a reset did
+     not). The user agreed to store the current password (VmAccountPasswordStore, DPAPI) and change it instead;
+     CLAUDE.md's rule changed with it. PasswordChangeLiveTests checks the real script (change, wrong password resets).
+   - UAC account (the user: "it would be nice if it was always just there"): hha-<username> stays enabled with a random
+     password between windows (LockAdminAsync replaces DisableAdminAsync), and Connect creates or enables it in the
+     background (EnsureListedAsync). Verified with GuestAdminLiveTests on HyperHarbor-Test.
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

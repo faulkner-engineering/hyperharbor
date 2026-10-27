@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Security.Principal;
 using HyperHarbor.Shared.Contracts.Ipc;
 
 namespace HyperHarbor.Host.Tray;
@@ -15,7 +16,22 @@ internal static class ConsoleAccessSetup
 
     /// <returns>Whether the helper succeeded, and what to tell the user.</returns>
     public static Task<(bool Succeeded, string Message)> RunAsync(string? serviceExecutable, string dataDirectory) =>
-        ElevatedHelper.RunAsync(serviceExecutable, [ConsoleSetupHelper.SetupSwitch, dataDirectory], "Console access is set up.");
+        ElevatedHelper.RunAsync(serviceExecutable, Arguments(dataDirectory, InstalledService.IsInstalled(), CurrentUser()), "Console access is set up.");
+
+    /// <summary>
+    /// A portable host runs as the tray's user, but the helper runs as whichever administrator approves the UAC
+    /// prompt, so the helper is told whose files it writes. The installed service runs as LocalSystem instead.
+    /// </summary>
+    internal static IReadOnlyList<string> Arguments(string dataDirectory, bool serviceInstalled, SecurityIdentifier? user) =>
+        serviceInstalled || user is null
+            ? [ConsoleSetupHelper.SetupSwitch, dataDirectory]
+            : [ConsoleSetupHelper.SetupSwitch, ConsoleSetupHelper.ForUserOption + user.Value, dataDirectory];
+
+    private static SecurityIdentifier? CurrentUser()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return identity.User;
+    }
 }
 
 /// <summary>

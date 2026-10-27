@@ -9,6 +9,13 @@ public sealed record GuestCredential(string UserName, string Password)
     public override string ToString() => $"GuestCredential {{ UserName = {UserName} }}";
 }
 
+/// <summary>What a password change did: changed from the current password, or reset, and why.</summary>
+/// <param name="ResetReason">The guest's error from the change that failed, which can contain no secret; null when it changed.</param>
+public sealed record PasswordChange(bool Changed, string? ResetReason)
+{
+    public static readonly PasswordChange Success = new(true, null);
+}
+
 /// <summary>How to reach a guest.</summary>
 /// <param name="Os">Selects PowerShell Direct (Windows) or SSH (Linux).</param>
 /// <param name="Address">Linux: the guest address for SSH. Not used for Windows.</param>
@@ -70,6 +77,13 @@ public interface IGuestAccountManager
 
     Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Changes the password from <paramref name="currentPassword"/>, as the account itself would, so the data Windows protected
+    /// with it (DPAPI) stays readable; falls back to a reset when the current password no longer works.
+    /// </summary>
+    /// <returns>Whether it was changed, or why it had to be reset (Linux guests always reset).</returns>
+    Task<PasswordChange> ChangePasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string currentPassword, string password, CancellationToken cancellationToken);
+
     /// <summary>Windows only: the state of a User's administrator account.</summary>
     Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken);
 
@@ -87,8 +101,11 @@ public interface IGuestAccountManager
         string password,
         CancellationToken cancellationToken);
 
-    /// <summary>Windows only: disables the administrator account and sets its password. Does nothing when it does not exist.</summary>
-    Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken);
+    /// <summary>
+    /// Windows only: ends an administrator window by setting a random password the host forgets. The account stays
+    /// enabled, so User Account Control prompts keep offering it. Does nothing when it does not exist.
+    /// </summary>
+    Task LockAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken);
 }
 
 /// <summary>Sends each call to the manager for the guest's OS family.</summary>
@@ -118,6 +135,9 @@ public sealed class GuestAccountRouter : IGuestAccountManager
     public Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
         For(target).SetPasswordAsync(target, admin, accountName, password, cancellationToken);
 
+    public Task<PasswordChange> ChangePasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string currentPassword, string password, CancellationToken cancellationToken) =>
+        For(target).ChangePasswordAsync(target, admin, accountName, currentPassword, password, cancellationToken);
+
     public Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken) =>
         For(target).InspectAdminAsync(target, admin, accountName, cancellationToken);
 
@@ -130,8 +150,8 @@ public sealed class GuestAccountRouter : IGuestAccountManager
         CancellationToken cancellationToken) =>
         For(target).EnableAdminAsync(target, admin, accountName, fullName, password, cancellationToken);
 
-    public Task DisableAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
-        For(target).DisableAdminAsync(target, admin, accountName, password, cancellationToken);
+    public Task LockAdminAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken) =>
+        For(target).LockAdminAsync(target, admin, accountName, password, cancellationToken);
 
     private IGuestAccountManager For(GuestTarget target) => target.Os switch
     {

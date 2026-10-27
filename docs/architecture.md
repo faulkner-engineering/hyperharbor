@@ -19,9 +19,9 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   by a one-time Provision VM flow. On each connect the host rotates its password via PowerShell Direct
   (serialized per VM and User, short reuse window), returns it to the requesting paired Device over mTLS,
   and the client removes it from the OS credential store after launching RDP. For UAC prompts inside a Windows
-  VM, each User also has a local administrator account hha-<username>, disabled except during a short
-  administrator window (GuestAdminService; elevated to open, one-time passphrase in host memory only, a random
-  password and disabled again when it ends). Design and the planned guest agent: [guest-elevation.md](guest-elevation.md).
+  VM, each User also has a local administrator account hha-<username>, always listed in UAC prompts
+  but usable only during a short administrator window (GuestAdminService; elevated to open, one-time passphrase in
+  host memory only, a random password nobody keeps otherwise). Design and the planned guest agent: [guest-elevation.md](guest-elevation.md).
 - Wake-on-LAN: readiness check with auto-fix, Test Wake, relay mode later
 - VM lifecycle: create from an ISO in the host's library, change compute settings, delete; long operations
   are jobs the client polls. Power actions, lifecycle jobs, and settings changes take a per-VM lock.
@@ -36,16 +36,18 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - docs/api.yaml: OpenAPI 3.1 contract, the source of truth for host and client
 - host/src/Shared.Contracts: DTOs mirroring api.yaml; ContractJson holds the wire JSON options
 - host/src/Host.Core: HyperV/ (CIM reader, VmMapper), Power/ (actions), Discovery/ (DNS-SD), Identity/,
-  Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile),
+  Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile,
+  DataDirectoryAccess: finds and repairs data files a portable host cannot open),
   Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService), Lifecycle/ (create, delete,
-  compute, jobs, locks, ISO library), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
+  compute, jobs, locks, ISO library, VmDiskService and VmDisks: listing and growing disks and extending the
+  partition), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
   VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants),
   Power/ (VM power actions; KeepAwake: the power request that keeps the host awake during remote use),
   Profiles/ (setup profiles: Catalogs, ProfileYamlReader/Writer, ProfileValidator, PackageAliasResolver,
   ExtensionIdParser, SetupProfileStore, AppxBaselines, AppxInventoryService, GuestProfileReader (PowerShell Direct
   scripts), PackageSearch (pwsh fallback), WingetIndex and WingetPackageSearch (the downloaded winget index, read
   through WinSqlite over winsqlite3.dll), ExtensionResolver, ProfileCaptureService),
-  Provisioning/ (ProvisioningService, ConnectService, PasswordRotator, VmCredentialStore, GuestAccounts with
+  Provisioning/ (ProvisioningService, ConnectService, PasswordRotator, VmCredentialStore, VmAccountPasswordStore, GuestAccounts with
   IGuestAccountManager, PowerShellDirectAccountManager (its Script and AdminScript), SshAccountManager; administrator
   windows: GuestAdminService, GuestAdminStore (guest-admin.json), PassphraseGenerator with PassphraseWords.txt (embedded))
 - catalogs/*.yaml (packages, extensions, appx, tweaks, browsers) and schemas/profile.v1.schema.json at the repository
@@ -53,6 +55,7 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and
   elevation filter (Security/), audit filter and job audit (Audit/), tray pipe server (Tray/), mDNS (Discovery/),
   ConsoleEndpoints (console session and upgraded tunnel), VmConsole/ConsoleSetupCommand (elevated --setup-console),
+  Security/UnreadableData (the portable host's message when it cannot open its data),
   GuestAdminEndpoints and GuestAdminMonitorService (the administrator window sweep).
   It builds HyperHarbor.Host.exe (WinExe); Program.cs picks the mode with Installation/HostCommandLine (service,
   console run, --tray, launcher, install, uninstall, helpers). Installation/: HostInstaller (elevated steps),

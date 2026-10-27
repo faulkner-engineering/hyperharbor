@@ -20,6 +20,7 @@ public enum VmJobKind
     TransferVm,
     MergeCheckpoints,
     ApplyMachineProfile,
+    GrowDisk,
 }
 
 /// <summary>Schema: VmJobState.</summary>
@@ -40,6 +41,7 @@ public sealed record JobError(string Title, string Detail);
 /// <param name="SetupResult">What an applySetupProfile job did, once it succeeded; omitted otherwise.</param>
 /// <param name="RestoreResult">What a restoreVm or restoreHostState job did, once it succeeded; omitted otherwise.</param>
 /// <param name="TransferResult">What a transferVm job did, once it succeeded; omitted otherwise.</param>
+/// <param name="DiskGrowResult">What a growDisk job did, once it succeeded; omitted otherwise.</param>
 public sealed record VmJob(
     Guid Id,
     VmJobKind Kind,
@@ -52,4 +54,5 @@ public sealed record VmJob(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] JobError? Error,
     Unattend.SetupProfileResult? SetupResult = null,
     Backup.RestoreResult? RestoreResult = null,
-    Transfers.TransferResult? TransferResult = null);
+    Transfers.TransferResult? TransferResult = null,
+    DiskGrowResult? DiskGrowResult = null);

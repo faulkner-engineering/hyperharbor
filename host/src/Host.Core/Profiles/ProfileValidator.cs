@@ -114,7 +114,7 @@ public sealed partial class ProfileValidator(Catalogs catalogs, HostCatalogs? ho
         }
 
         var tweaks = Tweaks(profile.Tweaks, issues);
-        var browser = Browser(profile.Browser, issues);
+        var browser = Browser(profile.Browser, isHost, issues);
         var services = isHost ? Services(profile.Services, issues) : null;
         var startup = isHost ? Startup(profile.Startup, issues) : null;
         var power = isHost ? Power(profile.Power, issues) : null;
@@ -320,7 +320,7 @@ public sealed partial class ProfileValidator(Catalogs catalogs, HostCatalogs? ho
         return result;
     }
 
-    private ProfileBrowser? Browser(ProfileBrowser? browser, List<ValidationIssue> issues)
+    private ProfileBrowser? Browser(ProfileBrowser? browser, bool isHost, List<ValidationIssue> issues)
     {
         if (browser is null)
         {
@@ -383,7 +383,12 @@ public sealed partial class ProfileValidator(Catalogs catalogs, HostCatalogs? ho
             }
         }
 
-        return new ProfileBrowser(new ProfileItem(appId, Clean(browser.App?.Name) ?? known?.Name), extensions, policies);
+        if (browser.MakeDefault && isHost)
+        {
+            issues.Add(new("browser.makeDefault", "Setting the default browser belongs to VM profiles."));
+        }
+
+        return new ProfileBrowser(new ProfileItem(appId, Clean(browser.App?.Name) ?? known?.Name), extensions, policies, browser.MakeDefault);
     }
 
     /// <summary>The policy types for <see cref="ProfileYamlWriter"/>.</summary>

@@ -32,6 +32,7 @@ public sealed class VmDeletionService
     private readonly GameAware.GameAwareStore? _gameAware;
     private readonly Backup.BackupConfigStore? _backups;
     private readonly Profiles.VmConnectionDefaultsStore? _connectionDefaults;
+    private readonly Provisioning.VmAccountPasswordStore? _accountPasswords;
 
     public VmDeletionService(
         IVmInventory inventory,
@@ -44,8 +45,10 @@ public sealed class VmDeletionService
         Provisioning.ProvisioningStore? provisioning = null,
         GameAware.GameAwareStore? gameAware = null,
         Backup.BackupConfigStore? backups = null,
-        Profiles.VmConnectionDefaultsStore? connectionDefaults = null)
+        Profiles.VmConnectionDefaultsStore? connectionDefaults = null,
+        Provisioning.VmAccountPasswordStore? accountPasswords = null)
     {
+        _accountPasswords = accountPasswords;
         _connectionDefaults = connectionDefaults;
         _unattended = unattended;
         _performance = performance;
@@ -248,7 +251,7 @@ public sealed class VmDeletionService
 
     /// <summary>
     /// Removes what the host keeps about a deleted VM: its install record and credential, Performance mode record,
-    /// provisioned accounts, game-aware policy, and backup policies. Backups already taken stay in their repositories.
+    /// provisioned accounts and their passwords, game-aware policy, and backup policies. Backups already taken stay in their repositories.
     /// The VM is gone by now, so a record that cannot be removed is logged and does not fail the deletion.
     /// </summary>
     private void ForgetRecords(Guid vmId, string vmName)
@@ -258,6 +261,7 @@ public sealed class VmDeletionService
         Forget("Performance mode record", () => _performance?.Remove(vmId));
         Forget("Remote Desktop defaults", () => _connectionDefaults?.Remove(vmId));
         Forget("provisioned accounts", () => _provisioning?.Remove(vmId));
+        Forget("account passwords", () => _accountPasswords?.RemoveVm(vmId));
         Forget("game-aware policy", () =>
         {
             if (_gameAware is not null && _gameAware.Load().VmPolicies.ContainsKey(key))

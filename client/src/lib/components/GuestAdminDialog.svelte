@@ -90,7 +90,7 @@
       .catch((e) =>
         toasts.error(
           `Administrator access to ${vm.name} could not be ended: ${errorMessage(e)} It ends by itself at ${endsAt}, ` +
-            "and HyperHarbor disables the account as soon as it can reach the VM.",
+            "and HyperHarbor replaces the passphrase as soon as it can reach the VM.",
         ),
       )
       .finally(() => onchanged?.());
@@ -158,7 +158,7 @@
       <button type="button" class="primary" onclick={done}>Done</button>
     </div>
   {:else if phase === "ended"}
-    <p role="status">Administrator access to {vm.name} has ended; HyperHarbor disables the account in the VM again.</p>
+    <p role="status">Administrator access to {vm.name} has ended; the passphrase no longer works.</p>
     <div class="actions">
       <button type="button" onclick={leave}>Close</button>
       <button type="button" class="primary" onclick={request}>Request again</button>

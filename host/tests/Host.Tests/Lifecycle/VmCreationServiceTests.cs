@@ -224,6 +224,20 @@ public sealed class VmCreationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AFailedCreate_RemovesTheVmsEmptyFolder_SoTheNameCanBeUsedAgain()
+    {
+        _options.VmRootFolder = @"D:\VMs";
+        _creation = Create();
+        _builder.FailAt = "configure";
+
+        var job = await _creation.StartAsync(UserId, Request(), null, CancellationToken.None);
+        await _jobs.WhenFinished(job.Id);
+
+        Assert.Equal(VmJobState.Failed, _jobs.Get(job.Id, UserId)!.State);
+        Assert.Equal([@"D:\VMs\Win11 Dev"], _files.FolderRequests);
+    }
+
+    [Fact]
     public async Task FailureCreatingTheDisk_DeletesNothing()
     {
         _builder.FailAt = "disk";

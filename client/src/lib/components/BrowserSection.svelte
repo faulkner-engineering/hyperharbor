@@ -1,6 +1,8 @@
 <script lang="ts">
   import {
+    DefaultBrowserApiVersion,
     errorMessage,
+    hostSupports,
     openStoreSearch,
     resolveExtension,
     type ExtensionCatalogItem,
@@ -29,6 +31,8 @@
     browserApp: string;
     extensions: ProfileItem[];
     policies: SvelteMap<string, string>;
+    /** Make the browser the default in the VM. */
+    makeDefault: boolean;
     selected: string | null;
     onselect: (detail: Detail) => void;
   }
@@ -42,6 +46,7 @@
     browserApp = $bindable(),
     extensions = $bindable(),
     policies,
+    makeDefault = $bindable(),
     selected,
     onselect,
   }: Props = $props();
@@ -136,6 +141,13 @@
 {#if !browser}
   <p class="muted">Choose a browser to install it with extensions and policies.</p>
 {:else}
+  {#if hostSupports(host, DefaultBrowserApiVersion)}
+    <label class="check default-browser">
+      <input type="checkbox" bind:checked={makeDefault} />
+      Make {browser.name} the default browser
+    </label>
+    <p class="muted hint">Windows applies this at every sign-in, so the default browser cannot be changed inside the VM.</p>
+  {/if}
   <Tabs
     label="Browser settings"
     tabs={[
@@ -237,6 +249,10 @@
 
   .beyond {
     margin-top: 0.75rem;
+  }
+
+  .default-browser + .hint {
+    margin-bottom: 0.75rem;
   }
 
   .caption {
