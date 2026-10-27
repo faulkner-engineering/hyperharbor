@@ -131,14 +131,18 @@ section for an area before changing it: most of these were learned from a failur
   its own folder under %TEMP%, since two sessions can share a name. The address stays in the title, which is
   how the client tells that the session window opened. (2026-10-26.) Verified live 2026-10-27: the address in the
   title includes the port from "full address" ("HyperHarbor-Test - 172.31.215.11:3389 - Remote Desktop Connection"),
-  so the title is not yet the "<VM name> - <IP>" form intended.
+  so the client leaves the port out when it is 3389 (rdp_endpoint) and the title reads "<VM name> - <IP>".
 - mstsc does not let a windowed session's window grow past the session's current resolution (it held one at 816x639,
   an 800x600 desktop, when asked for 1400x940 on a 2560x1080 screen; 2026-10-27, SessionLiveTests). Shrunk to 684x481,
   the guest stayed at 800x600 too, also with WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE around the resize as a drag sends
   them: dynamic resolution did not act at all in these windowed sessions (the user saw the same by hand; only full
   screen changes the resolution). The client's .rdp file and a minimal one (address, user, windowed) behaved the same,
-  so the file is not the cause. Not yet compared: a Windows guest HyperHarbor did not set up, and mstsc outside a
-  Remote Desktop session (the development PC is itself a VM used over Remote Desktop).
+  so the file is not the cause. The guest side was ready: each session opened Microsoft::Windows::RDS::DisplayControl
+  and rdpgrfx (RdpCoreTS/Operational events 132), and no Terminal Services policies were set. mstsc.exe and
+  mstscax.dll 10.0.26100.8875 contain the names of other .rdp settings ("smart sizing", "screen mode id",
+  "desktopwidth") but not "dynamic resolution" in any spelling, so that line in the client's file is most likely
+  ignored by this mstsc (an outside report found the same on 10.0.26200: github.com/endavis/gnome-connection-manager
+  issue 287). Not yet checked: mstsc on a physical PC rather than inside a Remote Desktop session, and Windows App.
 - Live test harness findings (SessionLiveTests, 2026-10-27): a CertHash value under HKCU\Software\Microsoft\Terminal
   Server Client\Servers\<address> with the presented certificate's SHA-1 did not stop mstsc's "could not be
   authenticated" dialog, and Win32_TSGeneralSetting.SSLCertificateSHA1Hash matched the served certificate anyway; the
@@ -382,7 +386,14 @@ section for an area before changing it: most of these were learned from a failur
   Seen 2026-10-27 (SessionLiveTests, Windows 11 build 26300, UCPD running): with the policy and its file in place before
   hh-owner's first sign-in, and BraveHTML registered for all users, hh-owner's http and https still opened in Edge.
   The account had its own hashed UserChoice of MSEdgeHTM, and it stayed after a reconnect and a VM restart, so the
-  policy did not override it at those sign-ins. Not fixed yet.
+  policy did not override it at those sign-ins. The cause: Windows does not read the policy on a workgroup PC. Its
+  documentation applies it only when the PC is domain-joined (Group Policy) or Microsoft Entra joined (the
+  ApplicationDefaults CSP), and Shell-Core/AppDefaults logged no policy step at any sign-in: at the first one
+  ("First logon of new user") it applied only the OEM defaults ("AppDefaults-ApplyOEMDefaultAssociations - apply dll
+  resource", then "- apply xml file", which set http and https to MSEdgeHTM), and later ones logged only
+  "AppDefaults-Logon-UserProfileLoaded". The OEM step reads the file `Dism /Online /Import-DefaultAppAssociations`
+  installs, so importing the browser's associations that way before the account's first sign-in is the likely fix
+  for new accounts (not yet tried); an account that has signed in keeps its choice. Not fixed yet.
 - Edge cannot be removed outside the European Economic Area: Windows offers the uninstall only when the region chosen
   at setup is in the EEA, and other apps need its WebView2 runtime. Forced removals are unsupported and Windows Update
   can put Edge back. The tweak system.hideEdge only sets Edge and EdgeUpdate policies (StartupBoostEnabled,

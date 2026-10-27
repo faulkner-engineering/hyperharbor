@@ -458,7 +458,7 @@ public sealed class SessionLiveTests(ITestOutputHelper output)
     private static string Describe(JsonNode result) => $"brave {result["brave"]}, blob of {((string?)result["blob"])?.Length ?? 0} characters";
 
     /// <summary>Runs scripts in the guest over PowerShell Direct as the stored administrator, or in a user's session.</summary>
-    private sealed class Guest(Guid vmId, GuestCredential admin)
+    internal sealed class Guest(Guid vmId, GuestCredential admin)
     {
         public async Task<JsonNode> AsAdminAsync(string command, params object[] arguments) =>
             await RunAsync(command, arguments, TimeSpan.FromMinutes(3));
