@@ -190,7 +190,8 @@ public sealed class Release024LiveTests(ITestOutputHelper output)
             {
                 return await GuestAsync(script, vmId, admin);
             }
-            catch (GuestUnavailableException) when (DateTime.UtcNow < deadline)
+            // While Windows starts, PowerShell Direct fails either way: unavailable, or "a remote session might have ended".
+            catch (Exception ex) when (ex is GuestUnavailableException or GuestOperationException && DateTime.UtcNow < deadline)
             {
                 await Task.Delay(TimeSpan.FromSeconds(10));
             }

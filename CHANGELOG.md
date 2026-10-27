@@ -10,7 +10,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
-API 1.36.0.
+## [0.2.4-beta.1] - 2026-10-27 (API 1.36.0)
+
+A beta of 0.2.4: growing a VM's disk, a default browser and a quieter Edge in setup profiles, browser data that survives
+Connect, an administrator account that UAC always offers, and Remote Desktop windows named after their VM. Update both
+the host and the client; the new options need a host with API 1.36.0.
 
 ### Added
 - Disk size… in a VM's menu grows a virtual hard disk. A Generation 2 VM's VHDX grows while the VM runs; anything else
