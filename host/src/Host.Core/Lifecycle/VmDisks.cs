@@ -141,12 +141,53 @@ public sealed class PowerShellPartitionExtender : IPartitionExtender
     internal static PartitionExtension Parse(System.Text.Json.Nodes.JsonNode? result) =>
         new((bool?)result?["extended"] ?? false, (string?)result?["note"] is { Length: > 0 } note ? note : null);
 
-    /// <summary>Extends the last partition of disk $number when it is basic NTFS. Shared by both scripts.</summary>
+    /// <summary>
+    /// Extends the last partition of disk $number when it is basic NTFS. Shared by both scripts. When Windows RE's
+    /// recovery partition follows a basic NTFS partition (Windows Setup adds one after C: when the layout has none),
+    /// a running guest ($inGuest) moves it to the end of the disk the way Microsoft documents (KB5028997): Windows RE
+    /// off, the recovery partition deleted, C: extended less its size, a new recovery partition made, Windows RE on.
+    /// Turning Windows RE off copies it to C:, so a failure after that leaves the guest bootable, with Windows RE on C:.
+    /// </summary>
     private const string ExtendFunction = """
-        function Extend($number) {
+        function MoveRecovery($number, $data, $recovery) {
+            $size = $recovery.Size
+            $enabled = (reagentc.exe /info | Out-String) -match 'Windows RE status:\s+Enabled'
+            if ($enabled) {
+                reagentc.exe /disable | Out-Null
+                if ($LASTEXITCODE -ne 0) { return @{ extended = $false; note = 'Windows RE could not be turned off, so the recovery partition after C: was left in place and C: did not grow. Extend it in Disk Management in the VM.' } }
+            }
+            $problem = $null
+            try {
+                Remove-Partition -DiskNumber $number -PartitionNumber $recovery.PartitionNumber -Confirm:$false
+                $max = (Get-PartitionSupportedSize -DiskNumber $number -PartitionNumber $data.PartitionNumber).SizeMax
+                $target = [math]::Floor(($max - $size) / 1MB) * 1MB
+                if ($target -gt $data.Size) { Resize-Partition -DiskNumber $number -PartitionNumber $data.PartitionNumber -Size $target }
+                $new = New-Partition -DiskNumber $number -UseMaximumSize -GptType '{de94bba4-06d1-4d40-a16a-bfd50179d6ac}'
+                $new | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'Recovery' -Confirm:$false | Out-Null
+                # Required and without a drive letter, as Windows marks its own recovery partition.
+                "select disk $number`nselect partition $($new.PartitionNumber)`ngpt attributes=0x8000000000000001`nexit" | diskpart.exe | Out-Null
+            }
+            catch { $problem = $_.Exception.Message }
+            finally {
+                if ($enabled) { reagentc.exe /enable | Out-Null; $reEnabled = $LASTEXITCODE -eq 0 } else { $reEnabled = $true }
+            }
+            $grown = (Get-Partition -DiskNumber $number -PartitionNumber $data.PartitionNumber).Size -gt $data.Size
+            $notes = @()
+            if ($problem) { $notes += "Moving the recovery partition stopped: $problem" }
+            if (-not $reEnabled) { $notes += 'Windows RE could not be turned back on; run reagentc /enable as an administrator in the VM.' }
+            return @{ extended = $grown; note = $(if ($notes.Count -gt 0) { $notes -join ' ' } else { $null }) }
+        }
+
+        function Extend($number, $inGuest) {
             $partitions = @(Get-Partition -DiskNumber $number | Sort-Object Offset)
             if ($partitions.Count -eq 0) { return @{ extended = $false; note = 'The disk has no partitions, so there was nothing to extend.' } }
             $last = $partitions[-1]
+            if ($last.Type -eq 'Recovery' -and $partitions.Count -ge 2 -and $partitions[-2].Type -eq 'Basic' -and ($partitions[-2] | Get-Volume -ErrorAction SilentlyContinue).FileSystem -eq 'NTFS') {
+                if (-not $inGuest) {
+                    return @{ extended = $false; note = 'A recovery partition follows C:, and it can be moved only while Windows runs. Start the VM and grow the disk again by a gigabyte; HyperHarbor then moves it and extends C:.' }
+                }
+                return MoveRecovery $number $partitions[-2] $last
+            }
             $volume = $last | Get-Volume -ErrorAction SilentlyContinue
             if ($last.Type -notin @('Basic', 'IFS') -or -not $volume -or $volume.FileSystem -ne 'NTFS') {
                 return @{ extended = $false; note = 'The last partition on the disk is not a Windows (NTFS) data partition, for example a recovery partition after C:, so it was left as it is. Extend the partition in Disk Management in the VM.' }
@@ -173,7 +214,7 @@ public sealed class PowerShellPartitionExtender : IPartitionExtender
                 $disk = $image | Get-Disk
                 if ($disk.IsOffline) { Set-Disk -Number $disk.Number -IsOffline $false }
                 if ($disk.IsReadOnly) { Set-Disk -Number $disk.Number -IsReadOnly $false }
-                $result = Extend $disk.Number
+                $result = Extend $disk.Number $false
             }
             finally { Dismount-DiskImage -ImagePath $request.path | Out-Null }
             Reply @{ ok = $true; result = $result }
@@ -215,7 +256,7 @@ public sealed class PowerShellPartitionExtender : IPartitionExtender
                 if ($disks.Count -ne 1) {
                     return @{ extended = $false; note = 'Windows in the VM did not show exactly one disk of the new size, so no partition was extended. Extend it in Disk Management in the VM.' }
                 }
-                Extend $disks[0].Number
+                Extend $disks[0].Number $true
             }
             Reply @{ ok = $true; result = $result }
         }

@@ -83,7 +83,7 @@ public static class AutounattendBuilder
                                         new XElement(Ns + "Value", install.Edition))),
                                 new XElement(Ns + "InstallTo",
                                     new XElement(Ns + "DiskID", 0),
-                                    new XElement(Ns + "PartitionID", 3)))),
+                                    new XElement(Ns + "PartitionID", WindowsPartition)))),
                         new XElement(Ns + "UserData",
                             new XElement(Ns + "AcceptEula", "true"),
                             new XElement(Ns + "ProductKey",
@@ -225,7 +225,14 @@ public static class AutounattendBuilder
                     new XElement(Ns + "Order", index + 1),
                     new XElement(Ns + "Path", $@"reg add HKLM\SYSTEM\Setup\LabConfig /v {value} /t REG_DWORD /d 1 /f"))));
 
-    /// <summary>Disk 0 as EFI (100 MB, FAT32), MSR (16 MB), and Windows (the rest, NTFS, C:).</summary>
+    /// <summary>The Windows partition (C:), last on the disk.</summary>
+    internal const int WindowsPartition = 4;
+
+    /// <summary>
+    /// Disk 0 as EFI (100 MB, FAT32), MSR (16 MB), Recovery (1 GB, NTFS), and Windows (the rest, NTFS, C:). Setup puts
+    /// Windows RE in an existing recovery partition; without one it shrinks C: and adds one after it, which keeps C:
+    /// from growing when the disk does (seen on build 26300 media, 2026-10-26).
+    /// </summary>
     private static XElement DiskLayout() =>
         new(Ns + "DiskConfiguration",
             new XElement(Ns + "Disk", Add(),
@@ -234,8 +241,9 @@ public static class AutounattendBuilder
                 new XElement(Ns + "CreatePartitions",
                     CreatePartition(1, "EFI", 100),
                     CreatePartition(2, "MSR", 16),
+                    CreatePartition(3, "Primary", 1024),
                     new XElement(Ns + "CreatePartition", Add(),
-                        new XElement(Ns + "Order", 3),
+                        new XElement(Ns + "Order", 4),
                         new XElement(Ns + "Type", "Primary"),
                         new XElement(Ns + "Extend", "true"))),
                 new XElement(Ns + "ModifyPartitions",
@@ -250,6 +258,12 @@ public static class AutounattendBuilder
                     new XElement(Ns + "ModifyPartition", Add(),
                         new XElement(Ns + "Order", 3),
                         new XElement(Ns + "PartitionID", 3),
+                        new XElement(Ns + "Label", "Recovery"),
+                        new XElement(Ns + "Format", "NTFS"),
+                        new XElement(Ns + "TypeID", "DE94BBA4-06D1-4D40-A16A-BFD50179D6AC")),
+                    new XElement(Ns + "ModifyPartition", Add(),
+                        new XElement(Ns + "Order", 4),
+                        new XElement(Ns + "PartitionID", WindowsPartition),
                         new XElement(Ns + "Label", "Windows"),
                         new XElement(Ns + "Letter", "C"),
                         new XElement(Ns + "Format", "NTFS")))));
