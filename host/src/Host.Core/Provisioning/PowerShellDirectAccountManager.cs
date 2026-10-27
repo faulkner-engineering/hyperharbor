@@ -40,6 +40,16 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
         await RunAsync(new { operation = "setPassword", vmId = target.VmId, admin.UserName, admin.Password, accountName, accountPassword = password }, cancellationToken);
     }
 
+    public async Task<PasswordChange> ChangePasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string currentPassword, string password, CancellationToken cancellationToken)
+    {
+        var result = await RunAsync(
+            new { operation = "changePassword", vmId = target.VmId, admin.UserName, admin.Password, accountName, currentPassword, accountPassword = password },
+            cancellationToken);
+        return (bool?)result?["changed"] == true
+            ? PasswordChange.Success
+            : new PasswordChange(false, (string?)result?["reason"] is { Length: > 0 } reason ? reason : "The guest did not say why.");
+    }
+
     public async Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken)
     {
         var result = await RunAdminAsync(new { operation = "inspectAdmin", vmId = target.VmId, admin.UserName, admin.Password, accountName }, cancellationToken);
@@ -344,6 +354,28 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
             Set-LocalUser -Name $name -Password $password
         }
 
+        # A change from the current password keeps the account's DPAPI data readable; a reset does not. Accounts
+        # HyperHarbor made may not change their own password, which a change counts as, so that is allowed first.
+        $changePassword = {
+            param($name, [securestring]$current, [securestring]$password)
+            $ErrorActionPreference = 'Stop'
+            function Plain([securestring]$secure) {
+                $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+                try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+            }
+            $user = Get-LocalUser -Name $name
+            if (-not $user.UserMayChangePassword) { Set-LocalUser -Name $name -UserMayChangePassword $true }
+            try {
+                ([adsi]"WinNT://$env:COMPUTERNAME/$name,user").ChangePassword((Plain $current), (Plain $password))
+                @{ changed = $true; reason = $null }
+            }
+            catch {
+                $reason = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $_.Exception.Message }
+                Set-LocalUser -Name $name -Password $password
+                @{ changed = $false; reason = $reason }
+            }
+        }
+
         try {
             switch ($request.operation) {
                 'inspect' { $result = Invoke-Command -Session $session -ScriptBlock $inspect -ArgumentList $request.accountName }
@@ -354,6 +386,10 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
                 'setPassword' {
                     Invoke-Command -Session $session -ScriptBlock $setPassword -ArgumentList $request.accountName, (Secure $request.accountPassword)
                     $result = $null
+                }
+                'changePassword' {
+                    $how = Invoke-Command -Session $session -ScriptBlock $changePassword -ArgumentList $request.accountName, (Secure $request.currentPassword), (Secure $request.accountPassword)
+                    $result = @{ changed = [bool]$how.changed; reason = [string]$how.reason }
                 }
                 default { throw "Unknown operation $($request.operation)." }
             }

@@ -18,6 +18,7 @@ public sealed class ProvisioningService
     private readonly ProvisioningStore _provisioning;
     private readonly TimeProvider _time;
     private readonly ILogger<ProvisioningService> _logger;
+    private readonly VmAccountPasswordStore? _passwords;
 
     public ProvisioningService(
         IVmInventory inventory,
@@ -26,7 +27,8 @@ public sealed class ProvisioningService
         VmCredentialStore credentials,
         ProvisioningStore provisioning,
         TimeProvider time,
-        ILogger<ProvisioningService> logger)
+        ILogger<ProvisioningService> logger,
+        VmAccountPasswordStore? passwords = null)
     {
         _inventory = inventory;
         _users = users;
@@ -35,6 +37,7 @@ public sealed class ProvisioningService
         _provisioning = provisioning;
         _time = time;
         _logger = logger;
+        _passwords = passwords;
     }
 
     /// <exception cref="VmNotFoundException">No VM has this ID.</exception>
@@ -85,7 +88,7 @@ public sealed class ProvisioningService
         var target = new GuestTarget(vmId, os, address, pinnedKey);
         var options = new GuestProvisionOptions(request.EnableRemoteDesktop, request.InstallDesktop);
 
-        // The initial password is never stored; each connect rotates it.
+        // Kept so the first connect can change it rather than reset it (VmAccountPasswordStore).
         var initialPassword = PasswordGenerator.Generate();
         GuestAccountState state;
         try
@@ -97,6 +100,8 @@ public sealed class ProvisioningService
         {
             throw GuestErrors.Sanitize(ex, admin.Password, initialPassword);
         }
+
+        _passwords?.Save(vmId, userId, initialPassword);
 
         if (!state.IsReadyForRemoteDesktop)
         {

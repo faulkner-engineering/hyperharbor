@@ -15,8 +15,9 @@ API 1.36.0.
 ### Added
 - Disk size… in a VM's menu grows a virtual hard disk. A Generation 2 VM's VHDX grows while the VM runs; anything else
   needs the VM off, and the dialog offers to shut it down, grow the disk, and start it again. HyperHarbor also extends
-  the partition at the end of the disk (C: on the VMs it installs): inside a running Windows VM it uses the VM's
-  administrator, and for an off VM the installed host mounts the disk itself (a portable host cannot, and says so).
+  C: (the partition at the end of the disk): inside a running Windows VM it uses the VM's administrator, and moves the
+  recovery partition Windows Setup puts after C: to the end first; for an off VM the installed host mounts the disk
+  itself (a portable host cannot, and says so). New Windows VMs get their recovery partition before C:, so C: is last.
   For Linux VMs it lists the commands that extend the file system. A disk never shrinks, and a VM with checkpoints
   must have them merged first. Needs a host with this version.
 - Setup and machine profiles can make their browser the default in the VM: "Make <browser> the default browser" in
@@ -29,6 +30,12 @@ API 1.36.0.
   shortcut stay. In the Remove section, Microsoft Edge is now rated keep and says why.
 
 ### Fixed
+- Brave no longer turns your extensions off, and browsers no longer lose sign-ins and saved passwords, after you
+  connect to a Windows VM. Each Connect gives the VM account a new password, and the host used to reset it, which made
+  everything Windows had encrypted for the account (with DPAPI) unreadable; Brave took that as its settings being
+  changed by another program. The host now changes the password from the previous one, which keeps that data, and so
+  stores the current password, encrypted with machine-scope DPAPI, beside the VM's administrator credential. The first
+  Connect after updating still resets it once.
 - A Windows install whose VM found nothing to boot is restarted again as intended. The host turned the VM off and
   started it at once, which Hyper-V refused while the VM was still stopping, so the install stayed at "The VM is off".
 - A portable host started with Start-HyperHarbor.ps1 by a standard Windows user no longer crashes at startup when

@@ -56,6 +56,13 @@ public sealed class SshAccountManager : IGuestAccountManager
         await RunAsync(target, admin, ["setPassword", accountName], password, CommandTimeout, cancellationToken);
     }
 
+    /// <summary>Linux keeps no DPAPI data tied to the password, so a reset is enough.</summary>
+    public async Task<PasswordChange> ChangePasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string currentPassword, string password, CancellationToken cancellationToken)
+    {
+        await SetPasswordAsync(target, admin, accountName, password, cancellationToken);
+        return new PasswordChange(false, "Linux guests are reset.");
+    }
+
     // Administrator windows are for Windows guests; GuestAdminService refuses Linux VMs before calling these.
     public Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken) =>
         throw AdminUnsupported();

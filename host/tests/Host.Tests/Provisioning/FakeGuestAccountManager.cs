@@ -79,6 +79,25 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
         }
     }
 
+    /// <summary>Password changes: the password each one started from, and whether the guest accepted it.</summary>
+    public List<(Guid VmId, string Account, string Current, string Password)> PasswordsChanged { get; } = [];
+
+    /// <summary>Current passwords the fake guest accepts for a change; any other forces a reset.</summary>
+    public HashSet<string> AcceptedCurrentPasswords { get; } = [];
+
+    public async Task<PasswordChange> ChangePasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string currentPassword, string password, CancellationToken cancellationToken)
+    {
+        await Enter(target, admin, password);
+        lock (_gate)
+        {
+            PasswordsChanged.Add((target.VmId, accountName, currentPassword, password));
+            PasswordsSet.Add((target.VmId, accountName, password));
+            var accepted = AcceptedCurrentPasswords.Remove(currentPassword);
+            AcceptedCurrentPasswords.Add(password);
+            return accepted ? PasswordChange.Success : new PasswordChange(false, "The current password is not valid.");
+        }
+    }
+
     /// <summary>Administrator window accounts by VM and account name.</summary>
     public Dictionary<(Guid VmId, string Account), GuestAdminAccountState> AdminAccounts { get; } = [];
 

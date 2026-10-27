@@ -242,12 +242,14 @@ builder.Services.AddSingleton<AmbientService>();
 builder.Services.AddSingleton<GameReadyService>();
 
 builder.Services.AddSingleton(new VmCredentialStore(dataDirectory));
+builder.Services.AddSingleton(new VmAccountPasswordStore(dataDirectory));
 builder.Services.AddSingleton(new ProvisioningStore(dataDirectory));
 builder.Services.AddSingleton<IGuestAccountManager>(new GuestAccountRouter(new PowerShellDirectAccountManager(), new SshAccountManager()));
 builder.Services.AddSingleton<ProvisioningService>();
 builder.Services.AddSingleton(services => new PasswordRotator(
     services.GetRequiredService<IGuestAccountManager>(),
     services.GetRequiredService<VmCredentialStore>(),
+    services.GetRequiredService<VmAccountPasswordStore>(),
     services.GetRequiredService<TimeProvider>(),
     TimeSpan.FromSeconds(builder.Configuration.GetValue("Rdp:ReuseWindowSeconds", (int)PasswordRotator.DefaultReuseWindow.TotalSeconds)),
     services.GetRequiredService<ILogger<PasswordRotator>>()));

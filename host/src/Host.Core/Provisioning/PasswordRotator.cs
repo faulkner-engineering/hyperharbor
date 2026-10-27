@@ -10,7 +10,9 @@ public sealed record RotatedPassword(string Password, DateTimeOffset ExpiresAt)
 }
 
 /// <summary>
-/// Rotates a User's VM account password on connect. Rotations for the same VM and User are
+/// Rotates a User's VM account password on connect, by changing it from the password set last time (kept in
+/// <see cref="VmAccountPasswordStore"/>), so the account keeps the data Windows protected with it; the first rotation,
+/// or one whose stored password no longer works, resets it instead. Rotations for the same VM and User are
 /// serialized, and callers within the reuse window get the password that was just set, so two
 /// devices connecting together do not invalidate each other's credential. The password is held
 /// only in memory, as a char array that is zeroed when the window ends; it is never logged.
@@ -21,6 +23,7 @@ public sealed class PasswordRotator : IDisposable
 
     private readonly IGuestAccountManager _guest;
     private readonly VmCredentialStore _credentials;
+    private readonly VmAccountPasswordStore _passwords;
     private readonly TimeProvider _time;
     private readonly TimeSpan _reuseWindow;
     private readonly ILogger<PasswordRotator> _logger;
@@ -29,6 +32,7 @@ public sealed class PasswordRotator : IDisposable
     public PasswordRotator(
         IGuestAccountManager guest,
         VmCredentialStore credentials,
+        VmAccountPasswordStore passwords,
         TimeProvider time,
         TimeSpan reuseWindow,
         ILogger<PasswordRotator> logger)
@@ -36,6 +40,7 @@ public sealed class PasswordRotator : IDisposable
         ArgumentOutOfRangeException.ThrowIfLessThan(reuseWindow, TimeSpan.Zero);
         _guest = guest;
         _credentials = credentials;
+        _passwords = passwords;
         _time = time;
         _reuseWindow = reuseWindow;
         _logger = logger;
@@ -60,13 +65,33 @@ public sealed class PasswordRotator : IDisposable
                 ?? throw new GuestAccountConflictException("This VM has no stored administrator credential. Provision it again.");
 
             var password = PasswordGenerator.Generate();
+            var stored = _passwords.Find(vmId, userId);
+            var change = new PasswordChange(false, null);
             try
             {
-                await _guest.SetPasswordAsync(target, admin, accountName, password, cancellationToken);
+                if (stored is null)
+                {
+                    await _guest.SetPasswordAsync(target, admin, accountName, password, cancellationToken);
+
+                }
+                else
+                {
+                    change = await _guest.ChangePasswordAsync(target, admin, accountName, stored, password, cancellationToken);
+                }
             }
             catch (Exception ex) when (GuestErrors.IsGuestError(ex))
             {
-                throw GuestErrors.Sanitize(ex, admin.Password, password);
+                throw GuestErrors.Sanitize(ex, admin.Password, password, stored ?? password);
+            }
+
+            _passwords.Save(vmId, userId, password);
+            if (stored is not null && !change.Changed)
+            {
+                _logger.LogWarning(
+                    "The password for {Account} on VM {VmId} could not be changed ({Reason}), so it was reset; data the account protected with Windows may no longer open.",
+                    accountName,
+                    vmId,
+                    GuestErrors.Clean(change.ResetReason ?? "", admin.Password, password, stored));
             }
 
             entry.Clear();

@@ -113,6 +113,14 @@ section for an area before changing it: most of these were learned from a failur
   provision or rotation is not repeated.
 - TERMSRV credentials the client writes are Generic, session-scoped, and tagged "HyperHarbor temporary
   credential"; startup cleanup removes only tagged entries (users may have their own TERMSRV entries).
+- An administrator's reset of an account's password (Set-LocalUser -Password, NetUserSetInfo) makes the account's DPAPI
+  data unreadable ("Key not valid for use in specified state"); a change from the old password (ADSI
+  IADsUser.ChangePassword, as any caller, with the account signed out) keeps it. Checked 2026-10-26 on a Windows 11
+  26100 guest with a scheduled task as the account (Start-Process -Credential fails in a PowerShell Direct session with
+  0xC0000142). Chromium-based browsers keep their encryption key with DPAPI and check their settings with it, so a reset
+  logs them out and Brave disables extensions as "changed by another program". PasswordRotator therefore changes the
+  password from the one VmAccountPasswordStore kept, and falls back to a reset (logged with the guest's reason) when that
+  fails; hh- accounts are created with UserMayNotChangePassword, which the change clears first.
 - Secrets: ProvisionVmRequest, VmConnection, GuestCredential, RotatedPassword, and the Rust VmConnection
   override ToString or Debug to hide passwords. Keep it that way for any new type that holds one.
 - Guest error text reaches logs and problem details. ProvisioningService and PasswordRotator pass it
@@ -184,10 +192,9 @@ section for an area before changing it: most of these were learned from a failur
   Windows media's "Press any key to boot from CD or DVD".
 - Turning a VM off (RequestStateChange 3) can return before it is off; a Start right after it fails with "Start is not
   valid in the current state" (2026-10-26, nested Hyper-V). WindowsSetupBootRecovery retries Start for 30 seconds.
-- Windows' DVD boot loader (cdboot.efi in efisys.bin) needs the disc's ISO 9660 file system: a UDF-only image (IMAPI2
-  with FileSystemsToCreate 4) passes "Press any key", then the firmware falls through to PXE and logs 18603. IMAPI2
-  supports ISO 9660 interchange levels 1 and 2 only, so an 8 GB install.wim cannot go on such an image; export one
-  edition to install.esd first. On the same VM, Start-VM made an automatic checkpoint (AutomaticCheckpointsEnabled
+- Windows' DVD boot loader (cdboot.efi in efisys.bin) reads UDF 1.02 but not UDF 2.50: an IMAPI2 image with
+  UDFRevision 0x250 passes "Press any key", then the firmware falls through to PXE and logs 18603. The same files as
+  UDF 1.02 (IMAPI2's default, and what Microsoft's media use) install. On the same VM, Start-VM made an automatic checkpoint (AutomaticCheckpointsEnabled
   is on for VMs HyperHarbor creates) while HyperHarbor's own CIM start did not; a checkpoint blocks growing the disk.
 - A first boot can still end with nothing installed (2026-10-25, laptop, build 26300 media, a second VM running): the
   keys got Setup started, the guest reset itself 26 seconds later (cause unknown), the second boot's prompt timed

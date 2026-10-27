@@ -518,6 +518,15 @@ verified, and what was found along the way. User-facing changes per release are 
      over SSH. Client: Disk size… in the VM menu (hostSupports 1.36.0), DiskDialog. Verified: unit tests, and
      DiskGrowLiveTests (HH_DISK_GROW_LIVE) grew a real VHDX from 1 to 2 GB through Hyper-V on the development VM. Not
      yet run against a VM: online growth, and both partition extensions.
+   - Recovery partition (found by Release024LiveTests): Windows Setup on build 26300 media shrank C: and added its own
+     0.87 GB recovery partition after it, so C: never grew. The user chose both fixes: the autounattend now makes a 1 GB
+     recovery partition before C: (partition 4), and in a running guest the extender moves an existing one to the end
+     (KB5028997: reagentc /disable, delete, extend, recreate, reagentc /enable). Verified live: C: 39 to 55 GB with
+     Windows RE enabled in the new partition 4.
+   - Brave extensions (the user: "each time I restart the VM Brave resets my extension"): every Connect reset the VM
+     account's password, which loses its DPAPI data (proven in the guest: a change kept protected data, a reset did
+     not). The user agreed to store the current password (VmAccountPasswordStore, DPAPI) and change it instead;
+     CLAUDE.md's rule changed with it. PasswordChangeLiveTests checks the real script (change, wrong password resets).
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.

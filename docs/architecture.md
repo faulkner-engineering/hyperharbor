@@ -47,7 +47,7 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   ExtensionIdParser, SetupProfileStore, AppxBaselines, AppxInventoryService, GuestProfileReader (PowerShell Direct
   scripts), PackageSearch (pwsh fallback), WingetIndex and WingetPackageSearch (the downloaded winget index, read
   through WinSqlite over winsqlite3.dll), ExtensionResolver, ProfileCaptureService),
-  Provisioning/ (ProvisioningService, ConnectService, PasswordRotator, VmCredentialStore, GuestAccounts with
+  Provisioning/ (ProvisioningService, ConnectService, PasswordRotator, VmCredentialStore, VmAccountPasswordStore, GuestAccounts with
   IGuestAccountManager, PowerShellDirectAccountManager (its Script and AdminScript), SshAccountManager; administrator
   windows: GuestAdminService, GuestAdminStore (guest-admin.json), PassphraseGenerator with PassphraseWords.txt (embedded))
 - catalogs/*.yaml (packages, extensions, appx, tweaks, browsers) and schemas/profile.v1.schema.json at the repository
