@@ -199,7 +199,7 @@ pub fn rdp_file(
     let microphone = defaults.is_none_or(ConnectionDefaults::microphone);
     let linux = guest_os == GuestOs::Linux;
     let mut lines = vec![
-        format!("full address:s:{address}:{port}"),
+        format!("full address:s:{}", rdp_endpoint(address, port)),
         format!("username:s:{user_name}"),
         "prompt for credentials:i:0".to_string(),
         "promptcredentialonce:i:0".to_string(),
@@ -257,13 +257,24 @@ pub fn host_rdp_file(address: &str, port: u16, monitors: &MonitorLayout) -> Stri
     lines.join("\r\n") + "\r\n"
 }
 
-/// "address:port", with an IPv6 address in brackets.
+/// The "full address" value: "address:port", or the address alone for Remote Desktop's default
+/// port. mstsc shows this value in the session window's title, so a default port would read as
+/// "<VM> - 192.168.0.50:3389 - Remote Desktop Connection" (seen 2026-10-27). An IPv6 address is in
+/// brackets.
 fn rdp_endpoint(address: &str, port: u16) -> String {
-    match address.parse::<std::net::IpAddr>() {
-        Ok(std::net::IpAddr::V6(_)) => format!("[{address}]:{port}"),
-        _ => format!("{address}:{port}"),
+    let host = match address.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V6(_)) => format!("[{address}]"),
+        _ => address.to_string(),
+    };
+    if port == DEFAULT_PORT {
+        host
+    } else {
+        format!("{host}:{port}")
     }
 }
+
+/// The port mstsc uses when "full address" names none.
+const DEFAULT_PORT: u16 = 3389;
 
 /// True for an address that can go into an .rdp file: an IP address (IPv6 without a zone, which
 /// mstsc does not accept) or a host name of letters, digits, dots, and hyphens.
@@ -685,7 +696,8 @@ mod tests {
         let lines: Vec<&str> = file.lines().collect();
 
         for expected in [
-            "full address:s:192.168.0.50:3389",
+            // No port: mstsc puts this value in the window title.
+            "full address:s:192.168.0.50",
             r"username:s:.\hh-owner",
             "prompt for credentials:i:0",
             "redirectwebauthn:i:1",
@@ -728,7 +740,7 @@ mod tests {
         let lines: Vec<&str> = file.lines().collect();
 
         for expected in [
-            "full address:s:192.168.0.10:3389",
+            "full address:s:192.168.0.10",
             "prompt for credentials:i:1",
             "enablecredsspsupport:i:1",
             "authentication level:i:2",
@@ -739,6 +751,29 @@ mod tests {
         assert!(!file.contains("username"));
         assert!(!file.contains("password"));
         assert!(file.ends_with("\r\n"));
+    }
+
+    #[test]
+    fn rdp_file_names_a_port_only_when_it_is_not_the_default() {
+        let file = |address: &str, port: u16| {
+            rdp_file(
+                address,
+                port,
+                "hh-owner",
+                GuestOs::Windows,
+                false,
+                &MonitorLayout::Single,
+                &CameraRedirect::None,
+                None,
+            )
+        };
+
+        assert!(file("192.168.0.50", 3390)
+            .lines()
+            .any(|line| line == "full address:s:192.168.0.50:3390"));
+        assert!(file("fd00::50", 3389)
+            .lines()
+            .any(|line| line == "full address:s:[fd00::50]"));
     }
 
     #[test]

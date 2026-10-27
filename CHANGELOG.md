@@ -10,6 +10,10 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- Remote Desktop windows are titled "<VM name> - <address> - Remote Desktop Connection" as intended; the address no
+  longer ends in ":3389". The port still shows when a connection uses another one. Client only.
+
 ## [0.2.4-beta.1] - 2026-10-27 (API 1.36.0)
 
 A beta of 0.2.4: growing a VM's disk, a default browser and a quieter Edge in setup profiles, browser data that survives
