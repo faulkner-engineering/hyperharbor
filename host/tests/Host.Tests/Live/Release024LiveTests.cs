@@ -198,7 +198,7 @@ public sealed class Release024LiveTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task<Guid> CreateAsync(LiveHostHarness host, Action<string> log)
+    internal static async Task<Guid> CreateAsync(LiveHostHarness host, Action<string> log)
     {
         var iso = Environment.GetEnvironmentVariable("HH_SPIKE_ISO")!;
         var inspection = await host.GetJsonAsync($"/api/v1/isos/{Uri.EscapeDataString(iso)}/inspection");

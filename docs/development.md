@@ -123,7 +123,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   hha-owner is enabled, in Administrators, not in Remote Desktop Users, and denied network and Remote Desktop sign-in,
   closes it, and checks it is still ready for UAC (enabled, with a new random password). The account stays in the VM. A throwaway VM for it:
   MachineProfileLiveTests with HH_MACHINE_KEEP=1 (HyperHarbor-Test, kept), then HH_GUEST_ADMIN_DATA=%LOCALAPPDATA%\HyperHarborHarness.
-- The UAC prompt itself is checked by hand (after a host and client with API 1.35.0 are running):
+- The UAC prompt itself is checked by hand (after a host and client with API 1.35.0 are running; SessionLiveTests
+  covers the account and passphrase, but not the prompt):
   1. Connect to a set-up Windows VM, and in the client choose the VM's menu > Administrator access…; enter the admin
      passphrase if asked. The dialog shows hha-<username> and a passphrase of three words and a digit, and a card with
      the passphrase appears at the top right of the screen.
@@ -136,6 +137,21 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
      dialog says it ended, and step 3's checks hold. Also check that `mstsc` to the VM as hha-<username> with the
      passphrase is refused while the window is open (SeDenyRemoteInteractiveLogonRight), and so is
      `net use \\<vm>\c$ /user:<vm>\hha-<username>` (SeDenyNetworkLogonRight).
+- Signed-in session checks (SessionLiveTests, 2026-10-27), formerly done by hand before a release:
+  `powershell -ExecutionPolicy Bypass -File scripts\live-session.ps1 -VmId <id>` (or `-Iso <image> -Keep` to create
+  HyperHarbor-Test from the 0.2.4 release profile first, about 15 minutes; `-IsoFolder` and `-VmFolder` set the harness
+  folders). About 7 minutes on an existing VM. It starts the client agent (`session_live` in client/src-tauri, which
+  opens Remote Desktop with the client's own rdp::launch) and SessionLiveTests, which talk through a private temporary
+  folder; passwords cross it only protected with DPAPI for the account. Checks: DPAPI data and Brave's key open after
+  a reconnect and after a VM restart (each with a rotated password); hha- is ready for UAC and the passphrase works
+  only while a window is open; http and https open in Brave; Edge does not start at sign-in; the session window's
+  title; a windowed session follows its window's size (also measured with a minimal .rdp file, for comparison).
+  Scripts run in the user's session through a scheduled task with an interactive principal. Every check runs, and
+  the test fails at the end with all failures; the log is %TEMP%\hyperharbor-session-progress.log.
+  Needs: an active desktop on this machine (stay connected; mstsc does not draw or resize otherwise), and RDP trust set
+  up for this account in the client (otherwise mstsc stops at its security dialog). The test answers Yes to the
+  certificate warning for the VM itself. Not covered: the UAC prompt's own tile (it is on the secure desktop) and
+  console window titles.
 - Camera tests (2026-10-08): HH_VCAM_LIVE=1 cargo test --lib camera::live -- --ignored --nocapture --test-threads=1 (from
   client/src-tauri; needs the camera source registered, which opens the physical camera for a moment). Two throwaway
   VMs for redirection tests: HH_CAMTEST_LIVE=1 HH_SPIKE_ISO=<image> with HH_HARNESS_ISO_FOLDER and HH_HARNESS_VM_FOLDER

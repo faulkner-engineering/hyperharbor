@@ -129,7 +129,22 @@ section for an area before changing it: most of these were learned from a failur
 - mstsc titles a session window "<.rdp file name> - <address> - Remote Desktop Connection", so the client names
   the file after the VM (rdp::window_file_name makes the name safe for a file) and writes each launch's file to
   its own folder under %TEMP%, since two sessions can share a name. The address stays in the title, which is
-  how the client tells that the session window opened. (2026-10-26; not yet verified live.)
+  how the client tells that the session window opened. (2026-10-26.) Verified live 2026-10-27: the address in the
+  title includes the port from "full address" ("HyperHarbor-Test - 172.31.215.11:3389 - Remote Desktop Connection"),
+  so the title is not yet the "<VM name> - <IP>" form intended.
+- mstsc does not let a windowed session's window grow past the session's current resolution (it held one at 816x639,
+  an 800x600 desktop, when asked for 1400x940 on a 2560x1080 screen; 2026-10-27, SessionLiveTests). Shrunk to 684x481,
+  the guest stayed at 800x600 too, also with WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE around the resize as a drag sends
+  them: dynamic resolution did not act at all in these windowed sessions (the user saw the same by hand; only full
+  screen changes the resolution). The client's .rdp file and a minimal one (address, user, windowed) behaved the same,
+  so the file is not the cause. Not yet compared: a Windows guest HyperHarbor did not set up, and mstsc outside a
+  Remote Desktop session (the development PC is itself a VM used over Remote Desktop).
+- Live test harness findings (SessionLiveTests, 2026-10-27): a CertHash value under HKCU\Software\Microsoft\Terminal
+  Server Client\Servers\<address> with the presented certificate's SHA-1 did not stop mstsc's "could not be
+  authenticated" dialog, and Win32_TSGeneralSetting.SSLCertificateSHA1Hash matched the served certificate anyway; the
+  test answers Yes in the dialog. During a user's first sign-in, PowerShell Direct refused the stored administrator for
+  a while ("The credential is invalid"), then accepted it again. Through Invoke-Command, a string gains PSComputerName
+  (and from Get-Content, PSPath), so ConvertTo-Json writes it as an object; read files with [IO.File]::ReadAllText.
 - The host sends the bare account name (hh-owner), not .\hh-owner: mstsc adds ".\" itself, and a doubled
   ".\.\hh-owner" fails as an unknown user (guest event 4625, substatus 0xc0000064) and prompts for a password.
 - Add-LocalGroupMember takes the group by -SID 'S-1-5-32-555' and the member as the LocalUser object
@@ -364,6 +379,10 @@ section for an area before changing it: most of these were learned from a failur
   Windows applies at every sign-in, also overriding the user's own change. ProgIds in catalogs/browsers.yaml:
   ChromeHTML, MSEdgeHTM, BraveHTML. Not yet verified on a live guest: the ProgIds, and whether a Brave that fell back
   to a per-user install (0x8A150010 retry) is registered for the User's account at all.
+  Seen 2026-10-27 (SessionLiveTests, Windows 11 build 26300, UCPD running): with the policy and its file in place before
+  hh-owner's first sign-in, and BraveHTML registered for all users, hh-owner's http and https still opened in Edge.
+  The account had its own hashed UserChoice of MSEdgeHTM, and it stayed after a reconnect and a VM restart, so the
+  policy did not override it at those sign-ins. Not fixed yet.
 - Edge cannot be removed outside the European Economic Area: Windows offers the uninstall only when the region chosen
   at setup is in the EEA, and other apps need its WebView2 runtime. Forced removals are unsupported and Windows Update
   can put Edge back. The tweak system.hideEdge only sets Edge and EdgeUpdate policies (StartupBoostEnabled,
