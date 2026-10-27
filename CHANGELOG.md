@@ -10,6 +10,11 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- The host window's spinners and update progress bar no longer race when Windows asks apps to reduce motion (as many
+  Remote Desktop sessions do): they stop looping, and the progress bar shows a still bar while the length of the work
+  is unknown.
+
 ## [0.2.4-beta.1] - 2026-10-27 (API 1.36.0)
 
 A beta of 0.2.4: growing a VM's disk, a default browser and a quieter Edge in setup profiles, browser data that survives

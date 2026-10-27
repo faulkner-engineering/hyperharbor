@@ -54,4 +54,14 @@
       left: 100%;
     }
   }
+
+  /* No sliding: a still, fainter full bar says the work goes on without saying how far it is. */
+  @media (prefers-reduced-motion: reduce) {
+    .sliding {
+      left: 0;
+      width: 100%;
+      opacity: 0.45;
+      animation: none;
+    }
+  }
 </style>

@@ -71,6 +71,11 @@ section for an area before changing it: most of these were learned from a failur
 
 ## Tray windows (WebView2, 2026-10-05)
 
+- prefers-reduced-motion is on in many Remote Desktop sessions (Windows animation effects off). A reduced-motion rule
+  that only shortens animation-duration leaves infinite animations looping at that speed: the 800 ms spinner and the
+  1.4 s sliding bar ran about a thousand times faster (seen 2026-10-27). theme.css also sets animation-iteration-count
+  to 1, and ProgressBar draws a still bar; e2e/motion.spec.ts checks both with Playwright's reducedMotion.
+
 - WebWindow.PlaceOn sizes the window for its monitor's DPI (GetDpiForMonitor) within the work area (WindowFit)
   with AutoScaleMode None; WinForms' own DPI scaling would scale it twice. The page scales itself.
 - The page must send "ready" right after its first render, not from requestAnimationFrame: the window is hidden
