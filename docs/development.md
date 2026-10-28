@@ -28,8 +28,10 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   HH_LIVE_HOST=<lan ip> HH_PIN_FILE=pin.txt cargo test live_pairing -- --ignored --nocapture
 - End to end without Hyper-V (no LAN, no setup): powershell -ExecutionPolicy Bypass -File scripts\e2e.ps1
   CI's e2e job runs it, and test-all.ps1 runs it unless -SkipE2E; run it before every pull request. It fetches the
-  pinned tools, sets HH_E2E=1 and HH_KOPIA_EXE, runs every host test marked [E2EFact] and [Trait("Category", "E2E")]
-  (dotnet test --filter Category=E2E: KopiaLiveTests, KopiaDedupLiveTests, BackupUpgradeE2ETests), then the Rust
+  pinned tools (Kopia from tools/tools.json; rclone, used only by tests, from tools/test-tools.json), sets HH_E2E=1,
+  HH_KOPIA_EXE, and HH_RCLONE_EXE, runs every host test marked [E2EFact] and [Trait("Category", "E2E")]
+  (dotnet test --filter Category=E2E: KopiaLiveTests, KopiaDedupLiveTests, BackupUpgradeE2ETests, and S3TargetE2ETests,
+  which runs `rclone serve s3` on loopback as the S3 target), then the Rust
   e2e_loopback test, which starts the real service on a free loopback port (so it can run while a packaged host runs).
   With HH_E2E=1 a missing tool fails a test rather than skipping it. A new test that needs no Hyper-V and no service on
   the internet belongs here, not among the opt-in live tests.

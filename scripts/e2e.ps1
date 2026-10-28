@@ -4,8 +4,9 @@
 
 .DESCRIPTION
     1. Host end-to-end tests ([E2EFact], Category=E2E in Host.Tests): the real kopia.exe, the real host service on
-       loopback, and local stand-ins for cloud storage. The script fetches the pinned tools (scripts\fetch-tools.ps1)
-       and sets HH_E2E=1 and the tool paths; with HH_E2E=1 a missing tool fails a test instead of skipping it.
+       loopback, and rclone's S3 server standing in for a cloud target. The script fetches the pinned tools
+       (scripts\fetch-tools.ps1) and sets HH_E2E=1 and the tool paths; with HH_E2E=1 a missing tool fails a test
+       instead of skipping it.
     2. The Rust client against the real host service (the ignored e2e_loopback test): it starts the service on
        127.0.0.1 with a temporary data directory and a private tray pipe, acts as the tray to read the PIN, and checks
        pairing (wrong PIN first), mTLS calls, certificate pinning, and unpairing. Without Hyper-V the VM list returns
@@ -34,6 +35,9 @@ $env:DOTNET_NOLOGO = '1'
 # The last line fetch-tools prints is the path of kopia.exe.
 $env:HH_KOPIA_EXE = (& (Join-Path $PSScriptRoot 'fetch-tools.ps1') | Select-Object -Last 1)
 if (-not (Test-Path $env:HH_KOPIA_EXE)) { throw "fetch-tools did not produce kopia.exe: $env:HH_KOPIA_EXE" }
+# rclone serve s3 stands in for an S3 backup target (tools\test-tools.json; never shipped).
+$env:HH_RCLONE_EXE = (& (Join-Path $PSScriptRoot 'fetch-tools.ps1') -Tool rclone | Select-Object -Last 1)
+if (-not (Test-Path $env:HH_RCLONE_EXE)) { throw "fetch-tools did not produce rclone.exe: $env:HH_RCLONE_EXE" }
 $env:HH_E2E = '1'
 
 $solution = Join-Path $repo 'HyperHarbor.sln'
