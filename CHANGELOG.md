@@ -10,6 +10,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.5-beta.1] - 2026-10-28 (API 1.37.0)
+
+A beta of 0.2.5: smaller backups, above all for VMs whose disks Windows encrypted with BitLocker on its own. New
+Windows VMs are no longer encrypted unless a machine profile allows it, Disk encryption… turns BitLocker off in an
+existing VM, and each backup says how much it uploaded. Update both the host and the client; the new options need a
+host with API 1.37.0. Action: the first backup of each existing VM after updating the host uploads its whole disk once.
+
 ### Added
 - Each backup run records how much it actually uploaded, after dedup and compression, beside the size of the disks.
   The backup panel shows it ("Backed up 3 hours ago (uploaded 1.2 GB of 40 GB)") and in the history. It is not

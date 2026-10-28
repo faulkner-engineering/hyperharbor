@@ -1,6 +1,6 @@
 {
   "name": "hyperharbor-client",
-  "version": "0.2.4",
+  "version": "0.2.5-beta.1",
   "description": "HyperHarbor desktop client",
   "private": true,
   "license": "Apache-2.0",
