@@ -2682,6 +2682,100 @@ paths:
         "503":
           $ref: "#/components/responses/HyperVUnavailable"
 
+  /vms/{vmId}/disk-encryption:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    get:
+      tags: [VMs]
+      operationId: getVmDiskEncryption
+      summary: Read BitLocker's state on each volume of a running Windows guest.
+      description: |
+        Since 1.37.0. Asks the guest over PowerShell Direct, with the VM's stored administrator, through
+        Win32_EncryptableVolume (which every Windows edition has). The VM must be running (409 with `code:
+        vmNotRunning`) and set up by HyperHarbor (409 with `code: vmNotProvisioned`); Linux guests get 409. Takes a few
+        seconds, so poll it no more than every few seconds while showing progress.
+      responses:
+        "200":
+          description: The guest's volumes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmDiskEncryption"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The VM is not running, has no stored administrator credential, or does not run Windows.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: The guest rejected the stored administrator credential.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "502":
+          description: The guest could not read its volumes.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "503":
+          description: The guest is not reachable over PowerShell Direct yet, or Hyper-V is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /vms/{vmId}/disk-encryption/turn-off:
+    parameters:
+      - $ref: "#/components/parameters/VmId"
+    post:
+      tags: [VMs]
+      operationId: turnOffVmDiskEncryption
+      summary: Turn BitLocker off on every volume of a running Windows guest.
+      description: |
+        Since 1.37.0. Starts a `turnOffDiskEncryption` job that asks the guest to decrypt each encrypted volume, data
+        volumes before the Windows volume (Windows refuses to decrypt the Windows volume while it holds a data
+        volume's automatic unlock key). The job ends once decryption has started; Windows decrypts in the background,
+        also across restarts, and `getVmDiskEncryption` shows its progress. `diskEncryption` in the job holds the
+        volumes as they were afterwards and what could not be started. The next backup uploads the whole disk once.
+        The same conditions as `getVmDiskEncryption` apply.
+      security:
+        - mutualTLS: []
+          elevation: []
+      responses:
+        "202":
+          description: The job started.
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VmJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/ElevationRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            The VM is not running, has no stored administrator credential, does not run Windows, or another operation
+            is in progress on it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "503":
+          $ref: "#/components/responses/HyperVUnavailable"
+
   /vms/{vmId}/disks/export:
     parameters:
       - $ref: "#/components/parameters/VmId"
@@ -5526,7 +5620,7 @@ components:
 
     VmJobKind:
       type: string
-      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState, transferVm, mergeCheckpoints, applyMachineProfile, growDisk]
+      enum: [createVm, deleteVm, applyCompute, applyPerformance, performanceGuestSetup, exportDisks, applySetupProfile, backupVm, backupHostState, restoreVm, replaceDisk, restoreHostState, transferVm, mergeCheckpoints, applyMachineProfile, growDisk, turnOffDiskEncryption]
 
     VmJobState:
       type: string
@@ -5592,6 +5686,11 @@ components:
           description: What a `growDisk` job did, once it succeeded (API 1.36.0). Omitted for other jobs.
           oneOf:
             - $ref: "#/components/schemas/DiskGrowResult"
+            - type: "null"
+        diskEncryption:
+          description: What a `turnOffDiskEncryption` job left, once it succeeded (API 1.37.0). Omitted for other jobs.
+          oneOf:
+            - $ref: "#/components/schemas/VmDiskEncryption"
             - type: "null"
 
     VmDisk:
@@ -5677,6 +5776,49 @@ components:
         note:
           type: [string, "null"]
           description: What the user still has to do, for example extend the file system in a Linux guest.
+
+    GuestEncryptionState:
+      type: string
+      description: Since 1.37.0. BitLocker's conversion state of one guest volume.
+      enum: [decrypted, encrypted, encrypting, decrypting, paused]
+
+    GuestVolumeEncryption:
+      type: object
+      description: Since 1.37.0. One volume of a Windows guest.
+      required: [mountPoint, operatingSystem, state, encryptedPercent]
+      properties:
+        mountPoint:
+          type: string
+          description: The drive letter, for example `C:`, or the volume's device path when it has none.
+        operatingSystem:
+          type: boolean
+          description: The volume Windows runs from.
+        state:
+          $ref: "#/components/schemas/GuestEncryptionState"
+        encryptedPercent:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          description: How much of the volume is encrypted; it falls to 0 while decrypting.
+
+    VmDiskEncryption:
+      type: object
+      description: Since 1.37.0. BitLocker's state in a Windows guest.
+      required: [vmId, volumes, problems]
+      properties:
+        vmId:
+          type: string
+          format: uuid
+        volumes:
+          type: array
+          items:
+            $ref: "#/components/schemas/GuestVolumeEncryption"
+        problems:
+          type: array
+          items:
+            type: string
+          description: Volumes whose decryption could not be started, and why. Empty when reading the state.
 
     ApplySetupProfileRequest:
       type: object
@@ -5934,6 +6076,13 @@ components:
           type: boolean
           default: true
           description: Turn off suggested apps and other consumer experiences.
+        allowDeviceEncryption:
+          type: boolean
+          description: >-
+            Since 1.37.0; false when absent. Let Windows turn on BitLocker device encryption by itself, as it does on a VM with a virtual
+            TPM. When false, Setup sets PreventDeviceEncryption before the first sign-in, so the disk stays unencrypted:
+            an encrypted disk makes every backup larger, and a restored or moved VM can ask for its recovery key. Older
+            hosts reject the field, so send it only when true.
 
     LinuxInstallSettings:
       type: object

@@ -13,13 +13,18 @@ public enum InstallOs
 /// <param name="DefaultEdition">The image to install, by its name in install.wim, for example "Windows 11 Pro".</param>
 /// <param name="BypassHardwareChecks">Skip Windows 11's TPM, Secure Boot, and memory checks (for VMs without a vTPM).</param>
 /// <param name="DisableConsumerFeatures">Turn off suggested apps and other consumer experiences.</param>
+/// <param name="AllowDeviceEncryption">
+/// Let Windows turn on BitLocker device encryption by itself. Off, Setup prevents it: an encrypted disk makes every
+/// backup larger, and a restored or moved VM can ask for a recovery key.
+/// </param>
 public sealed record WindowsInstallSettings(
     [property: JsonRequired] string DefaultEdition,
     bool BypassHardwareChecks = false,
     bool DisableTelemetry = true,
     bool DisableAdvertisingId = true,
     bool DisableLocation = true,
-    bool DisableConsumerFeatures = true);
+    bool DisableConsumerFeatures = true,
+    bool AllowDeviceEncryption = false);
 
 /// <summary>Ubuntu autoinstall choices. Schema: LinuxInstallSettings.</summary>
 /// <param name="SshAuthorizedKeys">OpenSSH public keys for the administrator account.</param>

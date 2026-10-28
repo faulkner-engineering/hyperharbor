@@ -182,6 +182,8 @@ public class ContractFixtureTests
         ["VmDiskList"] = new VmDiskList(VmId, [new VmDisk(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 68719476736, 21474836480, true, DiskGrowBlocker.Checkpoints)]),
         ["GrowVmDiskRequest"] = new GrowVmDiskRequest(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 128, true, true, false),
         ["DiskGrowResult"] = new DiskGrowResult(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 137438953472, false, "In the VM, extend the last partition and its file system."),
+        ["GuestVolumeEncryption"] = new GuestVolumeEncryption("C:", true, GuestEncryptionState.Decrypting, 42),
+        ["VmDiskEncryption"] = new VmDiskEncryption(VmId, [new GuestVolumeEncryption("C:", true, GuestEncryptionState.Decrypting, 42)], ["D: could not start decrypting (error 0x80310029)."]),
         ["HostGpu"] = new HostGpu([new HostGpuDevice("Intel(R) UHD Graphics", GpuVendor.Intel, "30.0.101.1122", true, 32, null)], []),
         ["BackupSchedule"] = new BackupSchedule("02:00", [DayOfWeek.Monday, DayOfWeek.Thursday]),
         ["BackupRetention"] = new BackupRetention(7, 4, 6),

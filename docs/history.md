@@ -552,3 +552,16 @@ per-device VM accounts and a user management UI.
      BackupRun.encryptedDisks, and warns once (first backup to a target, or a change since the last good backup)
      instead of every run. Unit tested on VHDX images built in memory (DiskEncryptionProbeTests), and on the real
      HyperHarbor-Test disk with HH_DISK_PROBE_LIVE=<path>, which found BitLocker that Windows had turned on itself.
+   - Device encryption (the user: "Device encryption should definitely be configurable"; decided: off by default,
+     with a turn-off action). WindowsInstallSettings.allowDeviceEncryption (account.windows in a machine profile,
+     false when absent, sent by the client only when true): when false, AutounattendBuilder adds a
+     Microsoft-Windows-Deployment RunSynchronous in the specialize pass that sets
+     HKLM\SYSTEM\CurrentControlSet\Control\BitLocker PreventDeviceEncryption=1, before the out-of-box experience
+     where Windows starts device encryption (first logon is too late). Install time only; existing VMs use the action.
+   - Turning BitLocker off: GET /vms/{id}/disk-encryption and POST /vms/{id}/disk-encryption/turn-off (elevated, a
+     turnOffDiskEncryption job with diskEncryption). VmDiskEncryptionService (Host.Core/Lifecycle) with
+     PowerShellGuestDiskEncryption: Win32_EncryptableVolume over PowerShell Direct with the stored administrator, since
+     the BitLocker module is missing on some editions; Decrypt on fixed volumes, data volumes before the Windows volume
+     (Windows refuses the Windows volume while it holds a data volume's automatic unlock key). The job ends once
+     decryption has started, so it does not hold the VM's lock for the hour decrypting can take; the client's
+     DiskEncryptionDialog reads the state every 10 seconds while a volume converts. Running, set-up Windows VMs only.

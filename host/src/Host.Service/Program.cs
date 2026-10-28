@@ -439,6 +439,8 @@ builder.Services.AddSingleton<VmComputeService>();
 builder.Services.AddSingleton<IHyperVDisks, CimHyperVDisks>();
 builder.Services.AddSingleton<IPartitionExtender, PowerShellPartitionExtender>();
 builder.Services.AddSingleton<VmDiskService>();
+builder.Services.AddSingleton<IGuestDiskEncryption, PowerShellGuestDiskEncryption>();
+builder.Services.AddSingleton<VmDiskEncryptionService>();
 
 // Performance mode: GPU partitioning and fixed resources for Windows VMs.
 builder.Services.AddSingleton(new PerformanceStore(dataDirectory));

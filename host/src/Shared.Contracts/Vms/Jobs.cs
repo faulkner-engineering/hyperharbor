@@ -21,6 +21,7 @@ public enum VmJobKind
     MergeCheckpoints,
     ApplyMachineProfile,
     GrowDisk,
+    TurnOffDiskEncryption,
 }
 
 /// <summary>Schema: VmJobState.</summary>
@@ -42,6 +43,7 @@ public sealed record JobError(string Title, string Detail);
 /// <param name="RestoreResult">What a restoreVm or restoreHostState job did, once it succeeded; omitted otherwise.</param>
 /// <param name="TransferResult">What a transferVm job did, once it succeeded; omitted otherwise.</param>
 /// <param name="DiskGrowResult">What a growDisk job did, once it succeeded; omitted otherwise.</param>
+/// <param name="DiskEncryption">What a turnOffDiskEncryption job left, once it succeeded; omitted otherwise.</param>
 public sealed record VmJob(
     Guid Id,
     VmJobKind Kind,
@@ -55,4 +57,5 @@ public sealed record VmJob(
     Unattend.SetupProfileResult? SetupResult = null,
     Backup.RestoreResult? RestoreResult = null,
     Transfers.TransferResult? TransferResult = null,
-    DiskGrowResult? DiskGrowResult = null);
+    DiskGrowResult? DiskGrowResult = null,
+    VmDiskEncryption? DiskEncryption = null);

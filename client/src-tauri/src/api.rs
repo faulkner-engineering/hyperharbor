@@ -1310,6 +1310,34 @@ impl ApiClient {
         self.get_json(host, paired, &vm_path(vm_id, "disks")?).await
     }
 
+    /// GET /vms/{vmId}/disk-encryption: BitLocker's state in a running Windows guest.
+    pub async fn get_vm_disk_encryption(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "disk-encryption")?)
+            .await
+    }
+
+    /// POST /vms/{vmId}/disk-encryption/turn-off (elevated). Returns the turnOffDiskEncryption job.
+    pub async fn turn_off_vm_disk_encryption(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.send_json(
+            host,
+            paired,
+            reqwest::Method::POST,
+            &vm_path(vm_id, "disk-encryption/turn-off")?,
+            &json!({}),
+        )
+        .await
+    }
+
     /// POST /vms/{vmId}/disks/grow (needs elevation). Returns the growDisk job.
     pub async fn grow_vm_disk(
         &self,

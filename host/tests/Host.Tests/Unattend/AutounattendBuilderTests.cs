@@ -125,6 +125,19 @@ public sealed class AutounattendBuilderTests
     }
 
     [Fact]
+    public void DeviceEncryption_IsPreventedInTheSpecializePass_UnlessAllowed()
+    {
+        var (_, prevented) = Build();
+        var (allowedText, _) = Build(new WindowsInstallSettings("Windows 11 Pro", AllowDeviceEncryption: true));
+
+        var command = Component(prevented, "specialize", "Microsoft-Windows-Deployment")
+            .Element(Ns + "RunSynchronous")!.Element(Ns + "RunSynchronousCommand")!;
+        Assert.Equal(@"reg add HKLM\SYSTEM\CurrentControlSet\Control\BitLocker /v PreventDeviceEncryption /t REG_DWORD /d 1 /f", (string)command.Element(Ns + "Path")!);
+        Assert.Equal(1, (int)command.Element(Ns + "Order")!);
+        Assert.DoesNotContain("PreventDeviceEncryption", allowedText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EditionNamesAreEscapedAsXml()
     {
         var (text, document) = Build(edition: "Windows 11 <Pro> & \"Co\"");

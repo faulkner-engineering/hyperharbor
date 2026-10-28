@@ -17,6 +17,8 @@
     onsettings?: (vm: Vm) => void;
     /** Grow a disk (hosts with API 1.36.0); leave unset to hide the entry. */
     ondisks?: (vm: Vm) => void;
+    /** BitLocker in a running Windows guest that HyperHarbor set up (hosts with API 1.37.0); unset hides the entry. */
+    onencryption?: (vm: Vm) => void;
     onperformance?: (vm: Vm) => void;
     onmonitors?: (vm: Vm) => void;
     /** Camera sharing settings for a Windows VM; leave unset to hide the entry. */
@@ -52,6 +54,7 @@
     onaction,
     onsettings,
     ondisks,
+    onencryption,
     onperformance,
     onmonitors,
     oncamera,
@@ -267,6 +270,9 @@
               <button type="button" onclick={() => onsettings?.(vm)}>Settings…</button>
               {#if ondisks && (vm.state === "running" || vm.state === "off")}
                 <button type="button" onclick={() => ondisks(vm)}>Disk size…</button>
+              {/if}
+              {#if onencryption && vm.state === "running" && vm.guestOs.family !== "linux" && vm.provisioned}
+                <button type="button" onclick={() => onencryption(vm)}>Disk encryption…</button>
               {/if}
               {#if vm.guestOs.family !== "linux"}
                 <button type="button" onclick={() => onperformance?.(vm)}>Performance mode…</button>

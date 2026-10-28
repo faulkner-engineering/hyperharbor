@@ -498,6 +498,12 @@
   "GuestSetupRequest": {
     "driversOnly": true
   },
+  "GuestVolumeEncryption": {
+    "mountPoint": "C:",
+    "operatingSystem": true,
+    "state": "decrypting",
+    "encryptedPercent": 42
+  },
   "HostGpu": {
     "gpus": [
       {
@@ -702,7 +708,8 @@
       "disableTelemetry": true,
       "disableAdvertisingId": true,
       "disableLocation": true,
-      "disableConsumerFeatures": true
+      "disableConsumerFeatures": true,
+      "allowDeviceEncryption": false
     }
   },
   "MachineBackup": {
@@ -803,7 +810,8 @@
         "disableTelemetry": true,
         "disableAdvertisingId": true,
         "disableLocation": true,
-        "disableConsumerFeatures": true
+        "disableConsumerFeatures": true,
+        "allowDeviceEncryption": false
       }
     },
     "display": {
@@ -1448,7 +1456,8 @@
           "disableTelemetry": true,
           "disableAdvertisingId": true,
           "disableLocation": true,
-          "disableConsumerFeatures": true
+          "disableConsumerFeatures": true,
+          "allowDeviceEncryption": false
         }
       },
       "display": {
@@ -1780,7 +1789,8 @@
       "disableTelemetry": true,
       "disableAdvertisingId": true,
       "disableLocation": true,
-      "disableConsumerFeatures": true
+      "disableConsumerFeatures": true,
+      "allowDeviceEncryption": false
     },
     "linux": null
   },
@@ -2001,6 +2011,20 @@
     "growWhileRunning": true,
     "growBlocker": null
   },
+  "VmDiskEncryption": {
+    "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "volumes": [
+      {
+        "mountPoint": "C:",
+        "operatingSystem": true,
+        "state": "decrypting",
+        "encryptedPercent": 42
+      }
+    ],
+    "problems": [
+      "D: could not start decrypting (error 0x80310029)."
+    ]
+  },
   "VmDiskList": {
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
     "disks": [
@@ -2113,6 +2137,7 @@
     "disableTelemetry": true,
     "disableAdvertisingId": true,
     "disableLocation": false,
-    "disableConsumerFeatures": true
+    "disableConsumerFeatures": true,
+    "allowDeviceEncryption": false
   }
 }

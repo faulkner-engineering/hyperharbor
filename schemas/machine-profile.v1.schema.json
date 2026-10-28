@@ -27,6 +27,7 @@
           "properties": {
             "defaultEdition": { "type": "string", "examples": ["Windows 11 Pro"] },
             "bypassHardwareChecks": { "type": "boolean" },
+            "allowDeviceEncryption": { "type": "boolean" },
             "disableTelemetry": { "type": "boolean" },
             "disableAdvertisingId": { "type": "boolean" },
             "disableLocation": { "type": "boolean" },

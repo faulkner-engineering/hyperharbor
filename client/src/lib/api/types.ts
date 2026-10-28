@@ -1585,6 +1585,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vms/{vmId}/disk-encryption": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read BitLocker's state on each volume of a running Windows guest.
+         * @description Since 1.37.0. Asks the guest over PowerShell Direct, with the VM's stored administrator, through
+         *     Win32_EncryptableVolume (which every Windows edition has). The VM must be running (409 with `code:
+         *     vmNotRunning`) and set up by HyperHarbor (409 with `code: vmNotProvisioned`); Linux guests get 409. Takes a few
+         *     seconds, so poll it no more than every few seconds while showing progress.
+         */
+        get: operations["getVmDiskEncryption"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/disk-encryption/turn-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn BitLocker off on every volume of a running Windows guest.
+         * @description Since 1.37.0. Starts a `turnOffDiskEncryption` job that asks the guest to decrypt each encrypted volume, data
+         *     volumes before the Windows volume (Windows refuses to decrypt the Windows volume while it holds a data
+         *     volume's automatic unlock key). The job ends once decryption has started; Windows decrypts in the background,
+         *     also across restarts, and `getVmDiskEncryption` shows its progress. `diskEncryption` in the job holds the
+         *     volumes as they were afterwards and what could not be started. The next backup uploads the whole disk once.
+         *     The same conditions as `getVmDiskEncryption` apply.
+         */
+        post: operations["turnOffVmDiskEncryption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vms/{vmId}/disks/export": {
         parameters: {
             query?: never;
@@ -3365,7 +3419,7 @@ export interface components {
             blockers: components["schemas"]["DeleteBlocker"][];
         };
         /** @enum {string} */
-        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm" | "mergeCheckpoints" | "applyMachineProfile" | "growDisk";
+        VmJobKind: "createVm" | "deleteVm" | "applyCompute" | "applyPerformance" | "performanceGuestSetup" | "exportDisks" | "applySetupProfile" | "backupVm" | "backupHostState" | "restoreVm" | "replaceDisk" | "restoreHostState" | "transferVm" | "mergeCheckpoints" | "applyMachineProfile" | "growDisk" | "turnOffDiskEncryption";
         /** @enum {string} */
         VmJobState: "running" | "succeeded" | "failed";
         JobError: {
@@ -3398,6 +3452,8 @@ export interface components {
             transferResult?: components["schemas"]["TransferResult"] | null;
             /** @description What a `growDisk` job did, once it succeeded (API 1.36.0). Omitted for other jobs. */
             diskGrowResult?: components["schemas"]["DiskGrowResult"] | null;
+            /** @description What a `turnOffDiskEncryption` job left, once it succeeded (API 1.37.0). Omitted for other jobs. */
+            diskEncryption?: components["schemas"]["VmDiskEncryption"] | null;
         };
         /** @description Since 1.36.0. A virtual hard disk attached to a VM. */
         VmDisk: {
@@ -3451,6 +3507,32 @@ export interface components {
             partitionExtended: boolean;
             /** @description What the user still has to do, for example extend the file system in a Linux guest. */
             note: string | null;
+        };
+        /**
+         * @description Since 1.37.0. BitLocker's conversion state of one guest volume.
+         * @enum {string}
+         */
+        GuestEncryptionState: "decrypted" | "encrypted" | "encrypting" | "decrypting" | "paused";
+        /** @description Since 1.37.0. One volume of a Windows guest. */
+        GuestVolumeEncryption: {
+            /** @description The drive letter, for example `C:`, or the volume's device path when it has none. */
+            mountPoint: string;
+            /** @description The volume Windows runs from. */
+            operatingSystem: boolean;
+            state: components["schemas"]["GuestEncryptionState"];
+            /**
+             * Format: int32
+             * @description How much of the volume is encrypted; it falls to 0 while decrypting.
+             */
+            encryptedPercent: number;
+        };
+        /** @description Since 1.37.0. BitLocker's state in a Windows guest. */
+        VmDiskEncryption: {
+            /** Format: uuid */
+            vmId: string;
+            volumes: components["schemas"]["GuestVolumeEncryption"][];
+            /** @description Volumes whose decryption could not be started, and why. Empty when reading the state. */
+            problems: string[];
         };
         ApplySetupProfileRequest: {
             /** @description An `id` from `GET /setup-profiles`. */
@@ -3608,6 +3690,8 @@ export interface components {
              * @default true
              */
             disableConsumerFeatures: boolean;
+            /** @description Since 1.37.0; false when absent. Let Windows turn on BitLocker device encryption by itself, as it does on a VM with a virtual TPM. When false, Setup sets PreventDeviceEncryption before the first sign-in, so the disk stays unencrypted: an encrypted disk makes every backup larger, and a restored or moved VM can ask for its recovery key. Older hosts reject the field, so send it only when true. */
+            allowDeviceEncryption?: boolean;
         };
         LinuxInstallSettings: {
             /** @description OpenSSH public keys (ssh-ed25519, ecdsa-sha2-nistp*, ssh-rsa) for the administrator. */
@@ -7528,6 +7612,108 @@ export interface operations {
             /**
              * @description The VM must be off (`code: requiresShutdown`), resource warnings to acknowledge, the disk cannot grow, the
              *     VM is saved or paused, or another operation is in progress on it.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            503: components["responses"]["HyperVUnavailable"];
+        };
+    };
+    getVmDiskEncryption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The guest's volumes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmDiskEncryption"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The VM is not running, has no stored administrator credential, or does not run Windows. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The guest rejected the stored administrator credential. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The guest could not read its volumes. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The guest is not reachable over PowerShell Direct yet, or Hyper-V is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    turnOffVmDiskEncryption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job started. */
+            202: {
+                headers: {
+                    /** @description URL of the job. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmJob"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not running, has no stored administrator credential, does not run Windows, or another operation
+             *     is in progress on it.
              */
             409: {
                 headers: {

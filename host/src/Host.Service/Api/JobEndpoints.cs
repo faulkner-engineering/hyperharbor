@@ -33,7 +33,8 @@ public static class JobEndpoints
         job.SetupResult,
         job.RestoreResult,
         job.TransferResult,
-        job.DiskGrowResult);
+        job.DiskGrowResult,
+        job.DiskEncryption);
 
     /// <summary>Another User's job is reported as not found.</summary>
     private static Results<Ok<VmJob>, ProblemHttpResult> GetJob(Guid jobId, VmJobStore jobs, ClaimsPrincipal user) =>

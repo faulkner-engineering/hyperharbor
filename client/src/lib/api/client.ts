@@ -24,6 +24,8 @@ export type VmComputeUpdate = components["schemas"]["VmComputeUpdate"];
 export type ComputeSetting = components["schemas"]["ComputeSetting"];
 export type VmDisk = components["schemas"]["VmDisk"];
 export type VmDiskList = components["schemas"]["VmDiskList"];
+export type VmDiskEncryption = components["schemas"]["VmDiskEncryption"];
+export type GuestVolumeEncryption = components["schemas"]["GuestVolumeEncryption"];
 export type GrowVmDiskRequest = components["schemas"]["GrowVmDiskRequest"];
 export type DiskGrowResult = components["schemas"]["DiskGrowResult"];
 export type ValidationIssue = components["schemas"]["ValidationIssue"];
@@ -981,6 +983,14 @@ export const updateVmCompute = (key: string, vmId: string, request: UpdateComput
 
 /** The API version that added listing and growing a VM's disks. */
 export const DiskGrowApiVersion = "1.36.0";
+
+/** Hosts that prevent BitLocker device encryption unless a machine profile allows it, and can turn it off in a guest. */
+export const DiskEncryptionApiVersion = "1.37.0";
+
+export const getVmDiskEncryption = (key: string, vmId: string) => invoke<VmDiskEncryption>("get_vm_disk_encryption", { key, vmId });
+
+/** Starts a turnOffDiskEncryption job (elevated). */
+export const turnOffVmDiskEncryption = (key: string, vmId: string) => invoke<VmJob>("turn_off_vm_disk_encryption", { key, vmId });
 
 export const listVmDisks = (key: string, vmId: string) => invoke<VmDiskList>("list_vm_disks", { key, vmId });
 
