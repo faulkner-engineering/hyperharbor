@@ -34,6 +34,7 @@
     ProfilesConsolidatedApiVersion,
     MachineProfileVmsApiVersion,
     MachineProfileApplyApiVersion,
+    DiskEncryptionApiVersion,
     DiskGrowApiVersion,
     ApplySetupProfileApiVersion,
     BackupApiVersion,
@@ -69,6 +70,7 @@
   import CreateVmFromProfileDialog from "$lib/components/CreateVmFromProfileDialog.svelte";
   import ComputeDialog from "$lib/components/ComputeDialog.svelte";
   import DiskDialog from "$lib/components/DiskDialog.svelte";
+  import DiskEncryptionDialog from "$lib/components/DiskEncryptionDialog.svelte";
   import PerformanceDialog from "$lib/components/PerformanceDialog.svelte";
   import GpuWarnings from "$lib/components/GpuWarnings.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
@@ -111,6 +113,7 @@
   let transferring = $state<Vm | null>(null);
   let editing = $state<Vm | null>(null);
   let growing = $state<Vm | null>(null);
+  let encrypting = $state<Vm | null>(null);
   let tuning = $state<Vm | null>(null);
   let choosingMonitors = $state<Vm | null>(null);
   let configuringCamera = $state<Vm | null>(null);
@@ -228,6 +231,7 @@
     transferring = null;
     editing = null;
     growing = null;
+    encrypting = null;
     tuning = null;
     choosingMonitors = null;
     configuringCamera = null;
@@ -438,6 +442,7 @@
     transferring = null;
     editing = null;
     growing = null;
+    encrypting = null;
     tuning = null;
     creating = false;
     creatingFrom = null;
@@ -728,6 +733,7 @@
             onaction={requestAction}
             onsettings={(vm) => (editing = vm)}
             ondisks={hostSupports(selectedHost, DiskGrowApiVersion) ? (vm) => (growing = vm) : undefined}
+            onencryption={hostSupports(selectedHost, DiskEncryptionApiVersion) ? (vm) => (encrypting = vm) : undefined}
             onperformance={(vm) => (tuning = vm)}
             onmonitors={(vm) => (choosingMonitors = vm)}
             oncamera={(vm) => (configuringCamera = vm)}
@@ -778,6 +784,9 @@
         {/if}
         {#if growing}
           <DiskDialog host={selectedHost} vm={growing} onclose={lifecycleClosed} />
+        {/if}
+        {#if encrypting}
+          <DiskEncryptionDialog host={selectedHost} vm={encrypting} onclose={lifecycleClosed} />
         {/if}
         {#if tuning}
           <PerformanceDialog host={selectedHost} vm={tuning} onclose={lifecycleClosed} />

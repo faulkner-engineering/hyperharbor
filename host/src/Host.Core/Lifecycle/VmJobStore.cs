@@ -14,6 +14,7 @@ namespace HyperHarbor.Host.Core.Lifecycle;
 /// <param name="RestoreResult">What a restore job did.</param>
 /// <param name="TransferResult">What a transfer job did.</param>
 /// <param name="DiskGrowResult">What a growDisk job did.</param>
+/// <param name="DiskEncryption">What a turnOffDiskEncryption job left.</param>
 public sealed record VmJobSnapshot(
     Guid Id,
     VmJobKind Kind,
@@ -29,7 +30,8 @@ public sealed record VmJobSnapshot(
     Shared.Contracts.Unattend.SetupProfileResult? SetupResult = null,
     Shared.Contracts.Backup.RestoreResult? RestoreResult = null,
     Shared.Contracts.Transfers.TransferResult? TransferResult = null,
-    Shared.Contracts.Vms.DiskGrowResult? DiskGrowResult = null);
+    Shared.Contracts.Vms.DiskGrowResult? DiskGrowResult = null,
+    Shared.Contracts.Vms.VmDiskEncryption? DiskEncryption = null);
 
 /// <summary>Handed to a job's work so it can report progress.</summary>
 public sealed class VmJobContext
@@ -69,6 +71,9 @@ public sealed class VmJobContext
 
     /// <summary>Records what a growDisk job did, for the job's snapshot.</summary>
     public void ReportDiskGrowResult(Shared.Contracts.Vms.DiskGrowResult result) => _store.SetDiskGrowResult(_jobId, result);
+
+    /// <summary>Records what a turnOffDiskEncryption job left, for the job's snapshot.</summary>
+    public void ReportDiskEncryption(Shared.Contracts.Vms.VmDiskEncryption result) => _store.SetDiskEncryption(_jobId, result);
 }
 
 /// <summary>
@@ -231,6 +236,7 @@ public sealed class VmJobStore : IDisposable
         VmJobKind.TransferVm => "transferring the virtual machine",
         VmJobKind.MergeCheckpoints => "merging checkpoints",
         VmJobKind.GrowDisk => "growing a disk",
+        VmJobKind.TurnOffDiskEncryption => "turning off disk encryption",
         _ => kind.ToString(),
     };
 
@@ -274,6 +280,17 @@ public sealed class VmJobStore : IDisposable
             if (_jobs.TryGetValue(jobId, out var entry))
             {
                 entry.Snapshot = entry.Snapshot with { DiskGrowResult = result, UpdatedAt = _time.GetUtcNow() };
+            }
+        }
+    }
+
+    internal void SetDiskEncryption(Guid jobId, Shared.Contracts.Vms.VmDiskEncryption result)
+    {
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue(jobId, out var entry))
+            {
+                entry.Snapshot = entry.Snapshot with { DiskEncryption = result, UpdatedAt = _time.GetUtcNow() };
             }
         }
     }

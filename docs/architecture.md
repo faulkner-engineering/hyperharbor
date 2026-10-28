@@ -67,6 +67,12 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   trail), SelfTestGate (copies the data to <data>\update\selftest and runs the new exe's --self-test);
   Security/DataDirectoryAcl. Host.Service/Installation/SelfTestRun: the real host on the copy, loopback port,
   no mDNS or install watcher; checks dataFormat, stores, start, tls (pinned host certificate), inventory.
+- host/src/Host.Core/Backup: Kopia backups. Kopia/ wraps kopia.exe (KopiaCli: typed commands, the disk splitter, and
+  measured snapshots; KopiaOutput parses its output). VmBackupService backs one VM up from a checkpoint's frozen disks
+  through hard-linked staging; DiskEncryptionProbe (VhdxEncryptionProbe, a read-only VHDX reader) finds BitLocker and
+  LUKS volumes in those disks for the manifest and the run's warnings. BackupCoordinator schedules runs; Restore/ holds
+  restore, snapshot browsing, and the monthly restore test. Host.Core/Lifecycle/VmDiskEncryptionService reads and
+  turns off BitLocker in a running Windows guest over PowerShell Direct (client: DiskEncryptionDialog).
 - Update helper: UpdateApplier (Host.Core/Installation) is the state machine; update\state.json (UpdateStateStore)
   saves each phase first, so a rerun resumes (Stopping/BackingUp/Flipping: keep From; Starting: commit if To is
   healthy, else roll back; RollingBack: finish). Healthy = update\health.json (HealthReporter, installed service

@@ -117,6 +117,21 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     HyperHarbor-Test2 with a setup profile and waits for Ready (about 25 minutes). HH_PROFILE_EXISTING_LIVE=1
     HH_SPIKE_ISO=<image>: creates HyperHarbor-Test, applies a profile through the API with a restart, checks the
     account's hive, and deletes the VM. Throwaway VMs created for tests may be deleted without asking (decided 2026-10-05); ask before changing any other VM.
+- Backups: HH_BACKUP_LIVE=1 (KopiaLiveTests) and HH_KOPIA_DEDUP_LIVE=1 (KopiaDedupLiveTests, about 1 GiB of temporary
+  files, a minute) run the real kopia.exe against temporary folders; both need HH_KOPIA_EXE=<path to kopia.exe>, for
+  example .tools\kopia-0.23.1\kopia.exe. KopiaDedupLiveTests prints what scattered writes to random data (an
+  encrypted disk) upload with the disk splitter and with kopia's default (run with --logger "console;verbosity=detailed").
+  HH_BACKUP_VM_LIVE=1 backs up and restores a throwaway VM. HH_DISK_PROBE_LIVE=<path to a .vhdx> prints what
+  VhdxEncryptionProbe finds in a real disk (read-only; works while the VM runs).
+- Encrypted guests (throwaway VMs only; HyperHarbor-Test, installed by the harness, has BitLocker that Windows turned on
+  itself): HH_BACKUP_BITLOCKER_LIVE=1 with HH_KOPIA_EXE and HH_LIVE_GUEST_VM=<id of an off VM without checkpoints>
+  backs it up, runs it for HH_BITLOCKER_RUN_MINUTES (10), shuts it down, and backs up again for HH_BITLOCKER_ROUNDS
+  (2), printing each upload beside how much of the disk changed (needs room for one full copy; HH_LIVE_LOG=<file> shows
+  progress while it runs). HH_DISK_ENCRYPTION_LIVE=1 with HH_LIVE_GUEST_VM turns BitLocker off in the guest through
+  VmDiskEncryptionService (credential from the harness folder or HH_GUEST_ADMIN_DATA), waits for decryption
+  (HH_DECRYPT_MINUTES, 90), and checks the disk with the probe. Run the backup test again afterwards to compare.
+  MachineProfileLiveTests checks that a fresh install has PreventDeviceEncryption and an unencrypted C:;
+  HH_MACHINE_ALLOW_ENCRYPTION=1 allows encryption instead and reports what Windows did.
 - Administrator windows: HH_GUEST_ADMIN_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs GuestAdminLiveTests against a running
   Windows VM that HyperHarbor set up (its credential and setup come from the host's data folder, so run elevated, or
   from HH_GUEST_ADMIN_DATA, for example the harness folder). It opens a window, checks over PowerShell Direct that

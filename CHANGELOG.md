@@ -10,6 +10,47 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.5-beta.1] - 2026-10-28 (API 1.37.0)
+
+A beta of 0.2.5: smaller backups, above all for VMs whose disks Windows encrypted with BitLocker on its own. New
+Windows VMs are no longer encrypted unless a machine profile allows it, Disk encryption… turns BitLocker off in an
+existing VM, and each backup says how much it uploaded. Update both the host and the client; the new options need a
+host with API 1.37.0. Action: the first backup of each existing VM after updating the host uploads its whole disk once.
+
+### Added
+- Each backup run records how much it actually uploaded, after dedup and compression, beside the size of the disks.
+  The backup panel shows it ("Backed up 3 hours ago (uploaded 1.2 GB of 40 GB)") and in the history. It is not
+  shown when another backup used the same target at the same time, since the upload cannot be split between them.
+  API 1.37.0 (BackupRun.uploadedBytes).
+- A run that uploads nearly a full copy of a VM's disks again says so, and names the usual cause: a guest that encrypts
+  its disks with BitLocker. The backup panel now shows the warnings of the latest stored backup.
+- Backups find BitLocker (and Linux LUKS) encryption in a VM's disks by reading their partitions on the host, so it
+  works for any VM, running or off, without signing in to the guest. The first backup of an encrypted VM, and a
+  backup after encryption was turned on or off in the guest, explain what it does to backup size; the backup panel
+  notes encrypted VMs. Each backup's manifest records what it found per disk. API 1.37.0 (BackupRun.encryptedDisks).
+- Disk encryption… in a running Windows VM's menu shows BitLocker's state on each volume and turns it off: Windows
+  decrypts in the background, the VM stays usable, and the dialog shows the progress. For VMs that HyperHarbor set up
+  (it uses the stored administrator). Needs a host with API 1.37.0.
+- Machine profiles have "Let Windows encrypt the disk (BitLocker device encryption)" in the Windows install settings
+  (account.windows.allowDeviceEncryption). Off by default.
+
+### Changed
+- New Windows VMs are no longer encrypted by Windows on its own. Windows 11 turns BitLocker device encryption on by
+  itself in a VM with a virtual TPM, which made every backup larger and could make a restored or moved VM ask for a
+  recovery key nobody had saved. The unattended install now prevents it unless the machine profile allows it. VMs
+  created before keep their encryption; turn it off with Disk encryption… in the VM's menu. Host only for the install.
+- VM disks are split into fixed 1 MiB pieces for dedup instead of Kopia's default of about 4 MiB. A small change in a
+  guest now uploads about a quarter as much, which matters most for BitLocker-encrypted guests, whose changes do not
+  compress (measured: 100 scattered 4 KiB writes uploaded 211 MiB before and 84 MiB after). Action: the first backup
+  of each existing VM after updating the host uploads the whole disk once, because the old pieces no longer line up;
+  its run says so. Host only.
+
+### Fixed
+- Shutting a VM down or restarting it no longer hangs when the guest never answers the request (seen on a guest busy
+  installing updates). After 60 seconds it fails with a message that suggests trying again or turning the VM off, and
+  jobs that shut a VM down first (growing a disk, applying settings or a machine profile) fail the same way instead
+  of holding the VM. Host only.
+
 ## [0.2.4] - 2026-10-27 (API 1.36.0)
 
 The stable release of everything in 0.2.4-beta.1 below: growing a VM's disk, a default browser and a quieter Edge in

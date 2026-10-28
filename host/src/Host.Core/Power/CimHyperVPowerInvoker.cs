@@ -28,9 +28,38 @@ public sealed class CimHyperVPowerInvoker : IHyperVPowerInvoker
 
     private const ushort OperationalStatusOk = 2;
 
+    /// <summary>
+    /// How long a shutdown or restart request may take to be accepted. Hyper-V normally answers in a second, but the
+    /// call once blocked for hours on a guest that was busy (probably installing updates), and it cannot be cancelled.
+    /// </summary>
+    internal static readonly TimeSpan GuestRequestTimeout = TimeSpan.FromSeconds(60);
+
     public Task InvokeAsync(Guid vmId, VmAction action, CancellationToken cancellationToken)
     {
-        return Task.Run(() => InvokeCoreAsync(vmId, action, cancellationToken), cancellationToken);
+        var call = Task.Run(() => InvokeCoreAsync(vmId, action, cancellationToken), cancellationToken);
+        return action is VmAction.Shutdown or VmAction.Restart ? WithDeadlineAsync(call, action, GuestRequestTimeout) : call;
+    }
+
+    /// <summary>
+    /// Waits for a request to the guest until the deadline. A request that misses it keeps running in the background
+    /// (the CIM call cannot be stopped); its outcome is observed and dropped.
+    /// </summary>
+    /// <exception cref="VmActionNotAllowedException">The guest did not accept the request in time.</exception>
+    internal static async Task WithDeadlineAsync(Task call, VmAction action, TimeSpan timeout)
+    {
+        try
+        {
+            await call.WaitAsync(timeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            _ = call.ContinueWith(abandoned => _ = abandoned.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            var verb = action == VmAction.Restart ? "restart" : "shut down";
+            throw new VmActionNotAllowedException(
+                action,
+                null,
+                $"The guest did not answer the request to {verb} within {timeout.TotalSeconds:0} seconds. It may be busy, for example installing updates. Try again later, or use turnOff to force it off.");
+        }
     }
 
     private static async Task InvokeCoreAsync(Guid vmId, VmAction action, CancellationToken cancellationToken)

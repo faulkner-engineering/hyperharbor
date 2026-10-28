@@ -184,6 +184,118 @@ public sealed class KopiaTests : IDisposable
     }
 
     [Fact]
+    public void Policy_SetsTheSplitter_OnlyWhenGiven()
+    {
+        Assert.DoesNotContain(KopiaCli.PolicyArguments("src", new RetentionPolicy(7, 4, 6)), a => a.StartsWith("--splitter", StringComparison.Ordinal));
+        Assert.Equal("--splitter=FIXED-1M", KopiaCli.PolicyArguments("src", new RetentionPolicy(7, 4, 6), KopiaCli.DiskSplitter)[^1]);
+    }
+
+    [Fact]
+    public void StoredBytes_PrefersThePackedTotal()
+    {
+        // Output of kopia 0.23.1 content stats --raw, with and without compressed content.
+        const string compressed = "Count: 24\r\nTotal Bytes: 100667295\r\nTotal Packed: 67116663 (compression 33.3%)\r\nBy Method:\r\n";
+        const string plain = "Count: 1\nTotal Bytes: 655\nAverage: 655\nHistogram:\n\n        1 between 100 and 1000 (total 683)\n";
+
+        Assert.Equal(67116663, KopiaOutput.StoredBytes(compressed));
+        Assert.Equal(655, KopiaOutput.StoredBytes(plain));
+        Assert.Null(KopiaOutput.StoredBytes("Count: 0\n"));
+        Assert.Null(KopiaOutput.StoredBytes("Total Bytes: 67.1 MB\n"));
+    }
+
+    [Fact]
+    public void PolicySplitter_ReadsTheAlgorithm_OrNullForTheDefault()
+    {
+        Assert.Equal("FIXED-1M", KopiaOutput.PolicySplitter("""{ "compression": { "compressorName": "zstd" }, "splitter": { "algorithm": "FIXED-1M" } }"""));
+        Assert.Null(KopiaOutput.PolicySplitter("""{ "splitter": {} }"""));
+        Assert.Null(KopiaOutput.PolicySplitter(string.Empty));
+    }
+
+    [Fact]
+    public async Task MeasuredSnapshot_ReportsTheRepositoryGrowth()
+    {
+        var stored = 1000L;
+        _runner.Respond = call => call.Arguments switch
+        {
+            ["content", "stats", ..] => new KopiaResult(0, $"Count: 3\nTotal Bytes: {stored}\n", string.Empty),
+            ["snapshot", "create", ..] => Created(() => stored += 5000),
+            _ => new KopiaResult(0, string.Empty, string.Empty),
+        };
+
+        var (snapshot, uploaded) = await new KopiaCli(_runner).CreateMeasuredSnapshotAsync(S3Repository(), "pw", @"D:\stage", "nightly", default);
+
+        Assert.Equal("snap1", snapshot.Id);
+        Assert.Equal(5000, uploaded);
+        Assert.Equal(["content", "stats", "--raw"], _runner.Calls[0].Arguments);
+    }
+
+    [Fact]
+    public async Task MeasuredSnapshot_IsNotMeasured_WhenStatsFail()
+    {
+        _runner.Respond = call => call.Arguments switch
+        {
+            ["content", "stats", ..] => new KopiaResult(1, string.Empty, "unknown command"),
+            ["snapshot", "create", ..] => Created(() => { }),
+            _ => new KopiaResult(0, string.Empty, string.Empty),
+        };
+
+        var (snapshot, uploaded) = await new KopiaCli(_runner).CreateMeasuredSnapshotAsync(S3Repository(), "pw", @"D:\stage", "nightly", default);
+
+        Assert.Equal("snap1", snapshot.Id);
+        Assert.Null(uploaded);
+    }
+
+    [Fact]
+    public async Task MeasuredSnapshots_ThatOverlapInOneRepository_AreNotMeasured()
+    {
+        var repository = S3Repository();
+        var firstStarted = new TaskCompletionSource();
+        var releaseFirst = new TaskCompletionSource();
+        var blocking = new BlockingKopiaRunner(firstStarted, releaseFirst);
+        var cli = new KopiaCli(blocking);
+
+        var first = cli.CreateMeasuredSnapshotAsync(repository, "pw", @"D:\a", "a", default);
+        await firstStarted.Task;
+        var second = await cli.CreateMeasuredSnapshotAsync(repository, "pw", @"D:\b", "b", default);
+        releaseFirst.SetResult();
+        var firstResult = await first;
+
+        Assert.Null(second.UploadedBytes);
+        Assert.Null(firstResult.UploadedBytes);
+
+        // Once both are done, the next snapshot has the repository to itself again.
+        Assert.NotNull((await cli.CreateMeasuredSnapshotAsync(repository, "pw", @"D:\c", "c", default)).UploadedBytes);
+    }
+
+    private static KopiaResult Created(Action onCreate)
+    {
+        onCreate();
+        return new KopiaResult(0, """{ "id": "snap1", "source": { "path": "p" }, "startTime": "2026-10-12T02:00:00Z" }""", string.Empty);
+    }
+
+    /// <summary>Holds the first snapshot create until released, so a second one overlaps it.</summary>
+    private sealed class BlockingKopiaRunner(TaskCompletionSource started, TaskCompletionSource release) : IKopiaRunner
+    {
+        private int _creates;
+
+        public async Task<KopiaResult> RunAsync(KopiaInvocation invocation, CancellationToken cancellationToken)
+        {
+            if (invocation.Arguments is ["snapshot", "create", ..])
+            {
+                if (Interlocked.Increment(ref _creates) == 1)
+                {
+                    started.SetResult();
+                    await release.Task.ConfigureAwait(false);
+                }
+
+                return new KopiaResult(0, """{ "id": "snap1", "source": { "path": "p" }, "startTime": "2026-10-12T02:00:00Z" }""", string.Empty);
+            }
+
+            return new KopiaResult(0, "Total Bytes: 10\n", string.Empty);
+        }
+    }
+
+    [Fact]
     public void RestoreMd_NamesThePasswordManager_AndNeverHoldsASecret()
     {
         var target = S3() with { S3 = S3().S3! with { Prefix = "hh" } };

@@ -29,7 +29,7 @@ public class ContractFixtureTests
 
     private static readonly BackupRun BackupRunSample = new(
         Guid.Parse("7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"), $"vm:{VmId:D}", "3f2a9c1e5d7b4a60", BackupRunTrigger.Schedule, Time, Time.AddMinutes(12),
-        BackupRunOutcome.Partial, 64_000_000_000, ["The checkpoint could not be removed."], VmId, "Ubuntu Dev", "cleanup", "k4f8a1b2c3d4e5f6");
+        BackupRunOutcome.Partial, 64_000_000_000, ["The checkpoint could not be removed."], VmId, "Ubuntu Dev", "cleanup", "k4f8a1b2c3d4e5f6", 1_250_000_000, 1);
 
     private static readonly RestoreTestResult RestoreTestResultSample = new(
         Guid.Parse("8d2f4a6b-1c3e-4a5b-9c7d-0e1f2a3b4c5d"), "Ubuntu Dev", "3f2a9c1e5d7b4a60", BackupRunTrigger.Schedule, Time, Time.AddMinutes(9),
@@ -182,6 +182,8 @@ public class ContractFixtureTests
         ["VmDiskList"] = new VmDiskList(VmId, [new VmDisk(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 68719476736, 21474836480, true, DiskGrowBlocker.Checkpoints)]),
         ["GrowVmDiskRequest"] = new GrowVmDiskRequest(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 128, true, true, false),
         ["DiskGrowResult"] = new DiskGrowResult(@"D:\VMs\Dev\Virtual Hard Disks\Dev.vhdx", 137438953472, false, "In the VM, extend the last partition and its file system."),
+        ["GuestVolumeEncryption"] = new GuestVolumeEncryption("C:", true, GuestEncryptionState.Decrypting, 42),
+        ["VmDiskEncryption"] = new VmDiskEncryption(VmId, [new GuestVolumeEncryption("C:", true, GuestEncryptionState.Decrypting, 42)], ["D: could not start decrypting (error 0x80310029)."]),
         ["HostGpu"] = new HostGpu([new HostGpuDevice("Intel(R) UHD Graphics", GpuVendor.Intel, "30.0.101.1122", true, 32, null)], []),
         ["BackupSchedule"] = new BackupSchedule("02:00", [DayOfWeek.Monday, DayOfWeek.Thursday]),
         ["BackupRetention"] = new BackupRetention(7, 4, 6),

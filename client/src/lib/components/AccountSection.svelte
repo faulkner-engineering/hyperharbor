@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { errorMessage, hostSupports, listUnattendProfiles, ProfilesConsolidatedApiVersion, type HostEntry, type UnattendProfile } from "$lib/api/client";
+  import {
+    DiskEncryptionApiVersion,
+    errorMessage,
+    hostSupports,
+    listUnattendProfiles,
+    ProfilesConsolidatedApiVersion,
+    type HostEntry,
+    type UnattendProfile,
+  } from "$lib/api/client";
   import { DEFAULT_EDITION, defaultLinux, defaultWindows, type MachineDraft } from "$lib/machineDraft.svelte";
   import { onMount } from "svelte";
 
@@ -97,6 +105,21 @@
     {@const settings = account.windows}
     <label>Edition <input bind:value={settings.defaultEdition} placeholder={DEFAULT_EDITION} /></label>
     <label class="check"><input type="checkbox" bind:checked={settings.bypassHardwareChecks} /> Bypass Windows 11's TPM, Secure Boot, and memory checks</label>
+    {#if hostSupports(host, DiskEncryptionApiVersion)}
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={settings.allowDeviceEncryption ?? false}
+          onchange={(event) => {
+            // Older hosts reject the field, so it is sent only when on.
+            if (event.currentTarget.checked) settings.allowDeviceEncryption = true;
+            else delete settings.allowDeviceEncryption;
+          }}
+        />
+        Let Windows encrypt the disk (BitLocker device encryption)
+      </label>
+      <p class="hint">Off by default: an encrypted disk makes every backup larger, and a restored or moved VM can ask for a recovery key.</p>
+    {/if}
     <fieldset>
       <legend>Privacy during setup</legend>
       <label class="check"><input type="checkbox" checked={settings.disableTelemetry ?? true} onchange={(event) => (settings.disableTelemetry = event.currentTarget.checked)} /> Send only required diagnostic data</label>
@@ -141,6 +164,12 @@
 
   legend {
     font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .hint {
+    margin: 0.1rem 0 0.4rem 1.6rem;
+    font-size: 0.8rem;
     color: var(--muted);
   }
 

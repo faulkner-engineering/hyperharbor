@@ -38,6 +38,7 @@ account:                         # today's unattended install profile
     disableAdvertisingId: true
     disableLocation: true
     disableConsumerFeatures: true
+    allowDeviceEncryption: false # API 1.37.0; false sets PreventDeviceEncryption in the specialize pass
   linux:                         # when os is linux
     sshAuthorizedKeys: []
     packages: []

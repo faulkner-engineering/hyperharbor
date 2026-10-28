@@ -535,3 +535,39 @@ verified, and what was found along the way. User-facing changes per release are 
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
+
+30. Backups of encrypted guests (2026-10-27; API 1.37.0; branch feature/backup-encryption). The user: kopia backups of
+   BitLocker guests seem to upload the whole disk every run. Measured first (platform-notes.md, Kopia backups and
+   encrypted guests): dedup still works on ciphertext, but each small write re-uploads a whole 4 MiB piece that cannot
+   compress. Decided with the user: FIXED-1M splitter for every VM disk source (KopiaCli.DiskSplitter), accepting one
+   full upload per existing VM; per-run uploaded bytes (KopiaCli.CreateMeasuredSnapshotAsync: content stats --raw
+   before and after, null when two snapshots overlapped in one repository); a run warning for a near-full upload after
+   an earlier backup (VmBackupService.UploadWarning, 80% of at least 1 GiB), worded for the splitter change when the
+   policy had another splitter. Client: uploaded size in the backup panel and history, warnings of the latest stored
+   backup.
+   - Encryption detection (the user chose reading the disk on the host over asking the guest): VhdxEncryptionProbe
+     reads the VHDX header, region table, metadata, and BAT, then the MBR or GPT and each partition's first sector,
+     for "-FVE-FS-" (BitLocker) and the LUKS magic; differencing disks, a log to replay, and anything unexpected are
+     Unknown, never an error. VmBackupService probes the frozen disks, records ManifestDisk.encryption and
+     BackupRun.encryptedDisks, and warns once (first backup to a target, or a change since the last good backup)
+     instead of every run. Unit tested on VHDX images built in memory (DiskEncryptionProbeTests), and on the real
+     HyperHarbor-Test disk with HH_DISK_PROBE_LIVE=<path>, which found BitLocker that Windows had turned on itself.
+   - Device encryption (the user: "Device encryption should definitely be configurable"; decided: off by default,
+     with a turn-off action). WindowsInstallSettings.allowDeviceEncryption (account.windows in a machine profile,
+     false when absent, sent by the client only when true): when false, AutounattendBuilder adds a
+     Microsoft-Windows-Deployment RunSynchronous in the specialize pass that sets
+     HKLM\SYSTEM\CurrentControlSet\Control\BitLocker PreventDeviceEncryption=1, before the out-of-box experience
+     where Windows starts device encryption (first logon is too late). Install time only; existing VMs use the action.
+   - Turning BitLocker off: GET /vms/{id}/disk-encryption and POST /vms/{id}/disk-encryption/turn-off (elevated, a
+     turnOffDiskEncryption job with diskEncryption). VmDiskEncryptionService (Host.Core/Lifecycle) with
+     PowerShellGuestDiskEncryption: Win32_EncryptableVolume over PowerShell Direct with the stored administrator, since
+     the BitLocker module is missing on some editions; Decrypt on fixed volumes, data volumes before the Windows volume
+     (Windows refuses the Windows volume while it holds a data volume's automatic unlock key). The job ends once
+     decryption has started, so it does not hold the VM's lock for the hour decrypting can take; the client's
+     DiskEncryptionDialog reads the state every 10 seconds while a volume converts. Running, set-up Windows VMs only.
+   - Verified live on HyperHarbor-Test (2026-10-28): BitLockerBackupLiveTests on the encrypted guest, then
+     DiskEncryptionLiveTests turned BitLocker off through the service, then the backup test again (numbers in
+     platform-notes.md, Kopia backups and encrypted guests). Fresh installs (MachineProfileLiveTests, Windows 11 with a
+     vTPM): by default PreventDeviceEncryption was 1 and C: unencrypted at Ready; with
+     HH_MACHINE_ALLOW_ENCRYPTION=1 the value was absent and C: was already encrypting at Ready. VmBackupLiveTests
+     passed with the FIXED-1M splitter. The client dialog and the profile checkbox were not clicked through.

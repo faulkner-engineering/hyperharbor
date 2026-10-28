@@ -12,7 +12,9 @@ namespace HyperHarbor.Host.Tests.Live;
 /// set on the VM and inside the guest, and deletes the VM. Skipped unless HH_MACHINE_LIVE=1 and HH_SPIKE_ISO (a Windows
 /// image in HH_HARNESS_ISO_FOLDER) are set; HH_MACHINE_GPU=1 adds a GPU share (needs a partitionable GPU), and
 /// HH_MACHINE_KEEP=1 leaves the VM for a look, and HH_LIVE_GUEST_VM=&lt;id&gt; checks the guest of a VM an earlier run made
-/// (and deletes it). About 30 minutes, or a few with HH_LIVE_GUEST_VM.
+/// (and deletes it). By default the profile leaves device encryption off, and the guest must have PreventDeviceEncryption
+/// set and C: unencrypted; HH_MACHINE_ALLOW_ENCRYPTION=1 allows it, and the test reports whether Windows encrypted C:
+/// within 10 minutes. About 30 minutes, or a few with HH_LIVE_GUEST_VM.
 /// </summary>
 public sealed class MachineProfileLiveTests(ITestOutputHelper output)
 {
@@ -56,6 +58,7 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
 
         await using var host = await LiveHostHarness.StartAsync(Log);
         var gpu = Environment.GetEnvironmentVariable("HH_MACHINE_GPU") == "1";
+        var allowEncryption = Environment.GetEnvironmentVariable("HH_MACHINE_ALLOW_ENCRYPTION") == "1";
         var iso = Environment.GetEnvironmentVariable("HH_SPIKE_ISO")!;
         var inspection = await host.GetJsonAsync($"/api/v1/isos/{Uri.EscapeDataString(iso)}/inspection");
         var editions = inspection["editions"]!.AsArray().Select(item => (string)item!).ToList();
@@ -66,7 +69,12 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
         {
             ["name"] = "Live machine",
             ["os"] = "windows",
-            ["account"] = new JsonObject { ["windows"] = new JsonObject { ["defaultEdition"] = edition } },
+            ["account"] = new JsonObject
+            {
+                ["windows"] = allowEncryption
+                    ? new JsonObject { ["defaultEdition"] = edition, ["allowDeviceEncryption"] = true }
+                    : new JsonObject { ["defaultEdition"] = edition },
+            },
             ["display"] = new JsonObject
             {
                 ["guest"] = new JsonObject
@@ -101,7 +109,7 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
             var reused = Guid.Parse(existing);
             try
             {
-                await CheckGuestAsync(host, reused, gpu, Log);
+                await CheckGuestAsync(host, reused, gpu, allowEncryption, Log);
             }
             finally
             {
@@ -141,7 +149,7 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
             }
 
             await WaitUntilReadyAsync(host, vmId, Log);
-            await CheckGuestAsync(host, vmId, gpu, Log);
+            await CheckGuestAsync(host, vmId, gpu, allowEncryption, Log);
         }
         finally
         {
@@ -153,11 +161,32 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
     }
 
     /// <summary>The setup profile's values in the guest and, with a GPU share, the driver the guest setup copied.</summary>
-    private static async Task CheckGuestAsync(LiveHostHarness host, Guid vmId, bool gpu, Action<string> log)
+    private static async Task CheckGuestAsync(LiveHostHarness host, Guid vmId, bool gpu, bool allowEncryption, Action<string> log)
     {
         var admin = new VmCredentialStore(host.DataDirectory).Find(vmId)!;
         var check = await PowerShellDirectRunner.RunAsync(PowerShellDirectRunner.Encode(GuestScript), new { vmId, admin.UserName, admin.Password }, TimeSpan.FromMinutes(2), CancellationToken.None);
         log("Guest: " + check!.ToJsonString());
+
+        // Device encryption: Win32_EncryptableVolume ConversionStatus 0 is fully decrypted.
+        if (allowEncryption)
+        {
+            Assert.Null((string?)check["preventDeviceEncryption"]);
+            var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(10);
+            var status = (string?)check["encryption"];
+            while (status == "0" && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30));
+                status = (string?)(await PowerShellDirectRunner.RunAsync(
+                    PowerShellDirectRunner.Encode(GuestScript), new { vmId, admin.UserName, admin.Password }, TimeSpan.FromMinutes(2), CancellationToken.None))!["encryption"];
+            }
+
+            log($"Encryption allowed: C: conversion status {status} (0 decrypted, 1 encrypted, 2 encrypting).");
+        }
+        else
+        {
+            Assert.Equal("1", (string?)check["preventDeviceEncryption"]);
+            Assert.Equal("0", (string?)check["encryption"]);
+        }
 
         if (gpu)
         {
@@ -301,12 +330,15 @@ public sealed class MachineProfileLiveTests(ITestOutputHelper output)
                 wallpaper = Value 'Control Panel\Desktop' 'WallPaper'
                 wallpaperStyle = Value 'Control Panel\Desktop' 'WallpaperStyle'
                 wallpaperCopied = Test-Path 'C:\Users\Public\Pictures\HyperHarbor\live-wallpaper.bmp'
+                preventDeviceEncryption = $(try { [string](Get-ItemPropertyValue 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker' -Name PreventDeviceEncryption -ErrorAction Stop) } catch { $null })
+                encryption = [string](Invoke-CimMethod -MethodName GetConversionStatus -InputObject (
+                    Get-CimInstance -Namespace 'root\cimv2\Security\MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume -Filter "DriveLetter='C:'")).ConversionStatus
             }
             [GC]::Collect(); [GC]::WaitForPendingFinalizers()
             & reg.exe unload 'HKU\HyperHarborCheck' 2>&1 | Out-Null
             $values
         }
         Remove-PSSession $session
-        @{ ok = $true; result = ($result | Select-Object appsUseLightTheme, accentColor, hideFileExt, wallpaper, wallpaperStyle, wallpaperCopied) } | ConvertTo-Json -Compress -Depth 4
+        @{ ok = $true; result = ($result | Select-Object appsUseLightTheme, accentColor, hideFileExt, wallpaper, wallpaperStyle, wallpaperCopied, preventDeviceEncryption, encryption) } | ConvertTo-Json -Compress -Depth 4
         """;
 }

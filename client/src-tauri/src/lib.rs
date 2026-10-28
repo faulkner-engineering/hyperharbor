@@ -1221,6 +1221,32 @@ async fn grow_vm_disk(
         .await
 }
 
+#[tauri::command]
+async fn get_vm_disk_encryption(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .get_vm_disk_encryption(&host, &paired, &vm_id)
+        .await
+}
+
+#[tauri::command]
+async fn turn_off_vm_disk_encryption(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .turn_off_vm_disk_encryption(&host, &paired, &vm_id)
+        .await
+}
+
 /// Event with the progress of an ISO upload: `{ pickId, sent, total }`.
 const ISO_UPLOAD_PROGRESS_EVENT: &str = "iso-upload-progress";
 
@@ -3134,6 +3160,8 @@ pub fn run() {
             update_vm_compute,
             list_vm_disks,
             grow_vm_disk,
+            get_vm_disk_encryption,
+            turn_off_vm_disk_encryption,
             pick_iso_file,
             upload_iso,
             cancel_iso_upload,

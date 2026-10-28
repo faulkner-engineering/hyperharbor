@@ -437,6 +437,48 @@ section for an area before changing it: most of these were learned from a failur
   service runs as LocalSystem and applies them directly, with no tray approval. An unelevated console
   host still asks the tray as well. TestHost pins the unelevated WakeFixCoordinator path.
 
+## Kopia backups and encrypted guests (measured 2026-10-27 with kopia 0.23.1)
+
+- Kopia dedups unchanged data of an encrypted disk: a snapshot of 1 GiB of random data (the stand-in for BitLocker
+  ciphertext) with no change uploaded 566 bytes. BitLocker's XTS-AES gives an unchanged sector the same ciphertext.
+- What hurts is the piece size. Each changed 4 KiB sector re-uploads the whole piece around it, and ciphertext does not
+  compress. With the default splitter (DYNAMIC-4M-BUZHASH, pieces of about 4 MiB) 10 scattered 4 KiB writes in 1 GiB of
+  random data uploaded 60 MB, 100 uploaded 405 MB, and 1,000 the whole file. On compressible data the same writes cost
+  kilobytes, because the re-uploaded pieces compress.
+- 100 scattered 4 KiB writes in 256 MiB of random data, by splitter: DYNAMIC-4M 211 MiB, DYNAMIC-1M 112 MiB,
+  FIXED-1M 84 MiB, FIXED-256K 24 MiB. A disk image never shifts its data, so fixed pieces lose nothing against
+  content-defined ones. HyperHarbor uses FIXED-1M for VM disks (`policy set --splitter`); smaller pieces mean more
+  index entries (about 4 million per TB at 256 KiB). Changing a source's splitter makes its next snapshot a full upload.
+- kopia 0.23.1 does not report a snapshot's upload: `snapshot create --json` has only logical sizes (stats.totalSize),
+  and its progress line on standard error is not printed at the end. `content stats` has no --json flag; with --raw it
+  prints "Total Bytes: N" and, when some content is compressed, "Total Packed: N (compression x%)". The packed total
+  before and after a snapshot is what it stored. It reads the local index cache.
+- `policy show <source> --json` gives the effective policy; `"splitter": {}` means kopia's default.
+- A BitLocker volume's boot sector has the OEM ID "-FVE-FS-" at offset 3 instead of "NTFS    ", so the host can tell an
+  encrypted guest disk from the VHDX alone (VhdxEncryptionProbe), without mounting it (Mount-VHD and Mount-DiskImage
+  need administrator rights: "A required privilege is not held by the client", 0x80070522).
+- Windows 11 turns BitLocker on by itself in a VM with a virtual TPM (automatic device encryption): HyperHarbor-Test,
+  installed unattended by HyperHarbor with a vTPM and never encrypted by hand, has a "-FVE-FS-" boot sector (found
+  2026-10-27 by the probe and confirmed by a raw scan of the VHDX). So VMs HyperHarbor creates get encrypted disks,
+  and the large backups that come with them, unless something prevents it. It starts during setup: a fresh install
+  that allowed it was already encrypting C: when HyperHarbor reported Ready (2026-10-28), and one with
+  PreventDeviceEncryption set in the specialize pass stayed unencrypted.
+- A real BitLocker guest (HyperHarbor-Test, Windows 11, 21.9 GiB VHDX; BitLockerBackupLiveTests, 2026-10-28), backed
+  up off with FIXED-1M, then started for 10 minutes and shut down before each later backup: the first backup uploaded
+  21.56 GiB (nothing compressed). Round 1 changed 0.14 GiB of 4 KiB sectors and uploaded 0.83 GiB; round 2 changed
+  1.01 GiB and uploaded 1.80 GiB. Each upload matched the changed 1 MiB pieces (0.84 and 1.81 GiB) to within 1%, so the
+  measurement is right and ciphertext pieces upload in full. The same changes cover 2.01 and 3.04 GiB in 4 MiB pieces,
+  about what kopia's default splitter would have uploaded: over a day of use that approaches the whole disk.
+- The same guest after Disk encryption… turned BitLocker off (DiskEncryptionLiveTests: Win32_EncryptableVolume Decrypt
+  on C:, decrypted in 2.7 minutes; the probe then found no BitLocker): the first backup uploaded 13.70 GiB of a 23.41 GiB
+  file (decrypting grew the VHDX by 1.5 GiB) instead of 21.56 GiB. Later rounds uploaded 1.22 GiB for 1.70 GiB of
+  changed 1 MiB pieces and 0.19 GiB for 0.60 GiB (72% and 32%), where the encrypted guest uploaded 99 to 100%. Churn
+  differs from round to round, so compare those shares rather than the raw sizes.
+- The host's graceful shutdown (Msvm_ShutdownComponent.InitiateShutdown through CimHyperVPowerInvoker) blocked for
+  hours once on that guest, on its second boot after a long time off (probably installing updates): no shutdown event
+  was logged and the call never returned, and it cannot be cancelled. CimHyperVPowerInvoker now stops waiting after
+  60 seconds (GuestRequestTimeout) and reports that the guest did not answer; the harness then turns the VM off.
+
 ## Growing disks (0.2.4)
 
 - Msvm_ImageManagementService.ResizeVirtualHardDisk(Path, MaxInternalSize) grows a VHDX; Hyper-V allows it on a running

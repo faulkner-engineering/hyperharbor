@@ -92,7 +92,8 @@ public static class AutounattendBuilder
                 Pass("specialize",
                     Component("Microsoft-Windows-Shell-Setup",
                         new XElement(Ns + "ComputerName", install.ComputerName),
-                        new XElement(Ns + "TimeZone", profile.TimeZone))),
+                        new XElement(Ns + "TimeZone", profile.TimeZone)),
+                    settings.AllowDeviceEncryption ? null : PreventDeviceEncryption()),
                 Pass("oobeSystem",
                     Component("Microsoft-Windows-International-Core", Locales(profile.Locale)),
                     Component("Microsoft-Windows-Shell-Setup",
@@ -281,6 +282,21 @@ public static class AutounattendBuilder
         new XElement(Ns + "UILanguage", locale),
         new XElement(Ns + "UserLocale", locale),
     ];
+
+    /// <summary>
+    /// Windows turns BitLocker device encryption on by itself on a VM with a virtual TPM, during the out-of-box
+    /// experience. The value must be there before that, so it is set in the specialize pass rather than at first logon.
+    /// </summary>
+    private static XElement PreventDeviceEncryption() =>
+        Component("Microsoft-Windows-Deployment",
+            new XElement(Ns + "RunSynchronous",
+                new XElement(Ns + "RunSynchronousCommand", Add(),
+                    new XElement(Ns + "Order", 1),
+                    new XElement(Ns + "Description", "Prevent automatic device encryption"),
+                    new XElement(Ns + "Path", PreventDeviceEncryptionCommand))));
+
+    internal const string PreventDeviceEncryptionCommand =
+        @"reg add HKLM\SYSTEM\CurrentControlSet\Control\BitLocker /v PreventDeviceEncryption /t REG_DWORD /d 1 /f";
 
     private static XElement Pass(string name, params object?[] components) =>
         new(Ns + "settings", new XAttribute("pass", name), components);
