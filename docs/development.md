@@ -123,6 +123,13 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   encrypted disk) upload with the disk splitter and with kopia's default (run with --logger "console;verbosity=detailed").
   HH_BACKUP_VM_LIVE=1 backs up and restores a throwaway VM. HH_DISK_PROBE_LIVE=<path to a .vhdx> prints what
   VhdxEncryptionProbe finds in a real disk (read-only; works while the VM runs).
+- Encrypted guests (throwaway VMs only; HyperHarbor-Test, installed by the harness, has BitLocker that Windows turned on
+  itself): HH_BACKUP_BITLOCKER_LIVE=1 with HH_KOPIA_EXE and HH_LIVE_GUEST_VM=<id of an off VM without checkpoints>
+  backs it up, runs it for HH_BITLOCKER_RUN_MINUTES (10), shuts it down, and backs up again for HH_BITLOCKER_ROUNDS
+  (2), printing each upload beside how much of the disk changed (needs room for one full copy; HH_LIVE_LOG=<file> shows
+  progress while it runs). HH_DISK_ENCRYPTION_LIVE=1 with HH_LIVE_GUEST_VM turns BitLocker off in the guest through
+  VmDiskEncryptionService (credential from the harness folder or HH_GUEST_ADMIN_DATA), waits for decryption
+  (HH_DECRYPT_MINUTES, 90), and checks the disk with the probe. Run the backup test again afterwards to compare.
 - Administrator windows: HH_GUEST_ADMIN_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs GuestAdminLiveTests against a running
   Windows VM that HyperHarbor set up (its credential and setup come from the host's data folder, so run elevated, or
   from HH_GUEST_ADMIN_DATA, for example the harness folder). It opens a window, checks over PowerShell Direct that

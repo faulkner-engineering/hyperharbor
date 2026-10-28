@@ -565,3 +565,7 @@ per-device VM accounts and a user management UI.
      (Windows refuses the Windows volume while it holds a data volume's automatic unlock key). The job ends once
      decryption has started, so it does not hold the VM's lock for the hour decrypting can take; the client's
      DiskEncryptionDialog reads the state every 10 seconds while a volume converts. Running, set-up Windows VMs only.
+   - Verified live on HyperHarbor-Test (2026-10-28): BitLockerBackupLiveTests on the encrypted guest, then
+     DiskEncryptionLiveTests turned BitLocker off through the service, then the backup test again (numbers in
+     platform-notes.md, Kopia backups and encrypted guests). The client dialog and the profile checkbox were not
+     clicked through; a fresh install with PreventDeviceEncryption was not run.

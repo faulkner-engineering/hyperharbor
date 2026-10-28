@@ -461,6 +461,20 @@ section for an area before changing it: most of these were learned from a failur
   installed unattended by HyperHarbor with a vTPM and never encrypted by hand, has a "-FVE-FS-" boot sector (found
   2026-10-27 by the probe and confirmed by a raw scan of the VHDX). So VMs HyperHarbor creates get encrypted disks,
   and the large backups that come with them, unless something prevents it.
+- A real BitLocker guest (HyperHarbor-Test, Windows 11, 21.9 GiB VHDX; BitLockerBackupLiveTests, 2026-10-28), backed
+  up off with FIXED-1M, then started for 10 minutes and shut down before each later backup: the first backup uploaded
+  21.56 GiB (nothing compressed). Round 1 changed 0.14 GiB of 4 KiB sectors and uploaded 0.83 GiB; round 2 changed
+  1.01 GiB and uploaded 1.80 GiB. Each upload matched the changed 1 MiB pieces (0.84 and 1.81 GiB) to within 1%, so the
+  measurement is right and ciphertext pieces upload in full. The same changes cover 2.01 and 3.04 GiB in 4 MiB pieces,
+  about what kopia's default splitter would have uploaded: over a day of use that approaches the whole disk.
+- The same guest after Disk encryption… turned BitLocker off (DiskEncryptionLiveTests: Win32_EncryptableVolume Decrypt
+  on C:, decrypted in 2.7 minutes; the probe then found no BitLocker): the first backup uploaded 13.70 GiB of a 23.41 GiB
+  file (decrypting grew the VHDX by 1.5 GiB) instead of 21.56 GiB. Later rounds uploaded 1.22 GiB for 1.70 GiB of
+  changed 1 MiB pieces and 0.19 GiB for 0.60 GiB (72% and 32%), where the encrypted guest uploaded 99 to 100%. Churn
+  differs from round to round, so compare those shares rather than the raw sizes.
+- The host's graceful shutdown (Msvm_ShutdownComponent.InitiateShutdown through CimHyperVPowerInvoker) blocked for
+  hours once on that guest, on its second boot after a long time off (probably installing updates): no shutdown event
+  was logged and the call never returned. The harness now gives it 2 minutes and then turns the VM off.
 
 ## Growing disks (0.2.4)
 
