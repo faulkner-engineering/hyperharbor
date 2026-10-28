@@ -26,8 +26,15 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Live mDNS browse (host service running): cargo test live_browse -- --ignored --nocapture
 - Live pairing over LAN (service running, something writing the PIN to the file):
   HH_LIVE_HOST=<lan ip> HH_PIN_FILE=pin.txt cargo test live_pairing -- --ignored --nocapture
-- End to end on loopback (no LAN, no setup): powershell -ExecutionPolicy Bypass -File scripts\e2e.ps1
-  It starts the real service on a free loopback port, so it can run while a packaged host is running.
+- End to end without Hyper-V (no LAN, no setup): powershell -ExecutionPolicy Bypass -File scripts\e2e.ps1
+  CI's e2e job runs it, and test-all.ps1 runs it unless -SkipE2E; run it before every pull request. It fetches the
+  pinned tools (Kopia from tools/tools.json; rclone, used only by tests, from tools/test-tools.json), sets HH_E2E=1,
+  HH_KOPIA_EXE, and HH_RCLONE_EXE, runs every host test marked [E2EFact] and [Trait("Category", "E2E")]
+  (dotnet test --filter Category=E2E: KopiaLiveTests, KopiaDedupLiveTests, BackupUpgradeE2ETests, and S3TargetE2ETests,
+  which runs `rclone serve s3` on loopback as the S3 target), then the Rust
+  e2e_loopback test, which starts the real service on a free loopback port (so it can run while a packaged host runs).
+  With HH_E2E=1 a missing tool fails a test rather than skipping it. A new test that needs no Hyper-V and no service on
+  the internet belongs here, not among the opt-in live tests.
 - Live lifecycle (creates, changes, and deletes HyperHarbor-Test; ask first):
   HH_LIFECYCLE_LIVE=1 dotnet test HyperHarbor.sln --filter LifecycleLiveTests
 - Live disk growth (a 1 GB VHDX in a temporary folder, no VM):
@@ -117,10 +124,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     HyperHarbor-Test2 with a setup profile and waits for Ready (about 25 minutes). HH_PROFILE_EXISTING_LIVE=1
     HH_SPIKE_ISO=<image>: creates HyperHarbor-Test, applies a profile through the API with a restart, checks the
     account's hive, and deletes the VM. Throwaway VMs created for tests may be deleted without asking (decided 2026-10-05); ask before changing any other VM.
-- Backups: HH_BACKUP_LIVE=1 (KopiaLiveTests) and HH_KOPIA_DEDUP_LIVE=1 (KopiaDedupLiveTests, about 1 GiB of temporary
-  files, a minute) run the real kopia.exe against temporary folders; both need HH_KOPIA_EXE=<path to kopia.exe>, for
-  example .tools\kopia-0.23.1\kopia.exe. KopiaDedupLiveTests prints what scattered writes to random data (an
-  encrypted disk) upload with the disk splitter and with kopia's default (run with --logger "console;verbosity=detailed").
+- Backups: the kopia tests without a VM are end-to-end tests (scripts\e2e.ps1). KopiaDedupLiveTests prints what
+  scattered writes to random data (an encrypted disk) upload with the disk splitter and with kopia's default, and
+  BackupUpgradeE2ETests takes a VM backup made the 0.2.4 way through the next two backups of this version.
   HH_BACKUP_VM_LIVE=1 backs up and restores a throwaway VM. HH_DISK_PROBE_LIVE=<path to a .vhdx> prints what
   VhdxEncryptionProbe finds in a real disk (read-only; works while the VM runs).
 - Encrypted guests (throwaway VMs only; HyperHarbor-Test, installed by the harness, has BitLocker that Windows turned on

@@ -454,6 +454,9 @@ section for an area before changing it: most of these were learned from a failur
   prints "Total Bytes: N" and, when some content is compressed, "Total Packed: N (compression x%)". The packed total
   before and after a snapshot is what it stored. It reads the local index cache.
 - `policy show <source> --json` gives the effective policy; `"splitter": {}` means kopia's default.
+- A changed splitter applies only to files kopia reads again: a file whose size and modification time match the
+  previous snapshot is reused without being read (BackupUpgradeE2ETests found this). So after updating from 0.2.4, the
+  full upload happens on the first backup after the VM has run, not for a disk nobody touched.
 - A BitLocker volume's boot sector has the OEM ID "-FVE-FS-" at offset 3 instead of "NTFS    ", so the host can tell an
   encrypted guest disk from the VHDX alone (VhdxEncryptionProbe), without mounting it (Mount-VHD and Mount-DiskImage
   need administrator rights: "A required privilege is not held by the client", 0x80070522).

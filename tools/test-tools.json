@@ -1,0 +1,11 @@
+{
+  "rclone": {
+    "version": "1.68.2",
+    "purpose": "End-to-end tests only (never shipped): rclone serve s3 stands in for an S3 backup target.",
+    "url": "https://github.com/rclone/rclone/releases/download/v1.68.2/rclone-v1.68.2-windows-amd64.zip",
+    "zipSha256": "812bf76cc02c04cf6327f3683f3d5a88e47d36c39db84c1a745777496be7d993",
+    "exeSha256": "dcbb5d188358df520b08a584df42a8e76161b30a90a62fefdd0001174d002122",
+    "license": "MIT",
+    "licenseUrl": "https://github.com/rclone/rclone/blob/master/COPYING"
+  }
+}
