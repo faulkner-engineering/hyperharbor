@@ -19,6 +19,11 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 - MVP scope only. Do not implement later phases early.
 - Professional code and comments. No slang. No em dashes.
 - Small commits with clear messages. Run tests before committing.
+- Prefer automated tests to manual steps: verify a change with a test (component test, end-to-end test, or live test)
+  rather than a list for the user to click through. A test that needs no Hyper-V is an end-to-end test ([E2EFact],
+  [Trait("Category", "E2E")]) that CI runs; one that needs Hyper-V or a VM is an opt-in live test run locally.
+- Before opening a pull request, run scripts\test-all.ps1 without -SkipE2E: it includes scripts\e2e.ps1, the same
+  end-to-end tests CI's e2e job runs.
 - Always update CHANGELOG.md with every user-visible change (features, behavior changes, fixes, API version
   changes, anything a user must act on), in the same commit. Add entries under [Unreleased]; when the version
   is bumped, move them under the new version with its date.
@@ -42,6 +47,7 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 ## Commands
 Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotnet:/c/Program Files/nodejs:$HOME/.cargo/bin:$PATH"
 - Everything CI runs: powershell -ExecutionPolicy Bypass -File scripts\test-all.ps1 [-HostOnly|-ClientOnly] [-SkipAudit]
+  [-SkipE2E] (-SkipE2E only for quick loops; the end-to-end tests alone: scripts\e2e.ps1)
 - Host: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Client (from client/): npm run check | npm test | npm run gen:api
 - Rust (from client/src-tauri, in PowerShell): cargo fmt --all; cargo clippy --workspace --all-targets -- -D warnings;

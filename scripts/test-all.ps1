@@ -7,19 +7,23 @@
     Contract: Redocly lint of docs/api.yaml; regenerated TypeScript types must match the committed file.
     Client:   npm ci, svelte-check, Vitest, npm audit (high and above).
     Rust:     cargo fmt --check, clippy -D warnings, cargo test, cargo audit.
+    E2E:      scripts\e2e.ps1, every end-to-end test that needs no Hyper-V (the real kopia, the host service on loopback,
+              the Rust client against it). CI runs it in its e2e job; run it before every pull request.
 
     -Coverage collects host code coverage into TestResults/.
     -SkipAudit skips the network-dependent npm and cargo advisory checks.
+    -SkipE2E skips the end-to-end tests, for quick loops while working; never before a pull request.
 
     Run from any directory in Windows PowerShell or PowerShell 7:
-        powershell -ExecutionPolicy Bypass -File scripts\test-all.ps1 [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]
+        powershell -ExecutionPolicy Bypass -File scripts\test-all.ps1 [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit] [-SkipE2E]
 #>
 [CmdletBinding()]
 param(
     [switch]$HostOnly,
     [switch]$ClientOnly,
     [switch]$Coverage,
-    [switch]$SkipAudit
+    [switch]$SkipAudit,
+    [switch]$SkipE2E
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,6 +115,13 @@ if (-not $HostOnly) {
             Write-Host 'cargo-audit is not installed; skipping (cargo install cargo-audit --locked).' -ForegroundColor Yellow
         }
     }
+}
+
+if (-not $SkipE2E) {
+    Invoke-Check 'End-to-end tests (no Hyper-V)' $repo { powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'e2e.ps1') }
+}
+else {
+    Write-Host 'Skipping the end-to-end tests (-SkipE2E); run them before a pull request.' -ForegroundColor Yellow
 }
 
 if ($failures.Count -gt 0) {

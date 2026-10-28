@@ -8,9 +8,10 @@ namespace HyperHarbor.Host.Tests.Live;
 /// <summary>
 /// Measures what the real kopia.exe uploads for an encrypted disk: random data stands in for BitLocker ciphertext, and
 /// scattered 4 KiB writes for a guest's small changes. Compares the disk splitter with kopia's default and checks the
-/// upload measurement itself. HH_KOPIA_DEDUP_LIVE=1 and HH_KOPIA_EXE=&lt;path to kopia.exe&gt;. Writes about 1 GiB of
-/// temporary files and touches nothing else.
+/// upload measurement itself. An end-to-end test (scripts\e2e.ps1). Writes about 1 GiB of temporary files and touches
+/// nothing else.
 /// </summary>
+[Trait("Category", "E2E")]
 public sealed class KopiaDedupLiveTests(ITestOutputHelper output) : IDisposable
 {
     private const int DiskBytes = 256 * 1024 * 1024;
@@ -31,10 +32,10 @@ public sealed class KopiaDedupLiveTests(ITestOutputHelper output) : IDisposable
         }
     }
 
-    [EnvironmentFact("HH_KOPIA_DEDUP_LIVE", "HH_KOPIA_EXE")]
+    [E2EFact]
     public async Task Live_ScatteredWritesToAnEncryptedDisk_UploadLessWithTheDiskSplitter()
     {
-        var cli = new KopiaCli(new KopiaProcessRunner(Environment.GetEnvironmentVariable("HH_KOPIA_EXE")!));
+        var cli = new KopiaCli(new KopiaProcessRunner(E2E.KopiaExe));
         var target = new BackupTarget
         {
             Id = "t1", Name = "Live", Kind = BackupTargetKind.Local, Local = new LocalTargetSettings(Path.Combine(_root, "dest")),

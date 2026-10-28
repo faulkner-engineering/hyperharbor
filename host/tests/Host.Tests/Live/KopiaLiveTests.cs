@@ -6,8 +6,9 @@ namespace HyperHarbor.Host.Tests.Live;
 
 /// <summary>
 /// Runs the real kopia.exe against a temporary local folder: create, policy, snapshot, list, restore, wrong passphrase,
-/// and a missing repository. HH_BACKUP_LIVE=1 and HH_KOPIA_EXE=&lt;path to kopia.exe&gt;. Touches only temporary folders.
+/// and a missing repository. An end-to-end test (scripts\e2e.ps1). Touches only temporary folders.
 /// </summary>
+[Trait("Category", "E2E")]
 public sealed class KopiaLiveTests : IDisposable
 {
     private readonly string _root = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "hyperharbor-tests", Guid.NewGuid().ToString("N"))).FullName;
@@ -23,10 +24,10 @@ public sealed class KopiaLiveTests : IDisposable
         }
     }
 
-    [EnvironmentFact("HH_BACKUP_LIVE", "HH_KOPIA_EXE")]
+    [E2EFact]
     public async Task Live_LocalRepository_RoundTripsASnapshot()
     {
-        var cli = new KopiaCli(new KopiaProcessRunner(Environment.GetEnvironmentVariable("HH_KOPIA_EXE")!));
+        var cli = new KopiaCli(new KopiaProcessRunner(E2E.KopiaExe));
         var target = new BackupTarget
         {
             Id = "t1", Name = "Live", Kind = BackupTargetKind.Local, Local = new LocalTargetSettings(Path.Combine(_root, "dest")),
