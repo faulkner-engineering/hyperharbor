@@ -1,3 +1,4 @@
+using System.Globalization;
 using HyperHarbor.Host.Core.Backup.Kopia;
 using HyperHarbor.Host.Core.Lifecycle;
 using HyperHarbor.Host.Core.Performance;
@@ -39,6 +40,7 @@ public sealed class VmBackupService(
         Vm? vm = null;
         string? snapshotId = null;
         long bytes = 0;
+        long? uploaded = null;
         var outcome = BackupOutcome.Failed;
         string? reason = null;
         try
@@ -136,15 +138,26 @@ public sealed class VmBackupService(
                 staging.WriteFile(Path.Combine(stagingFolder, BackupManifest.FileName), manifest.ToJson());
 
                 progress("Setting retention", 30);
-                await kopia.SetPolicyAsync(repository.Repository, repository.Passphrase, stagingFolder, request.Policy.Retention, cancellationToken).ConfigureAwait(false);
+                var earlier = history.LastSuccess(BackupCoordinator.VmItem(request.VmId), request.Target.Id) is not null;
+                var splitterChanged = earlier
+                    && await kopia.ReadSplitterAsync(repository.Repository, repository.Passphrase, stagingFolder, cancellationToken).ConfigureAwait(false)
+                        != KopiaCli.DiskSplitter;
+                await kopia.SetPolicyAsync(
+                    repository.Repository, repository.Passphrase, stagingFolder, request.Policy.Retention, cancellationToken, KopiaCli.DiskSplitter).ConfigureAwait(false);
                 await kopia.SetBandwidthAsync(repository.Repository, repository.Passphrase, request.Policy.BandwidthKbps, cancellationToken).ConfigureAwait(false);
 
                 progress("Uploading", 35);
-                var snapshot = await kopia.CreateSnapshotAsync(
+                var (snapshot, measured) = await kopia.CreateMeasuredSnapshotAsync(
                     repository.Repository, repository.Passphrase, stagingFolder,
                     $"hyperharbor vm={request.VmId:D} name={definition.Name} run={runId:N}", cancellationToken).ConfigureAwait(false);
                 snapshotId = snapshot.Id;
                 bytes = snapshot.TotalSize;
+                uploaded = measured;
+                if (UploadWarning(bytes, uploaded, earlier, splitterChanged) is { } uploadWarning)
+                {
+                    warnings.Add(uploadWarning);
+                }
+
                 outcome = BackupOutcome.Succeeded;
             }
             finally
@@ -193,12 +206,38 @@ public sealed class VmBackupService(
         {
             var record = new BackupRunRecord(
                 runId, $"vm:{request.VmId:D}", request.VmId, vm?.Name, request.Target.Id, request.Trigger,
-                started, time.GetUtcNow(), outcome, reason, snapshotId, bytes, warnings);
+                started, time.GetUtcNow(), outcome, reason, snapshotId, bytes, warnings, uploaded);
             history.Add(record);
             progress("Done", 99);
             return record;
         }
     }
+
+    /// <summary>
+    /// The warning for a run that uploaded nearly a full copy of the disks, or null. The first backup of a VM to a target
+    /// is a full copy anyway, and a small VM is not worth a warning.
+    /// </summary>
+    internal static string? UploadWarning(long totalBytes, long? uploadedBytes, bool earlierBackup, bool splitterChanged)
+    {
+        if (!earlierBackup || uploadedBytes is not { } uploaded || totalBytes < FullUploadMinimumBytes || uploaded < totalBytes * FullUploadRatio)
+        {
+            return null;
+        }
+
+        var sizes = $"It uploaded {Gigabytes(uploaded)} GB of {Gigabytes(totalBytes)} GB.";
+        return splitterChanged
+            ? $"This backup stored the disks in a new layout that changes far less on later backups, so it uploaded them in full once. {sizes}"
+            : $"This backup uploaded nearly a full copy of the disks. {sizes} This happens when the guest rewrote most of its disks, "
+                + "for example when it turned on or changed BitLocker encryption. If it happens every time, the guest's disks are "
+                + "probably encrypted: an encrypted disk does not compress, so every changed part uploads in full.";
+    }
+
+    /// <summary>A run that uploads at least this share of the disks counts as a full copy.</summary>
+    internal const double FullUploadRatio = 0.8;
+
+    internal const long FullUploadMinimumBytes = 1L << 30;
+
+    private static string Gigabytes(long bytes) => (bytes / (double)(1L << 30)).ToString("0.0", CultureInfo.InvariantCulture);
 
     /// <returns>False when a checkpoint could not be removed.</returns>
     private async Task<bool> RemoveNewCheckpointsAsync(Guid vmId, HashSet<string> known, List<string> warnings)

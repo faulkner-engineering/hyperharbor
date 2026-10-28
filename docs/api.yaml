@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.36.0
+  version: 1.37.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -7731,6 +7731,12 @@ components:
           description: Why a run failed or was skipped.
         snapshotId:
           type: string
+        uploadedBytes:
+          type: integer
+          format: int64
+          description: >-
+            Since 1.37.0. What the run added to the backup repository after dedup and compression. Absent when it was not
+            measured, for example when another backup used the same repository at the same time.
 
     RestoreTestOutcome:
       type: string

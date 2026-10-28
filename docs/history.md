@@ -535,3 +535,13 @@ verified, and what was found along the way. User-facing changes per release are 
 
 v2 (paid tier, not in MVP): per-user accounts with roles and SSO mapping. Also out of MVP scope:
 per-device VM accounts and a user management UI.
+
+30. Backups of encrypted guests (2026-10-27; API 1.37.0; branch feature/backup-encryption). The user: kopia backups of
+   BitLocker guests seem to upload the whole disk every run. Measured first (platform-notes.md, Kopia backups and
+   encrypted guests): dedup still works on ciphertext, but each small write re-uploads a whole 4 MiB piece that cannot
+   compress. Decided with the user: FIXED-1M splitter for every VM disk source (KopiaCli.DiskSplitter), accepting one
+   full upload per existing VM; per-run uploaded bytes (KopiaCli.CreateMeasuredSnapshotAsync: content stats --raw
+   before and after, null when two snapshots overlapped in one repository); a run warning for a near-full upload after
+   an earlier backup (VmBackupService.UploadWarning, 80% of at least 1 GiB), worded for the splitter change when the
+   policy had another splitter. Client: uploaded size in the backup panel and history, warnings of the latest stored
+   backup.

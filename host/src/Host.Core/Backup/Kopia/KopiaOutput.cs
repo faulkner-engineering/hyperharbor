@@ -39,6 +39,52 @@ public static class KopiaOutput
     public static KopiaSnapshot CreatedSnapshot(string json) =>
         Snapshots(json).FirstOrDefault() ?? throw new KopiaException("kopia did not report the snapshot it created.", KopiaFailure.Unknown);
 
+    /// <summary>
+    /// The stored size from <c>content stats --raw</c>: "Total Packed" when some content is compressed, otherwise
+    /// "Total Bytes". Null when neither line is there.
+    /// </summary>
+    public static long? StoredBytes(string text)
+    {
+        long? total = null;
+        foreach (var line in text.Split('\n'))
+        {
+            if (Number(line, "Total Packed:") is { } packed)
+            {
+                return packed;
+            }
+
+            total ??= Number(line, "Total Bytes:");
+        }
+
+        return total;
+
+        static long? Number(string line, string label)
+        {
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith(label, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var value = trimmed[label.Length..].TrimStart().Split(' ')[0];
+            return long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number : null;
+        }
+    }
+
+    /// <summary>The splitter algorithm in <c>policy show --json</c>, or null when the policy leaves kopia's default.</summary>
+    public static string? PolicySplitter(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        using var document = ParseDocument(json);
+        return document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("splitter", out var splitter)
+            ? Text(splitter, "algorithm")
+            : null;
+    }
+
     public static KopiaFailure Classify(string errorText)
     {
         var text = errorText.ToLowerInvariant();

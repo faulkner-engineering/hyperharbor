@@ -458,4 +458,64 @@ public sealed class VmBackupServiceTests : IDisposable
         Assert.Equal(BackupOutcome.Succeeded, _history.LastSuccess($"vm:{VmId:D}", "t1")!.Outcome);
         Assert.Null(_history.LastSuccess($"vm:{VmId:D}", "other"));
     }
+
+    [Fact]
+    public async Task DiskSources_UseTheFixedSplitter_AndTheRunRecordsWhatItUploaded()
+    {
+        var stored = 100L;
+        _kopia.Respond = call => call.Arguments switch
+        {
+            ["content", "stats", ..] => new KopiaResult(0, $"Total Bytes: {stored}\n", string.Empty),
+            ["snapshot", "create", ..] => Snapshot(4242, () => stored += 300),
+            _ => new KopiaResult(0, string.Empty, string.Empty),
+        };
+
+        var record = await RunAsync();
+
+        Assert.Equal(BackupOutcome.Succeeded, record.Outcome);
+        Assert.Equal(300, record.UploadedBytes);
+        Assert.Equal(300, _history.List()[0].UploadedBytes);
+        Assert.Contains("--splitter=FIXED-1M", _kopia.Calls.Single(c => c.Arguments is ["policy", "set", ..]).Arguments);
+        Assert.DoesNotContain(_kopia.Calls, c => c.Arguments is ["policy", "show", ..]);
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("FIXED-1M", false)]
+    public async Task AFullUpload_AfterAnEarlierBackup_IsExplained(string? splitterBefore, bool layoutChanged)
+    {
+        await RunAsync();
+        var stored = 0L;
+        _kopia.Respond = call => call.Arguments switch
+        {
+            ["policy", "show", ..] => new KopiaResult(0, splitterBefore is null ? """{ "splitter": {} }""" : $$"""{ "splitter": { "algorithm": "{{splitterBefore}}" } }""", string.Empty),
+            ["content", "stats", ..] => new KopiaResult(0, $"Total Bytes: {stored}\n", string.Empty),
+            ["snapshot", "create", ..] => Snapshot(10L << 30, () => stored += 9L << 30),
+            _ => new KopiaResult(0, string.Empty, string.Empty),
+        };
+
+        var record = await RunAsync();
+
+        var warning = Assert.Single(record.Warnings);
+        Assert.Contains("9.0 GB of 10.0 GB", warning);
+        Assert.Equal(layoutChanged, warning.Contains("new layout"));
+        Assert.Equal(!layoutChanged, warning.Contains("BitLocker"));
+    }
+
+    [Theory]
+    [InlineData(10L << 30, 9L << 30, true, true)]
+    [InlineData(10L << 30, 7L << 30, true, false)]
+    [InlineData(10L << 30, 9L << 30, false, false)]
+    [InlineData(512L << 20, 500L << 20, true, false)]
+    public void UploadWarning_OnlyForANearlyFullCopyOfALargeEnoughVm(long total, long uploaded, bool earlier, bool warns)
+    {
+        Assert.Equal(warns, VmBackupService.UploadWarning(total, uploaded, earlier, splitterChanged: false) is not null);
+        Assert.Null(VmBackupService.UploadWarning(total, null, earlier, splitterChanged: false));
+    }
+
+    private static KopiaResult Snapshot(long totalSize, Action onCreate)
+    {
+        onCreate();
+        return new KopiaResult(0, $$"""{ "id": "snap1", "source": { "path": "p" }, "startTime": "2026-10-12T02:00:00Z", "stats": { "totalSize": {{totalSize}} } }""", string.Empty);
+    }
 }

@@ -49,6 +49,7 @@ public sealed class HostStateBackupService(
         var warnings = new List<string>();
         string? snapshotId = null;
         long bytes = 0;
+        long? uploaded = null;
         var outcome = BackupOutcome.Failed;
         string? reason = null;
         try
@@ -64,10 +65,11 @@ public sealed class HostStateBackupService(
                 await kopia.SetPolicyAsync(repository.Repository, repository.Passphrase, StagingFolder, target.DefaultRetention, cancellationToken).ConfigureAwait(false);
 
                 progress("Uploading", 40);
-                var snapshot = await kopia.CreateSnapshotAsync(
+                var (snapshot, measured) = await kopia.CreateMeasuredSnapshotAsync(
                     repository.Repository, repository.Passphrase, StagingFolder, $"hyperharbor host-state run={runId:N}", cancellationToken).ConfigureAwait(false);
                 snapshotId = snapshot.Id;
                 bytes = snapshot.TotalSize;
+                uploaded = measured;
                 outcome = BackupOutcome.Succeeded;
                 if (collected.Count == 0)
                 {
@@ -89,7 +91,7 @@ public sealed class HostStateBackupService(
             reason = ex.Message;
         }
 
-        var record = new BackupRunRecord(runId, "host", null, null, target.Id, trigger, started, time.GetUtcNow(), outcome, reason, snapshotId, bytes, warnings);
+        var record = new BackupRunRecord(runId, "host", null, null, target.Id, trigger, started, time.GetUtcNow(), outcome, reason, snapshotId, bytes, warnings, uploaded);
         history.Add(record);
         progress("Done", 99);
         return record;

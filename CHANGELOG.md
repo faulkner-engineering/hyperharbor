@@ -10,6 +10,21 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- Each backup run records how much it actually uploaded, after dedup and compression, beside the size of the disks.
+  The backup panel shows it ("Backed up 3 hours ago (uploaded 1.2 GB of 40 GB)") and in the history. It is not
+  shown when another backup used the same target at the same time, since the upload cannot be split between them.
+  API 1.37.0 (BackupRun.uploadedBytes).
+- A run that uploads nearly a full copy of a VM's disks again says so, and names the usual cause: a guest that encrypts
+  its disks with BitLocker. The backup panel now shows the warnings of the latest stored backup.
+
+### Changed
+- VM disks are split into fixed 1 MiB pieces for dedup instead of Kopia's default of about 4 MiB. A small change in a
+  guest now uploads about a quarter as much, which matters most for BitLocker-encrypted guests, whose changes do not
+  compress (measured: 100 scattered 4 KiB writes uploaded 211 MiB before and 84 MiB after). Action: the first backup
+  of each existing VM after updating the host uploads the whole disk once, because the old pieces no longer line up;
+  its run says so. Host only.
+
 ## [0.2.4] - 2026-10-27 (API 1.36.0)
 
 The stable release of everything in 0.2.4-beta.1 below: growing a VM's disk, a default browser and a quieter Edge in

@@ -146,7 +146,8 @@
       "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
       "vmName": "Ubuntu Dev",
       "reason": "cleanup",
-      "snapshotId": "k4f8a1b2c3d4e5f6"
+      "snapshotId": "k4f8a1b2c3d4e5f6",
+      "uploadedBytes": 1250000000
     },
     "lastSuccessAt": "2026-10-03T12:00:00\u002B00:00"
   },
@@ -194,7 +195,8 @@
     "vmId": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
     "vmName": "Ubuntu Dev",
     "reason": "cleanup",
-    "snapshotId": "k4f8a1b2c3d4e5f6"
+    "snapshotId": "k4f8a1b2c3d4e5f6",
+    "uploadedBytes": 1250000000
   },
   "BackupS3Settings": {
     "endpoint": "s3.example.com",
@@ -519,7 +521,7 @@
     "hostId": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
     "hostName": "TC-PC",
     "version": "0.1.0",
-    "apiVersion": "1.36.0",
+    "apiVersion": "1.37.0",
     "certificateFingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   },
   "HostRemoteDesktop": {

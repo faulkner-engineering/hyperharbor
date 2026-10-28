@@ -4550,6 +4550,11 @@ export interface components {
             /** @description Why a run failed or was skipped. */
             reason?: string;
             snapshotId?: string;
+            /**
+             * Format: int64
+             * @description Since 1.37.0. What the run added to the backup repository after dedup and compression. Absent when it was not measured, for example when another backup used the same repository at the same time.
+             */
+            uploadedBytes?: number;
         };
         /** @enum {string} */
         RestoreTestOutcome: "passed" | "failed" | "skipped";

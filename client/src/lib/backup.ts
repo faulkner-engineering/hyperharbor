@@ -94,9 +94,9 @@ export function runSummary(status: BackupItemStatus, now: Date = new Date()): st
   if (!run) return "Not backed up yet.";
   switch (run.outcome) {
     case "succeeded":
-      return `Backed up ${ageText(run.finishedAt, now)}.`;
+      return `Backed up ${ageText(run.finishedAt, now)}${uploadSuffix(run)}.`;
     case "partial":
-      return `Backed up ${ageText(run.finishedAt, now)}, with a problem to look at.`;
+      return `Backed up ${ageText(run.finishedAt, now)}${uploadSuffix(run)}, with a problem to look at.`;
     case "skipped":
       return `Skipped ${ageText(run.finishedAt, now)}: ${reasonText(run)}`;
     case "failed":
@@ -104,6 +104,23 @@ export function runSummary(status: BackupItemStatus, now: Date = new Date()): st
         ? `Failed ${ageText(run.finishedAt, now)}: ${reasonText(run)} Last good backup ${ageText(status.lastSuccessAt, now)}.`
         : `Failed ${ageText(run.finishedAt, now)}: ${reasonText(run)}`;
   }
+}
+
+/** "uploaded 1.2 GB of 40 GB", or null when the host did not measure the upload (hosts before API 1.37.0). */
+export function uploadText(run: Pick<BackupRun, "uploadedBytes" | "totalBytes">): string | null {
+  if (run.uploadedBytes == null) return null;
+  return `uploaded ${formatBytes(run.uploadedBytes)} of ${formatBytes(run.totalBytes)}`;
+}
+
+function uploadSuffix(run: BackupRun): string {
+  const text = uploadText(run);
+  return text ? ` (${text})` : "";
+}
+
+/** The warnings of a run that stored a backup; a failed or skipped run explains itself in its summary. */
+export function storedRunWarnings(status: BackupItemStatus): string[] {
+  const run = status.lastRun;
+  return run && (run.outcome === "succeeded" || run.outcome === "partial") ? run.warnings : [];
 }
 
 function reasonText(run: BackupRun): string {

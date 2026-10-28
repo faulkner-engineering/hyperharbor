@@ -21,7 +21,17 @@
     type HostEntry,
     type Vm,
   } from "$lib/api/client";
-  import { ageText, itemName, runSummary, scheduleText, targetLocation, targetReady, KIND_LABELS } from "$lib/backup";
+  import {
+    ageText,
+    itemName,
+    runSummary,
+    scheduleText,
+    storedRunWarnings,
+    targetLocation,
+    targetReady,
+    uploadText,
+    KIND_LABELS,
+  } from "$lib/backup";
   import { ElevationCancelled, waitForJob, withElevation } from "$lib/lifecycle.svelte";
   import BackupTargetDialog from "./BackupTargetDialog.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -258,6 +268,7 @@
         <li class:overdue={item.overdue}>
           <strong>{itemName(item)}</strong> to {item.targetName}: {runSummary(item)}
           {#if item.overdue}<span class="warning"> No good backup for a while.</span>{/if}
+          {#each storedRunWarnings(item) as warning, index (index)}<p class="warning">{warning}</p>{/each}
         </li>
       {/each}
     </ul>
@@ -274,6 +285,7 @@
       {#each history as run (run.runId)}
         <li>
           {ageText(run.finishedAt)} · {run.item === "host" ? "Host settings" : (run.vmName ?? "VM")} · {run.outcome} · {run.trigger}
+          {#if uploadText(run)}<span class="muted"> · {uploadText(run)}</span>{/if}
           {#if run.reason && run.outcome !== "succeeded"}<span class="muted"> · {run.reason}</span>{/if}
         </li>
       {/each}

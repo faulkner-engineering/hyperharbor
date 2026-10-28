@@ -437,6 +437,24 @@ section for an area before changing it: most of these were learned from a failur
   service runs as LocalSystem and applies them directly, with no tray approval. An unelevated console
   host still asks the tray as well. TestHost pins the unelevated WakeFixCoordinator path.
 
+## Kopia backups and encrypted guests (measured 2026-10-27 with kopia 0.23.1)
+
+- Kopia dedups unchanged data of an encrypted disk: a snapshot of 1 GiB of random data (the stand-in for BitLocker
+  ciphertext) with no change uploaded 566 bytes. BitLocker's XTS-AES gives an unchanged sector the same ciphertext.
+- What hurts is the piece size. Each changed 4 KiB sector re-uploads the whole piece around it, and ciphertext does not
+  compress. With the default splitter (DYNAMIC-4M-BUZHASH, pieces of about 4 MiB) 10 scattered 4 KiB writes in 1 GiB of
+  random data uploaded 60 MB, 100 uploaded 405 MB, and 1,000 the whole file. On compressible data the same writes cost
+  kilobytes, because the re-uploaded pieces compress.
+- 100 scattered 4 KiB writes in 256 MiB of random data, by splitter: DYNAMIC-4M 211 MiB, DYNAMIC-1M 112 MiB,
+  FIXED-1M 84 MiB, FIXED-256K 24 MiB. A disk image never shifts its data, so fixed pieces lose nothing against
+  content-defined ones. HyperHarbor uses FIXED-1M for VM disks (`policy set --splitter`); smaller pieces mean more
+  index entries (about 4 million per TB at 256 KiB). Changing a source's splitter makes its next snapshot a full upload.
+- kopia 0.23.1 does not report a snapshot's upload: `snapshot create --json` has only logical sizes (stats.totalSize),
+  and its progress line on standard error is not printed at the end. `content stats` has no --json flag; with --raw it
+  prints "Total Bytes: N" and, when some content is compressed, "Total Packed: N (compression x%)". The packed total
+  before and after a snapshot is what it stored. It reads the local index cache.
+- `policy show <source> --json` gives the effective policy; `"splitter": {}` means kopia's default.
+
 ## Growing disks (0.2.4)
 
 - Msvm_ImageManagementService.ResizeVirtualHardDisk(Path, MaxInternalSize) grows a VHDX; Hyper-V allows it on a running

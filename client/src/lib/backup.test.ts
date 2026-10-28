@@ -17,9 +17,11 @@ import {
   restoreTestLine,
   restoreTestSummary,
   runSummary,
+  storedRunWarnings,
   scheduleText,
   targetLocation,
   toNewTarget,
+  uploadText,
 } from "./backup";
 
 const now = new Date("2026-10-12T12:00:00Z");
@@ -106,6 +108,22 @@ describe("status text", () => {
     );
 
     expect(text).toBe("Failed 3 hours ago: The disk is full. Last good backup 2 days ago.");
+  });
+
+  it("says how much a run uploaded when the host measured it", () => {
+    const measured = run("succeeded", { totalBytes: 40 * 1024 ** 3, uploadedBytes: 1.5 * 1024 ** 3 });
+
+    expect(uploadText(measured)).toBe("uploaded 1.5 GB of 40 GB");
+    expect(runSummary(status({ lastRun: measured }), now)).toBe("Backed up 3 hours ago (uploaded 1.5 GB of 40 GB).");
+    expect(uploadText(run("succeeded"))).toBeNull();
+  });
+
+  it("shows the warnings of a stored backup only", () => {
+    const warnings = ["This backup uploaded nearly a full copy of the disks."];
+
+    expect(storedRunWarnings(status({ lastRun: run("succeeded", { warnings }) }))).toEqual(warnings);
+    expect(storedRunWarnings(status({ lastRun: run("failed", { warnings }) }))).toEqual([]);
+    expect(storedRunWarnings(status())).toEqual([]);
   });
 
   it("explains a run skipped for its conditions with the reason the host gave", () => {

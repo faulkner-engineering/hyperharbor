@@ -178,6 +178,7 @@ public sealed record BackupPolicy(
 /// <summary>One finished run from the history. Schema: BackupRun.</summary>
 /// <param name="Item">"vm:&lt;id&gt;" or "host".</param>
 /// <param name="Reason">Why a run failed or was skipped.</param>
+/// <param name="UploadedBytes">What the run added to the repository after dedup and compression; null when not measured.</param>
 public sealed record BackupRun(
     Guid RunId,
     string Item,
@@ -191,7 +192,8 @@ public sealed record BackupRun(
     Guid? VmId = null,
     string? VmName = null,
     string? Reason = null,
-    string? SnapshotId = null);
+    string? SnapshotId = null,
+    long? UploadedBytes = null);
 
 /// <summary>How the last run of one item to one target went. Schema: BackupItemStatus.</summary>
 /// <param name="Overdue">The last success is older than twice the schedule's longest gap.</param>
