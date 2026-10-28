@@ -4555,6 +4555,11 @@ export interface components {
              * @description Since 1.37.0. What the run added to the backup repository after dedup and compression. Absent when it was not measured, for example when another backup used the same repository at the same time.
              */
             uploadedBytes?: number;
+            /**
+             * Format: int32
+             * @description Since 1.37.0. How many of the VM's disks hold an encrypted volume (BitLocker or LUKS), read from their partitions on the host. Absent for host state and for runs that did not read the disks.
+             */
+            encryptedDisks?: number;
         };
         /** @enum {string} */
         RestoreTestOutcome: "passed" | "failed" | "skipped";

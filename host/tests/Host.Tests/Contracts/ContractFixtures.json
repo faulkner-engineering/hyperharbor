@@ -147,7 +147,8 @@
       "vmName": "Ubuntu Dev",
       "reason": "cleanup",
       "snapshotId": "k4f8a1b2c3d4e5f6",
-      "uploadedBytes": 1250000000
+      "uploadedBytes": 1250000000,
+      "encryptedDisks": 1
     },
     "lastSuccessAt": "2026-10-03T12:00:00\u002B00:00"
   },
@@ -196,7 +197,8 @@
     "vmName": "Ubuntu Dev",
     "reason": "cleanup",
     "snapshotId": "k4f8a1b2c3d4e5f6",
-    "uploadedBytes": 1250000000
+    "uploadedBytes": 1250000000,
+    "encryptedDisks": 1
   },
   "BackupS3Settings": {
     "endpoint": "s3.example.com",

@@ -117,6 +117,13 @@ function uploadSuffix(run: BackupRun): string {
   return text ? ` (${text})` : "";
 }
 
+/** A note for a VM whose last backup found encrypted disks (hosts since API 1.37.0), or null. */
+export function encryptionNote(status: BackupItemStatus): string | null {
+  const count = status.lastRun?.encryptedDisks ?? 0;
+  if (count === 0) return null;
+  return count === 1 ? "Its disk is encrypted, so its backups are larger." : "Its disks are encrypted, so its backups are larger.";
+}
+
 /** The warnings of a run that stored a backup; a failed or skipped run explains itself in its summary. */
 export function storedRunWarnings(status: BackupItemStatus): string[] {
   const run = status.lastRun;

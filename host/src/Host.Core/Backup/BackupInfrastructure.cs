@@ -88,6 +88,7 @@ public enum BackupOutcome
 
 /// <param name="Item">"vm:&lt;id&gt;" or "host".</param>
 /// <param name="UploadedBytes">What the run added to the repository after dedup and compression; null when it was not measured.</param>
+/// <param name="EncryptedDisks">How many of the VM's disks hold an encrypted volume; null for host state and older runs.</param>
 public sealed record BackupRunRecord(
     Guid RunId,
     string Item,
@@ -102,7 +103,8 @@ public sealed record BackupRunRecord(
     string? SnapshotId,
     long TotalBytes,
     IReadOnlyList<string> Warnings,
-    long? UploadedBytes = null);
+    long? UploadedBytes = null,
+    int? EncryptedDisks = null);
 
 /// <summary>Run history in backup-history.json, newest last, capped. Holds no secrets.</summary>
 public sealed class BackupHistoryStore

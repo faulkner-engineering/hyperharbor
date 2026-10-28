@@ -23,6 +23,7 @@
   } from "$lib/api/client";
   import {
     ageText,
+    encryptionNote,
     itemName,
     runSummary,
     scheduleText,
@@ -268,6 +269,7 @@
         <li class:overdue={item.overdue}>
           <strong>{itemName(item)}</strong> to {item.targetName}: {runSummary(item)}
           {#if item.overdue}<span class="warning"> No good backup for a while.</span>{/if}
+          {#if encryptionNote(item)}<span class="muted"> {encryptionNote(item)}</span>{/if}
           {#each storedRunWarnings(item) as warning, index (index)}<p class="warning">{warning}</p>{/each}
         </li>
       {/each}

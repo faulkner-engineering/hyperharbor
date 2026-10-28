@@ -22,7 +22,8 @@ public sealed record ManifestFirmware(bool SecureBoot, string? SecureBootTemplat
 public sealed record ManifestAdapter(string? SwitchName, string? SwitchId, string? MacAddress);
 
 /// <param name="File">The file's name inside the snapshot.</param>
-public sealed record ManifestDisk(string File, string ControllerType, int Controller, int Lun, long SizeBytes);
+/// <param name="Encryption">What the backup found in the disk's partitions; absent in older backups.</param>
+public sealed record ManifestDisk(string File, string ControllerType, int Controller, int Lun, long SizeBytes, DiskEncryption? Encryption = null);
 
 public sealed record ManifestGpu(ulong Vram, ulong Encode, ulong Decode, ulong Compute, int LowMmioGapMb, int HighMmioGapMb);
 
@@ -111,7 +112,8 @@ public static class ManifestBuilder
         string? guestOs,
         bool provisioned,
         string version,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        IReadOnlyList<DiskEncryption>? diskEncryption = null)
     {
         if (diskFiles.Count != definition.Disks.Count || diskSizes.Count != diskFiles.Count)
         {
@@ -133,7 +135,8 @@ public static class ManifestBuilder
             Firmware = new ManifestFirmware(definition.SecureBoot, definition.SecureBootTemplateId),
             Tpm = definition.TpmEnabled,
             Network = definition.Adapters.Select(a => new ManifestAdapter(a.SwitchName, a.SwitchId, a.MacAddress)).ToList(),
-            Disks = definition.Disks.Select((disk, i) => new ManifestDisk(diskFiles[i], disk.ControllerType, disk.ControllerNumber, disk.Lun, diskSizes[i])).ToList(),
+            Disks = definition.Disks.Select((disk, i) => new ManifestDisk(
+                diskFiles[i], disk.ControllerType, disk.ControllerNumber, disk.Lun, diskSizes[i], diskEncryption?[i])).ToList(),
             Gpu = definition.Gpu is { } gpu
                 ? new ManifestGpu(gpu.Vram, gpu.Encode, gpu.Decode, gpu.Compute, definition.LowMmioGapMb, definition.HighMmioGapMb)
                 : null,

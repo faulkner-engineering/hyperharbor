@@ -545,3 +545,10 @@ per-device VM accounts and a user management UI.
    an earlier backup (VmBackupService.UploadWarning, 80% of at least 1 GiB), worded for the splitter change when the
    policy had another splitter. Client: uploaded size in the backup panel and history, warnings of the latest stored
    backup.
+   - Encryption detection (the user chose reading the disk on the host over asking the guest): VhdxEncryptionProbe
+     reads the VHDX header, region table, metadata, and BAT, then the MBR or GPT and each partition's first sector,
+     for "-FVE-FS-" (BitLocker) and the LUKS magic; differencing disks, a log to replay, and anything unexpected are
+     Unknown, never an error. VmBackupService probes the frozen disks, records ManifestDisk.encryption and
+     BackupRun.encryptedDisks, and warns once (first backup to a target, or a change since the last good backup)
+     instead of every run. Unit tested on VHDX images built in memory (DiskEncryptionProbeTests), and on the real
+     HyperHarbor-Test disk with HH_DISK_PROBE_LIVE=<path>, which found BitLocker that Windows had turned on itself.

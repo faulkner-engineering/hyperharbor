@@ -27,9 +27,12 @@ public sealed class VmBackupService(
     Func<Guid, bool> isProvisioned,
     TimeProvider time,
     ILogger<VmBackupService> logger,
-    string hostVersion)
+    string hostVersion,
+    IDiskEncryptionProbe? encryptionProbe = null)
 {
     public const string StagingFolderName = ".hh-backup";
+
+    private readonly IDiskEncryptionProbe _encryption = encryptionProbe ?? new VhdxEncryptionProbe();
 
     /// <summary>Always returns a record (and writes it to the history); never throws for a failed backup.</summary>
     public async Task<BackupRunRecord> RunAsync(VmBackupRequest request, Action<string, int> progress, CancellationToken cancellationToken)
@@ -41,6 +44,7 @@ public sealed class VmBackupService(
         string? snapshotId = null;
         long bytes = 0;
         long? uploaded = null;
+        int? encryptedDisks = null;
         var outcome = BackupOutcome.Failed;
         string? reason = null;
         try
@@ -131,15 +135,24 @@ public sealed class VmBackupService(
                     sizes.Add(staging.Length(frozen[i]));
                 }
 
+                // Read from the frozen disks, which nothing writes to while the backup runs.
+                var encryption = frozen.Select(_encryption.Probe).ToList();
+                encryptedDisks = encryption.Count(e => e is DiskEncryption.BitLocker or DiskEncryption.Luks);
+                var earlier = history.LastSuccess(BackupCoordinator.VmItem(request.VmId), request.Target.Id);
+                var encryptionWarning = EncryptionWarning(encryption, earlier);
+                if (encryptionWarning is not null)
+                {
+                    warnings.Add(encryptionWarning);
+                }
+
                 var manifest = ManifestBuilder.Build(
                     definition, names, sizes, performance.Find(request.VmId), mode, warnings,
                     vm.GuestOs is { Family: not GuestOsFamily.Unknown } os ? os.Name ?? os.Family.ToString() : null,
-                    isProvisioned(request.VmId), hostVersion, started);
+                    isProvisioned(request.VmId), hostVersion, started, encryption);
                 staging.WriteFile(Path.Combine(stagingFolder, BackupManifest.FileName), manifest.ToJson());
 
                 progress("Setting retention", 30);
-                var earlier = history.LastSuccess(BackupCoordinator.VmItem(request.VmId), request.Target.Id) is not null;
-                var splitterChanged = earlier
+                var splitterChanged = earlier is not null
                     && await kopia.ReadSplitterAsync(repository.Repository, repository.Passphrase, stagingFolder, cancellationToken).ConfigureAwait(false)
                         != KopiaCli.DiskSplitter;
                 await kopia.SetPolicyAsync(
@@ -153,7 +166,8 @@ public sealed class VmBackupService(
                 snapshotId = snapshot.Id;
                 bytes = snapshot.TotalSize;
                 uploaded = measured;
-                if (UploadWarning(bytes, uploaded, earlier, splitterChanged) is { } uploadWarning)
+                // A change of encryption already explains a full upload.
+                if (encryptionWarning is null && UploadWarning(bytes, uploaded, earlier is not null, splitterChanged, encryptedDisks > 0) is { } uploadWarning)
                 {
                     warnings.Add(uploadWarning);
                 }
@@ -206,7 +220,7 @@ public sealed class VmBackupService(
         {
             var record = new BackupRunRecord(
                 runId, $"vm:{request.VmId:D}", request.VmId, vm?.Name, request.Target.Id, request.Trigger,
-                started, time.GetUtcNow(), outcome, reason, snapshotId, bytes, warnings, uploaded);
+                started, time.GetUtcNow(), outcome, reason, snapshotId, bytes, warnings, uploaded, encryptedDisks);
             history.Add(record);
             progress("Done", 99);
             return record;
@@ -217,7 +231,7 @@ public sealed class VmBackupService(
     /// The warning for a run that uploaded nearly a full copy of the disks, or null. The first backup of a VM to a target
     /// is a full copy anyway, and a small VM is not worth a warning.
     /// </summary>
-    internal static string? UploadWarning(long totalBytes, long? uploadedBytes, bool earlierBackup, bool splitterChanged)
+    internal static string? UploadWarning(long totalBytes, long? uploadedBytes, bool earlierBackup, bool splitterChanged, bool encrypted)
     {
         if (!earlierBackup || uploadedBytes is not { } uploaded || totalBytes < FullUploadMinimumBytes || uploaded < totalBytes * FullUploadRatio)
         {
@@ -225,11 +239,44 @@ public sealed class VmBackupService(
         }
 
         var sizes = $"It uploaded {Gigabytes(uploaded)} GB of {Gigabytes(totalBytes)} GB.";
-        return splitterChanged
-            ? $"This backup stored the disks in a new layout that changes far less on later backups, so it uploaded them in full once. {sizes}"
+        if (splitterChanged)
+        {
+            return $"This backup stored the disks in a new layout that changes far less on later backups, so it uploaded them in full once. {sizes}";
+        }
+
+        return encrypted
+            ? $"This backup uploaded nearly a full copy of the disks. {sizes} The guest encrypts its disks, so every part it changed "
+                + "uploads in full, without compression. Turning encryption off in the guest makes its backups much smaller."
             : $"This backup uploaded nearly a full copy of the disks. {sizes} This happens when the guest rewrote most of its disks, "
-                + "for example when it turned on or changed BitLocker encryption. If it happens every time, the guest's disks are "
-                + "probably encrypted: an encrypted disk does not compress, so every changed part uploads in full.";
+                + "for example when it turned BitLocker on.";
+    }
+
+    /// <summary>
+    /// A note when a VM's disks are found encrypted for the first time on a target, or the number of encrypted disks
+    /// changed since the last good backup; otherwise null. Not repeated on every run.
+    /// </summary>
+    internal static string? EncryptionWarning(IReadOnlyList<DiskEncryption> disks, BackupRunRecord? earlier)
+    {
+        var encrypted = disks.Count(e => e is DiskEncryption.BitLocker or DiskEncryption.Luks);
+        var name = disks.Contains(DiskEncryption.BitLocker) ? "BitLocker" : "LUKS";
+        var before = earlier?.EncryptedDisks;
+        if (before is null)
+        {
+            return encrypted == 0
+                ? null
+                : $"The guest encrypts its disks with {name}. Encrypted disks do not compress, so this VM's backups are larger, "
+                    + "and every part the guest changes uploads in full. Turning encryption off in the guest makes them much smaller.";
+        }
+
+        if (encrypted > before)
+        {
+            return $"The guest turned on {name} since the last backup. Encrypting rewrote its disks, so this backup uploads them in full, "
+                + "and later backups are larger because encrypted disks do not compress.";
+        }
+
+        return encrypted < before
+            ? "The guest turned disk encryption off since the last backup. Decrypting rewrote its disks, so this backup uploads them in full once; later backups are smaller."
+            : null;
     }
 
     /// <summary>A run that uploads at least this share of the disks counts as a full copy.</summary>

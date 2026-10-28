@@ -116,7 +116,8 @@ public static class BackupMapping
         run.VmName,
         run.Reason,
         run.SnapshotId,
-        run.UploadedBytes);
+        run.UploadedBytes,
+        run.EncryptedDisks);
 
     public static Wire.BackupItemStatus ToContract(this Engine.BackupItemStatus item) => new(
         item.Item, item.TargetId, item.TargetName, item.Overdue, item.VmId, item.VmName, item.LastRun?.ToContract(), item.LastSuccessAt);

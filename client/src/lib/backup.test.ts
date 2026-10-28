@@ -4,6 +4,7 @@ import {
   ageText,
   confirmationComplete,
   emptyTargetForm,
+  encryptionNote,
   formProblem,
   formatBytes,
   crumbs,
@@ -116,6 +117,13 @@ describe("status text", () => {
     expect(uploadText(measured)).toBe("uploaded 1.5 GB of 40 GB");
     expect(runSummary(status({ lastRun: measured }), now)).toBe("Backed up 3 hours ago (uploaded 1.5 GB of 40 GB).");
     expect(uploadText(run("succeeded"))).toBeNull();
+  });
+
+  it("notes encrypted disks from the last run", () => {
+    expect(encryptionNote(status({ lastRun: run("succeeded", { encryptedDisks: 1 }) }))).toBe("Its disk is encrypted, so its backups are larger.");
+    expect(encryptionNote(status({ lastRun: run("succeeded", { encryptedDisks: 2 }) }))).toContain("disks are encrypted");
+    expect(encryptionNote(status({ lastRun: run("succeeded", { encryptedDisks: 0 }) }))).toBeNull();
+    expect(encryptionNote(status())).toBeNull();
   });
 
   it("shows the warnings of a stored backup only", () => {

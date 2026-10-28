@@ -454,6 +454,13 @@ section for an area before changing it: most of these were learned from a failur
   prints "Total Bytes: N" and, when some content is compressed, "Total Packed: N (compression x%)". The packed total
   before and after a snapshot is what it stored. It reads the local index cache.
 - `policy show <source> --json` gives the effective policy; `"splitter": {}` means kopia's default.
+- A BitLocker volume's boot sector has the OEM ID "-FVE-FS-" at offset 3 instead of "NTFS    ", so the host can tell an
+  encrypted guest disk from the VHDX alone (VhdxEncryptionProbe), without mounting it (Mount-VHD and Mount-DiskImage
+  need administrator rights: "A required privilege is not held by the client", 0x80070522).
+- Windows 11 turns BitLocker on by itself in a VM with a virtual TPM (automatic device encryption): HyperHarbor-Test,
+  installed unattended by HyperHarbor with a vTPM and never encrypted by hand, has a "-FVE-FS-" boot sector (found
+  2026-10-27 by the probe and confirmed by a raw scan of the VHDX). So VMs HyperHarbor creates get encrypted disks,
+  and the large backups that come with them, unless something prevents it.
 
 ## Growing disks (0.2.4)
 

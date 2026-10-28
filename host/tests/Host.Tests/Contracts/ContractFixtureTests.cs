@@ -29,7 +29,7 @@ public class ContractFixtureTests
 
     private static readonly BackupRun BackupRunSample = new(
         Guid.Parse("7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"), $"vm:{VmId:D}", "3f2a9c1e5d7b4a60", BackupRunTrigger.Schedule, Time, Time.AddMinutes(12),
-        BackupRunOutcome.Partial, 64_000_000_000, ["The checkpoint could not be removed."], VmId, "Ubuntu Dev", "cleanup", "k4f8a1b2c3d4e5f6", 1_250_000_000);
+        BackupRunOutcome.Partial, 64_000_000_000, ["The checkpoint could not be removed."], VmId, "Ubuntu Dev", "cleanup", "k4f8a1b2c3d4e5f6", 1_250_000_000, 1);
 
     private static readonly RestoreTestResult RestoreTestResultSample = new(
         Guid.Parse("8d2f4a6b-1c3e-4a5b-9c7d-0e1f2a3b4c5d"), "Ubuntu Dev", "3f2a9c1e5d7b4a60", BackupRunTrigger.Schedule, Time, Time.AddMinutes(9),

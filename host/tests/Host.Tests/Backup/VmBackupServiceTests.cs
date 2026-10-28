@@ -101,6 +101,19 @@ internal sealed class FakeStaging : IBackupStaging
     public void Remove(string folder) => Log.Add("staging:remove");
 }
 
+internal sealed class FakeEncryptionProbe : IDiskEncryptionProbe
+{
+    public DiskEncryption Result { get; set; } = DiskEncryption.None;
+
+    public List<string> Probed { get; } = [];
+
+    public DiskEncryption Probe(string path)
+    {
+        Probed.Add(path);
+        return Result;
+    }
+}
+
 internal sealed class FakeRepositories(string dataDirectory) : IBackupRepositories
 {
     public int Opened { get; private set; }
@@ -132,6 +145,7 @@ public sealed class VmBackupServiceTests : IDisposable
     private readonly FakeHyperVStorage _storage = new();
     private readonly FakeRepositories _repositories;
     private readonly FakeKopiaRunner _kopia = new();
+    private readonly FakeEncryptionProbe _encryption = new();
     private readonly BackupHistoryStore _history;
     private readonly PerformanceStore _performance;
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 10, 12, 2, 0, 0, TimeSpan.Zero));
@@ -165,7 +179,7 @@ public sealed class VmBackupServiceTests : IDisposable
 
     private VmBackupService Service() => new(
         _inventory, _definitions, _checkpoints, _storage, _staging, _repositories, new KopiaCli(_kopia), _history, _performance,
-        _ => true, _time, NullLogger<VmBackupService>.Instance, "1.2.3");
+        _ => true, _time, NullLogger<VmBackupService>.Instance, "1.2.3", _encryption);
 
     private VmBackupRequest Request(GpuLiveCopy gpu = GpuLiveCopy.RequireOff) =>
         new(VmId, _target, new BackupPolicy { VmId = VmId.ToString("D"), TargetId = "t1", GpuLiveCopy = gpu, Retention = new RetentionPolicy(7, 4, 6) }, BackupTrigger.Manual);
@@ -411,7 +425,7 @@ public sealed class VmBackupServiceTests : IDisposable
         Assert.Equal(new ManifestFirmware(true, "1734c6e8-3154-4dda-ba5f-a874cc483422"), manifest.Firmware);
         Assert.True(manifest.Tpm);
         Assert.Equal("External", manifest.Network[0].SwitchName);
-        Assert.Equal(new ManifestDisk("disk-0.vhdx", "scsi", 0, 0, 1000), manifest.Disks[0]);
+        Assert.Equal(new ManifestDisk("disk-0.vhdx", "scsi", 0, 0, 1000, DiskEncryption.None), manifest.Disks[0]);
         Assert.True(manifest.Performance.Applied);
         Assert.Equal("31.0.101", manifest.Performance.GuestDriverVersion);
         Assert.True(manifest.Guest.Provisioned);
@@ -509,8 +523,69 @@ public sealed class VmBackupServiceTests : IDisposable
     [InlineData(512L << 20, 500L << 20, true, false)]
     public void UploadWarning_OnlyForANearlyFullCopyOfALargeEnoughVm(long total, long uploaded, bool earlier, bool warns)
     {
-        Assert.Equal(warns, VmBackupService.UploadWarning(total, uploaded, earlier, splitterChanged: false) is not null);
-        Assert.Null(VmBackupService.UploadWarning(total, null, earlier, splitterChanged: false));
+        Assert.Equal(warns, VmBackupService.UploadWarning(total, uploaded, earlier, splitterChanged: false, encrypted: false) is not null);
+        Assert.Null(VmBackupService.UploadWarning(total, null, earlier, splitterChanged: false, encrypted: false));
+    }
+
+    [Fact]
+    public async Task AnEncryptedDisk_IsRecorded_AndExplainedOnTheFirstBackupOnly()
+    {
+        _encryption.Result = DiskEncryption.BitLocker;
+        _definitions.Current = () => _checkpoints.Items.Count > 0 ? Definition(false, @"D:\VMs\Web\Web_AUTO.avhdx") : Definition();
+        _storage.Parents[@"D:\VMs\Web\Web_AUTO.avhdx"] = @"D:\VMs\Web\Web.vhdx";
+
+        var first = await RunAsync();
+        var second = await RunAsync();
+
+        Assert.Equal([@"D:\VMs\Web\Web.vhdx", @"D:\VMs\Web\Web.vhdx"], _encryption.Probed);
+        Assert.Equal(1, first.EncryptedDisks);
+        Assert.Contains(first.Warnings, w => w.Contains("encrypts its disks with BitLocker"));
+        Assert.Empty(second.Warnings);
+        var manifest = BackupManifest.Parse(_staging.Files.Single(f => f.Key.EndsWith(BackupManifest.FileName)).Value);
+        Assert.Equal(DiskEncryption.BitLocker, Assert.Single(manifest.Disks).Encryption);
+        Assert.Contains("\"encryption\": \"bitLocker\"", System.Text.Encoding.UTF8.GetString(_staging.Files.Single().Value));
+    }
+
+    [Fact]
+    public async Task TurningBitLockerOn_ExplainsTheFullUpload_InOneWarning()
+    {
+        await RunAsync();
+        _encryption.Result = DiskEncryption.BitLocker;
+        var stored = 0L;
+        _kopia.Respond = call => call.Arguments switch
+        {
+            ["policy", "show", ..] => new KopiaResult(0, """{ "splitter": { "algorithm": "FIXED-1M" } }""", string.Empty),
+            ["content", "stats", ..] => new KopiaResult(0, $"Total Bytes: {stored}\n", string.Empty),
+            ["snapshot", "create", ..] => Snapshot(10L << 30, () => stored += 10L << 30),
+            _ => new KopiaResult(0, string.Empty, string.Empty),
+        };
+
+        var record = await RunAsync();
+
+        Assert.Contains("turned on BitLocker since the last backup", Assert.Single(record.Warnings));
+    }
+
+    [Fact]
+    public void EncryptionWarning_ComparesWithTheLastGoodBackup()
+    {
+        BackupRunRecord Earlier(int? encrypted) => new(
+            Guid.NewGuid(), "vm:x", VmId, "Web", "t1", BackupTrigger.Manual, _time.GetUtcNow(), _time.GetUtcNow(),
+            BackupOutcome.Succeeded, null, "s", 1, [], null, encrypted);
+
+        Assert.Null(VmBackupService.EncryptionWarning([DiskEncryption.None], null));
+        Assert.Null(VmBackupService.EncryptionWarning([DiskEncryption.Unknown], Earlier(null)));
+        Assert.Contains("LUKS", VmBackupService.EncryptionWarning([DiskEncryption.Luks], null));
+        Assert.Contains("encrypts its disks", VmBackupService.EncryptionWarning([DiskEncryption.BitLocker], Earlier(null)));
+        Assert.Null(VmBackupService.EncryptionWarning([DiskEncryption.BitLocker, DiskEncryption.None], Earlier(1)));
+        Assert.Contains("turned disk encryption off", VmBackupService.EncryptionWarning([DiskEncryption.None], Earlier(1)));
+    }
+
+    [Fact]
+    public void AnEncryptedVm_UploadingAFullCopy_IsToldWhy()
+    {
+        var warning = VmBackupService.UploadWarning(10L << 30, 9L << 30, earlierBackup: true, splitterChanged: false, encrypted: true);
+
+        Assert.Contains("The guest encrypts its disks", warning);
     }
 
     private static KopiaResult Snapshot(long totalSize, Action onCreate)

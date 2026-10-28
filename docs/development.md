@@ -121,7 +121,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   files, a minute) run the real kopia.exe against temporary folders; both need HH_KOPIA_EXE=<path to kopia.exe>, for
   example .tools\kopia-0.23.1\kopia.exe. KopiaDedupLiveTests prints what scattered writes to random data (an
   encrypted disk) upload with the disk splitter and with kopia's default (run with --logger "console;verbosity=detailed").
-  HH_BACKUP_VM_LIVE=1 backs up and restores a throwaway VM.
+  HH_BACKUP_VM_LIVE=1 backs up and restores a throwaway VM. HH_DISK_PROBE_LIVE=<path to a .vhdx> prints what
+  VhdxEncryptionProbe finds in a real disk (read-only; works while the VM runs).
 - Administrator windows: HH_GUEST_ADMIN_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs GuestAdminLiveTests against a running
   Windows VM that HyperHarbor set up (its credential and setup come from the host's data folder, so run elevated, or
   from HH_GUEST_ADMIN_DATA, for example the harness folder). It opens a window, checks over PowerShell Direct that

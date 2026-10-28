@@ -17,6 +17,10 @@ note anything that needs action, such as updating the host, a new elevation requ
   API 1.37.0 (BackupRun.uploadedBytes).
 - A run that uploads nearly a full copy of a VM's disks again says so, and names the usual cause: a guest that encrypts
   its disks with BitLocker. The backup panel now shows the warnings of the latest stored backup.
+- Backups find BitLocker (and Linux LUKS) encryption in a VM's disks by reading their partitions on the host, so it
+  works for any VM, running or off, without signing in to the guest. The first backup of an encrypted VM, and a
+  backup after encryption was turned on or off in the guest, explain what it does to backup size; the backup panel
+  notes encrypted VMs. Each backup's manifest records what it found per disk. API 1.37.0 (BackupRun.encryptedDisks).
 
 ### Changed
 - VM disks are split into fixed 1 MiB pieces for dedup instead of Kopia's default of about 4 MiB. A small change in a
