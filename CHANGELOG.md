@@ -38,6 +38,12 @@ note anything that needs action, such as updating the host, a new elevation requ
   of each existing VM after updating the host uploads the whole disk once, because the old pieces no longer line up;
   its run says so. Host only.
 
+### Fixed
+- Shutting a VM down or restarting it no longer hangs when the guest never answers the request (seen on a guest busy
+  installing updates). After 60 seconds it fails with a message that suggests trying again or turning the VM off, and
+  jobs that shut a VM down first (growing a disk, applying settings or a machine profile) fail the same way instead
+  of holding the VM. Host only.
+
 ## [0.2.4] - 2026-10-27 (API 1.36.0)
 
 The stable release of everything in 0.2.4-beta.1 below: growing a VM's disk, a default browser and a quieter Edge in

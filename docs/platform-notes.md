@@ -474,7 +474,8 @@ section for an area before changing it: most of these were learned from a failur
   differs from round to round, so compare those shares rather than the raw sizes.
 - The host's graceful shutdown (Msvm_ShutdownComponent.InitiateShutdown through CimHyperVPowerInvoker) blocked for
   hours once on that guest, on its second boot after a long time off (probably installing updates): no shutdown event
-  was logged and the call never returned. The harness now gives it 2 minutes and then turns the VM off.
+  was logged and the call never returned, and it cannot be cancelled. CimHyperVPowerInvoker now stops waiting after
+  60 seconds (GuestRequestTimeout) and reports that the guest did not answer; the harness then turns the VM off.
 
 ## Growing disks (0.2.4)
 
