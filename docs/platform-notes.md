@@ -460,7 +460,9 @@ section for an area before changing it: most of these were learned from a failur
 - Windows 11 turns BitLocker on by itself in a VM with a virtual TPM (automatic device encryption): HyperHarbor-Test,
   installed unattended by HyperHarbor with a vTPM and never encrypted by hand, has a "-FVE-FS-" boot sector (found
   2026-10-27 by the probe and confirmed by a raw scan of the VHDX). So VMs HyperHarbor creates get encrypted disks,
-  and the large backups that come with them, unless something prevents it.
+  and the large backups that come with them, unless something prevents it. It starts during setup: a fresh install
+  that allowed it was already encrypting C: when HyperHarbor reported Ready (2026-10-28), and one with
+  PreventDeviceEncryption set in the specialize pass stayed unencrypted.
 - A real BitLocker guest (HyperHarbor-Test, Windows 11, 21.9 GiB VHDX; BitLockerBackupLiveTests, 2026-10-28), backed
   up off with FIXED-1M, then started for 10 minutes and shut down before each later backup: the first backup uploaded
   21.56 GiB (nothing compressed). Round 1 changed 0.14 GiB of 4 KiB sectors and uploaded 0.83 GiB; round 2 changed

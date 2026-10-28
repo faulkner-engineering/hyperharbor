@@ -130,6 +130,8 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   progress while it runs). HH_DISK_ENCRYPTION_LIVE=1 with HH_LIVE_GUEST_VM turns BitLocker off in the guest through
   VmDiskEncryptionService (credential from the harness folder or HH_GUEST_ADMIN_DATA), waits for decryption
   (HH_DECRYPT_MINUTES, 90), and checks the disk with the probe. Run the backup test again afterwards to compare.
+  MachineProfileLiveTests checks that a fresh install has PreventDeviceEncryption and an unencrypted C:;
+  HH_MACHINE_ALLOW_ENCRYPTION=1 allows encryption instead and reports what Windows did.
 - Administrator windows: HH_GUEST_ADMIN_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs GuestAdminLiveTests against a running
   Windows VM that HyperHarbor set up (its credential and setup come from the host's data folder, so run elevated, or
   from HH_GUEST_ADMIN_DATA, for example the harness folder). It opens a window, checks over PowerShell Direct that
