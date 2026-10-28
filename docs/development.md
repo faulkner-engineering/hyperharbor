@@ -117,6 +117,11 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
     HyperHarbor-Test2 with a setup profile and waits for Ready (about 25 minutes). HH_PROFILE_EXISTING_LIVE=1
     HH_SPIKE_ISO=<image>: creates HyperHarbor-Test, applies a profile through the API with a restart, checks the
     account's hive, and deletes the VM. Throwaway VMs created for tests may be deleted without asking (decided 2026-10-05); ask before changing any other VM.
+- Backups: HH_BACKUP_LIVE=1 (KopiaLiveTests) and HH_KOPIA_DEDUP_LIVE=1 (KopiaDedupLiveTests, about 1 GiB of temporary
+  files, a minute) run the real kopia.exe against temporary folders; both need HH_KOPIA_EXE=<path to kopia.exe>, for
+  example .tools\kopia-0.23.1\kopia.exe. KopiaDedupLiveTests prints what scattered writes to random data (an
+  encrypted disk) upload with the disk splitter and with kopia's default (run with --logger "console;verbosity=detailed").
+  HH_BACKUP_VM_LIVE=1 backs up and restores a throwaway VM.
 - Administrator windows: HH_GUEST_ADMIN_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs GuestAdminLiveTests against a running
   Windows VM that HyperHarbor set up (its credential and setup come from the host's data folder, so run elevated, or
   from HH_GUEST_ADMIN_DATA, for example the harness folder). It opens a window, checks over PowerShell Direct that
