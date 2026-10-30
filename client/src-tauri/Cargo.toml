@@ -1,6 +1,6 @@
 [package]
 name = "hyperharbor-client"
-version = "0.2.5-beta.2"
+version = "0.2.5"
 description = "HyperHarbor desktop client"
 authors = ["Faulkner Engineering LLC"]
 license = "Apache-2.0"
