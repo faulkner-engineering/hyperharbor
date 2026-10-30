@@ -1,14 +1,17 @@
 name: Signing check
 
-# Signs a throwaway executable the way a release does (the "release" environment, azure/login with OIDC, scripts/sign.ps1
-# with the repository's signing variables), so the Azure setup is proven without tagging a release. Runs by hand and
-# when the signing code changes; it touches nothing that ships.
+# Signs throwaway executables the way a release does (the "release" environment, azure/login with OIDC, scripts/sign.ps1
+# with the repository's signing variables), so the Azure setup and the sign command Tauri runs are proven without
+# tagging a release. Runs by hand and when the signing code changes; it touches nothing that ships.
 
 on:
   workflow_dispatch:
   push:
+    # Tags are left out: path filters do not apply to them, so every release tag would run it.
+    branches: ["**"]
     paths:
       - scripts/sign.ps1
+      - scripts/package.ps1
       - tools/build-tools.json
       - .github/workflows/signing-check.yml
 
@@ -41,9 +44,32 @@ jobs:
           $exe = Join-Path $env:RUNNER_TEMP 'signing-check.exe'
           Add-Type -OutputType ConsoleApplication -OutputAssembly $exe -TypeDefinition 'public static class Program { public static void Main() { System.Console.WriteLine("HyperHarbor signing check"); } }'
           if ((Get-AuthenticodeSignature -LiteralPath $exe).Status -eq 'Valid') { throw 'The throwaway executable is signed before signing.' }
+          # A second, unsigned copy for the next step: PowerShell 7's Add-Type cannot build an executable.
+          Copy-Item $exe (Join-Path $env:RUNNER_TEMP 'signing-check-tauri.exe')
           ./scripts/sign.ps1 $exe
           $signature = Get-AuthenticodeSignature -LiteralPath $exe
           Write-Host "Signer: $($signature.SignerCertificate.Subject)"
           Write-Host "Issuer: $($signature.SignerCertificate.Issuer)"
           Write-Host "Timestamped by: $($signature.TimeStamperCertificate.Subject)"
           if (-not $signature.TimeStamperCertificate) { throw 'The signature has no timestamp.' }
+
+      # The release's package step runs in pwsh, and Tauri starts the sign command through npm and its own CLI. Node
+      # starts it here the same way, from the configuration package.ps1 writes.
+      - name: Sign through the command Tauri runs
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'signing-check-tauri.exe'
+          $config = Join-Path $env:RUNNER_TEMP 'tauri.sign.json'
+          ./scripts/sign.ps1 -TauriConfig $config
+          $env:HH_SIGNING_LOG = Join-Path $env:RUNNER_TEMP 'signing.log'
+          $command = (Get-Content $config -Raw | ConvertFrom-Json).bundle.windows.signCommand
+          $arguments = @($command.args | ForEach-Object { if ($_ -eq '%1') { $exe } else { $_ } })
+          $env:HH_SIGN_CMD = $command.cmd
+          $env:HH_SIGN_ARGS = ConvertTo-Json -Compress -InputObject $arguments
+          node -e "const r = require('child_process').spawnSync(process.env.HH_SIGN_CMD, JSON.parse(process.env.HH_SIGN_ARGS), { stdio: 'inherit' }); process.exit(r.status ?? 1)"
+          $status = $LASTEXITCODE
+          if (Test-Path $env:HH_SIGNING_LOG) { Get-Content $env:HH_SIGNING_LOG }
+          if ($status -ne 0) { throw "The sign command exited with $status." }
+          $signature = Get-AuthenticodeSignature -LiteralPath $exe
+          if ($signature.Status -ne 'Valid') { throw "Not validly signed: $($signature.Status)" }
+          Write-Host "Signed through $($command.cmd): $($signature.SignerCertificate.Subject)"

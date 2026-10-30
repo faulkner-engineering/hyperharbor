@@ -190,18 +190,30 @@ if (-not $HostOnly) {
         # updater's .sig over the installer (signing afterwards would invalidate that signature).
         if ($codeSigning) {
             $signConfig = Join-Path ([IO.Path]::GetTempPath()) "hyperharbor-tauri-sign-$PID.json"
-            $signCommand = @{ cmd = 'powershell'; args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $sign, '%1') }
-            @{ bundle = @{ windows = @{ signCommand = $signCommand } } } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $signConfig -Encoding ASCII
+            & $sign -TauriConfig $signConfig
             $configs += @('--config', $signConfig)
+            # Tauri hides a failing sign command's output; sign.ps1 writes it here too.
+            $env:HH_SIGNING_LOG = Join-Path ([IO.Path]::GetTempPath()) "hyperharbor-signing-$PID.log"
+            Remove-Item -LiteralPath $env:HH_SIGNING_LOG -ErrorAction SilentlyContinue
         }
-        # Not splatted: npm's PowerShell shim turns a splatted --no-bundle into "-" and "no-bundle".
-        if ($Fast) { Invoke-Step "Build client ($mode)" { npm run tauri build -- --no-bundle @configs } }
-        else { Invoke-Step "Build client ($mode)" { npm run tauri build -- --bundles nsis @configs } }
+        try {
+            # Not splatted: npm's PowerShell shim turns a splatted --no-bundle into "-" and "no-bundle".
+            if ($Fast) { Invoke-Step "Build client ($mode)" { npm run tauri build -- --no-bundle @configs } }
+            else { Invoke-Step "Build client ($mode)" { npm run tauri build -- --bundles nsis @configs } }
+        }
+        catch {
+            if ($env:HH_SIGNING_LOG -and (Test-Path -LiteralPath $env:HH_SIGNING_LOG)) {
+                Write-Host 'Code signing log:' -ForegroundColor Yellow
+                Get-Content -LiteralPath $env:HH_SIGNING_LOG | Write-Host
+            }
+            throw
+        }
     }
     finally {
         Pop-Location
         Remove-Item Env:\CARGO_PROFILE_RELEASE_LTO, Env:\CARGO_PROFILE_RELEASE_OPT_LEVEL, Env:\CARGO_PROFILE_RELEASE_INCREMENTAL, Env:\CARGO_PROFILE_RELEASE_CODEGEN_UNITS -ErrorAction SilentlyContinue
         if ($signConfig) { Remove-Item -LiteralPath $signConfig -ErrorAction SilentlyContinue }
+        Remove-Item Env:\HH_SIGNING_LOG -ErrorAction SilentlyContinue
     }
 
     $release = Join-Path $repo 'client\src-tauri\target\release'
