@@ -33,6 +33,10 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   (dotnet test --filter Category=E2E: KopiaLiveTests, KopiaDedupLiveTests, BackupUpgradeE2ETests, and S3TargetE2ETests,
   which runs `rclone serve s3` on loopback as the S3 target), then the Rust
   e2e_loopback test, which starts the real service on a free loopback port (so it can run while a packaged host runs).
+  Last, compatibility with the last stable release (previousRelease in tools/test-tools.json): the same Rust test of this
+  client against that release's published host (pinned by the SHA-256 its latest.json gives), and of that release's
+  client, built from its tag in a temporary git worktree (fetched when CI's shallow checkout lacks it, sharing the
+  client's target folder), against this host. About 3.5 minutes in all.
   With HH_E2E=1 a missing tool fails a test rather than skipping it. A new test that needs no Hyper-V and no service on
   the internet belongs here, not among the opt-in live tests.
 - Live lifecycle (creates, changes, and deletes HyperHarbor-Test; ask first):
@@ -86,6 +90,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   published non-prerelease); publishing a prerelease copies its latest.json to the fixed "channel-beta"
   release that beta hosts read. Publishing a stable release copies it there too when it is newer than the beta the
   channel offers, so beta users get it; the job rewrites the host manifest's "channel" to "beta", which hosts check.
+  After publishing a stable release, move previousRelease in tools/test-tools.json to it (version, tag, the host exe's
+  url, and exeSha256 from that release's latest.json), so the compatibility tests compare with the newest stable.
 
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
@@ -138,6 +144,12 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   (HH_DECRYPT_MINUTES, 90), and checks the disk with the probe. Run the backup test again afterwards to compare.
   MachineProfileLiveTests checks that a fresh install has PreventDeviceEncryption and an unencrypted C:;
   HH_MACHINE_ALLOW_ENCRYPTION=1 allows encryption instead and reports what Windows did.
+- Guest power: HH_POWER_LIVE=1 with HH_LIVE_GUEST_VM=<id of a Windows VM the harness set up> runs PowerLiveTests
+  through the harness: Restart (Windows must boot again), a processor change with shutDownToApply (the job shuts the
+  guest down, applies, starts it), and Shut down, each accepted within 30 seconds. It changes the processor count, so
+  use a throwaway VM: MachineProfileLiveTests with HH_MACHINE_KEEP=1 makes one, and with HH_LIVE_GUEST_VM it checks
+  and deletes it afterwards (start the VM first: PowerLiveTests leaves it off, and the guest check then fails, though
+  the VM is still deleted). Verified 2026-10-30: Restart and Shut down accepted in 0.6 s, the compute job succeeded.
 - Administrator windows: HH_GUEST_ADMIN_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs GuestAdminLiveTests against a running
   Windows VM that HyperHarbor set up (its credential and setup come from the host's data folder, so run elevated, or
   from HH_GUEST_ADMIN_DATA, for example the harness folder). It opens a window, checks over PowerShell Direct that
