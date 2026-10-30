@@ -124,9 +124,18 @@ fetched by fetch-tools.ps1 -Tool artifactSigning) and checks the result with Get
      Trusted Signing, Certificate Profile Signer).
   4. Repository variables (Settings, Secrets and variables, Actions, Variables; none of them is secret):
      AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, SIGNING_ENDPOINT, SIGNING_ACCOUNT, SIGNING_PROFILE.
-- Checked locally (2026-10-30) with dummy settings: fetch-tools downloads and verifies the plug-in, signtool loads it
-  and reads the metadata, and signing stops at the Azure sign-in, as it must without one. A real signature has not
-  been made yet.
+- Tauri's sign command runs in the same PowerShell as the build (sign.ps1 -TauriConfig records its own process's
+  path): the release's package step runs in pwsh, and Windows PowerShell started from there through npm and the Tauri
+  CLI failed with only "failed to run powershell" (0.2.5-beta.2's first run). Tauri hides the command's output, so
+  package.ps1 sets HH_SIGNING_LOG and prints that log when the client build fails.
+- The Signing check workflow (signing-check.yml) proves the Azure setup without a release: in the "release"
+  environment it signs a throwaway executable with sign.ps1, then a second one through the exact command Tauri gets,
+  started by Node from pwsh. It runs by hand and on any push that changes the signing files.
+- First real signatures (2026-10-30, Signing check on GitHub): signer CN=Faulkner Engineering LLC, issuer Microsoft
+  ID Verified CS AOC CA 03, timestamped by the Microsoft timestamp service. 0.2.5-beta.2 was the first signed
+  release, with eleven files signed during the build: the host executable (its latest.json SHA-256 matches the
+  signed file), the client, the camera DLL, five NSIS plug-in DLLs, the uninstaller, the setup executable, and the
+  portable copy.
 
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
