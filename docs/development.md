@@ -93,6 +93,41 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   After publishing a stable release, move previousRelease in tools/test-tools.json to it (version, tag, the host exe's
   url, and exeSha256 from that release's latest.json), so the compatibility tests compare with the newest stable.
 
+## Code signing
+
+Release builds are signed with Azure Artifact Signing (formerly Trusted Signing). scripts\sign.ps1 runs signtool with
+the Artifact Signing plug-in (Microsoft.ArtifactSigning.Client, pinned with its hashes in tools/build-tools.json and
+fetched by fetch-tools.ps1 -Tool artifactSigning) and checks the result with Get-AuthenticodeSignature.
+
+- Order matters: package.ps1 signs the host executable before write-update-manifest records its SHA-256 in
+  latest.json (hosts refuse an update whose hash differs). Tauri runs sign.ps1 as bundle.windows.signCommand (a config
+  package.ps1 writes for the build) on every file it ships, in place, then on the installer, and only then makes the
+  updater's .sig over the installer. Checked 2026-10-30 with a stand-in command on a full build: the client executable,
+  resources/hyperharbor_vcam.dll, NSIS's plug-in DLLs, the uninstaller, and last the setup executable (nine files).
+  The portable client and the camera DLL in dist are copies of those signed files. Signing dist afterwards would
+  break both checks.
+- sign.ps1 does nothing without HH_SIGNING_ENDPOINT, HH_SIGNING_ACCOUNT, and HH_SIGNING_PROFILE, so local and CI builds
+  need no Azure account; with HH_SIGNING_REQUIRED=1 a missing setting fails instead. Fast builds are never signed. The
+  credential is the Azure CLI login (or AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_CLIENT_SECRET); the other kinds
+  are excluded in the plug-in's metadata. A developer with az login and the signer role can sign a local full build.
+- The release workflow signs when the repository variable SIGNING_ENDPOINT is set; until then it warns and releases
+  unsigned. Once set, it signs in with azure/login (OIDC; no secret is stored), passes HH_SIGNING_REQUIRED=1, and fails
+  unless the host executable and the installer have valid signatures. The draft job runs in the "release" environment,
+  because a federated credential cannot name tags with a wildcard.
+- One-time Azure setup (the owner's):
+  1. An Artifact Signing account and a Public Trust certificate profile (after identity validation). Note the
+     account's endpoint, for example https://eus.codesigning.azure.net.
+  2. An app registration (or user-assigned managed identity) with a federated credential: issuer
+     https://token.actions.githubusercontent.com, subject repo:faulkner-engineering/hyperharbor:environment:release,
+     audience api://AzureADTokenExchange.
+  3. On the certificate profile, give that identity the Certificate Profile Signer role (Artifact Signing, formerly
+     Trusted Signing, Certificate Profile Signer).
+  4. Repository variables (Settings, Secrets and variables, Actions, Variables; none of them is secret):
+     AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, SIGNING_ENDPOINT, SIGNING_ACCOUNT, SIGNING_PROFILE.
+- Checked locally (2026-10-30) with dummy settings: fetch-tools downloads and verifies the plug-in, signtool loads it
+  and reads the metadata, and signing stops at the Azure sign-in, as it must without one. A real signature has not
+  been made yet.
+
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
 run npm run gen:api, and lint. OpenApiEnumTests fail if C# enums or the API version drift from api.yaml.

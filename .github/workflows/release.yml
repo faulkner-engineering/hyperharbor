@@ -7,6 +7,12 @@ name: Release
 #     non-prerelease release.
 #   - beta: publishing a prerelease copies its latest.json to the fixed "channel-beta" release, which beta
 #     hosts read (the beta-channel job below). A stable release newer than the channel's beta is copied there too.
+#
+# Code signing (Azure Artifact Signing, formerly Trusted Signing) is on when the SIGNING_ENDPOINT variable is set:
+# azure/login signs in with OIDC (no secret is stored), and package.ps1 signs the host executable and the camera DLL,
+# while Tauri signs the client executable and the installer, each before the hash or signature that covers it is
+# made (docs/development.md, Code signing). The federated credential's subject is the "release" environment, since a
+# tag cannot be named with a wildcard there.
 
 on:
   push:
@@ -17,11 +23,19 @@ on:
 permissions:
   contents: write
   actions: read
+  id-token: write
 
 jobs:
   draft:
     if: github.event_name == 'push'
     runs-on: windows-latest
+    environment: release
+    env:
+      HH_SIGNING_ENDPOINT: ${{ vars.SIGNING_ENDPOINT }}
+      HH_SIGNING_ACCOUNT: ${{ vars.SIGNING_ACCOUNT }}
+      HH_SIGNING_PROFILE: ${{ vars.SIGNING_PROFILE }}
+      # Once signing is configured, a release that cannot sign fails instead of shipping unsigned files.
+      HH_SIGNING_REQUIRED: ${{ vars.SIGNING_ENDPOINT != '' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -63,6 +77,20 @@ jobs:
         working-directory: client
         run: npm ci --no-audit --no-fund
 
+      - name: Code signing is configured
+        if: vars.SIGNING_ENDPOINT == ''
+        shell: pwsh
+        run: Write-Host '::warning::SIGNING_ENDPOINT is not set, so this release is not code signed (docs/development.md, Code signing).'
+
+      # OIDC: GitHub's token for the "release" environment is exchanged for an Azure one; sign.ps1 uses the Azure CLI login.
+      - name: Azure login for code signing
+        if: vars.SIGNING_ENDPOINT != ''
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       - name: Package (full build)
         shell: pwsh
         env:
@@ -78,6 +106,17 @@ jobs:
             if (-not (Test-Path $file)) { throw "$file is missing: check the TAURI_SIGNING_PRIVATE_KEY secrets." }
           }
           if (-not (Get-ChildItem dist/*-setup.exe.sig)) { throw 'The installer signature is missing.' }
+
+      - name: The shipped executables are code signed
+        if: vars.SIGNING_ENDPOINT != ''
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          foreach ($file in @("dist/HyperHarbor-Host-$version.exe") + (Get-ChildItem dist/*-setup.exe).FullName) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $file
+            if ($signature.Status -ne 'Valid') { throw "$file is not validly signed: $($signature.Status) $($signature.StatusMessage)" }
+            Write-Host "$file is signed by $($signature.SignerCertificate.Subject), timestamped $($signature.TimeStamperCertificate.NotBefore)."
+          }
 
       # CI runs for the same commit (pushed to main with the tag) while this job packages; wait for its result.
       - name: CI passed for the tagged commit

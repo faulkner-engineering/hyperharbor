@@ -42,6 +42,11 @@ $env:Path = (@($toolPaths | Where-Object { Test-Path $_ }) + $env:Path) -join ';
 $env:DOTNET_NOLOGO = '1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 
+# Code signing with Azure Artifact Signing (scripts\sign.ps1), for full builds where HH_SIGNING_* is set (the release
+# workflow sets it, with HH_SIGNING_REQUIRED=1 so a missing setting fails the release).
+$sign = Join-Path $PSScriptRoot 'sign.ps1'
+$codeSigning = -not $Fast -and ([bool]$env:HH_SIGNING_ENDPOINT -or $env:HH_SIGNING_REQUIRED -eq '1')
+
 function Invoke-Step([string]$Title, [scriptblock]$Command) {
     Write-Host "==> $Title" -ForegroundColor Cyan
     & $Command
@@ -132,6 +137,10 @@ if (-not $ClientOnly) {
         throw "The host publish produced more than one file: $($extra.Name -join ', ')"
     }
 
+    # Code signing (scripts\sign.ps1; it signs only when HH_SIGNING_* is set, as in the release workflow) comes before
+    # latest.json records the executable's SHA-256, which hosts check before they update. Fast builds are not signed.
+    if (-not $Fast) { Invoke-Step 'Sign host' { & $sign (Join-Path $staging 'HyperHarbor.Host.exe') } }
+
     # dist\host keeps the portable start and stop scripts for development runs; the executable alone is what ships.
     Copy-Item (Join-Path $repo 'packaging\host\*') $staging
     $hostExe = Join-Path $dist "HyperHarbor-Host-$version.exe"
@@ -176,6 +185,15 @@ if (-not $HostOnly) {
         $configs = @('--config', 'src-tauri/tauri.camera.conf.json')
         if ($signing) { $configs += @('--config', 'src-tauri/tauri.updater.conf.json') }
         elseif (-not $Fast) { Write-Host 'TAURI_SIGNING_PRIVATE_KEY is not set: building without updater artifacts.' -ForegroundColor Yellow }
+        # Code signing: while it bundles, Tauri runs sign.ps1 on every file it ships, in place (the client executable,
+        # the camera DLL in resources, NSIS's plug-ins and uninstaller), then on the installer, and only then makes the
+        # updater's .sig over the installer (signing afterwards would invalidate that signature).
+        if ($codeSigning) {
+            $signConfig = Join-Path ([IO.Path]::GetTempPath()) "hyperharbor-tauri-sign-$PID.json"
+            $signCommand = @{ cmd = 'powershell'; args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $sign, '%1') }
+            @{ bundle = @{ windows = @{ signCommand = $signCommand } } } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $signConfig -Encoding ASCII
+            $configs += @('--config', $signConfig)
+        }
         # Not splatted: npm's PowerShell shim turns a splatted --no-bundle into "-" and "no-bundle".
         if ($Fast) { Invoke-Step "Build client ($mode)" { npm run tauri build -- --no-bundle @configs } }
         else { Invoke-Step "Build client ($mode)" { npm run tauri build -- --bundles nsis @configs } }
@@ -183,6 +201,7 @@ if (-not $HostOnly) {
     finally {
         Pop-Location
         Remove-Item Env:\CARGO_PROFILE_RELEASE_LTO, Env:\CARGO_PROFILE_RELEASE_OPT_LEVEL, Env:\CARGO_PROFILE_RELEASE_INCREMENTAL, Env:\CARGO_PROFILE_RELEASE_CODEGEN_UNITS -ErrorAction SilentlyContinue
+        if ($signConfig) { Remove-Item -LiteralPath $signConfig -ErrorAction SilentlyContinue }
     }
 
     $release = Join-Path $repo 'client\src-tauri\target\release'
@@ -219,9 +238,14 @@ if (-not $HostOnly) {
         [System.IO.File]::WriteAllText((Join-Path $dist 'client-latest.json'), ($clientManifest | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
         Write-Host "Client update manifest: $(Join-Path $dist 'client-latest.json')" -ForegroundColor Green
     }
-    Copy-Item (Join-Path $release 'hyperharbor-client.exe') (Join-Path $dist "HyperHarbor-Client-$version-portable.exe") -Force
+    $portable = Join-Path $dist "HyperHarbor-Client-$version-portable.exe"
+    Copy-Item (Join-Path $release 'hyperharbor-client.exe') $portable -Force
+    # Tauri signs the executable it bundles; the portable copy is signed here if it was not.
+    if ($codeSigning -and (Get-AuthenticodeSignature -LiteralPath $portable).Status -ne 'Valid') {
+        Invoke-Step 'Sign portable client' { & $sign $portable }
+    }
     # The portable client looks for the camera source next to itself.
     Copy-Item (Join-Path $resources 'hyperharbor_vcam.dll') $dist -Force
     if (-not $Fast) { Write-Host "Client installer: $(Join-Path $dist $installer.Name)" -ForegroundColor Green }
-    Write-Host "Client portable:  $(Join-Path $dist "HyperHarbor-Client-$version-portable.exe")" -ForegroundColor Green
+    Write-Host "Client portable:  $portable" -ForegroundColor Green
 }

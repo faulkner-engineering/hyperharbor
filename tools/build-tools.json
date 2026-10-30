@@ -1,0 +1,13 @@
+{
+  "artifactSigning": {
+    "version": "1.0.146",
+    "purpose": "Release builds only (never shipped): the signtool plug-in for Azure Artifact Signing (formerly Trusted Signing), which scripts/sign.ps1 uses.",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/1.0.146/microsoft.artifactsigning.client.1.0.146.nupkg",
+    "zipSha256": "7761e5d8f31e54b764da21d33cd8b0a2940e1b05526c7dfcb5e94b0431426f70",
+    "folder": "bin/x64",
+    "file": "Azure.CodeSigning.Dlib.dll",
+    "exeSha256": "123fa0c50341777d8e5b1414df52f39a1f2c7ab4a9f716abf6310069a6cb8a19",
+    "license": "MIT",
+    "licenseUrl": "https://www.nuget.org/packages/Microsoft.ArtifactSigning.Client/1.0.146/license"
+  }
+}
