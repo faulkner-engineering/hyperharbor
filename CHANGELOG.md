@@ -10,6 +10,14 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-30 (API 1.37.0)
+
+The stable release of everything in 0.2.5-beta.1 and 0.2.5-beta.2 below: smaller backups, above all for VMs whose disks
+Windows encrypted with BitLocker on its own, the uploaded size of each backup, new Windows VMs left unencrypted unless a
+machine profile allows it, Disk encryption… to turn BitLocker off in an existing VM, shutdowns that no longer hang, and
+the first code signed release. Update both the host and the client; the new options need a host with API 1.37.0.
+Action: the first backup of each existing VM after updating the host uploads its whole disk once.
+
 ## [0.2.5-beta.2] - 2026-10-30 (API 1.37.0)
 
 The first signed release: the same features as 0.2.5-beta.1, with the host executable, the client installer, and
