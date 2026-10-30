@@ -2,37 +2,45 @@
 .SYNOPSIS
     Downloads a pinned third-party tool into .tools and verifies its SHA-256 hashes.
 .DESCRIPTION
-    tools\tools.json pins the tools HyperHarbor ships (Kopia), and tools\test-tools.json the ones only tests use
-    (rclone, and the previous release's host for compatibility tests). Each entry has the download URL and the hashes
-    of the archive (when it is a zip) and the executable. A tool is downloaded only when missing or when its hash
-    differs. Prints the path of the executable on the last line.
+    tools\tools.json pins the tools HyperHarbor ships (Kopia), tools\test-tools.json the ones only tests use (rclone,
+    and the previous release's host for compatibility tests), and tools\build-tools.json the ones only release builds
+    use (the Artifact Signing plug-in for signtool). Each entry has the download URL and the hashes of the archive (when
+    it is a zip or a NuGet package) and of the file the caller needs. A tool is downloaded only when missing or when its
+    hash differs. Prints the path of that file on the last line.
     The binaries are not committed; package.ps1 embeds Kopia in HyperHarbor.Host.exe.
 .EXAMPLE
     scripts\fetch-tools.ps1                            # kopia.exe
     scripts\fetch-tools.ps1 -Tool rclone               # rclone.exe, for the end-to-end tests
     scripts\fetch-tools.ps1 -Tool previousRelease      # the last stable release's HyperHarbor-Host-<version>.exe
+    scripts\fetch-tools.ps1 -Tool artifactSigning      # Azure.CodeSigning.Dlib.dll with its dependencies, for sign.ps1
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('kopia', 'rclone', 'previousRelease')][string]$Tool = 'kopia'
+    [ValidateSet('kopia', 'rclone', 'previousRelease', 'artifactSigning')][string]$Tool = 'kopia'
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $cache = Join-Path $repo '.tools'
-$pins = if ($Tool -eq 'kopia') { 'tools.json' } else { 'test-tools.json' }
+$pins = switch ($Tool) {
+    'kopia' { 'tools.json' }
+    'artifactSigning' { 'build-tools.json' }
+    default { 'test-tools.json' }
+}
 $pin = (Get-Content (Join-Path $repo "tools\$pins") -Raw | ConvertFrom-Json).$Tool
 $folder = Join-Path $cache "$Tool-$($pin.version)"
-# A zip holds <tool>.exe; a plain executable keeps the name it is published under.
-$exeName = if ($pin.zipSha256) { "$Tool.exe" } else { Split-Path -Leaf ([Uri]$pin.url).AbsolutePath }
-$exe = Join-Path $folder $exeName
+# An archive holds <tool>.exe, or a folder whose files are all kept (pin.folder, pin.file); a plain executable keeps
+# the name it is published under.
+$fileName = if ($pin.file) { $pin.file } elseif ($pin.zipSha256) { "$Tool.exe" } else { Split-Path -Leaf ([Uri]$pin.url).AbsolutePath }
+$file = Join-Path $folder $fileName
 
 function Get-Hash([string]$Path) { (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant() }
 
-if (-not ((Test-Path $exe) -and (Get-Hash $exe) -eq $pin.exeSha256)) {
+if (-not ((Test-Path $file) -and (Get-Hash $file) -eq $pin.exeSha256)) {
     New-Item -ItemType Directory -Force $folder | Out-Null
     Write-Host "Downloading $Tool $($pin.version)" -ForegroundColor Cyan
     if ($pin.zipSha256) {
+        # Expand-Archive takes only the .zip extension, which a NuGet package (.nupkg) lacks.
         $zip = Join-Path $folder "$Tool.zip"
         Invoke-WebRequest -Uri $pin.url -OutFile $zip -UseBasicParsing
         if ((Get-Hash $zip) -ne $pin.zipSha256) {
@@ -42,17 +50,22 @@ if (-not ((Test-Path $exe) -and (Get-Hash $exe) -eq $pin.exeSha256)) {
         $extract = Join-Path $folder 'extract'
         if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
         Expand-Archive -LiteralPath $zip -DestinationPath $extract
-        Copy-Item (Get-ChildItem $extract -Recurse -Filter "$Tool.exe" | Select-Object -First 1).FullName $exe -Force
+        if ($pin.folder) {
+            Copy-Item (Join-Path $extract "$($pin.folder)\*") $folder -Recurse -Force
+        }
+        else {
+            Copy-Item (Get-ChildItem $extract -Recurse -Filter "$Tool.exe" | Select-Object -First 1).FullName $file -Force
+        }
         Remove-Item $extract -Recurse -Force
         Remove-Item $zip -Force
     }
     else {
-        Invoke-WebRequest -Uri $pin.url -OutFile $exe -UseBasicParsing
+        Invoke-WebRequest -Uri $pin.url -OutFile $file -UseBasicParsing
     }
-    if ((Get-Hash $exe) -ne $pin.exeSha256) {
-        Remove-Item $exe -Force
-        throw "$exeName does not match the pinned SHA-256 in tools\$pins."
+    if ((Get-Hash $file) -ne $pin.exeSha256) {
+        Remove-Item $file -Force
+        throw "$fileName does not match the pinned SHA-256 in tools\$pins."
     }
 }
 
-$exe
+$file

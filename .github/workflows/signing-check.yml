@@ -1,0 +1,49 @@
+name: Signing check
+
+# Signs a throwaway executable the way a release does (the "release" environment, azure/login with OIDC, scripts/sign.ps1
+# with the repository's signing variables), so the Azure setup is proven without tagging a release. Runs by hand and
+# when the signing code changes; it touches nothing that ships.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/sign.ps1
+      - tools/build-tools.json
+      - .github/workflows/signing-check.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sign:
+    runs-on: windows-latest
+    environment: release
+    env:
+      HH_SIGNING_ENDPOINT: ${{ vars.SIGNING_ENDPOINT }}
+      HH_SIGNING_ACCOUNT: ${{ vars.SIGNING_ACCOUNT }}
+      HH_SIGNING_PROFILE: ${{ vars.SIGNING_PROFILE }}
+      HH_SIGNING_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign a throwaway executable
+        shell: powershell
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'signing-check.exe'
+          Add-Type -OutputType ConsoleApplication -OutputAssembly $exe -TypeDefinition 'public static class Program { public static void Main() { System.Console.WriteLine("HyperHarbor signing check"); } }'
+          if ((Get-AuthenticodeSignature -LiteralPath $exe).Status -eq 'Valid') { throw 'The throwaway executable is signed before signing.' }
+          ./scripts/sign.ps1 $exe
+          $signature = Get-AuthenticodeSignature -LiteralPath $exe
+          Write-Host "Signer: $($signature.SignerCertificate.Subject)"
+          Write-Host "Issuer: $($signature.SignerCertificate.Issuer)"
+          Write-Host "Timestamped by: $($signature.TimeStamperCertificate.Subject)"
+          if (-not $signature.TimeStamperCertificate) { throw 'The signature has no timestamp.' }

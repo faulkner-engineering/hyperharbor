@@ -10,6 +10,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Changed
+- Releases are code signed with Azure Artifact Signing: the host executable, the client installer, and everything
+  the installer puts on the PC (the client, its camera DLL, and the uninstaller). Windows SmartScreen and Defender
+  then show the publisher instead of an unknown program. The update checks are unchanged: hosts still verify each
+  update's SHA-256, and clients the installer's update signature.
+
 ## [0.2.5-beta.1] - 2026-10-28 (API 1.37.0)
 
 A beta of 0.2.5: smaller backups, above all for VMs whose disks Windows encrypted with BitLocker on its own. New
