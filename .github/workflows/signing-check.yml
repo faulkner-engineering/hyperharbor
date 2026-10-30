@@ -44,6 +44,8 @@ jobs:
           $exe = Join-Path $env:RUNNER_TEMP 'signing-check.exe'
           Add-Type -OutputType ConsoleApplication -OutputAssembly $exe -TypeDefinition 'public static class Program { public static void Main() { System.Console.WriteLine("HyperHarbor signing check"); } }'
           if ((Get-AuthenticodeSignature -LiteralPath $exe).Status -eq 'Valid') { throw 'The throwaway executable is signed before signing.' }
+          # A second, unsigned copy for the next step: PowerShell 7's Add-Type cannot build an executable.
+          Copy-Item $exe (Join-Path $env:RUNNER_TEMP 'signing-check-tauri.exe')
           ./scripts/sign.ps1 $exe
           $signature = Get-AuthenticodeSignature -LiteralPath $exe
           Write-Host "Signer: $($signature.SignerCertificate.Subject)"
@@ -57,7 +59,6 @@ jobs:
         shell: pwsh
         run: |
           $exe = Join-Path $env:RUNNER_TEMP 'signing-check-tauri.exe'
-          Add-Type -OutputType ConsoleApplication -OutputAssembly $exe -TypeDefinition 'public static class Program { public static void Main() { System.Console.WriteLine("HyperHarbor signing check"); } }'
           $config = Join-Path $env:RUNNER_TEMP 'tauri.sign.json'
           ./scripts/sign.ps1 -TauriConfig $config
           $env:HH_SIGNING_LOG = Join-Path $env:RUNNER_TEMP 'signing.log'
