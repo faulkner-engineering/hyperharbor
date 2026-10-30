@@ -37,11 +37,11 @@ jobs:
       # Once signing is configured, a release that cannot sign fails instead of shipping unsigned files.
       HH_SIGNING_REQUIRED: ${{ vars.SIGNING_ENDPOINT != '' && '1' || '0' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -85,7 +85,7 @@ jobs:
       # OIDC: GitHub's token for the "release" environment is exchanged for an Azure one; sign.ps1 uses the Azure CLI login.
       - name: Azure login for code signing
         if: vars.SIGNING_ENDPOINT != ''
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
