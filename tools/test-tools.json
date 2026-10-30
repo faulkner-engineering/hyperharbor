@@ -9,10 +9,10 @@
     "licenseUrl": "https://github.com/rclone/rclone/blob/master/COPYING"
   },
   "previousRelease": {
-    "version": "0.2.4",
+    "version": "0.2.5",
     "purpose": "Compatibility tests: the current client against this host, and this release's client (built from its tag) against the current host. Move it to each new stable release.",
-    "tag": "v0.2.4",
-    "url": "https://github.com/faulkner-engineering/hyperharbor/releases/download/v0.2.4/HyperHarbor-Host-0.2.4.exe",
-    "exeSha256": "d06afdad74041240921277dd1d424d50db7fade4145f0037099e9de8874cae79"
+    "tag": "v0.2.5",
+    "url": "https://github.com/faulkner-engineering/hyperharbor/releases/download/v0.2.5/HyperHarbor-Host-0.2.5.exe",
+    "exeSha256": "dd96ab1d8a7e0c5e4a2bb06477e8c3a658900de0c0ebf292184c0581f58396b8"
   }
 }
