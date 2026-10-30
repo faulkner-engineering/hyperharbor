@@ -10,6 +10,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.5-beta.2] - 2026-10-30 (API 1.37.0)
+
+The first signed release: the same features as 0.2.5-beta.1, with the host executable, the client installer, and
+the files the installer puts on the PC signed by Faulkner Engineering LLC. No API or behavior change; update both the
+host and the client to try it.
+
 ### Changed
 - Releases are code signed with Azure Artifact Signing: the host executable, the client installer, and everything
   the installer puts on the PC (the client, its camera DLL, and the uninstaller). Windows SmartScreen and Defender
