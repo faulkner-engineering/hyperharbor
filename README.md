@@ -31,6 +31,34 @@ Manage Hyper-V virtual machines on a home PC and connect to them in one click fr
 - **Performance mode** (GPU partitioning and Remote Desktop tuning), camera sharing for concurrent sessions, backups with
   Kopia, moving and copying VMs between hosts, Tailscale, and self-updating host and client.
 
+## How it compares
+
+HyperHarbor does not replace Remote Desktop. It uses Remote Desktop and automates everything around it, so the fair
+question is why not use one of the existing options.
+
+| | Plain RDP | RD Gateway | Parsec or Moonlight | HyperHarbor |
+| --- | --- | --- | --- | --- |
+| Runs on | Any Windows | Windows Server | Any Windows | Windows 10 or 11 Pro with Hyper-V |
+| Port exposed to the internet | Only if you forward one | Yes, 443 | No for Parsec (relayed); Moonlight needs a VPN or a forwarded port | No; your LAN or Tailscale |
+| Credentials | Typed or saved on each device | Typed on each device | Parsec account, or Moonlight PIN pairing | Paired once per device; a one-time password per connection, never stored |
+| Host can sleep | No | No | No | Yes, woken on demand |
+| Creates and provisions VMs | No | No | No | Yes, unattended from an ISO, with setup profiles |
+| Backups, restore, moving between hosts | No | No | No | Yes |
+| Graphics-heavy work (games, CAD) | Adequate | Adequate | Best in class | Adequate (Remote Desktop) |
+| Works from a borrowed PC with nothing installed | Yes | Yes | Parsec has a browser client | No; the client must be installed |
+| Open source | Not applicable | Not applicable | Moonlight yes, Parsec no | Yes, Apache 2.0 |
+
+Where each one is the better choice:
+
+- **Plain RDP**: one VM on your LAN that is always on. Thirty seconds to set up, nothing to install.
+- **RD Gateway**: you already run Windows Server and want the built-in clients to reach your machines from anywhere.
+- **Parsec and Moonlight**: the display matters most. They stream games and video better than Remote Desktop will.
+- **Proxmox**: a dedicated server. HyperHarbor is for the Windows PC you already have, which stays a normal PC.
+
+HyperHarbor is for a workstation that lives in a VM: it builds the VM, backs it up, moves it between machines, lets
+the host sleep, and gets you into it from any paired device without a password to remember. If you do not need those,
+you do not need HyperHarbor.
+
 ## Install
 
 HyperHarbor has two parts: the **host**, on the PC that runs Hyper-V, and the **client**, on each PC you connect from.
