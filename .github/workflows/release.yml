@@ -13,12 +13,21 @@ name: Release
 # while Tauri signs the client executable and the installer, each before the hash or signature that covers it is
 # made (docs/development.md, Code signing). The federated credential's subject is the "release" environment, since a
 # tag cannot be named with a wildcard there.
+#
+# Publishing a stable release also submits it to Windows Package Manager (the winget job): one pull request per package
+# to microsoft/winget-pkgs. Drafts and prereleases never reach winget.
 
 on:
   push:
     tags: ["v*"]
   release:
     types: [published]
+  # Re-submits a published stable release to winget when the winget job failed and its run can no longer be re-run.
+  workflow_dispatch:
+    inputs:
+      winget-tag:
+        description: Published stable release tag to submit to winget (for example v0.2.6)
+        required: true
 
 permissions:
   contents: write
@@ -193,3 +202,51 @@ jobs:
           jq '.channel = "beta"' manifest/latest.json > manifest/latest.beta.json
           mv manifest/latest.beta.json manifest/latest.json
           gh release upload channel-beta manifest/latest.json manifest/client-latest.json --repo "$REPO" --clobber
+
+  # A published stable release goes to Windows Package Manager: a pull request to microsoft/winget-pkgs for each package,
+  # from the owner's fork (tylerfaulkner/winget-pkgs) with the WINGET_TOKEN secret (docs/development.md, winget). The
+  # action (komac) starts from the newest version already in winget-pkgs and changes the version, installer URL, hash,
+  # and release date, so the first version of each package was submitted by hand. It runs after the beta channel job,
+  # because the assets are public once the release is. Prereleases never get here; a draft is not a published release.
+  winget:
+    # A manual run skips beta-channel, and a skipped need would skip this job too without the result check.
+    if: >-
+      !cancelled() && needs.beta-channel.result != 'failure' && (
+      (github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v'))
+      || github.event_name == 'workflow_dispatch')
+    needs: beta-channel
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - identifier: FaulknerEngineering.HyperHarbor.Host
+            installers: '^HyperHarbor-Host-[0-9.]+\.exe$'
+          - identifier: FaulknerEngineering.HyperHarbor.Client
+            installers: '^HyperHarbor_[0-9.]+_x64-setup\.exe$'
+    steps:
+      - name: The release is published and stable
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.winget-tag }}
+        run: |
+          release="$(gh release view "$TAG" --repo "$REPO" --json isDraft,isPrerelease)"
+          if [ "$(jq -r .isDraft <<< "$release")" = "true" ] || [ "$(jq -r .isPrerelease <<< "$release")" = "true" ]; then
+            echo "::error::$TAG is a draft or a prerelease; only published stable releases go to winget."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Submit to winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+        with:
+          identifier: ${{ matrix.identifier }}
+          version: ${{ steps.release.outputs.version }}
+          release-tag: ${{ steps.release.outputs.tag }}
+          installers-regex: ${{ matrix.installers }}
+          release-notes-url: https://github.com/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+          fork-user: tylerfaulkner

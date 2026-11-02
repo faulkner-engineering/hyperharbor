@@ -10,6 +10,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- Windows Package Manager packages: `winget install FaulknerEngineering.HyperHarbor.Host` and
+  `winget install FaulknerEngineering.HyperHarbor.Client` (available once the first submission is merged into the winget
+  repository). Each stable release is submitted to winget when it is published; prereleases are not.
+  `winget uninstall` of the host keeps pairings and settings in `%ProgramData%\HyperHarbor`.
+
 ### Changed
 - The host's entry in Settings > Apps > Installed apps now has a quiet uninstall command (`uninstall --quiet`) and a
   link to faulkner.engineering, and its version follows the host's own updates, so Windows Package Manager (winget)

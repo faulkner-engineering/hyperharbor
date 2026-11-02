@@ -175,6 +175,14 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   tauri.conf.json; the private key and its password are the repository secrets TAURI_SIGNING_PRIVATE_KEY and
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD (losing the key means installed clients cannot update; back it up). UI:
   ClientUpdate.svelte in the sidebar.
+- packaging/winget: the Windows Package Manager packages (FaulknerEngineering.HyperHarbor.Host and .Client).
+  New-WingetManifests.ps1 writes their manifests for a release in the winget-pkgs layout; schemas/1.12.0 holds the
+  winget-cli manifest schemas the end-to-end test (Host.Tests/Packaging/WingetManifestTests) validates against; README.md
+  covers the installers' winget behavior and the local checks. The release workflow's winget job submits each published
+  stable release (docs/development.md, winget). The host's side is Installation/UninstallEntry (the Installed apps
+  entry winget correlates by its key name, HyperHarborHost; UpdateRunCommand keeps its DisplayVersion current).
+- packaging/host: Start-HyperHarbor.ps1 and Stop-HyperHarbor.ps1, the portable development run that package.ps1 copies
+  to dist\host.
 - docs/pairing.md: the SPAKE2 pairing protocol; both implementations must match it and Spake2Vectors.json
 - tools/trailer: records the README trailer (docs/images/hyperharbor-trailer.webp, an animated WebP).
   make-trailer.ps1 starts the portable client with the WebView2 debug port; drive.mjs runs the profile, Create VM, and
