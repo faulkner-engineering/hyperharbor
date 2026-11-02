@@ -10,6 +10,29 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- Windows Package Manager packages: `winget install FaulknerEngineering.HyperHarbor.Host` and
+  `winget install FaulknerEngineering.HyperHarbor.Client` (available once the first submission is merged into the winget
+  repository). Each stable release is submitted to winget when it is published; prereleases are not.
+  `winget uninstall` of the host keeps pairings and settings in `%ProgramData%\HyperHarbor`.
+
+### Changed
+- The host's entry in Settings > Apps > Installed apps now has a quiet uninstall command (`uninstall --quiet`) and a
+  link to faulkner.engineering, and its version follows the host's own updates, so Windows Package Manager (winget)
+  and Settings show the version that is running.
+
+### Fixed
+- `HyperHarbor.Host.exe install --quiet` and `uninstall --quiet` showed progress and result dialogs when started
+  without a terminal (by winget, a script, or a deployment tool). They now show no dialog.
+- Uninstalling the host from Settings or with the installed `HyperHarbor.Host.exe uninstall` returned at once while
+  the removal went on in the background, so a script or winget reported success before the host was removed, and
+  never learned of a failure. It now waits for the removal and returns its exit code.
+- Uninstalling the host left the Console idle sleep schedule's tasks (HyperHarbor\Console sleep and Console wake), which
+  then ran a deleted program and kept waking the PC, and an empty HyperHarbor folder in Task Scheduler. Uninstall now
+  removes both tasks and the folder.
+- Uninstalling the client with winget (or any tool that runs its quiet uninstall command) reported success while the
+  uninstaller was still running. The client's quiet uninstall now finishes before it returns.
+
 ## [0.2.5] - 2026-10-30 (API 1.37.0)
 
 The stable release of everything in 0.2.5-beta.1 and 0.2.5-beta.2 below: smaller backups, above all for VMs whose disks

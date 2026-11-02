@@ -74,8 +74,8 @@ Both are on the [Releases](https://github.com/faulkner-engineering/hyperharbor/r
 
 ### Host
 
-1. Download `HyperHarbor-Host-<version>.exe` and double-click it. The builds are not code signed yet, so Windows
-   SmartScreen may warn: choose **More info** > **Run anyway**.
+1. Download `HyperHarbor-Host-<version>.exe` and double-click it. Releases since 0.2.5 are signed by Faulkner
+   Engineering LLC.
 2. Approve the administrator prompt. HyperHarbor installs a Windows service, allows TCP 48443
    through the firewall on Private networks, and adds **HyperHarbor Host** to the Start menu.
 3. Open **HyperHarbor Host** and set an **admin passphrase**. Creating, deleting, and other risky actions from a client
@@ -93,6 +93,17 @@ To remove the host, uninstall **HyperHarbor Host** from Settings > Apps > Instal
 
 Since the April 2026 Windows update, Remote Desktop asks what each connection may use. **Trust HyperHarbor connections**
 at the bottom of the sidebar (one administrator approval) signs HyperHarbor's connections so it does not ask.
+
+### With winget
+
+Available once the first submission to the Windows Package Manager repository is merged:
+
+```powershell
+winget install FaulknerEngineering.HyperHarbor.Host     # on the Hyper-V PC; one administrator prompt
+winget install FaulknerEngineering.HyperHarbor.Client   # on each PC you connect from
+```
+
+`winget uninstall FaulknerEngineering.HyperHarbor.Host` keeps your pairings and settings in `%ProgramData%\HyperHarbor`.
 
 Both parts update themselves: the host from its window or a client's **Host** menu > **Updates**, the client from the
 sidebar. The **beta** channel gets prereleases.

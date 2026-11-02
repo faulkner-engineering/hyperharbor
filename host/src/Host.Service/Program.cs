@@ -78,9 +78,9 @@ if (!isWindowsService)
         case HostMode.Launcher:
             return await Launcher.RunAsync();
         case HostMode.Install:
-            return await InstallCommand.InstallAsync(args, attached || redirected ? new ConsoleInstallUi() : new DialogInstallUi());
+            return await InstallCommand.InstallAsync(args, InstallCommand.ChooseUi(args, attached || redirected));
         case HostMode.Uninstall:
-            return await InstallCommand.UninstallAsync(args, attached || redirected ? new ConsoleInstallUi() : new DialogInstallUi());
+            return await InstallCommand.UninstallAsync(args, InstallCommand.ChooseUi(args, attached || redirected));
         case HostMode.SaveWakeDiagnostics:
             return WakeDiagnosticsCommand.Run(args);
         case HostMode.Help:

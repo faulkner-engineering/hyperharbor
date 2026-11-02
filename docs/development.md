@@ -137,6 +137,52 @@ fetched by fetch-tools.ps1 -Tool artifactSigning) and checks the result with Get
   signed file), the client, the camera DLL, five NSIS plug-in DLLs, the uninstaller, the setup executable, and the
   portable copy.
 
+## winget (Windows Package Manager)
+
+Two packages in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs), FaulknerEngineering.HyperHarbor.Host
+and FaulknerEngineering.HyperHarbor.Client, install the assets of each published stable release. What the installers do
+for winget, the manifests, and the local checks are in [packaging/winget/README.md](../packaging/winget/README.md);
+New-WingetManifests.ps1 there writes the manifests for a version. Prereleases and drafts never reach winget.
+
+- One-time setup (the owner's):
+  1. Fork microsoft/winget-pkgs to github.com/tylerfaulkner (the release workflow's fork-user).
+  2. Create a classic personal access token on that account with the public_repo scope (fine-grained tokens are not
+     supported by the action). Adding the workflow scope lets the action sync the fork when winget-pkgs changes its own
+     workflow files; without it, such a sync fails ("does not have the correct permissions to execute UpdateRef") until
+     the fork is synced from its GitHub page, then the job is re-run.
+  3. Store it as the repository secret WINGET_TOKEN (Settings, Secrets and variables, Actions). The token expires;
+     renew it before then, or the winget job fails.
+- First submission of each package (by hand, once; the workflow can only update a package that already exists):
+  1. After publishing the release, make and check the manifests:
+     `powershell -ExecutionPolicy Bypass -File packaging\winget\New-WingetManifests.ps1 -Version X.Y.Z`, then
+     `winget validate --manifest packaging\winget\out\manifests\f\FaulknerEngineering\HyperHarbor\Host\X.Y.Z` and the
+     same for Client. Optionally install both from the manifests (the README's live tests).
+  2. Install wingetcreate (`winget install Microsoft.WingetCreate`) and submit each folder; it opens a pull request from
+     the token account's fork:
+     `wingetcreate submit --token <token> packaging\winget\out\manifests\f\FaulknerEngineering\HyperHarbor\Host\X.Y.Z`
+     `wingetcreate submit --token <token> packaging\winget\out\manifests\f\FaulknerEngineering\HyperHarbor\Client\X.Y.Z`
+  3. Sign the Microsoft CLA when the bot asks on the first pull request.
+  What happens to a new package: the validation pipeline checks the manifests against the schema, downloads the
+  installer and compares its SHA-256, scans it for malware (SmartScreen and Defender; the signature helps), then
+  installs and uninstalls it silently in a clean VM and checks that an uninstall entry appears that matches the
+  manifest (DisplayVersion equal to PackageVersion, the ProductCode). An installer that shows a dialog or waits for input
+  fails there. A new package also gets the New-Package label and a moderator's review: that the identifier, publisher,
+  and package names are right and consistent with the publisher's site, that it is not a duplicate of an existing
+  package, that the license and URLs are correct and reachable, and that the installer is the publisher's own release.
+  Answer the moderators in the pull request; a change there is a new commit to the same branch.
+- Later versions: publishing a stable release runs the release workflow's winget job (after the beta-channel job), once
+  per package. vedantmgoyal9/winget-releaser (pinned to a commit; komac underneath) copies the newest manifest in
+  winget-pkgs and changes the version, installer URL, SHA-256, and release date, then opens the pull request from
+  tylerfaulkner/winget-pkgs. Fields the first submission set (switches, scope, descriptions) carry over; to change them,
+  submit a version by hand with wingetcreate as above.
+- When the winget job fails: read its log (a common cause is an expired token or a fork that needs syncing; a pull
+  request for the same version that is already open makes it fail too). Fix the cause, then in Actions open the
+  release's Release run and choose Re-run failed jobs, which repeats only the package that failed. If that run can no
+  longer be re-run, choose Actions, Release, Run workflow, with winget-tag set to the release tag (vX.Y.Z); the job
+  refuses drafts and prereleases. By hand instead: `wingetcreate update FaulknerEngineering.HyperHarbor.Host --version X.Y.Z
+  --urls https://github.com/faulkner-engineering/hyperharbor/releases/download/vX.Y.Z/HyperHarbor-Host-X.Y.Z.exe --submit
+  --token <token>` (the client the same with its installer).
+
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
 run npm run gen:api, and lint. OpenApiEnumTests fail if C# enums or the API version drift from api.yaml.
@@ -244,5 +290,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   ("could not connect to the guest", "ConvertTo-SecureString ... module could not be loaded").
   PowerShellDirectRunner scripts must answer {ok, result} or {ok:false, error, stage}; any other keys read as null or
   "Unknown error.".
+- winget packages: packaging\winget\Test-WingetLive.ps1 (as a standard user; installs, upgrades, self-updates, and
+  uninstalls the real host and client from local manifests, one UAC prompt per host step, about 30 minutes with the
+  self-update) and Test-WingetSandbox.ps1 (inside Windows Sandbox through winget-pkgs' SandboxTest.ps1). Setup and the
+  2026-11-02 results: packaging/winget/README.md, Live tests.
 - VM console automation: Msvm_Keyboard.TypeText can drop characters, so send TypeKey one key at a time.
   Read the screen with GetVirtualSystemThumbnailImage (RGB565) and confirm a prompt is gone before moving on.

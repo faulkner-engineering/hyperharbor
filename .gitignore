@@ -33,3 +33,4 @@ playwright-report/
 
 # Trailer recordings (tools/trailer)
 tools/trailer/out/
+packaging/winget/out/

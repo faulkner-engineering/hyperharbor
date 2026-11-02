@@ -18,9 +18,16 @@ internal static class InstallCommand
     public const int ExitFailed = 1;
     public const int ExitCancelled = 2;
 
+    /// <summary>No dialogs and no questions, even without a terminal (winget starts the installer without one).</summary>
+    public const string QuietSwitch = "--quiet";
+
     private const string Succeeded = "OK";
     private const string FailedPrefix = "FAILED: ";
     private const int ErrorCancelled = 1223;
+
+    /// <summary>Prints to the terminal when there is one or when <see cref="QuietSwitch"/> is given; otherwise dialogs.</summary>
+    public static IInstallUi ChooseUi(string[] args, bool startedFromConsole) =>
+        startedFromConsole || args.Contains(QuietSwitch) ? new ConsoleInstallUi() : new DialogInstallUi();
 
     public static async Task<int> InstallAsync(string[] args, IInstallUi ui)
     {
@@ -35,7 +42,7 @@ internal static class InstallCommand
                     version,
                     options.Port,
                     TrayUser.Parse(options.TrayUser ?? throw new ArgumentException("The elevated installer needs --tray-user.")),
-                    options.ParentProcessId));
+                    options.ParentProcessIds));
         }
 
         var installed = layout.CurrentVersion;
@@ -96,23 +103,27 @@ internal static class InstallCommand
         if (options.Elevated)
         {
             return await RunElevatedPartAsync(options.ResultFile!, progress =>
-                new HostInstaller(layout, progress).UninstallAsync(options.RemoveData, options.ParentProcessId));
+                new HostInstaller(layout, progress).UninstallAsync(options.RemoveData, options.ParentProcessIds));
         }
 
-        // The installed executable cannot delete its own folder, so a temporary copy does the work.
+        // The installed executable cannot delete its own folder, so a temporary copy does the work. This one waits
+        // for it and returns its exit code: winget and Settings wait for the command they started, and a winget
+        // uninstall that returned at once reported success before anything was removed. The copy keeps this process
+        // running (--parent-pid) and moves its locked executable aside (HostInstaller).
         var self = Environment.ProcessPath!;
         if (layout.Contains(self))
         {
             var copy = Path.Combine(Path.GetTempPath(), $"HyperHarbor.Host-uninstall-{Guid.NewGuid():N}.exe");
             File.Copy(self, copy);
             var start = new ProcessStartInfo(copy) { UseShellExecute = false };
-            foreach (var argument in args.Prepend(HostCommandLine.UninstallVerb))
+            foreach (var argument in args.Prepend(HostCommandLine.UninstallVerb).Concat(["--parent-pid", Environment.ProcessId.ToString(CultureInfo.InvariantCulture)]))
             {
                 start.ArgumentList.Add(argument);
             }
 
-            using var _ = Process.Start(start);
-            return ExitSucceeded;
+            using var process = Process.Start(start)!;
+            await process.WaitForExitAsync();
+            return process.ExitCode;
         }
 
         var text = options.RemoveData
@@ -127,6 +138,11 @@ internal static class InstallCommand
         if (options.RemoveData)
         {
             arguments.Add("--remove-data");
+        }
+
+        foreach (var parent in options.ParentProcessIds)
+        {
+            arguments.AddRange(["--parent-pid", parent.ToString(CultureInfo.InvariantCulture)]);
         }
 
         var (succeeded, message) = await ui.RunAsync("Removing HyperHarbor", progress => RunElevatedAsync(arguments, progress));
@@ -240,8 +256,9 @@ internal static class InstallCommand
     }
 
     /// <summary>
-    /// Command-line options. Public: --port, --root, --quiet, --remove-data. Internal (the elevated copy):
-    /// --elevated, --tray-user, --result-file, --parent-pid.
+    /// Command-line options. Public: --port, --root, --quiet, --remove-data. Internal (the elevated copy and the
+    /// uninstall copy): --elevated, --tray-user, --result-file, and --parent-pid, once for each waiting process that
+    /// the elevated steps must not stop.
     /// </summary>
     internal sealed record Options(
         int Port = HostInstaller.DefaultPort,
@@ -250,9 +267,10 @@ internal static class InstallCommand
         bool RemoveData = false,
         bool Elevated = false,
         string? TrayUser = null,
-        string? ResultFile = null,
-        int? ParentProcessId = null)
+        string? ResultFile = null)
     {
+        public IReadOnlyList<int> ParentProcessIds { get; init; } = [];
+
         public static Options Parse(string[] args)
         {
             var options = new Options();
@@ -263,12 +281,12 @@ internal static class InstallCommand
                 {
                     "--port" => options with { Port = int.TryParse(Value(), NumberStyles.None, CultureInfo.InvariantCulture, out var port) && port is > 0 and < 65536 ? port : throw new ArgumentException("--port needs a port number.") },
                     "--root" => options with { Root = Path.GetFullPath(Value()) },
-                    "--quiet" => options with { Quiet = true },
+                    QuietSwitch => options with { Quiet = true },
                     "--remove-data" => options with { RemoveData = true },
                     "--elevated" => options with { Elevated = true },
                     "--tray-user" => options with { TrayUser = Value() },
                     "--result-file" => options with { ResultFile = Value() },
-                    "--parent-pid" => options with { ParentProcessId = int.Parse(Value(), CultureInfo.InvariantCulture) },
+                    "--parent-pid" => options with { ParentProcessIds = [.. options.ParentProcessIds, int.Parse(Value(), CultureInfo.InvariantCulture)] },
                     var unknown => throw new ArgumentException($"Unknown option {unknown}. Run HyperHarbor.Host.exe --help."),
                 };
             }
