@@ -153,10 +153,15 @@ function Uninstall-Both {
     Test-HostRemoved
     $code = Invoke-Winget 'Uninstall the client' @('uninstall', '--name', 'HyperHarbor', '--exact', '--disable-interactivity')
     Test-Check 'client uninstall exit code' ($code -eq 0) "($code)"
-    # NSIS uninstallers copy themselves to %TEMP% and exit, so winget returns before the copy has finished.
+    # The client's QuietUninstallString runs the uninstaller in place (_?=), so it is done when winget returns (a client
+    # installed before 0.2.6 has none, and its uninstaller returns early). Only uninstall.exe, which cannot delete
+    # itself while running, goes a moment later.
+    $folder = Join-Path $env:LOCALAPPDATA 'HyperHarbor'
+    Test-Check 'client uninstall entry removed when winget returns' (-not (Test-Path -LiteralPath $clientKey))
+    Test-Check 'client removed when winget returns' (-not (Test-Path -LiteralPath (Join-Path $folder 'hyperharbor-client.exe')))
     $watch = [Diagnostics.Stopwatch]::StartNew()
-    while ((Test-Path -LiteralPath $clientKey) -and $watch.Elapsed.TotalSeconds -lt 30) { Start-Sleep -Milliseconds 250 }
-    Test-Check 'client uninstall entry removed' (-not (Test-Path -LiteralPath $clientKey)) "($([Math]::Round($watch.Elapsed.TotalSeconds, 1)) s after winget returned)"
+    while ((Test-Path -LiteralPath (Join-Path $folder 'uninstall.exe')) -and $watch.Elapsed.TotalSeconds -lt 40) { Start-Sleep -Milliseconds 250 }
+    Test-Check 'client uninstall.exe removed afterwards' (-not (Test-Path -LiteralPath (Join-Path $folder 'uninstall.exe'))) "($([Math]::Round($watch.Elapsed.TotalSeconds, 1)) s)"
 }
 
 function Install-Host([string]$Step, [string]$Version) {

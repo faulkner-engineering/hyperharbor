@@ -628,8 +628,15 @@ section for an area before changing it: most of these were learned from a failur
   return 0 at once: with the published 0.2.5, `winget uninstall` reported "Successfully uninstalled" after 1 s while the
   service, entry, and folder were all still there. It now waits for the copy. A running executable cannot be deleted
   but can be renamed, so the copy moves the waiting one to %TEMP% and deletes it at restart.
-- Tauri's NSIS uninstaller also returns before it is done (NSIS copies the uninstaller to %TEMP% and starts it): winget
-  reports success and the HKCU entry disappears about 5 s later. Accepted; it is NSIS's design, not ours.
+- Tauri's NSIS uninstaller also returned before it was done (NSIS copies the uninstaller to %TEMP% and starts it): winget
+  reported success and the HKCU entry disappeared about 5 s later. winget prefers QuietUninstallString for nullsoft too,
+  so the installer hooks (client/src-tauri/windows/installer-hooks.nsh, Tauri's bundle.windows.nsis.installerHooks)
+  write one that runs uninstall.exe in place (_?=<dir>, the last argument, unquoted even with spaces); winget then
+  returned in under a second with the entry and the program gone. Found on the way: Tauri's installer runs the old
+  uninstaller with _?= before every reinstall and update and then writes into the same folder, so the self-deletion
+  runs only for our /CLEANUP; ExecShell starts the cleanup cmd in the output folder, the install folder, which then
+  cannot be removed (SetOutPath $TEMP first); and Tauri remembers a /D= install folder in HKCU\Software\Faulkner
+  Engineering LLC\HyperHarbor even after uninstalling, so later installs go there.
 - `winget settings --enable LocalManifestFiles` run through over-the-shoulder elevation (a standard user, an
   administrator's credentials) turns it on for the administrator's account only; the standard user still saw it off. The
   machine-wide switch is the policy value HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller\EnableLocalManifestFiles

@@ -580,7 +580,9 @@ per-device VM accounts and a user management UI.
    - Installer fixes found by reading and then running under winget: `--quiet` chose dialogs whenever no terminal was
      attached (winget starts installers without one); the installed executable's uninstall returned at once while a
      temporary copy worked (it now waits and moves its own locked file aside); uninstall left the sleep schedule's two
-     tasks and the empty \HyperHarbor task folder. The uninstall entry gained QuietUninstallString and URLInfoAbout, and
+     tasks and the empty \HyperHarbor task folder. The client's NSIS uninstaller returned before it was done (it
+     restarts itself from %TEMP%); Tauri installer hooks now write a QuietUninstallString that runs it in place (_?=)
+     and remove uninstall.exe afterwards, only when started with /CLEANUP, since Tauri's reinstall also runs it in place. The uninstall entry gained QuietUninstallString and URLInfoAbout, and
      UpdateRunCommand sets DisplayVersion after every helper run, because winget decides upgrades from it.
    - packaging/winget: New-WingetManifests.ps1 (manifest schema 1.12.0, the newest in winget-pkgs; the three winget-cli
      schemas are vendored for WingetManifestTests), Test-WingetLive.ps1 (opt-in live test as a standard user),

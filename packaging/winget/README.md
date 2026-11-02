@@ -13,7 +13,7 @@ published stable GitHub release:
 | Silent switches | `install --quiet` (also for silent with progress) | `/S` |
 | Upgrade | the same command: `install` updates an installed host in place | the same installer |
 | Uninstall key (ProductCode) | `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\HyperHarborHost` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\HyperHarbor` |
-| Uninstall | `QuietUninstallString`: `"<root>\current\HyperHarbor.Host.exe" uninstall --quiet` | `UninstallString` plus `/S`, which winget adds for nullsoft |
+| Uninstall | `QuietUninstallString`: `"<root>\current\HyperHarbor.Host.exe" uninstall --quiet` | `QuietUninstallString`: `"<dir>\uninstall.exe" /S /CLEANUP _?=<dir>` (since 0.2.6) |
 
 The bare identifier `FaulknerEngineering.HyperHarbor` is reserved and not used by either package.
 
@@ -37,7 +37,13 @@ work once the first submission of each package is merged into winget-pkgs.
   `current` points at after every run, so `winget list` and `winget upgrade` see the version that is running, not the
   one winget installed.
 - Client: Tauri's NSIS installer installs for the current user in `%LOCALAPPDATA%\HyperHarbor` and writes its uninstall
-  entry under HKCU. It needs no elevation, and the client updates itself as before.
+  entry under HKCU. It needs no elevation, and the client updates itself as before. Run plainly, an NSIS uninstaller
+  copies itself to `%TEMP%`, starts the copy, and exits, so winget reported success while the uninstall was still going
+  on. Since 0.2.6 the installer hooks (`client/src-tauri/windows/installer-hooks.nsh`) write a `QuietUninstallString`
+  that runs it in place with `_?=<dir>`, which winget uses: the entry and the program are gone when winget returns, and
+  `/CLEANUP` has a hidden `cmd` delete `uninstall.exe` (which cannot delete itself) and the folder, if empty, a second
+  or two later. Tauri's own reinstall and update also run the old uninstaller in place, without `/CLEANUP`, so they
+  are unaffected. Settings' Uninstall button still uses `UninstallString`, unchanged.
 - Both are code signed with Azure Artifact Signing (signer `CN=Faulkner Engineering LLC`). The 1.12.0 manifest schema has
   no field for an executable's signer (`SignatureSha256` is for MSIX only), so the manifests do not record it.
 
@@ -159,5 +165,9 @@ directly under the mapped folder is the standard run: `pwsh -File Tools\SandboxT
 - Windows Sandbox (Windows 11 Enterprise 26100, a fresh winget, elevated so no prompts): host 0.2.6 installed in 12 s
   with no window but the test's own, uninstalled in 5 s leaving only the data folder; client 0.2.5 installed in 6 s,
   started, and uninstalled.
+- Client quiet uninstall (installer hooks, a full client build): `winget uninstall` returned in under a second with the
+  entry, the client, and the camera DLL gone (before: success first, the entry gone about 5 s later); `uninstall.exe`
+  followed within 2.3 s, and an install folder holding nothing else was removed. An upgrade from the published 0.2.4
+  and a reinstall over itself kept `uninstall.exe` and the client, which started.
 - The published 0.2.5 host is not winget-ready (it predates this phase): its uninstall returned 0 after 1 s with
   nothing removed. Submit the first release that carries this phase's installer changes.

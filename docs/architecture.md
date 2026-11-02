@@ -174,7 +174,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   turns on createUpdaterArtifacts, and copies the installer's .sig). The public key is plugins.updater.pubkey in
   tauri.conf.json; the private key and its password are the repository secrets TAURI_SIGNING_PRIVATE_KEY and
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD (losing the key means installed clients cannot update; back it up). UI:
-  ClientUpdate.svelte in the sidebar.
+  ClientUpdate.svelte in the sidebar. client/src-tauri/windows/installer-hooks.nsh (bundle.windows.nsis.installerHooks): the
+  QuietUninstallString that runs the uninstaller in place, so winget waits for it, and the cleanup of uninstall.exe afterwards.
 - packaging/winget: the Windows Package Manager packages (FaulknerEngineering.HyperHarbor.Host and .Client).
   New-WingetManifests.ps1 writes their manifests for a release in the winget-pkgs layout; Test-WingetLive.ps1 and
   Test-WingetSandbox.ps1 are the opt-in live tests (on this PC as a standard user, and inside Windows Sandbox); schemas/1.12.0 holds the
