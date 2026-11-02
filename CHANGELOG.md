@@ -10,6 +10,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-11-02 (API 1.37.0)
+
+Windows Package Manager packages for the host and the client, and the installer fixes they needed: quiet installs and
+uninstalls that show no dialog and wait until they are done, a complete host uninstall (including the sleep schedule's
+tasks), and an Installed apps entry whose version follows the host's own updates. No API change; update the host to get
+the uninstall fixes. This is the first release submitted to winget.
+
 ### Added
 - Windows Package Manager packages: `winget install FaulknerEngineering.HyperHarbor.Host` and
   `winget install FaulknerEngineering.HyperHarbor.Client` (available once the first submission is merged into the winget
