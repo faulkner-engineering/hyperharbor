@@ -148,6 +148,9 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
 
         FirewallRule.Delete();
         UpdateTask.Delete();
+        // A sleep schedule's tasks would otherwise run a deleted executable and keep waking the PC.
+        new PowerScheduleTasks(layout).Remove();
+        DeleteTaskFolder();
         UninstallEntry.Delete();
         StartMenuShortcut.Delete();
         if (trayUser is not null)
@@ -222,6 +225,26 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
         }
 
         progress.Report($"{layout.Root} will be deleted when Windows restarts");
+    }
+
+    /// <summary>
+    /// Deletes the \HyperHarbor task folder, which schtasks leaves behind when it deletes the last task in it. The
+    /// Task Scheduler refuses to delete a folder that still holds a task, so one registered by something else stays.
+    /// </summary>
+    private static void DeleteTaskFolder()
+    {
+        try
+        {
+            var type = Type.GetTypeFromProgID("Schedule.Service", throwOnError: true)!;
+            var service = Activator.CreateInstance(type)!;
+            type.InvokeMember("Connect", System.Reflection.BindingFlags.InvokeMethod, null, service, null);
+            var root = type.InvokeMember("GetFolder", System.Reflection.BindingFlags.InvokeMethod, null, service, [@"\"])!;
+            root.GetType().InvokeMember("DeleteFolder", System.Reflection.BindingFlags.InvokeMethod, null, root, ["HyperHarbor", 0]);
+        }
+        catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is COMException)
+        {
+            // Missing, or not empty.
+        }
     }
 
     /// <returns>True when the service was running (or stopping) and is now stopped.</returns>

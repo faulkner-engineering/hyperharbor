@@ -27,6 +27,9 @@ note anything that needs action, such as updating the host, a new elevation requ
 - Uninstalling the host from Settings or with the installed `HyperHarbor.Host.exe uninstall` returned at once while
   the removal went on in the background, so a script or winget reported success before the host was removed, and
   never learned of a failure. It now waits for the removal and returns its exit code.
+- Uninstalling the host left the Console idle sleep schedule's tasks (HyperHarbor\Console sleep and Console wake), which
+  then ran a deleted program and kept waking the PC, and an empty HyperHarbor folder in Task Scheduler. Uninstall now
+  removes both tasks and the folder.
 
 ## [0.2.5] - 2026-10-30 (API 1.37.0)
 
