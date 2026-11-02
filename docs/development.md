@@ -290,5 +290,9 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   ("could not connect to the guest", "ConvertTo-SecureString ... module could not be loaded").
   PowerShellDirectRunner scripts must answer {ok, result} or {ok:false, error, stage}; any other keys read as null or
   "Unknown error.".
+- winget packages: packaging\winget\Test-WingetLive.ps1 (as a standard user; installs, upgrades, self-updates, and
+  uninstalls the real host and client from local manifests, one UAC prompt per host step, about 30 minutes with the
+  self-update) and Test-WingetSandbox.ps1 (inside Windows Sandbox through winget-pkgs' SandboxTest.ps1). Setup and the
+  2026-11-02 results: packaging/winget/README.md, Live tests.
 - VM console automation: Msvm_Keyboard.TypeText can drop characters, so send TypeKey one key at a time.
   Read the screen with GetVirtualSystemThumbnailImage (RGB565) and confirm a prompt is gone before moving on.

@@ -76,38 +76,88 @@ holds the three JSON schemas from [microsoft/winget-cli](https://github.com/micr
 
 ## Live tests
 
-These install the real packages, so run them on a test PC. Installing from a local manifest needs a setting that only
-an administrator can turn on, once:
+These install the real packages, so run them on a test PC with the HyperHarborHost service not installed.
+
+### Installs, upgrades, self-update, and uninstalls (Test-WingetLive.ps1)
+
+Installing from a local manifest needs an administrator setting. Under over-the-shoulder elevation (a standard user
+approving with an administrator's credentials) `winget settings --enable LocalManifestFiles` turns it on for the
+administrator's account only, so set the machine policy instead, once, elevated:
 
 ```powershell
-winget settings --enable LocalManifestFiles     # elevated
+reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller /v EnableLocalManifestFiles /t REG_DWORD /d 1 /f
 ```
 
-Then, as the user who will use HyperHarbor (not elevated):
+Then make manifests for every version the test names (New-WingetManifests.ps1; `-InstallerBaseUrl` and
+`-AllowPrerelease` for test builds served by any http server on loopback) and run, as the user who will use
+HyperHarbor, not elevated:
 
 ```powershell
-$m = 'packaging\winget\out\manifests\f\FaulknerEngineering\HyperHarbor'
-winget validate --manifest "$m\Host\0.2.5"
-winget validate --manifest "$m\Client\0.2.5"
-winget install --manifest "$m\Host\0.2.5" --accept-package-agreements --disable-interactivity
-winget install --manifest "$m\Client\0.2.5" --accept-package-agreements --disable-interactivity
-winget list --name HyperHarbor                  # both, with their versions
-Get-Service HyperHarborHost                     # Running
-winget uninstall --name "HyperHarbor Host" --disable-interactivity
+powershell -ExecutionPolicy Bypass -File packaging\winget\Test-WingetLive.ps1 -ManifestRoot <folder> `
+    -NewVersion 0.2.6 -PreviousVersion 0.2.5 -ClientVersion 0.2.5 -PreviousClientVersion 0.2.4 `
+    -SelfUpdateVersion 0.2.5-winget.1 -SelfUpdateTarget 0.2.5 [-Steps 1,2,3,4]
+```
+
+Step 1 installs both packages; step 2 uninstalls them; step 3 installs the previous releases and upgrades them; step 4
+installs a host older than the newest stable release, waits for it to update itself (about 15 minutes), and installs
+the new version over it. After each step it checks the exit codes, the service, the uninstall entries, the versions
+folder and current junction, the scheduled tasks and their folder, the data folder, `winget list`, and that the client
+starts. Each host install, upgrade, and uninstall asks for one UAC prompt; the client asks for none. The same by hand:
+
+```powershell
+winget install --manifest <Host folder> --accept-package-agreements --disable-interactivity
+winget install --manifest <Client folder> --accept-package-agreements --disable-interactivity
+winget list --name HyperHarbor
+winget upgrade --manifest <newer Host folder> --accept-package-agreements --disable-interactivity
+winget uninstall --name "HyperHarbor Host" --exact --disable-interactivity
 winget uninstall --name HyperHarbor --exact --disable-interactivity
-Get-Service HyperHarborHost                     # not found
-schtasks /query /tn "HyperHarbor\Update"        # not found
 ```
 
 Until a package is in winget-pkgs, `winget list` shows a package installed from a local manifest by its uninstall
 entry (`ARP\Machine\X64\HyperHarborHost`, `ARP\User\X64\HyperHarbor`) rather than by its identifier, and `winget
-upgrade` can only upgrade it with `--manifest`.
+upgrade` upgrades it only with `--manifest`.
 
-- Upgrade: install the previous release from its manifest, then `winget upgrade --manifest <newer folder>` (or
-  `winget install --manifest`). Afterwards `%ProgramFiles%\HyperHarbor\versions` holds both versions and `current`
-  points at the newer one, as after a self-update.
-- Self-update: with a host installed by winget, let the host update itself (or choose Install now), then check that
-  `winget list --name "HyperHarbor Host"` shows the new version.
-- Windows Sandbox: in a clone of winget-pkgs, `.\Tools\SandboxTest.ps1 <manifest folder>` installs the package in a
-  fresh Windows Sandbox, the way the winget-pkgs validation does. It needs the Windows Sandbox feature
-  (Containers-DisposableClientVM) and, in a VM, nested virtualization.
+### Windows Sandbox (Test-WingetSandbox.ps1)
+
+The winget-pkgs validation installs each package in a clean VM; Windows Sandbox does the same on this PC. Once,
+elevated, then restart (in a VM, the VM needs nested virtualization):
+
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All
+```
+
+`Tools\SandboxTest.ps1` from winget-pkgs needs PowerShell 7 (`winget install Microsoft.PowerShell`), and a mapped
+folder inside the winget-pkgs clone (otherwise it asks before mapping and fails without a console). Lay out a folder
+there with Test-WingetSandbox.ps1, `manifests\Host\<version>` and `manifests\Client\<version>` (one each; nested, so
+SandboxTest does not install them itself), and `serve\` with a test build its manifest points at on
+http://127.0.0.1:8765/ (the script serves it inside the sandbox), then:
+
+```powershell
+git clone --depth 1 --filter=blob:none --sparse https://github.com/microsoft/winget-pkgs; cd winget-pkgs
+git sparse-checkout set Tools
+pwsh -File Tools\SandboxTest.ps1 -MapFolder .\hh-sandbox `
+    -Script { & 'C:\Users\WDAGUtilityAccount\Desktop\hh-sandbox\Test-WingetSandbox.ps1' }
+```
+
+It writes `result.txt` into the folder: each winget command's exit code and output, the service, the uninstall
+entries, `winget list`, the windows open after each install (a dialog would show here), and what is left after each
+uninstall. SandboxTest.ps1 waits until the Sandbox window is closed. For a published release, a manifest folder
+directly under the mapped folder is the standard run: `pwsh -File Tools\SandboxTest.ps1 <manifest folder>`.
+
+### Results (2026-11-02, the development VM, Windows 11 build 26300, winget 1.29.380)
+
+0.2.6 test builds of this phase's host, with the published 0.2.4 and 0.2.5:
+
+- Fresh install (standard user): host 0.2.6 in 44 s with one UAC prompt, client 0.2.5 in 7 s with none; `winget list`
+  showed both, the service ran, and the client started. Uninstalling both removed the service, the update task, the
+  entries, and the install folder, and kept `%ProgramData%\HyperHarbor`.
+- Upgrade: published 0.2.5 installed with `winget install`, then `winget upgrade` to 0.2.6 in 49 s: `versions` held
+  0.2.5 and 0.2.6 with `current` on 0.2.6, as after a self-update. Client 0.2.4 to 0.2.5 likewise. The uninstall
+  afterwards also removed the task folder (all 32 checks passed).
+- Self-update: host 0.2.5-winget.1 from winget updated itself to the published 0.2.5 after its idle wait; the entry
+  and `winget list` then showed 0.2.5. `winget upgrade` to 0.2.6 over it worked, and so did its uninstall.
+- Windows Sandbox (Windows 11 Enterprise 26100, a fresh winget, elevated so no prompts): host 0.2.6 installed in 12 s
+  with no window but the test's own, uninstalled in 5 s leaving only the data folder; client 0.2.5 installed in 6 s,
+  started, and uninstalled.
+- The published 0.2.5 host is not winget-ready (it predates this phase): its uninstall returned 0 after 1 s with
+  nothing removed. Submit the first release that carries this phase's installer changes.

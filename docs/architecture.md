@@ -176,7 +176,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD (losing the key means installed clients cannot update; back it up). UI:
   ClientUpdate.svelte in the sidebar.
 - packaging/winget: the Windows Package Manager packages (FaulknerEngineering.HyperHarbor.Host and .Client).
-  New-WingetManifests.ps1 writes their manifests for a release in the winget-pkgs layout; schemas/1.12.0 holds the
+  New-WingetManifests.ps1 writes their manifests for a release in the winget-pkgs layout; Test-WingetLive.ps1 and
+  Test-WingetSandbox.ps1 are the opt-in live tests (on this PC as a standard user, and inside Windows Sandbox); schemas/1.12.0 holds the
   winget-cli manifest schemas the end-to-end test (Host.Tests/Packaging/WingetManifestTests) validates against; README.md
   covers the installers' winget behavior and the local checks. The release workflow's winget job submits each published
   stable release (docs/development.md, winget). The host's side is Installation/UninstallEntry (the Installed apps

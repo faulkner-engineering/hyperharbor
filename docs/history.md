@@ -571,3 +571,24 @@ per-device VM accounts and a user management UI.
      vTPM): by default PreventDeviceEncryption was 1 and C: unencrypted at Ready; with
      HH_MACHINE_ALLOW_ENCRYPTION=1 the value was absent and C: was already encrypting at Ready. VmBackupLiveTests
      passed with the FIXED-1M splitter. The client dialog and the profile checkbox were not clicked through.
+31. Windows Package Manager (2026-11-02; no API change; branch feat/winget). Specified by the user as "phase 29"
+   (the history's 29 and 30 were already taken). Two packages in microsoft/winget-pkgs from the release assets:
+   FaulknerEngineering.HyperHarbor.Host (exe, machine scope, elevatesSelf, `install --quiet`, ProductCode
+   HyperHarborHost) and FaulknerEngineering.HyperHarbor.Client (Tauri's NSIS installer: nullsoft, user scope, `/S`,
+   ProductCode HyperHarbor, its HKCU key). The bare FaulknerEngineering.HyperHarbor is reserved. No Scoop or
+   Chocolatey, and the self-updates are unchanged.
+   - Installer fixes found by reading and then running under winget: `--quiet` chose dialogs whenever no terminal was
+     attached (winget starts installers without one); the installed executable's uninstall returned at once while a
+     temporary copy worked (it now waits and moves its own locked file aside); uninstall left the sleep schedule's two
+     tasks and the empty \HyperHarbor task folder. The uninstall entry gained QuietUninstallString and URLInfoAbout, and
+     UpdateRunCommand sets DisplayVersion after every helper run, because winget decides upgrades from it.
+   - packaging/winget: New-WingetManifests.ps1 (manifest schema 1.12.0, the newest in winget-pkgs; the three winget-cli
+     schemas are vendored for WingetManifestTests), Test-WingetLive.ps1 (opt-in live test as a standard user),
+     Test-WingetSandbox.ps1 (inside Windows Sandbox through winget-pkgs' SandboxTest.ps1), README.md.
+   - The release workflow's winget job (winget-releaser pinned to a commit, from tylerfaulkner/winget-pkgs with the
+     WINGET_TOKEN secret) runs for published stable releases after the beta channel job, and by hand with a tag.
+     ReleaseWorkflowTests check its conditions and that each package's pattern matches only its installer.
+   - Verified live on the development VM (packaging/winget/README.md, Results): fresh install, uninstall, upgrade from
+     the published 0.2.5, self-update from a winget install (the entry and winget list followed it), and Windows
+     Sandbox, with 0.2.6 test builds. The published 0.2.5 is not winget-ready, so the first submission is the next
+     release. Not done here: the winget-pkgs pull requests (the owner's step).

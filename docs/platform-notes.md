@@ -619,3 +619,40 @@ section for an area before changing it: most of these were learned from a failur
   count: a Remote Desktop session to a VM never passes through the host, so the client
   checks in with GET /host every minute (sessions.rs) while mstsc windows it launched stay open, as long as the
   client app runs. Check with `powercfg /requests` (elevated): "HyperHarbor: ..." under SYSTEM.
+
+## winget packages (phase 31, 2026-11-02; winget 1.29.380 on the development VM, build 26300)
+- winget starts an exe installer with ShellExecute and no console. HyperHarbor.Host.exe is a GUI-subsystem executable, so
+  it found no terminal and chose dialogs: `install --quiet` still showed the progress and result dialogs. --quiet now
+  always prints instead (InstallCommand.ChooseUi).
+- winget waits only for the process it starts. The installed executable's uninstall used to start a temporary copy and
+  return 0 at once: with the published 0.2.5, `winget uninstall` reported "Successfully uninstalled" after 1 s while the
+  service, entry, and folder were all still there. It now waits for the copy. A running executable cannot be deleted
+  but can be renamed, so the copy moves the waiting one to %TEMP% and deletes it at restart.
+- Tauri's NSIS uninstaller also returns before it is done (NSIS copies the uninstaller to %TEMP% and starts it): winget
+  reports success and the HKCU entry disappears about 5 s later. Accepted; it is NSIS's design, not ours.
+- `winget settings --enable LocalManifestFiles` run through over-the-shoulder elevation (a standard user, an
+  administrator's credentials) turns it on for the administrator's account only; the standard user still saw it off. The
+  machine-wide switch is the policy value HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller\EnableLocalManifestFiles
+  (DWORD 1); winget --info then lists it under Group Policy.
+- With ElevationRequirement elevatesSelf, winget run by a standard user says "The installer will request to run as
+  administrator. Expect a prompt." and runs the host's installer unelevated; the installer's own elevation is the one UAC
+  prompt (install, upgrade, and uninstall each). The client shows none. A prompt nobody answered ended after about 10
+  minutes; the installer exited 2, and winget reported 0x8A15010C through the manifest's cancelledByUser mapping.
+- Until a package is in winget-pkgs, winget list shows a manifest install by its uninstall entry:
+  ARP\Machine\X64\HyperHarborHost and ARP\User\X64\HyperHarbor, with DisplayVersion as the version.
+- A standard user cannot see the host's SYSTEM tasks: schtasks /query says "The system cannot find the path specified",
+  and the TaskCache\Tree keys are unreadable (Test-Path still finds them, and the Update key stayed after the task was
+  deleted). The Task Scheduler COM API answers 0x80070002 for a missing task. schtasks /Delete leaves an empty
+  \HyperHarbor folder, which uninstall now deletes through that API, along with the sleep schedule's two tasks it used
+  to leave behind.
+- Self-update with a winget install: a host installed as 0.2.5-winget.1 updated itself to the published 0.2.5 after its
+  10 idle minutes, and the helper set the entry's DisplayVersion, so winget list showed 0.2.5. `winget upgrade` to
+  0.2.6 over that self-updated host left versions 0.2.5 and 0.2.6 with current on 0.2.6, as a self-update does.
+- The published 0.2.4 client installer took 114 s and 361 s under winget, against 7 s for 0.2.5; the cause was not
+  found (0.2.4 was the last unsigned release). winget logs "RemoveMotwIfApplicable failed ... 80070003" for every
+  local-manifest download; it is harmless.
+- Windows Sandbox with winget-pkgs' Tools\SandboxTest.ps1 (2026-11-02): it needs PowerShell 7 (under Windows PowerShell
+  5.1 its Invoke-WebRequest -Method Head throws a NullReferenceException, and -Script uses Out-File -Path), and it
+  asks before mapping a folder outside the winget-pkgs clone, which fails without a console. The sandbox user is an
+  elevated administrator, so the host installs there without a prompt. It cannot reach the host's loopback, so a test
+  build is served inside the sandbox (Test-WingetSandbox.ps1). SandboxTest.ps1 returns only after the window closes.
