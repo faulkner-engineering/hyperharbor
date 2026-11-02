@@ -92,12 +92,36 @@ public sealed class WingetManifestTests : IDisposable
 
         if (FindWinget() is { } winget)
         {
+            var version = Run(winget, "--version").Log.Trim();
             foreach (var package in new[] { "Host", "Client" })
             {
                 var (validated, validation) = Run(winget, "validate", "--manifest", Folder(output, package), "--disable-interactivity");
-                Assert.True(validated == 0, validation);
+                Assert.True(validated == 0 || OnlySchemaHeaderWarnings(validation), $"winget {version}: {validation}");
             }
         }
+    }
+
+    /// <summary>
+    /// A winget older than the 1.12.0 schema (CI's runner image) validates the manifests but warns that the
+    /// yaml-language-server header "does not match the expected pattern", and exits non-zero. The header is the one
+    /// winget-pkgs' own 1.12.0 manifests carry, and the schemas above check the content, so only that warning is accepted.
+    /// </summary>
+    internal static bool OnlySchemaHeaderWarnings(string validation)
+    {
+        var warnings = validation.Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith("Warning:", StringComparison.OrdinalIgnoreCase)).ToList();
+        return validation.Contains("Manifest validation succeeded with warnings", StringComparison.Ordinal)
+            && warnings.Count > 0
+            && warnings.All(line => line.Contains("The schema header URL does not match the expected pattern", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OnlySchemaHeaderWarnings_AcceptsTheOlderWingetHeaderWarning_AndNothingElse()
+    {
+        const string header = "Warning: The schema header URL does not match the expected pattern. Value: # yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json Line: 1, Column: 25 File: x.yaml";
+        Assert.True(OnlySchemaHeaderWarnings($"Manifest validation succeeded with warnings.\r\n{header}\r\n"));
+        Assert.False(OnlySchemaHeaderWarnings($"Manifest validation succeeded with warnings.\r\n{header}\r\nWarning: Installer type exe requires a silent switch.\r\n"));
+        Assert.False(OnlySchemaHeaderWarnings($"Manifest validation failed.\r\n{header}\r\n"));
+        Assert.False(OnlySchemaHeaderWarnings("Manifest validation succeeded with warnings.\r\n"));
     }
 
     [E2EFact]
