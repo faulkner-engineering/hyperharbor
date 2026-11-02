@@ -51,9 +51,20 @@ public sealed class HostCommandLineTests
     public void InstallOptions_ParsePublicAndElevatedSwitches()
     {
         var options = InstallCommand.Options.Parse(
-            ["--port", "48444", "--root", "C:\\HH", "--quiet", "--elevated", "--tray-user", "S-1-5-21-1-2-3-1001", "--result-file", "C:\\r.txt", "--parent-pid", "42"]);
+            ["--port", "48444", "--root", "C:\\HH", "--quiet", "--elevated", "--tray-user", "S-1-5-21-1-2-3-1001", "--result-file", "C:\\r.txt", "--parent-pid", "42", "--parent-pid", "7"]);
 
-        Assert.Equal(new InstallCommand.Options(48444, "C:\\HH", Quiet: true, Elevated: true, TrayUser: "S-1-5-21-1-2-3-1001", ResultFile: "C:\\r.txt", ParentProcessId: 42), options);
+        Assert.Equal(new InstallCommand.Options(48444, "C:\\HH", Quiet: true, Elevated: true, TrayUser: "S-1-5-21-1-2-3-1001", ResultFile: "C:\\r.txt") { ParentProcessIds = options.ParentProcessIds }, options);
+        Assert.Equal([42, 7], options.ParentProcessIds);
+    }
+
+    [Theory]
+    [InlineData(true, new[] { "--port", "48444" }, typeof(ConsoleInstallUi))]
+    [InlineData(false, new[] { "--quiet" }, typeof(ConsoleInstallUi))]
+    [InlineData(false, new[] { "--remove-data" }, typeof(DialogInstallUi))]
+    public void InstallUi_IsTheTerminal_WhenStartedFromOne_OrQuiet(bool startedFromConsole, string[] args, Type expected)
+    {
+        // winget starts the installer without a terminal; --quiet must still show no dialog.
+        Assert.IsType(expected, InstallCommand.ChooseUi(args, startedFromConsole));
     }
 
     [Theory]

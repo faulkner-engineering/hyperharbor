@@ -35,12 +35,12 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
 
     private static string DataDirectory => HostIdentityStore.DefaultDataDirectory;
 
-    /// <param name="parentProcessId">The unelevated installer waiting for this one; it is not stopped.</param>
-    public async Task InstallAsync(SemanticVersion version, int port, SecurityIdentifier trayUser, int? parentProcessId)
+    /// <param name="parentProcessIds">The installers waiting for this one; they are not stopped.</param>
+    public async Task InstallAsync(SemanticVersion version, int port, SecurityIdentifier trayUser, IReadOnlyCollection<int> parentProcessIds)
     {
         progress.Report("Stopping the running host");
         var wasRunning = StopService();
-        StopHostProcesses(parentProcessId);
+        StopHostProcesses(parentProcessIds);
         try
         {
             await InstallStoppedAsync(version, port, trayUser);
@@ -119,7 +119,11 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
     }
 
     /// <param name="removeData">Also delete %ProgramData%\HyperHarbor: pairings, settings, and the audit trail.</param>
-    public async Task UninstallAsync(bool removeData, int? parentProcessId)
+    /// <param name="parentProcessIds">
+    /// The commands waiting for this one; they are not stopped. One of them can be the installed executable that
+    /// winget or Settings started, which still runs from the folder being deleted.
+    /// </param>
+    public async Task UninstallAsync(bool removeData, IReadOnlyCollection<int> parentProcessIds)
     {
         SecurityIdentifier? trayUser = null;
         using (var parameters = Registry.LocalMachine.OpenSubKey(HostService.ParametersKey))
@@ -133,7 +137,7 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
         progress.Report($"Stopping and removing the {HostService.Name} service");
         StopService();
         ServiceRegistration.Delete(HostService.Name);
-        StopHostProcesses(parentProcessId);
+        StopHostProcesses(parentProcessIds);
 
         if (File.Exists(Path.Combine(DataDirectory, ConsoleSetupHelper.AccountsFileName)))
         {
@@ -154,12 +158,7 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
         if (Directory.Exists(layout.Root))
         {
             progress.Report($"Deleting {layout.Root}");
-            foreach (var link in new[] { layout.Current, layout.Current + ".next" }.Where(Junction.IsJunction))
-            {
-                Junction.Delete(link);
-            }
-
-            Directory.Delete(layout.Root, recursive: true);
+            DeleteInstallFolder();
         }
 
         if (removeData && Directory.Exists(DataDirectory))
@@ -173,6 +172,56 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
         {
             NativeMethods.MoveFileEx(self, null, NativeMethods.MoveFileDelayUntilReboot);
         }
+    }
+
+    /// <summary>
+    /// Deletes the install folder. A running executable cannot be deleted but can be renamed, so one that is still
+    /// running (the installed copy that started the uninstall and waits for it) is moved to the temporary folder and
+    /// deleted when Windows restarts. On another volume it cannot be moved, and it and its folders go at the restart.
+    /// </summary>
+    internal void DeleteInstallFolder()
+    {
+        foreach (var link in new[] { layout.Current, layout.Current + ".next" }.Where(Junction.IsJunction))
+        {
+            Junction.Delete(link);
+        }
+
+        var leftOver = false;
+        foreach (var file in Directory.EnumerateFiles(layout.Root, "*", SearchOption.AllDirectories).ToList())
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                var aside = Path.Combine(Path.GetTempPath(), $"HyperHarbor-removed-{Guid.NewGuid():N}{Path.GetExtension(file)}");
+                try
+                {
+                    File.Move(file, aside);
+                    NativeMethods.MoveFileEx(aside, null, NativeMethods.MoveFileDelayUntilReboot);
+                }
+                catch (Exception moveFailure) when (moveFailure is UnauthorizedAccessException or IOException)
+                {
+                    NativeMethods.MoveFileEx(file, null, NativeMethods.MoveFileDelayUntilReboot);
+                    leftOver = true;
+                }
+            }
+        }
+
+        if (!leftOver)
+        {
+            Directory.Delete(layout.Root, recursive: true);
+            return;
+        }
+
+        // Deepest first, so each folder is empty when Windows comes to it.
+        foreach (var folder in Directory.EnumerateDirectories(layout.Root, "*", SearchOption.AllDirectories).OrderByDescending(path => path.Length).Append(layout.Root))
+        {
+            NativeMethods.MoveFileEx(folder, null, NativeMethods.MoveFileDelayUntilReboot);
+        }
+
+        progress.Report($"{layout.Root} will be deleted when Windows restarts");
     }
 
     /// <returns>True when the service was running (or stopping) and is now stopped.</returns>
@@ -214,13 +263,13 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
     }
 
     /// <summary>Stops trays and portable hosts, which lock the executables and hold the port and the pipe.</summary>
-    private void StopHostProcesses(int? parentProcessId)
+    private void StopHostProcesses(IReadOnlyCollection<int> parentProcessIds)
     {
         foreach (var process in HostProcessNames.SelectMany(Process.GetProcessesByName))
         {
             using (process)
             {
-                if (process.Id == Environment.ProcessId || process.Id == parentProcessId)
+                if (process.Id == Environment.ProcessId || parentProcessIds.Contains(process.Id))
                 {
                     continue;
                 }

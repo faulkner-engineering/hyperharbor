@@ -10,6 +10,18 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Changed
+- The host's entry in Settings > Apps > Installed apps now has a quiet uninstall command (`uninstall --quiet`) and a
+  link to faulkner.engineering, and its version follows the host's own updates, so Windows Package Manager (winget)
+  and Settings show the version that is running.
+
+### Fixed
+- `HyperHarbor.Host.exe install --quiet` and `uninstall --quiet` showed progress and result dialogs when started
+  without a terminal (by winget, a script, or a deployment tool). They now show no dialog.
+- Uninstalling the host from Settings or with the installed `HyperHarbor.Host.exe uninstall` returned at once while
+  the removal went on in the background, so a script or winget reported success before the host was removed, and
+  never learned of a failure. It now waits for the removal and returns its exit code.
+
 ## [0.2.5] - 2026-10-30 (API 1.37.0)
 
 The stable release of everything in 0.2.5-beta.1 and 0.2.5-beta.2 below: smaller backups, above all for VMs whose disks

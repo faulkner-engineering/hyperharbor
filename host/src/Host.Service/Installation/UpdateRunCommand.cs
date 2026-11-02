@@ -80,6 +80,7 @@ internal static class UpdateRunCommand
         try
         {
             var state = await applier.RunAsync(CancellationToken.None);
+            SyncUninstallEntry(layout, logger);
             return state.Phase == UpdatePhase.Failed ? 1 : 0;
         }
         catch (Exception ex)
@@ -87,6 +88,25 @@ internal static class UpdateRunCommand
             // The state stays as saved, so the next run (or the next startup) resumes from it.
             logger.LogCritical(ex, "The update helper stopped unexpectedly.");
             return 3;
+        }
+    }
+
+    /// <summary>
+    /// Points the Installed apps entry at the version now current (after an update, a rollback, or nothing). winget
+    /// compares its manifest with DisplayVersion, so a stale one would offer the update the host already applied.
+    /// </summary>
+    private static void SyncUninstallEntry(InstallLayout layout, ILogger logger)
+    {
+        try
+        {
+            if (UninstallEntry.UpdateVersion(layout) is { } version)
+            {
+                logger.LogInformation("The Installed apps entry shows version {Version}.", version);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            logger.LogWarning(ex, "The Installed apps entry could not be updated.");
         }
     }
 }
