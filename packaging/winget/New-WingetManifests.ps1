@@ -138,7 +138,11 @@ try {
             throw "Not found: $file"
         }
 
-        $sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToUpperInvariant()
+        # .NET rather than Get-FileHash: Windows PowerShell started from PowerShell 7 inherits its module path and
+        # cannot load Microsoft.PowerShell.Utility, where Get-FileHash lives (CI's end-to-end job).
+        $stream = [IO.File]::OpenRead((Resolve-Path -LiteralPath $file).Path)
+        try { $sha256 = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($stream)).Replace('-', '') }
+        finally { $stream.Dispose() }
         $folder = Join-Path $OutputDirectory "manifests\f\FaulknerEngineering\HyperHarbor\$($package.Name)\$Version"
         New-Item -ItemType Directory -Force $folder | Out-Null
         $id = $package.Identifier

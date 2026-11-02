@@ -153,6 +153,10 @@ public sealed class WingetManifestTests : IDisposable
             start.ArgumentList.Add(argument);
         }
 
+        // CI runs the tests from PowerShell 7, whose module path Windows PowerShell would inherit and then fail to load
+        // its own modules (Get-FileHash, Invoke-WebRequest); without the variable it uses its defaults.
+        start.Environment.Remove("PSModulePath");
+
         using var process = Process.Start(start)!;
         var error = process.StandardError.ReadToEndAsync();
         var output = process.StandardOutput.ReadToEnd();
