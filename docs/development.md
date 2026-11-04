@@ -183,6 +183,26 @@ New-WingetManifests.ps1 there writes the manifests for a version. Prereleases an
   --urls https://github.com/faulkner-engineering/hyperharbor/releases/download/vX.Y.Z/HyperHarbor-Host-X.Y.Z.exe --submit
   --token <token>` (the client the same with its installer).
 
+## Dependency updates
+
+Dependabot (.github/dependabot.yml) runs monthly and opens one pull request per ecosystem (npm for the client and the
+tray window app together, cargo, nuget, github-actions) with every minor and patch update. Major updates come one at a
+time. Security updates are neither grouped nor held for the schedule. Before merging one, check out its branch and run
+the same checks as for a code change (scripts\test-all.ps1 without -SkipE2E, and scripts\package.ps1 -Fast when it
+affects the publish); CI green is necessary, not sufficient.
+
+Ignored major versions, and why (remove the entry when the reason no longer holds):
+- Microsoft.Extensions.* (nuget), until the host moves off .NET 8. The 10.x packages still carry a net8.0 build, but
+  each one pulls the rest of the 10.x line, which then ships app-local and overrides the ASP.NET Core 8 shared
+  framework's copies (34 assemblies, among them System.Text.Json and DiagnosticSource; measured 2026-11-04). Taking
+  part of the line fails to compile (CS0433 on ProviderAliasAttribute with Logging.Abstractions 10 and Logging 8), and
+  taking all of it runs ASP.NET Core 8 on Microsoft.Extensions 10, which is a deliberate upgrade, not a routine bump.
+- windows-core and windows-sys (cargo; for a 0.x crate Dependabot treats a minor bump as major). windows-core has to
+  move in lockstep with the windows crate: windows-core 0.100 does not compile with windows 0.62 (E0277 on every
+  #[implement] in client/vcam), and windows 0.100 was not published as of 2026-11-04. The port (renamed Win32 module
+  paths and features, Ref renamed to InRef, raw HRESULT returns) is a deliberate upgrade of client/vcam and
+  client/src-tauri together.
+
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
 run npm run gen:api, and lint. OpenApiEnumTests fail if C# enums or the API version drift from api.yaml.
