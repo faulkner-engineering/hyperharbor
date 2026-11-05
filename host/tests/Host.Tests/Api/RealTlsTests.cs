@@ -337,7 +337,7 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
         /// CreateSelfSigned works only after a PFX round trip.
         /// </summary>
         private static X509Certificate2 WithExportablePrivateKey(X509Certificate2 certificate) =>
-            new(certificate.Export(X509ContentType.Pfx), (string?)null, X509KeyStorageFlags.Exportable);
+            X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.Exportable);
 
         private void Append(string? line)
         {

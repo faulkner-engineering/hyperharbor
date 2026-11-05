@@ -40,7 +40,7 @@ public sealed class HostCertificateStore
         try
         {
             // SChannel cannot use ephemeral keys, so let the key be imported to a temporary key container.
-            return new X509Certificate2(pfx, (string?)null, X509KeyStorageFlags.DefaultKeySet);
+            return X509CertificateLoader.LoadPkcs12(pfx, null, X509KeyStorageFlags.DefaultKeySet);
         }
         finally
         {
