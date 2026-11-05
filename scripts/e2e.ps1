@@ -49,6 +49,8 @@ if ($LASTEXITCODE -ne 0) { throw "Host build failed with exit code $LASTEXITCODE
 
 dotnet test $solution --no-build -c Debug --filter 'Category=E2E'
 if ($LASTEXITCODE -ne 0) { throw "Host end-to-end tests failed with exit code $LASTEXITCODE." }
+# Frees the .NET compiler and MSBuild servers before the Rust builds below (see the memory note in test-all.ps1).
+dotnet build-server shutdown *> $null
 
 $env:HH_E2E_SERVICE_EXE = Join-Path $repo 'host\src\Host.Service\bin\Debug\net8.0-windows\HyperHarbor.Host.exe'
 if (-not (Test-Path $env:HH_E2E_SERVICE_EXE)) { throw "Not found: $env:HH_E2E_SERVICE_EXE" }

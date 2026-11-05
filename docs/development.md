@@ -6,6 +6,9 @@ Building, testing, packaging, and releasing HyperHarbor. The architecture is in 
 Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotnet:/c/Program Files/nodejs:$HOME/.cargo/bin:$PATH"
 - Everything CI runs (build, tests, lint, type drift, audits): powershell -ExecutionPolicy Bypass -File scripts\test-all.ps1
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
+  It fits in 10 GB of memory: MSBuild worker nodes exit after each build (MSBUILDDISABLENODEREUSE), the .NET build
+  servers are shut down before the Rust checks, and cargo runs one job per 4 GB unless CARGO_BUILD_JOBS is set.
+  Before this (2026-11-05), the full run on a 10 GB machine was stopped for low memory in cargo test.
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service (opens its own console
   window); pairing needs the tray: dotnet run --project host/src/Host.Service -- --tray
