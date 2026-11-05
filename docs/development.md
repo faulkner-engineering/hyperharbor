@@ -191,6 +191,17 @@ time. Security updates are neither grouped nor held for the schedule. Before mer
 the same checks as for a code change (scripts\test-all.ps1 without -SkipE2E, and scripts\package.ps1 -Fast when it
 affects the publish); CI green is necessary, not sufficient.
 
+How Dependabot behaves (found while working through the 2026-11 pull requests):
+- Merge one pull request at a time and comment "@dependabot rebase" on the rest, so each is tested against main.
+- A rebase can regenerate the pull request with newer versions (the tray group's svelte moved from 5.57.2 to 5.57.3)
+  or replace it with a new pull request (the cargo group #8 became #39, with two updates dropped). Test the head the
+  rebase produced, not the one before it, and merge with gh pr merge --match-head-commit so a later push is not taken.
+- Closing a pull request blocks only that exact version: the next patch of the same major opens a new one (SvelteKit
+  3.1.0 was closed and 3.1.1 reopened it the next day). Only the ignore list below stops a major for good.
+- For a 0.x crate, Dependabot treats a minor bump (0.60 to 0.61) as major, so it comes alone, outside the cargo group,
+  and a "version-update:semver-major" ignore covers it.
+- Groups apply only to version updates (applies-to: version-updates), so security updates stay one per pull request.
+
 Ignored major versions, and why (remove the entry when the reason no longer holds):
 - Microsoft.Extensions.* (nuget), until the host moves off .NET 8. The 10.x packages still carry a net8.0 build, but
   each one pulls the rest of the 10.x line, which then ships app-local and overrides the ASP.NET Core 8 shared
