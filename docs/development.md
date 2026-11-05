@@ -197,11 +197,15 @@ Ignored major versions, and why (remove the entry when the reason no longer hold
   framework's copies (34 assemblies, among them System.Text.Json and DiagnosticSource; measured 2026-11-04). Taking
   part of the line fails to compile (CS0433 on ProviderAliasAttribute with Logging.Abstractions 10 and Logging 8), and
   taking all of it runs ASP.NET Core 8 on Microsoft.Extensions 10, which is a deliberate upgrade, not a routine bump.
-- windows-core and windows-sys (cargo; for a 0.x crate Dependabot treats a minor bump as major). windows-core has to
-  move in lockstep with the windows crate: windows-core 0.100 does not compile with windows 0.62 (E0277 on every
+- System.Diagnostics.EventLog (nuget), until the host moves off .NET 8. It is versioned with the .NET runtime: 10.x has
+  no net8.0 dependencies and would compile, but it gives a net8.0 host nothing, while 8.0.x patches (which still
+  arrive as minor and patch updates) keep it on the runtime line the host runs and that Microsoft.Extensions 8 uses.
+- windows, windows-core, and windows-sys (cargo; for a 0.x crate Dependabot treats a minor bump as major). The
+  windows-rs crates move in lockstep: windows-core 0.100 does not compile with windows 0.62 (E0277 on every
   #[implement] in client/vcam), and windows 0.100 was not published as of 2026-11-04. The port (renamed Win32 module
   paths and features, Ref renamed to InRef, raw HRESULT returns) is a deliberate upgrade of client/vcam and
-  client/src-tauri together.
+  client/src-tauri together, so windows itself is ignored too: its next major arrives as one pull request that cannot
+  be taken without the others.
 
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
