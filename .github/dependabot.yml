@@ -3,7 +3,7 @@
 # grouped and are not held for the schedule: Dependabot opens each one as soon as the advisory is published.
 # CI runs on every pull request, so a broken update shows as a failed check.
 # Ignored majors (the list and the reason are in docs/development.md, "Dependency updates"): windows, windows-core,
-# and windows-sys, and Microsoft.Extensions.* and System.Diagnostics.EventLog while the host targets .NET 8.
+# and windows-sys, and Microsoft.Extensions.* and System.Diagnostics.EventLog, which move with the .NET runtime.
 # Not covered: Kopia (pinned with its hashes in tools/tools.json) and the .NET SDK (global.json).
 version: 2
 updates:

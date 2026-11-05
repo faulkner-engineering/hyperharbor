@@ -1,7 +1,7 @@
 # HyperHarbor
 
 Host/client app that manages Hyper-V VMs on a home PC and connects to them in one click from any device. Think "Moonlight for Hyper-V."
-The host (host/, .NET 8) is a Windows service with an mTLS API and a WebView2 tray; the client (client/, Tauri v2, Rust and
+The host (host/, .NET 10) is a Windows service with an mTLS API and a WebView2 tray; the client (client/, Tauri v2, Rust and
 SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.yaml is the contract between them.
 
 ## Read before working on an area

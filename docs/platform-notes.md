@@ -39,7 +39,9 @@ section for an area before changing it: most of these were learned from a failur
 - Other LAN devices need an inbound firewall rule for TCP 48443. The packaged host's start script creates it;
   a dev run from source does not.
 - mDNS on the host goes through DnsServiceRegister (dnsapi.dll). Do not bind UDP 5353 in the host.
-- ASP.NET Core 8 logs every handled exception; that category is off in appsettings.json and ApiExceptionHandler logs instead.
+- ASP.NET Core's exception handler middleware logs exceptions itself (on .NET 8 every one; from .NET 10 only those an
+  IExceptionHandler does not handle, which ApiExceptionHandler logs and returns false for). That category stays off in
+  appsettings.json so ApiExceptionHandler's own entries are the only ones.
 - Svelte: run the svelte-autofixer MCP tool on every .svelte file you change. Without the MCP server, the same check runs
   from client/: `npx --yes @sveltejs/mcp@0.1.27 svelte-autofixer <path to .svelte file>`. Its suggestions about
   setInterval and refreshVms inside $effect in routes/+page.svelte are the page's polling timers, which belong there.

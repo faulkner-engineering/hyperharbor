@@ -7,8 +7,10 @@ Status: in progress on branch feat/dotnet10 (started 2026-11-05). Research and a
 - .NET 8 reaches end of support on 2026-11-10 (dotnet.microsoft.com/platform/support/policy/dotnet-core). A .NET 8 host
   keeps running after that date but gets no more security fixes, and the host serves an mTLS API on the local network.
 - .NET 10 is the current LTS: released 2025-11-11, supported until 2028-11-14 (latest patch 10.0.14, SDK 10.0.403).
-- The Dependabot ignores for Microsoft.Extensions.* and System.Diagnostics.EventLog majors exist only because the
-  host is on .NET 8 (development.md, "Dependency updates"); they go away with this phase.
+- The Dependabot ignores for Microsoft.Extensions.* and System.Diagnostics.EventLog majors held those packages to the
+  .NET 8 line; this phase moves them to 10.x with the runtime. The ignores stay (reworded): .NET 11 (an STS release,
+  due November 2026) brings 11.x packages that would sit over the ASP.NET Core 10 framework the same way, and the
+  host moves from LTS to LTS.
 
 ## What the spike found (2026-11-05, scratch worktree of main at 7b80bac, SDK 10.0.403)
 Measured unless marked otherwise. The patch and logs are not in the repository; they were a throwaway.
@@ -79,16 +81,21 @@ Each step is a commit with its tests; the branch is merged when every step is do
    the form changes).
 3. Packaging: set StaticWebAssetsEnabled to false in Host.Service.csproj (the host serves no static web assets; the
    tray UI is embedded resources), so the publish is one file again. Keep package.ps1's one-file check.
-4. The host.pfx compatibility test (above), with the fixture written by the 0.2.6 host.
+4. The host.pfx compatibility test (above). Done: HostCertificateCompatibilityTests loads a certificate written by
+   HostCertificateStore.Create on .NET 8.0.33 (a test-only key for FIXTURE-HOST, generated from main with a scratch
+   .NET 8 program, not from any real host), keeps the file unchanged, and serves it over TLS.
 5. The background service order: run the tray and the keep-awake tests with the new threading; move work to StartAsync
-   only where a test shows it matters.
+   only where a test shows it matters. Done, no change needed: TrayPipeServer subscribes before it starts accepting,
+   in the same method, so no tray can connect first (and the tray queries status when it connects); KeepAwakeService
+   holds a PowerCreateRequest handle, which is not tied to a thread; VmInventoryStartupLogger only logs. The full
+   test run passes.
 6. Size and startup: find what makes the executable smaller (compare the bundle manifests of the two publishes) and
    what costs the 90 ms (ReadyToRun state of the framework assemblies in the bundle, tiered compilation). Decide with
    the user whether the startup cost is acceptable or worth an option such as ReadyToRun for HyperHarbor's own
    assemblies.
-7. Documentation: CLAUDE.md and architecture.md (".NET 8"), platform-notes.md:42, development.md (remove the two
-   .NET 8 ignore entries), .github/dependabot.yml (remove the Microsoft.Extensions.* and System.Diagnostics.EventLog
-   ignores), history.md entry 32, and CHANGELOG.md.
+7. Documentation: CLAUDE.md and architecture.md (".NET 8"), platform-notes.md:42, development.md and
+   .github/dependabot.yml (the Microsoft.Extensions.* and System.Diagnostics.EventLog ignores reworded for the next
+   runtime line, not removed), history.md entry 32, and CHANGELOG.md.
 8. Verification: scripts\test-all.ps1 without -SkipE2E (including the cross-version tests, which now pair a .NET 8
    release with the .NET 10 host), scripts\package.ps1 (full, with compression), and live on the development host:
    install as a service and run under the service account (single-file extraction), the tray window and its pages
