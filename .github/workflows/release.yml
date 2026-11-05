@@ -47,7 +47,7 @@ jobs:
       HH_SIGNING_REQUIRED: ${{ vars.SIGNING_ENDPOINT != '' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - uses: actions/setup-node@v7
