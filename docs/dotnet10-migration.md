@@ -1,7 +1,7 @@
 # Moving the host to .NET 10 (phase 32)
 
-Status: planned 2026-11-05, not started. Research and a spike on a scratch copy are done (below); the open decisions are
-at the end. The client (Tauri, Rust) does not change.
+Status: in progress on branch feat/dotnet10 (started 2026-11-05). Research and a spike on a scratch copy are done
+(below); the user's decisions are at the end. The client (Tauri, Rust) does not change.
 
 ## Why now
 - .NET 8 reaches end of support on 2026-11-10 (dotnet.microsoft.com/platform/support/policy/dotnet-core). A .NET 8 host
@@ -97,8 +97,12 @@ Each step is a commit with its tests; the branch is merged when every step is do
 
 Estimated size: steps 1 to 5 and 7 are about a day; step 6 depends on what it finds; step 8 is half a day of live runs.
 
-## Open decisions (for the user)
-- Version: 0.3.0 (a new runtime under every installed host) or 0.2.7.
-- Timing: before or soon after 2026-11-10. Nothing stops working on that date; the risk grows with each .NET security
-  fix that 8 no longer gets.
-- Whether about 90 ms more startup (10%) is acceptable as measured, or step 6 should recover it before release.
+## Decisions (with the user, 2026-11-05)
+- Version: this ships in 0.3.0, which may also carry other changes. Nothing is released yet, so the version is not
+  bumped in this phase; changelog entries go under [Unreleased] and move under 0.3.0 when the user bumps it.
+- Timing: start now.
+- Startup: step 6 recovers the measured cost (about 90 ms, 10%); accepting it as measured was declined.
+
+Ordering note: X509CertificateLoader does not exist on .NET 8, so steps 1 and 2 are two commits: first the two tray
+fixes that also build on .NET 8 (FormClosed, the designer serialization attribute), then the retarget together with
+the certificate loader changes.
