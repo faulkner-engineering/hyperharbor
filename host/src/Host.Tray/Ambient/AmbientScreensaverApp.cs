@@ -153,7 +153,8 @@ public static class AmbientScreensaverApp
                 form.Show();
             }
 
-            _page.Closed += (_, _) => End();
+            // FormClosed, not Closed: Form.Closed is obsolete from .NET 10 (WFDEV004).
+            _page.FormClosed += (_, _) => End();
             _ = _page.StartAsync();
 
             _display = new DisplayStateWatcher(off =>
