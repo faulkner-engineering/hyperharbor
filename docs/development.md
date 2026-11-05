@@ -183,6 +183,41 @@ New-WingetManifests.ps1 there writes the manifests for a version. Prereleases an
   --urls https://github.com/faulkner-engineering/hyperharbor/releases/download/vX.Y.Z/HyperHarbor-Host-X.Y.Z.exe --submit
   --token <token>` (the client the same with its installer).
 
+## Dependency updates
+
+Dependabot (.github/dependabot.yml) runs monthly and opens one pull request per ecosystem (npm for the client and the
+tray window app together, cargo, nuget, github-actions) with every minor and patch update. Major updates come one at a
+time. Security updates are neither grouped nor held for the schedule. Before merging one, check out its branch and run
+the same checks as for a code change (scripts\test-all.ps1 without -SkipE2E, and scripts\package.ps1 -Fast when it
+affects the publish); CI green is necessary, not sufficient.
+
+How Dependabot behaves (found while working through the 2026-11 pull requests):
+- Merge one pull request at a time and comment "@dependabot rebase" on the rest, so each is tested against main.
+- A rebase can regenerate the pull request with newer versions (the tray group's svelte moved from 5.57.2 to 5.57.3)
+  or replace it with a new pull request (the cargo group #8 became #39, with two updates dropped). Test the head the
+  rebase produced, not the one before it, and merge with gh pr merge --match-head-commit so a later push is not taken.
+- Closing a pull request blocks only that exact version: the next patch of the same major opens a new one (SvelteKit
+  3.1.0 was closed and 3.1.1 reopened it the next day). Only the ignore list below stops a major for good.
+- For a 0.x crate, Dependabot treats a minor bump (0.60 to 0.61) as major, so it comes alone, outside the cargo group,
+  and a "version-update:semver-major" ignore covers it.
+- Groups apply only to version updates (applies-to: version-updates), so security updates stay one per pull request.
+
+Ignored major versions, and why (remove the entry when the reason no longer holds):
+- Microsoft.Extensions.* (nuget), until the host moves off .NET 8. The 10.x packages still carry a net8.0 build, but
+  each one pulls the rest of the 10.x line, which then ships app-local and overrides the ASP.NET Core 8 shared
+  framework's copies (34 assemblies, among them System.Text.Json and DiagnosticSource; measured 2026-11-04). Taking
+  part of the line fails to compile (CS0433 on ProviderAliasAttribute with Logging.Abstractions 10 and Logging 8), and
+  taking all of it runs ASP.NET Core 8 on Microsoft.Extensions 10, which is a deliberate upgrade, not a routine bump.
+- System.Diagnostics.EventLog (nuget), until the host moves off .NET 8. It is versioned with the .NET runtime: 10.x has
+  no net8.0 dependencies and would compile, but it gives a net8.0 host nothing, while 8.0.x patches (which still
+  arrive as minor and patch updates) keep it on the runtime line the host runs and that Microsoft.Extensions 8 uses.
+- windows, windows-core, and windows-sys (cargo; for a 0.x crate Dependabot treats a minor bump as major). The
+  windows-rs crates move in lockstep: windows-core 0.100 does not compile with windows 0.62 (E0277 on every
+  #[implement] in client/vcam), and windows 0.100 was not published as of 2026-11-04. The port (renamed Win32 module
+  paths and features, Ref renamed to InRef, raw HRESULT returns) is a deliberate upgrade of client/vcam and
+  client/src-tauri together, so windows itself is ignored too: its next major arrives as one pull request that cannot
+  be taken without the others.
+
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
 run npm run gen:api, and lint. OpenApiEnumTests fail if C# enums or the API version drift from api.yaml.
