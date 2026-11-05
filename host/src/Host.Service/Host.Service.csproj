@@ -14,6 +14,9 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- Packages' XML documentation (WebView2's) would land beside the single executable. -->
     <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <!-- The host serves no static web assets (the tray's pages are resources of Host.Tray). Without this the .NET 10
+         Web SDK publishes an empty HyperHarbor.Host.staticwebassets.endpoints.json beside the single executable. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
   <ItemGroup>
