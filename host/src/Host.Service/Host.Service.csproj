@@ -17,6 +17,9 @@
     <!-- The host serves no static web assets (the tray's pages are resources of Host.Tray). Without this the .NET 10
          Web SDK publishes an empty HyperHarbor.Host.staticwebassets.endpoints.json beside the single executable. -->
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <!-- Dynamic PGO's instrumentation cost the .NET 10 host about 70 ms of startup (measured in phase 32,
+         docs/dotnet10-migration.md); the host is I/O-bound and spends little time in hot loops. -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
 
   <ItemGroup>

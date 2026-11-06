@@ -92,7 +92,32 @@ Each step is a commit with its tests; the branch is merged when every step is do
 6. Size and startup: find what makes the executable smaller (compare the bundle manifests of the two publishes) and
    what costs the 90 ms (ReadyToRun state of the framework assemblies in the bundle, tiered compilation). Decide with
    the user whether the startup cost is acceptable or worth an option such as ReadyToRun for HyperHarbor's own
-   assemblies.
+   assemblies. Done (measured 2026-11-05; 11 runs per variant, alternating, in --self-test mode):
+   - The spike's timing script counted some connections to SelfTestRun.FreeLoopbackPort's short-lived listener as
+     the API accepting; the corrected script rejects a connection reset within 20 ms. The 883 and 970 ms above came
+     from the old script.
+   - Size: .NET 8's self-contained publish shipped all of WPF (201 files, 55.1 MB: PresentationFramework,
+     PresentationCore, D3DCompiler_47_cor3, wpfgfx, the themes, and satellite resources) although the host uses only
+     WinForms; .NET 10 publishes none of it. ReadyToRun coverage of the framework is the same in both (about 248
+     assemblies); HyperHarbor's own and the packages' assemblies are IL only in both.
+   - Startup, median (range), uncompressed (-Fast) and release (compressed):
+
+     | Variant | -Fast | Release | Release size |
+     |---|---|---|---|
+     | .NET 8 | 930 ms (891 to 961) | 1316 ms (1264 to 1386) | 104,991,793 bytes |
+     | .NET 10 | 1022 ms (950 to 1068) | 1270 ms (1249 to 1314) | 85,700,876 bytes |
+     | .NET 10, TieredPGO off | 958 ms (899 to 1019) | 1199 ms (1161 to 1294) | 85,700,918 bytes |
+     | .NET 10, ReadyToRun (composite, the single-file default) | 878 ms | 1355 ms | 101,901,069 bytes |
+     | .NET 10, ReadyToRun not composite, TieredPGO off | 884 ms | 1176 ms | 92,673,845 bytes |
+
+   - Taken: TieredPGO false in Host.Service.csproj (HostRuntimeConfigTests guards it). It costs no size or build time,
+     and release startup is 9% faster than .NET 8. Dynamic PGO's instrumentation costs .NET 10 more than .NET 8
+     (inferred: the app's assemblies are IL only, so much of startup is JIT). Without it, long-running CPU-heavy code
+     loses some optimization; the host is I/O-bound. The tray runs from the same executable and gets the setting.
+   - Not taken: ReadyToRun for HyperHarbor's assemblies (PublishReadyToRun with PublishReadyToRunComposite false)
+     would also bring -Fast below .NET 8, for about 7 MB in release and 9 s of publish time. -Fast is a development
+     build, so it is left for later. Never use the composite form: it recompiles the framework, takes 83 to 192 s to
+     publish, and is the slowest in release.
 7. Documentation: CLAUDE.md and architecture.md (".NET 8"), platform-notes.md:42, development.md and
    .github/dependabot.yml (the Microsoft.Extensions.* and System.Diagnostics.EventLog ignores reworded for the next
    runtime line, not removed), history.md entry 32, and CHANGELOG.md.
