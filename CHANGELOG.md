@@ -19,6 +19,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 - After the service is uninstalled, the portable host's setup prompt now restores access to the data folder itself,
   not only to the files in it, so `Start-HyperHarbor.ps1` starts the host again instead of asking for setup each time.
 
+### Removed
+- Windows 10 support. The host and the client need Windows 11 (build 22000 or later); HyperHarbor 0.2.6 is the last
+  version for Windows 10. On Windows 10 the host installer stops with a message, and a host installed there keeps
+  running 0.2.6: it does not update itself to a version that cannot run on that PC. A client on Windows 10 that has
+  updated itself still opens and connects, but camera sharing is not available (the camera goes to one VM at a time,
+  as before). Virtual machines can still run Windows 10. The winget packages require Windows 11.
+
 ## [0.2.6] - 2026-11-02 (API 1.37.0)
 
 Windows Package Manager packages for the host and the client, and the installer fixes they needed: quiet installs and

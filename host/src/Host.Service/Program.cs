@@ -113,6 +113,19 @@ if (!isWindowsService)
     }
 }
 
+// From 0.3.0 the host needs Windows 11. The self-test stops here too, so a Windows 10 host never updates to this version.
+if (WindowsRequirement.ProblemOnThisPc() is { } unsupportedWindows)
+{
+    Console.Error.WriteLine(unsupportedWindows);
+    if (ownConsoleWindow)
+    {
+        Console.Error.WriteLine("Press Enter to close this window.");
+        Console.ReadLine();
+    }
+
+    return WindowsRequirement.ExitCode;
+}
+
 // A service starts in System32, so appsettings.json is read from the executable's folder instead.
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
