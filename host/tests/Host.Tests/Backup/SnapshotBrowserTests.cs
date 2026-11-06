@@ -59,15 +59,16 @@ public sealed class SnapshotBrowserTests : IDisposable
         Guest = new ManifestGuest("Windows", false),
     };
 
-    private async Task<BrowseSessionInfo> OpenReadyAsync()
+    private Task<BrowseSessionInfo> OpenReadyAsync() => OpenReadyAsync(_browser.Open(_target, "snap-1").Id);
+
+    private async Task<BrowseSessionInfo> OpenReadyAsync(string id)
     {
-        var info = _browser.Open(_target, "snap-1");
-        for (var i = 0; i < 500 && _browser.Get(info.Id)!.State == BrowseState.Preparing; i++)
+        for (var i = 0; i < 500 && _browser.Get(id)!.State == BrowseState.Preparing; i++)
         {
             await Task.Delay(10);
         }
 
-        return _browser.Get(info.Id)!;
+        return _browser.Get(id)!;
     }
 
     [Fact]
@@ -191,6 +192,28 @@ public sealed class SnapshotBrowserTests : IDisposable
     }
 
     [Fact]
+    public async Task AFailedSession_IsReportedOnlyAfterItsDisksAreDetached()
+    {
+        // The test above failed now and then on CI: the session showed Failed while the disk was still being detached.
+        _mounter.Volumes = false;
+        var dismount = new TaskCompletionSource();
+        _mounter.DismountGate = dismount.Task;
+
+        var info = _browser.Open(_target, "snap-1");
+        for (var i = 0; i < 500 && _mounter.Dismounting == 0; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.Equal(1, _mounter.Dismounting);
+        Assert.Equal(BrowseState.Preparing, _browser.Get(info.Id)!.State);
+        dismount.SetResult();
+        var finished = await OpenReadyAsync(info.Id);
+        Assert.Equal(BrowseState.Failed, finished.State);
+        Assert.Empty(Directory.EnumerateDirectories(Path.Combine(_root, "work")));
+    }
+
+    [Fact]
     public async Task ARepositoryFailure_IsShownAsAFailedSession()
     {
         _repositories.Throw = new BackupException("The passphrase is missing.");
@@ -227,10 +250,23 @@ public sealed class SnapshotBrowserTests : IDisposable
             return Task.FromResult<IReadOnlyList<BrowseVolume>>(Volumes ? [new BrowseVolume(volume, "Windows", 1000)] : []);
         }
 
-        public Task DismountAsync(string imagePath, CancellationToken cancellationToken)
+        /// <summary>While set and not complete, dismounting waits for it.</summary>
+        public Task? DismountGate { get; set; }
+
+        private int _dismounting;
+
+        /// <summary>Dismounts started, including one still waiting for <see cref="DismountGate"/>.</summary>
+        public int Dismounting => Volatile.Read(ref _dismounting);
+
+        public async Task DismountAsync(string imagePath, CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _dismounting);
+            if (DismountGate is { } gate)
+            {
+                await gate;
+            }
+
             Dismounted.Add(imagePath);
-            return Task.CompletedTask;
         }
     }
 }

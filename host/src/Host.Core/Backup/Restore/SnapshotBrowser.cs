@@ -335,14 +335,16 @@ public sealed class SnapshotBrowser(
         {
             logger.LogWarning(ex, "Opening a backup for browsing failed.");
             session.Error = ex is RestoreException or BackupException or KopiaException ? ex.Message : "The backup could not be opened. The host log has the details.";
-            session.State = BrowseState.Failed;
+            // Failed only once the disks are detached and the folder is gone: a caller that sees Failed may start
+            // again at once, and a test that checks the cleanup must not race it (seen on CI, 2026-11-06).
             await TearDownFilesAsync(session).ConfigureAwait(false);
+            session.State = BrowseState.Failed;
         }
         catch (OperationCanceledException)
         {
-            session.State = BrowseState.Failed;
             session.Error = "Browsing was closed.";
             await TearDownFilesAsync(session).ConfigureAwait(false);
+            session.State = BrowseState.Failed;
         }
     }
 
