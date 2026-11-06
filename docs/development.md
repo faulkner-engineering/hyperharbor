@@ -70,9 +70,14 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Version comes from Directory.Build.props (host) and client/src-tauri/tauri.conf.json (client); keep them equal.
 - The script refuses to run while anything is running from dist/ (Windows locks the exe).
 - After `HyperHarbor.Host.exe uninstall` (data kept), %ProgramData%\HyperHarbor keeps the installed service's ACL
-  (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts dies on data-format.json
-  (it now says which file it cannot open and exits with code 3). Start dist\host\HyperHarbor.Host.exe run elevated
-  instead (seen on the laptop 2026-10-21); the tray from Start-HyperHarbor.ps1 connects to it.
+  (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts cannot open the data folder (it
+  says which file and exits with code 3; seen on the laptop 2026-10-21). Start-HyperHarbor.ps1 then asks for setup,
+  which restores the account's access to the folder and everything in it.
+- Installing the service over a portable host's data: run the installer as the signed-in user, not from a console
+  elevated as another administrator. It asks for elevation itself and makes the signed-in user the tray user; from an
+  elevated console the tray user is that administrator, the installer does not trust the signed-in user's files and
+  moves them to untrusted-<time>\ in the data folder, and the service starts with a new identity
+  (docs/platform-notes.md).
 - dist\host\Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
   Hyper-V Administrators membership, console account), then starts "HyperHarbor.Host.exe run" and "--tray". It asks
   for elevation again when the current account cannot open a file in the data folder, and setup restores access

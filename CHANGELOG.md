@@ -10,6 +10,15 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- Installing the host no longer deletes data files that another account created. The installer (and the service at
+  each start) still keeps the service from using them, but now moves them into an `untrusted-<date>` folder in
+  `%ProgramData%\HyperHarbor`, and says which account created them, so they can be restored by hand. Installing from
+  another administrator's console over a portable host's data used to delete that host's certificate and pairings,
+  so every paired device had to pair again.
+- After the service is uninstalled, the portable host's setup prompt now restores access to the data folder itself,
+  not only to the files in it, so `Start-HyperHarbor.ps1` starts the host again instead of asking for setup each time.
+
 ## [0.2.6] - 2026-11-02 (API 1.37.0)
 
 Windows Package Manager packages for the host and the client, and the installer fixes they needed: quiet installs and
