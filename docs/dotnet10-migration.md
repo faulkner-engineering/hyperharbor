@@ -1,7 +1,8 @@
 # Moving the host to .NET 10 (phase 32)
 
-Status: in progress on branch feat/dotnet10 (started 2026-11-05). Research and a spike on a scratch copy are done
-(below); the user's decisions are at the end. The client (Tauri, Rust) does not change.
+Status: done on branch feat/dotnet10 (2026-11-05 to 2026-11-06), every step below including the live checks; not
+merged yet. The user's decisions are at the end; what was verified is in docs/history.md, entry 32. The client
+(Tauri, Rust) does not change.
 
 ## Why now
 - .NET 8 reaches end of support on 2026-11-10 (dotnet.microsoft.com/platform/support/policy/dotnet-core). A .NET 8 host
@@ -125,7 +126,8 @@ Each step is a commit with its tests; the branch is merged when every step is do
    release with the .NET 10 host), scripts\package.ps1 (full, with compression), and live on the development host:
    install as a service and run under the service account (single-file extraction), the tray window and its pages
    (WebView2), the Hyper-V live tests, and a self-update from the installed 0.2.6 to the .NET 10 build and back
-   (rollback).
+   (rollback). Done 2026-11-06 (history.md, entry 32). The self-update ran over a local HTTPS channel with two
+   throwaway builds: one that exits when started as a service (rolled back to 0.2.6) and the branch head (installed).
 
 Estimated size: steps 1 to 5 and 7 are about a day; step 6 depends on what it finds; step 8 is half a day of live runs.
 
