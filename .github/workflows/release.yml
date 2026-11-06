@@ -52,10 +52,11 @@ jobs:
           global-json-file: global.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
           cache-dependency-path: client/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
+      # The Rust release pinned in rust-toolchain.toml, with its components.
+      - run: rustup toolchain install
       # A tag run can read caches only from main and from its own tag, so the release-profile dependencies come
       # from the cache the Release build cache workflow keeps on main. Saving here would help no later tag.
       - uses: Swatinem/rust-cache@v2
