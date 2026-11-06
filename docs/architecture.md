@@ -5,7 +5,7 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 [history.md](history.md).
 
 ## Overview
-- host/ (.NET 8): one executable, HyperHarbor.Host.exe (Kestrel API with mTLS, WinForms tray, installer,
+- host/ (.NET 10): one executable, HyperHarbor.Host.exe (Kestrel API with mTLS, WinForms tray, installer,
   elevated helpers), on a Core library. Installed as the LocalSystem service HyperHarborHost under
   %ProgramFiles%\HyperHarbor\versions\<version> with a current junction; data stays in %ProgramData%\HyperHarbor.
   - Hyper-V via CIM/WMI (root\virtualization\v2); PowerShell Direct through Windows PowerShell (powershell.exe)

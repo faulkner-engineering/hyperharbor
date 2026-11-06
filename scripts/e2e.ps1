@@ -52,7 +52,7 @@ if ($LASTEXITCODE -ne 0) { throw "Host end-to-end tests failed with exit code $L
 # Frees the .NET compiler and MSBuild servers before the Rust builds below (see the memory note in test-all.ps1).
 dotnet build-server shutdown *> $null
 
-$env:HH_E2E_SERVICE_EXE = Join-Path $repo 'host\src\Host.Service\bin\Debug\net8.0-windows\HyperHarbor.Host.exe'
+$env:HH_E2E_SERVICE_EXE = Join-Path $repo 'host\src\Host.Service\bin\Debug\net10.0-windows\HyperHarbor.Host.exe'
 if (-not (Test-Path $env:HH_E2E_SERVICE_EXE)) { throw "Not found: $env:HH_E2E_SERVICE_EXE" }
 
 $tauri = Join-Path $repo 'client\src-tauri'
@@ -93,6 +93,8 @@ git -C $repo worktree add --detach $worktree $previous.tag
 if ($LASTEXITCODE -ne 0) { throw "Could not check out $($previous.tag)." }
 # Sharing the build folder lets the old client reuse the dependencies already built.
 $env:CARGO_TARGET_DIR = Join-Path $tauri 'target'
+# Releases before 0.3.0 build with full debug information; this matches today's profile (Cargo.toml) and its memory use.
+$env:CARGO_PROFILE_DEV_DEBUG = 'line-tables-only'
 Push-Location (Join-Path $worktree 'client\src-tauri')
 try {
     cargo test e2e_loopback -- --ignored --nocapture
@@ -101,5 +103,6 @@ try {
 finally {
     Pop-Location
     Remove-Item Env:\CARGO_TARGET_DIR
+    Remove-Item Env:\CARGO_PROFILE_DEV_DEBUG
     git -C $repo worktree remove --force $worktree
 }

@@ -10,6 +10,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Changed
+- The host runs on .NET 10 (LTS, supported until November 2028) instead of .NET 8, which reaches end of support on
+  November 10, 2026. The host is self-contained, so nothing needs to be installed; it updates itself as before, and
+  pairings, settings, and the host's certificate carry over. The host download is about 18% smaller (it no longer
+  carries WPF, which it never used) and the host starts about 9% faster.
+
 ### Fixed
 - Installing the host no longer deletes data files that another account created. The installer (and the service at
   each start) still keeps the service from using them, but now moves them into an `untrusted-<date>` folder in

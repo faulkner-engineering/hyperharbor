@@ -110,7 +110,7 @@ sidebar. The **beta** channel gets prereleases.
 
 ## Build from source
 
-Requirements: .NET SDK 8.0, Rust through rustup (MSVC; rust-toolchain.toml picks the version), and Node.js 26.
+Requirements: .NET SDK 10 (global.json picks the feature band), Rust through rustup (MSVC; rust-toolchain.toml picks the version), and Node.js 26.
 
 ```powershell
 dotnet build HyperHarbor.sln

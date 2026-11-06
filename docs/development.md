@@ -8,7 +8,11 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
   It fits in 10 GB of memory: MSBuild worker nodes exit after each build (MSBUILDDISABLENODEREUSE), the .NET build
   servers are shut down before the Rust checks, and cargo runs one job per 4 GB unless CARGO_BUILD_JOBS is set.
-  Before this (2026-11-05), the full run on a 10 GB machine was stopped for low memory in cargo test.
+  Before this (2026-11-05), the full run on a 10 GB machine was stopped for low memory in cargo test. Development and
+  test builds carry file and line debug information only (profile.dev in Cargo.toml; e2e.ps1 applies the same to the
+  previous release's client), which keeps the linker's memory down; before that (2026-11-06), the run was still stopped
+  while e2e.ps1 compiled the previous release's client. On a 10 GB machine, also stop dist (host, tray, and client:
+  about 1 GB with their WebView2 processes) before a full run.
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service (opens its own console
   window); pairing needs the tray: dotnet run --project host/src/Host.Service -- --tray
@@ -214,14 +218,14 @@ How Dependabot behaves (found while working through the 2026-11 pull requests):
 - Groups apply only to version updates (applies-to: version-updates), so security updates stay one per pull request.
 
 Ignored major versions, and why (remove the entry when the reason no longer holds):
-- Microsoft.Extensions.* (nuget), until the host moves off .NET 8. The 10.x packages still carry a net8.0 build, but
-  each one pulls the rest of the 10.x line, which then ships app-local and overrides the ASP.NET Core 8 shared
-  framework's copies (34 assemblies, among them System.Text.Json and DiagnosticSource; measured 2026-11-04). Taking
-  part of the line fails to compile (CS0433 on ProviderAliasAttribute with Logging.Abstractions 10 and Logging 8), and
-  taking all of it runs ASP.NET Core 8 on Microsoft.Extensions 10, which is a deliberate upgrade, not a routine bump.
-- System.Diagnostics.EventLog (nuget), until the host moves off .NET 8. It is versioned with the .NET runtime: 10.x has
-  no net8.0 dependencies and would compile, but it gives a net8.0 host nothing, while 8.0.x patches (which still
-  arrive as minor and patch updates) keep it on the runtime line the host runs and that Microsoft.Extensions 8 uses.
+- Microsoft.Extensions.* (nuget), while the host stays on .NET 10 (LTS; it moves to the next LTS, not to .NET 11). A
+  newer major still carries a build for the current runtime but pulls the rest of its line, which then ships
+  app-local and overrides the ASP.NET Core shared framework's copies. On .NET 8 with the 10.x packages that was 34
+  assemblies, among them System.Text.Json and DiagnosticSource (measured 2026-11-04); taking part of the line failed to
+  compile (CS0433 on ProviderAliasAttribute with Logging.Abstractions 10 and Logging 8). The packages move to a new
+  major together with the runtime, as in phase 32 (docs/dotnet10-migration.md).
+- System.Diagnostics.EventLog (nuget), for the same reason: it is versioned with the .NET runtime, a newer major gives
+  the host nothing, and patches on the current major still arrive as minor and patch updates.
 - windows, windows-core, and windows-sys (cargo; for a 0.x crate Dependabot treats a minor bump as major). The
   windows-rs crates move in lockstep: windows-core 0.100 does not compile with windows 0.62 (E0277 on every
   #[implement] in client/vcam), and windows 0.100 was not published as of 2026-11-04. The port (renamed Win32 module
