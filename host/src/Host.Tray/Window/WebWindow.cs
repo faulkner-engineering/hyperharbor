@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
@@ -51,6 +52,8 @@ internal sealed class WebWindow : Form
     public bool IsReady => _ready;
 
     /// <summary>Closing by the user hides the window instead, so it opens again at once (raises <see cref="Hidden"/>).</summary>
+    /// <remarks>Set in code only; the designer must not serialize it (WFO1000 is an error from .NET 9).</remarks>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool HideOnClose { get; init; }
 
     public event Action? Hidden;

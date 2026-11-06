@@ -1,0 +1,8 @@
+# The Rust release every build uses: local, CI, and releases (rustup reads this file from any folder below it).
+# Pinned rather than "stable" because clippy runs with -D warnings, so a new release's lints could turn CI red on a
+# day nothing changed. Bump it on purpose, with a full scripts\test-all.ps1 run (docs/development.md, Dependency
+# updates).
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

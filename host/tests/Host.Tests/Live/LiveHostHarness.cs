@@ -62,7 +62,7 @@ public sealed class LiveHostHarness : IAsyncDisposable
             new PairedDeviceStore(data, users).Add(users.GetOrCreateDefault().UserId, "Live harness", CertificateFingerprint.Of(created), DateTimeOffset.UtcNow);
         }
 
-        var certificate = new X509Certificate2(certificatePath, (string?)null, X509KeyStorageFlags.UserKeySet);
+        var certificate = X509CertificateLoader.LoadPkcs12FromFile(certificatePath, null, X509KeyStorageFlags.UserKeySet);
 
         var passphrases = new AdminPassphraseStore(data);
         if (!passphrases.Verify(Passphrase))

@@ -34,6 +34,15 @@ internal static class InstallCommand
         var options = Options.Parse(args);
         var layout = new InstallLayout(options.Root ?? UninstallEntry.FindInstalled()?.Root ?? InstallLayout.DefaultRoot);
         var version = HostVersion.Current;
+        if (WindowsRequirement.ProblemOnThisPc() is { } unsupportedWindows)
+        {
+            if (!options.Elevated)
+            {
+                ui.Report("HyperHarbor was not installed", unsupportedWindows, succeeded: false);
+            }
+
+            return ExitFailed;
+        }
 
         if (options.Elevated)
         {

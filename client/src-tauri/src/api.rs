@@ -16,7 +16,13 @@ use crate::tls;
 use crate::wake::WakeAdapter;
 
 const API_BASE_PATH: &str = "/api/v1";
+/// How long connecting may take, the TLS handshake included (reqwest's connect timeout covers both).
+#[cfg(not(test))]
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+/// Tests start hundreds of loopback servers at once, each handshake on its own thread; on a busy CI
+/// runner a handshake took over 2 s and failed tests that had nothing to do with timeouts (2026-11-06).
+#[cfg(test)]
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Looking for a host on a tailnet peer: a peer without HyperHarbor refuses at once or not at all.
 const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
@@ -3769,20 +3775,38 @@ mod server_tests {
         let api = api();
         let paired = paired(server.certificate_hash());
 
+        // The server answers every POST with a pairing reply, so most calls fail after sending, by
+        // design. Each must still have reached the server exactly once: a body that never arrived
+        // (a timeout on a busy runner) would otherwise shift every later body into the wrong schema.
+        let mut sent = 0;
+        let mut reached = |call: &str, error: Option<ClientError>| {
+            sent += 1;
+            assert_eq!(
+                server.requests().len(),
+                sent,
+                "{call} did not reach the test server: {error:?}"
+            );
+        };
+
         let pending = api.start_pairing(&target).await.unwrap();
-        let _ = api.complete_pairing(&target, &pending, "482913").await;
+        reached("start_pairing", None);
+        let result = api.complete_pairing(&target, &pending, "482913").await;
+        reached("complete_pairing", result.err());
         let options = ProvisionOptions {
             enable_remote_desktop: true,
             install_desktop: true,
             trust_new_host_key: true,
         };
-        let _ = api
+        let result = api
             .provision_vm(&target, &paired, VM_ID, "hhadmin", "x", options)
             .await;
-        let _ = api
+        reached("provision_vm", result.err());
+        let result = api
             .fix_wake(&target, &paired, &["magicPacket".to_string()])
             .await;
-        let _ = api.start_wake_test(&target, &paired, 30).await;
+        reached("fix_wake", result.err());
+        let result = api.start_wake_test(&target, &paired, 30).await;
+        reached("start_wake_test", result.err());
 
         let bodies: Vec<serde_json::Value> = server
             .requests()

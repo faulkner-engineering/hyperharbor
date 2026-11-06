@@ -10,6 +10,28 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Changed
+- The host runs on .NET 10 (LTS, supported until November 2028) instead of .NET 8, which reaches end of support on
+  November 10, 2026. The host is self-contained, so nothing needs to be installed; it updates itself as before, and
+  pairings, settings, and the host's certificate carry over. The host download is about 18% smaller (it no longer
+  carries WPF, which it never used) and the host starts about 9% faster.
+
+### Fixed
+- Installing the host no longer deletes data files that another account created. The installer (and the service at
+  each start) still keeps the service from using them, but now moves them into an `untrusted-<date>` folder in
+  `%ProgramData%\HyperHarbor`, and says which account created them, so they can be restored by hand. Installing from
+  another administrator's console over a portable host's data used to delete that host's certificate and pairings,
+  so every paired device had to pair again.
+- After the service is uninstalled, the portable host's setup prompt now restores access to the data folder itself,
+  not only to the files in it, so `Start-HyperHarbor.ps1` starts the host again instead of asking for setup each time.
+
+### Removed
+- Windows 10 support. The host and the client need Windows 11 (build 22000 or later); HyperHarbor 0.2.6 is the last
+  version for Windows 10. On Windows 10 the host installer stops with a message, and a host installed there keeps
+  running 0.2.6: it does not update itself to a version that cannot run on that PC. A client on Windows 10 that has
+  updated itself still opens and connects, but camera sharing is not available (the camera goes to one VM at a time,
+  as before). Virtual machines can still run Windows 10. The winget packages require Windows 11.
+
 ## [0.2.6] - 2026-11-02 (API 1.37.0)
 
 Windows Package Manager packages for the host and the client, and the installer fixes they needed: quiet installs and

@@ -8,7 +8,11 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
   It fits in 10 GB of memory: MSBuild worker nodes exit after each build (MSBUILDDISABLENODEREUSE), the .NET build
   servers are shut down before the Rust checks, and cargo runs one job per 4 GB unless CARGO_BUILD_JOBS is set.
-  Before this (2026-11-05), the full run on a 10 GB machine was stopped for low memory in cargo test.
+  Before this (2026-11-05), the full run on a 10 GB machine was stopped for low memory in cargo test. Development and
+  test builds carry file and line debug information only (profile.dev in Cargo.toml; e2e.ps1 applies the same to the
+  previous release's client), which keeps the linker's memory down; before that (2026-11-06), the run was still stopped
+  while e2e.ps1 compiled the previous release's client. On a 10 GB machine, also stop dist (host, tray, and client:
+  about 1 GB with their WebView2 processes) before a full run.
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service (opens its own console
   window); pairing needs the tray: dotnet run --project host/src/Host.Service -- --tray
@@ -70,9 +74,14 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Version comes from Directory.Build.props (host) and client/src-tauri/tauri.conf.json (client); keep them equal.
 - The script refuses to run while anything is running from dist/ (Windows locks the exe).
 - After `HyperHarbor.Host.exe uninstall` (data kept), %ProgramData%\HyperHarbor keeps the installed service's ACL
-  (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts dies on data-format.json
-  (it now says which file it cannot open and exits with code 3). Start dist\host\HyperHarbor.Host.exe run elevated
-  instead (seen on the laptop 2026-10-21); the tray from Start-HyperHarbor.ps1 connects to it.
+  (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts cannot open the data folder (it
+  says which file and exits with code 3; seen on the laptop 2026-10-21). Start-HyperHarbor.ps1 then asks for setup,
+  which restores the account's access to the folder and everything in it.
+- Installing the service over a portable host's data: run the installer as the signed-in user, not from a console
+  elevated as another administrator. It asks for elevation itself and makes the signed-in user the tray user; from an
+  elevated console the tray user is that administrator, the installer does not trust the signed-in user's files and
+  moves them to untrusted-<time>\ in the data folder, and the service starts with a new identity
+  (docs/platform-notes.md).
 - dist\host\Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
   Hyper-V Administrators membership, console account), then starts "HyperHarbor.Host.exe run" and "--tray". It asks
   for elevation again when the current account cannot open a file in the data folder, and setup restores access
@@ -178,6 +187,9 @@ New-WingetManifests.ps1 there writes the manifests for a version. Prereleases an
   winget-pkgs and changes the version, installer URL, SHA-256, and release date, then opens the pull request from
   tylerfaulkner/winget-pkgs. Fields the first submission set (switches, scope, descriptions) carry over; to change them,
   submit a version by hand with wingetcreate as above.
+- 0.3.0 adds MinimumOSVersion 10.0.22000.0 (Windows 11) and a new host description to both manifests, which the
+  automated job would not carry over. Submit 0.3.0 by hand (New-WingetManifests.ps1, then wingetcreate submit), or
+  winget would offer it to Windows 10 PCs, where the host installer then refuses.
 - When the winget job fails: read its log (a common cause is an expired token or a fork that needs syncing; a pull
   request for the same version that is already open makes it fail too). Fix the cause, then in Actions open the
   release's Release run and choose Re-run failed jobs, which repeats only the package that failed. If that run can no
@@ -206,20 +218,29 @@ How Dependabot behaves (found while working through the 2026-11 pull requests):
 - Groups apply only to version updates (applies-to: version-updates), so security updates stay one per pull request.
 
 Ignored major versions, and why (remove the entry when the reason no longer holds):
-- Microsoft.Extensions.* (nuget), until the host moves off .NET 8. The 10.x packages still carry a net8.0 build, but
-  each one pulls the rest of the 10.x line, which then ships app-local and overrides the ASP.NET Core 8 shared
-  framework's copies (34 assemblies, among them System.Text.Json and DiagnosticSource; measured 2026-11-04). Taking
-  part of the line fails to compile (CS0433 on ProviderAliasAttribute with Logging.Abstractions 10 and Logging 8), and
-  taking all of it runs ASP.NET Core 8 on Microsoft.Extensions 10, which is a deliberate upgrade, not a routine bump.
-- System.Diagnostics.EventLog (nuget), until the host moves off .NET 8. It is versioned with the .NET runtime: 10.x has
-  no net8.0 dependencies and would compile, but it gives a net8.0 host nothing, while 8.0.x patches (which still
-  arrive as minor and patch updates) keep it on the runtime line the host runs and that Microsoft.Extensions 8 uses.
+- Microsoft.Extensions.* (nuget), while the host stays on .NET 10 (LTS; it moves to the next LTS, not to .NET 11). A
+  newer major still carries a build for the current runtime but pulls the rest of its line, which then ships
+  app-local and overrides the ASP.NET Core shared framework's copies. On .NET 8 with the 10.x packages that was 34
+  assemblies, among them System.Text.Json and DiagnosticSource (measured 2026-11-04); taking part of the line failed to
+  compile (CS0433 on ProviderAliasAttribute with Logging.Abstractions 10 and Logging 8). The packages move to a new
+  major together with the runtime, as in phase 32 (docs/dotnet10-migration.md).
+- System.Diagnostics.EventLog (nuget), for the same reason: it is versioned with the .NET runtime, a newer major gives
+  the host nothing, and patches on the current major still arrive as minor and patch updates.
 - windows, windows-core, and windows-sys (cargo; for a 0.x crate Dependabot treats a minor bump as major). The
   windows-rs crates move in lockstep: windows-core 0.100 does not compile with windows 0.62 (E0277 on every
   #[implement] in client/vcam), and windows 0.100 was not published as of 2026-11-04. The port (renamed Win32 module
   paths and features, Ref renamed to InRef, raw HRESULT returns) is a deliberate upgrade of client/vcam and
   client/src-tauri together, so windows itself is ignored too: its next major arrives as one pull request that cannot
   be taken without the others.
+
+Toolchains (Dependabot does not bump them; check them on the monthly update day):
+- Rust: rust-toolchain.toml pins the release (with rustfmt and clippy) for local builds, CI, and releases; the
+  workflows run `rustup toolchain install`, which reads it. Pinned since 2026-11-06 because clippy runs with
+  -D warnings, so an unpinned "stable" could fail CI the day a release added a lint. To bump: change channel, run
+  scripts\test-all.ps1, and fix the new lints in the same commit. The release cache workflow rebuilds when the file
+  changes.
+- Node: the workflows' node-version (26, the active LTS since October 2026, supported until April 2029) and the local
+  install move together. The next LTS (28) arrives in October 2028.
 
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),

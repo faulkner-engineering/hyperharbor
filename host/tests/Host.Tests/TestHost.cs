@@ -294,7 +294,7 @@ internal sealed class TestHost : IDisposable
 
                 if (context.Request.Headers.TryGetValue(ClientCertificateHeader, out var value))
                 {
-                    context.Connection.ClientCertificate = new X509Certificate2(Convert.FromBase64String(value.ToString()));
+                    context.Connection.ClientCertificate = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(value.ToString()));
                 }
 
                 await nextMiddleware(context);

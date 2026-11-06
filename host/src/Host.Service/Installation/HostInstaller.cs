@@ -69,9 +69,11 @@ internal sealed class HostInstaller(InstallLayout layout, IProgress<string> prog
         }
 
         progress.Report("Securing the data folder");
-        foreach (var removed in DataDirectoryAcl.Secure(DataDirectory, trayUser))
+        foreach (var entry in DataDirectoryAcl.Secure(DataDirectory, trayUser))
         {
-            progress.Report($"Removed {removed}, which an untrusted account created");
+            progress.Report(entry.MovedTo is null
+                ? $"Removed {entry.Path}, a link {entry.Owner} created"
+                : $"Moved {entry.Path} to {entry.MovedTo}: {entry.Owner} created it, so the service does not use it");
         }
 
         progress.Report($"Registering the {HostService.Name} service");

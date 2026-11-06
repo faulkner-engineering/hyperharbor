@@ -8,23 +8,34 @@ namespace HyperHarbor.Host.Core.Security;
 /// its subfolders, and the service (LocalSystem) trusts what it reads there: a paired-devices.json or
 /// host-settings.json planted by another local account before first use would grant API access or move
 /// where VMs are written. The folder gets a protected ACL (SYSTEM, Administrators, and the account running
-/// this, full control; the tray user may read), and entries owned by anyone else are removed.
+/// this, full control; the tray user may read), and entries owned by anyone else are moved out of the service's
+/// way into an "untrusted-" folder that nothing reads. They are moved, not deleted, because they may be the
+/// owner's own data: a portable host's files belong to the account that ran it, and an installer run from another
+/// administrator's console does not trust that account (2026-11-06, docs/platform-notes.md).
 /// </summary>
 public static class DataDirectoryAcl
 {
-    /// <summary>Applies the ACL and removes untrusted entries. Idempotent.</summary>
+    /// <summary>The start of the folders that hold untrusted entries; one per run that found any.</summary>
+    public const string QuarantinePrefix = "untrusted-";
+
+    /// <summary>Applies the ACL and moves untrusted entries aside. Idempotent.</summary>
     /// <param name="trayUser">The installing user, who may read (the tray opens the logs) and whose files are trusted.</param>
-    /// <returns>The paths removed because another account owned them.</returns>
-    public static IReadOnlyList<string> Secure(string directory, SecurityIdentifier? trayUser)
+    /// <returns>The entries another account owned, and where each went.</returns>
+    public static IReadOnlyList<UntrustedEntry> Secure(string directory, SecurityIdentifier? trayUser) =>
+        Secure(directory, trayUser, TrustedOwners(trayUser), DateTimeOffset.UtcNow);
+
+    /// <summary><see cref="Secure(string, SecurityIdentifier?)"/> with the trusted owners given. Exposed for tests.</summary>
+    internal static IReadOnlyList<UntrustedEntry> Secure(string directory, SecurityIdentifier? trayUser, IReadOnlySet<SecurityIdentifier> trusted, DateTimeOffset now)
     {
         Directory.CreateDirectory(directory);
         var info = new DirectoryInfo(directory);
         info.SetAccessControl(CreateSecurity(trayUser));
 
-        var trusted = TrustedOwners(trayUser);
-        var removed = new List<string>();
-        RemoveUntrusted(info, trusted, removed);
-        return removed;
+        // Created only after the ACL above is in place, so no other account can have planted it or write into it.
+        var quarantine = new Lazy<string>(() => CreateQuarantine(directory, now));
+        var found = new List<UntrustedEntry>();
+        MoveUntrusted(info, info.FullName, trusted, quarantine, found);
+        return found;
     }
 
     /// <summary>The folder ACL. Exposed for tests.</summary>
@@ -57,6 +68,19 @@ public static class DataDirectoryAcl
         }
     }
 
+    private static string CreateQuarantine(string directory, DateTimeOffset now)
+    {
+        var name = QuarantinePrefix + now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        var path = Path.Combine(directory, name);
+        for (var suffix = 2; Directory.Exists(path); suffix++)
+        {
+            path = Path.Combine(directory, $"{name}-{suffix}");
+        }
+
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
     private static HashSet<SecurityIdentifier> TrustedOwners(SecurityIdentifier? trayUser)
     {
         var trusted = FullControlIdentities().ToHashSet();
@@ -70,9 +94,10 @@ public static class DataDirectoryAcl
         return trusted;
     }
 
-    private static void RemoveUntrusted(DirectoryInfo folder, HashSet<SecurityIdentifier> trusted, List<string> removed)
+    private static void MoveUntrusted(DirectoryInfo folder, string root, IReadOnlySet<SecurityIdentifier> trusted, Lazy<string> quarantine, List<UntrustedEntry> found)
     {
-        foreach (var entry in folder.EnumerateFileSystemInfos())
+        // A snapshot: the quarantine folder may be created inside the folder being listed.
+        foreach (var entry in folder.EnumerateFileSystemInfos().ToList())
         {
             var owner = entry switch
             {
@@ -82,25 +107,62 @@ public static class DataDirectoryAcl
             };
             if (owner is SecurityIdentifier sid && trusted.Contains(sid))
             {
-                if (entry is DirectoryInfo subfolder && !subfolder.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                var isQuarantine = folder.FullName == root && entry.Name.StartsWith(QuarantinePrefix, StringComparison.OrdinalIgnoreCase);
+                if (entry is DirectoryInfo subfolder && !subfolder.Attributes.HasFlag(FileAttributes.ReparsePoint) && !isQuarantine)
                 {
-                    RemoveUntrusted(subfolder, trusted, removed);
+                    MoveUntrusted(subfolder, root, trusted, quarantine, found);
                 }
 
                 continue;
             }
 
+            var ownerName = owner is SecurityIdentifier ownerSid ? AccountName(ownerSid) : "an unknown account";
+            if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                // A planted junction or link holds no data, and a later copy of the folder could follow it out.
+                if (entry is DirectoryInfo link)
+                {
+                    link.Delete(recursive: false);
+                }
+                else
+                {
+                    entry.Delete();
+                }
+
+                found.Add(new UntrustedEntry(entry.FullName, ownerName, MovedTo: null));
+                continue;
+            }
+
+            // MoveTo changes FullName to the new location.
+            var path = entry.FullName;
+            var target = Path.Combine(quarantine.Value, Path.GetRelativePath(root, path));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             if (entry is DirectoryInfo untrustedFolder)
             {
-                untrustedFolder.Delete(recursive: !untrustedFolder.Attributes.HasFlag(FileAttributes.ReparsePoint));
+                untrustedFolder.MoveTo(target);
             }
             else
             {
-                entry.Attributes = FileAttributes.Normal;
-                entry.Delete();
+                ((FileInfo)entry).MoveTo(target);
             }
 
-            removed.Add(entry.FullName);
+            found.Add(new UntrustedEntry(path, ownerName, target));
+        }
+    }
+
+    private static string AccountName(SecurityIdentifier sid)
+    {
+        try
+        {
+            return sid.Translate(typeof(NTAccount)).Value;
+        }
+        catch (IdentityNotMappedException)
+        {
+            return sid.Value;
         }
     }
 }
+
+/// <summary>A data directory entry another account owned.</summary>
+/// <param name="MovedTo">Where it is now; null for a link, which is deleted.</param>
+public sealed record UntrustedEntry(string Path, string Owner, string? MovedTo);

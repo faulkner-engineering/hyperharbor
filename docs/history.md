@@ -594,3 +594,32 @@ per-device VM accounts and a user management UI.
      the published 0.2.5, self-update from a winget install (the entry and winget list followed it), and Windows
      Sandbox, with 0.2.6 test builds. The published 0.2.5 is not winget-ready, so the first submission is the next
      release. Not done here: the winget-pkgs pull requests (the owner's step).
+32. The host on .NET 10 (2026-11-05 to 2026-11-06; no API change; branch feat/dotnet10). .NET 8 reaches end of support
+   on 2026-11-10; .NET 10 is the LTS until 2028-11-14. The plan, the spike, and every measurement are in
+   docs/dotnet10-migration.md. Decided with the user: it ships in 0.3.0, which may carry other changes, and the version
+   is not bumped until the release; the measured startup cost was to be recovered, not accepted.
+   - Retarget (net10.0-windows, SDK 10.0.403, the six runtime-versioned packages at 10.0.14) and the 8 build errors
+     with -warnaserror: X509CertificateLoader for the host certificate and the tests (SYSLIB0057), FormClosed
+     (WFDEV004), and a designer serialization attribute (WFO1000). StaticWebAssetsEnabled false, or the Web SDK
+     publishes an empty endpoints file beside the single executable. HostCertificateCompatibilityTests load and serve
+     a certificate written by the .NET 8 host (a test-only key), since every paired client pins the host's.
+   - Size and startup: .NET 8's self-contained publish carried all of WPF (55 MB) although the host uses only WinForms;
+     .NET 10 does not. Dynamic PGO cost .NET 10 about 70 ms of startup, so TieredPGO is off (HostRuntimeConfigTests).
+     Release build: 85.7 MB instead of 105.0 MB, startup 1199 ms instead of 1316 ms.
+   - test-all on a 10 GB machine: the cross-version stage was stopped for low memory while it compiled the previous
+     release's client. Development and test Rust builds now carry line tables only (profile.dev, and
+     CARGO_PROFILE_DEV_DEBUG for the old client in e2e.ps1).
+   - Verified on 2026-11-06 on the development VM: the full test-all including the cross-version tests (the 0.2.5
+     client against the .NET 10 host and the reverse); the full compressed package; dist relaunched on it with this
+     machine's data, serving the same host certificate (D769A5F2...70B1); the tray window and its pages in WebView2
+     (opened through UI Automation); Hyper-V from the single-file host and LifecycleLiveTests and DiskGrowLiveTests; and
+     the released 0.2.6 installed as the service, updating itself over a local HTTPS channel (a throwaway certificate
+     and file server; nothing published). A .NET 10 build that exits when started as a service (0.3.0-net10.1) was
+     rolled back ("did not start, so 0.2.6 was restored"); the branch head (0.3.0-net10.2) installed, kept the
+     certificate, moved the uninstall entry to its version, accepted the preshutdown control (the ServiceBase field
+     still exists), reached Hyper-V, and logged no errors.
+   - The first service install of that test lost data: run from a console elevated as another administrator, the 0.2.6
+     installer did not trust hh-owner's files and deleted the portable host's certificate, pairings, and logs, and the
+     uninstall left the data folder unreadable to hh-owner. The identity came back from update\backups\ (the logs and
+     the audit trail did not); both bugs are fixed on branch fix/data-folder-safety (docs/platform-notes.md, General).
+     Not verified live: the preshutdown shutdown of a Performance mode VM (no GPU VM), and a signed build.

@@ -37,7 +37,9 @@ public sealed class SecurityStoreTests : IDisposable
         using var certificate = new HostCertificateStore(_directory, "TEST-HOST").GetOrCreate();
         var bytes = File.ReadAllBytes(Path.Combine(_directory, "host-certificate.pfx.protected"));
 
-        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => new X509Certificate2(bytes));
+        // Neither as a PKCS#12 file nor as a single certificate (the old X509Certificate2 constructor tried both).
+        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => X509CertificateLoader.LoadPkcs12(bytes, null));
+        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => X509CertificateLoader.LoadCertificate(bytes));
     }
 
     [Fact]

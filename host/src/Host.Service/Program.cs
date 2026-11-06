@@ -113,6 +113,19 @@ if (!isWindowsService)
     }
 }
 
+// From 0.3.0 the host needs Windows 11. The self-test stops here too, so a Windows 10 host never updates to this version.
+if (WindowsRequirement.ProblemOnThisPc() is { } unsupportedWindows)
+{
+    Console.Error.WriteLine(unsupportedWindows);
+    if (ownConsoleWindow)
+    {
+        Console.Error.WriteLine("Press Enter to close this window.");
+        Console.ReadLine();
+    }
+
+    return WindowsRequirement.ExitCode;
+}
+
 // A service starts in System32, so appsettings.json is read from the executable's folder instead.
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
@@ -679,9 +692,16 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 await using var app = builder.Build();
 
-foreach (var removed in untrustedDataEntries)
+foreach (var entry in untrustedDataEntries)
 {
-    app.Logger.LogWarning("Removed {Path} from the data directory: an untrusted account owned it.", removed);
+    if (entry.MovedTo is null)
+    {
+        app.Logger.LogWarning("Removed {Path} from the data directory: a link {Owner} created.", entry.Path, entry.Owner);
+    }
+    else
+    {
+        app.Logger.LogWarning("Moved {Path} to {MovedTo}: {Owner} created it, so the service does not use it.", entry.Path, entry.MovedTo, entry.Owner);
+    }
 }
 
 app.UseExceptionHandler();

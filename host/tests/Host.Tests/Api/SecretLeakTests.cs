@@ -142,7 +142,7 @@ public sealed class SecretLeakTests : IDisposable
     private static string ClientPem(HttpClient client)
     {
         var raw = client.DefaultRequestHeaders.GetValues(TestHost.ClientCertificateHeader).Single();
-        return new X509Certificate2(Convert.FromBase64String(raw)).ExportCertificatePem();
+        return X509CertificateLoader.LoadCertificate(Convert.FromBase64String(raw)).ExportCertificatePem();
     }
 
     private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, Guid pairingId, PairingConfirmation confirmation) =>
