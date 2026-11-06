@@ -7,7 +7,8 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Everything CI runs (build, tests, lint, type drift, audits): powershell -ExecutionPolicy Bypass -File scripts\test-all.ps1
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
   It fits in 10 GB of memory: MSBuild worker nodes exit after each build (MSBUILDDISABLENODEREUSE), the .NET build
-  servers are shut down before the Rust checks, and cargo runs one job per 4 GB unless CARGO_BUILD_JOBS is set.
+  servers are shut down before the Rust checks, and cargo runs one job per 4 GB unless CARGO_BUILD_JOBS is set
+  (scripts/build-memory.ps1, which package.ps1 uses too since a build of it was stopped the same way on 2026-11-06).
   Before this (2026-11-05), the full run on a 10 GB machine was stopped for low memory in cargo test. Development and
   test builds carry file and line debug information only (profile.dev in Cargo.toml; e2e.ps1 applies the same to the
   previous release's client), which keeps the linker's memory down; before that (2026-11-06), the run was still stopped

@@ -42,25 +42,8 @@ $env:Path = (@($toolPaths | Where-Object { Test-Path $_ }) + $env:Path) -join ';
 $env:DOTNET_NOLOGO = '1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 
-# Memory. On a 10 GB machine the full run was stopped for low memory in cargo test: MSBuild worker nodes and the
-# compiler server stayed resident after the host checks, and cargo ran one job per core, each linking a large test
-# binary. Worker nodes now exit after each build, the build servers are shut down before the Rust checks, and cargo
-# gets about 4 GB per job (two jobs passed on that machine, four did not). A CARGO_BUILD_JOBS already set is kept.
-$env:MSBUILDDISABLENODEREUSE = '1'
-if (-not $env:CARGO_BUILD_JOBS) {
-    # Rounded first: Windows reports a little under the installed size, and a 16 GB machine should keep four jobs.
-    $memoryGb = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
-    $jobs = [Math]::Max(1, [Math]::Min([Environment]::ProcessorCount, [int][Math]::Floor($memoryGb / 4)))
-    if ($jobs -lt [Environment]::ProcessorCount) {
-        $env:CARGO_BUILD_JOBS = "$jobs"
-        Write-Host "cargo: $jobs parallel jobs for $memoryGb GB of memory." -ForegroundColor Yellow
-    }
-}
-
-# Shuts down the .NET compiler and MSBuild servers so their memory is free for the Rust build.
-function Stop-DotnetBuildServers {
-    dotnet build-server shutdown *> $null
-}
+# Memory limits (MSBuild node reuse off, cargo jobs by memory) and Stop-DotnetBuildServers; shared with package.ps1.
+. (Join-Path $PSScriptRoot 'build-memory.ps1')
 
 $failures = [System.Collections.Generic.List[string]]::new()
 

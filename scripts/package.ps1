@@ -42,6 +42,9 @@ $env:Path = (@($toolPaths | Where-Object { Test-Path $_ }) + $env:Path) -join ';
 $env:DOTNET_NOLOGO = '1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 
+# Memory limits (MSBuild node reuse off, cargo jobs by memory) and Stop-DotnetBuildServers; shared with test-all.ps1.
+. (Join-Path $PSScriptRoot 'build-memory.ps1')
+
 # Code signing with Azure Artifact Signing (scripts\sign.ps1), for full builds where HH_SIGNING_* is set (the release
 # workflow sets it, with HH_SIGNING_REQUIRED=1 so a missing setting fails the release).
 $sign = Join-Path $PSScriptRoot 'sign.ps1'
@@ -82,6 +85,7 @@ if (-not $SkipTests) {
         Invoke-Step 'Host tests' { dotnet test (Join-Path $repo 'HyperHarbor.sln') -c Release }
     }
     if (-not $HostOnly) {
+        Stop-DotnetBuildServers
         Push-Location (Join-Path $repo 'client')
         try {
             Invoke-Step 'Generated API types match api.yaml' {
@@ -152,6 +156,9 @@ if (-not $ClientOnly) {
     $manifest = Join-Path $dist 'latest.json'
     Invoke-Step 'Write update manifest' { & (Join-Path $staging 'HyperHarbor.Host.exe') write-update-manifest $manifest | Out-String | Write-Host }
 }
+
+# The host build is done; its build servers would hold their memory through the Rust build, and after the script.
+Stop-DotnetBuildServers
 
 if (-not $HostOnly) {
     if ($Fast) {
