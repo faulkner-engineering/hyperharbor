@@ -8,7 +8,11 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   [-HostOnly|-ClientOnly] [-Coverage] [-SkipAudit]. CI: .github/workflows/ci.yml (windows-latest).
   It fits in 10 GB of memory: MSBuild worker nodes exit after each build (MSBUILDDISABLENODEREUSE), the .NET build
   servers are shut down before the Rust checks, and cargo runs one job per 4 GB unless CARGO_BUILD_JOBS is set.
-  Before this (2026-11-05), the full run on a 10 GB machine was stopped for low memory in cargo test.
+  Before this (2026-11-05), the full run on a 10 GB machine was stopped for low memory in cargo test. Development and
+  test builds carry file and line debug information only (profile.dev in Cargo.toml; e2e.ps1 applies the same to the
+  previous release's client), which keeps the linker's memory down; before that (2026-11-06), the run was still stopped
+  while e2e.ps1 compiled the previous release's client. On a 10 GB machine, also stop dist (host, tray, and client:
+  about 1 GB with their WebView2 processes) before a full run.
 - Host build/test: dotnet build HyperHarbor.sln -warnaserror && dotnet test HyperHarbor.sln
 - Run host API (https://*:48443, mTLS): dotnet run --project host/src/Host.Service (opens its own console
   window); pairing needs the tray: dotnet run --project host/src/Host.Service -- --tray

@@ -75,6 +75,12 @@ windows = { version = "0.62", features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 
+# File and line debug information only, in development and test builds (the test profile inherits it): full debug
+# information made linking the test binaries need more memory than a 10 GB machine has (docs/development.md).
+# Backtraces keep file and line numbers; a debugger shows no local variables.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 codegen-units = 1
 lto = true

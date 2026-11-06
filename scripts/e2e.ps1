@@ -93,6 +93,8 @@ git -C $repo worktree add --detach $worktree $previous.tag
 if ($LASTEXITCODE -ne 0) { throw "Could not check out $($previous.tag)." }
 # Sharing the build folder lets the old client reuse the dependencies already built.
 $env:CARGO_TARGET_DIR = Join-Path $tauri 'target'
+# Releases before 0.3.0 build with full debug information; this matches today's profile (Cargo.toml) and its memory use.
+$env:CARGO_PROFILE_DEV_DEBUG = 'line-tables-only'
 Push-Location (Join-Path $worktree 'client\src-tauri')
 try {
     cargo test e2e_loopback -- --ignored --nocapture
@@ -101,5 +103,6 @@ try {
 finally {
     Pop-Location
     Remove-Item Env:\CARGO_TARGET_DIR
+    Remove-Item Env:\CARGO_PROFILE_DEV_DEBUG
     git -C $repo worktree remove --force $worktree
 }
