@@ -127,12 +127,12 @@ describe("CameraDialog", () => {
       status: {
         ...idle,
         sharingAvailable: false,
-        sharingMessage: "Camera sharing requires Windows 11 on this device. Only one VM at a time can use the camera here.",
+        sharingMessage: "Camera sharing is not available: HyperHarbor needs Windows 11, and this device runs Windows build 19045.",
       },
     });
     render(CameraDialog, { host, vm, onclose: vi.fn() });
 
-    expect(await screen.findByText(/requires Windows 11 on this device/)).toBeTruthy();
+    expect(await screen.findByText(/HyperHarbor needs Windows 11/)).toBeTruthy();
     expect(screen.getByLabelText(/Blur the picture/).matches(":disabled")).toBe(true);
     expect((screen.getByRole("button", { name: "Close shutter" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -195,11 +195,16 @@ describe("CameraDialog", () => {
 
   it("does not offer setup on Windows 10, where the camera is not shared at all", async () => {
     mockClient({
-      status: { ...idle, sharingAvailable: false, sourceInstalled: false, sharingMessage: "Camera sharing requires Windows 11 on this device." },
+      status: {
+        ...idle,
+        sharingAvailable: false,
+        sourceInstalled: false,
+        sharingMessage: "Camera sharing is not available: HyperHarbor needs Windows 11, and this device runs Windows build 19045.",
+      },
     });
     render(CameraDialog, { host, vm, onclose: vi.fn() });
 
-    expect(await screen.findByText(/requires Windows 11/)).toBeTruthy();
+    expect(await screen.findByText(/needs Windows 11/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Set up camera sharing" })).toBeNull();
   });
 

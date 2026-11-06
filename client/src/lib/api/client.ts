@@ -373,7 +373,7 @@ export interface CameraSessionStatus {
 
 /** Camera sharing on this device. Mirrors CameraStatus in src-tauri/src/camera/service.rs. */
 export interface CameraStatus {
-  /** False on Windows 10 and where the camera source is not installed. */
+  /** False below Windows 11 and where the camera source is not installed. */
   sharingAvailable: boolean;
   sharingMessage: string | null;
   /** False until "Set up camera sharing" has installed the camera source on this device. */

@@ -1124,8 +1124,7 @@ mod tests {
     #[test]
     fn no_camera_for_this_pc_is_made_when_no_vm_gets_a_virtual_camera() {
         // Windows 10, not set up, and sharing turned off for the VM: no virtual cameras at all.
-        let (first, _backend, log) =
-            service(Support::NeedsWindows11 { build: 19045 }, "localnone1");
+        let (first, _backend, log) = service(Support::from_probe(19045, Ok(true)), "localnone1");
         first.prepare("host/work", "Work");
         assert!(log.created.lock().unwrap().is_empty());
         assert!(first.status().local_camera.is_none());
@@ -1188,10 +1187,12 @@ mod tests {
 
     #[test]
     fn windows_10_gives_the_first_vm_the_physical_camera_and_the_second_none() {
-        let (service, _backend, log) = service(Support::NeedsWindows11 { build: 19045 }, "win10");
+        // HyperHarbor needs Windows 11 from 0.3.0, but a client that updated itself on Windows 10
+        // still opens, and its camera works as on any device without virtual cameras.
+        let (service, _backend, log) = service(Support::from_probe(19045, Ok(true)), "win10");
         let first = service.prepare("host/work", "Work");
         assert_eq!(first.redirect, CameraRedirect::AllPhysical);
-        assert!(first.notice.unwrap().contains("requires Windows 11"));
+        assert!(first.notice.unwrap().contains("needs Windows 11"));
         let second = service.prepare("host/games", "Games");
         assert_eq!(second.redirect, CameraRedirect::None);
         assert!(second
@@ -1496,7 +1497,7 @@ mod tests {
 
     #[test]
     fn nothing_is_cleaned_up_where_virtual_cameras_do_not_exist() {
-        let (backend, log) = Fake::new(Support::NeedsWindows11 { build: 19045 });
+        let (backend, log) = Fake::new(Support::from_probe(19045, Ok(true)));
         let ledger = std::env::temp_dir()
             .join(format!("hh-camsvc-win10-{}", std::process::id()))
             .join("ledger.json");

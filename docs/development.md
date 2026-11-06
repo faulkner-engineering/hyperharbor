@@ -178,6 +178,9 @@ New-WingetManifests.ps1 there writes the manifests for a version. Prereleases an
   winget-pkgs and changes the version, installer URL, SHA-256, and release date, then opens the pull request from
   tylerfaulkner/winget-pkgs. Fields the first submission set (switches, scope, descriptions) carry over; to change them,
   submit a version by hand with wingetcreate as above.
+- 0.3.0 adds MinimumOSVersion 10.0.22000.0 (Windows 11) and a new host description to both manifests, which the
+  automated job would not carry over. Submit 0.3.0 by hand (New-WingetManifests.ps1, then wingetcreate submit), or
+  winget would offer it to Windows 10 PCs, where the host installer then refuses.
 - When the winget job fails: read its log (a common cause is an expired token or a fork that needs syncing; a pull
   request for the same version that is already open makes it fail too). Fix the cause, then in Actions open the
   release's Release run and choose Re-run failed jobs, which repeats only the package that failed. If that run can no

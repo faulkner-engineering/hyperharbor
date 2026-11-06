@@ -565,6 +565,12 @@ section for an area before changing it: most of these were learned from a failur
   Windows 10 (no MFCreateVirtualCamera) and Windows N editions. All free Media Foundation functions go through
   camera/mfapi.rs; mfapi's test parses the test exe's import table and fails on any mf*.dll. COM interfaces need no
   import. dumpbin /imports on the real exe shows only ordinary DLLs.
+- From 0.3.0 HyperHarbor needs Windows 11 (decided with the user 2026-11-06). The host refuses older Windows
+  (Host.Core/Installation/WindowsRequirement, in the installer and at every start, so the update self-test fails and
+  a Windows 10 host stays on 0.2.x). The client does not refuse: the Tauri updater has no OS condition, so a Windows
+  10 client still updates itself, and it must still open there. That is why the lazy Media Foundation lookup above
+  stays; below build 22000 camera::support reports Unavailable with the reason, and the physical camera goes to one
+  VM, as on a Windows N edition.
 - COM interface types are not Send in windows-rs; VirtualCamera has a documented unsafe impl Send (multithreaded apartment).
 - Media Foundation error codes for a busy camera (checked against the windows crate): MF_E_VIDEO_RECORDING_DEVICE_PREEMPTED
   0xC00D3EA3, MF_E_HW_MFT_FAILED_START_STREAMING 0xC00D3704, invalidated 0xC00D3EA2, E_ACCESSDENIED for the privacy

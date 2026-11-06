@@ -1,17 +1,16 @@
 //! Whether this device can share its camera. User-mode virtual cameras (`MFCreateVirtualCamera`)
-//! arrived in Windows 11, so Windows 10 keeps the old behaviour: the physical camera goes to the
-//! first session that asks for it.
+//! need Windows 11, which HyperHarbor needs from 0.3.0. On a device without them (Windows 10, or a
+//! Windows 11 edition without Media Foundation) the physical camera goes to the first session that
+//! asks for it.
 
-/// The first Windows 11 build number.
+/// The first Windows 11 build.
 pub const MIN_BUILD: u32 = 22000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Support {
     /// Virtual cameras can be created.
     Available,
-    /// Windows 10 or older: only the physical camera, for one VM at a time.
-    NeedsWindows11 { build: u32 },
-    /// Windows 11, but the API reports no support (or could not be loaded).
+    /// No virtual cameras here, with the reason.
     Unavailable(String),
 }
 
@@ -20,7 +19,9 @@ impl Support {
     /// supports software cameras. A build below Windows 11 never reaches the API check.
     pub fn from_probe(build: u32, api_supported: Result<bool, String>) -> Self {
         if build < MIN_BUILD {
-            return Self::NeedsWindows11 { build };
+            return Self::Unavailable(format!(
+                "HyperHarbor needs Windows 11, and this device runs Windows build {build}."
+            ));
         }
         match api_supported {
             Ok(true) => Self::Available,
@@ -39,10 +40,6 @@ impl Support {
     pub fn message(&self) -> Option<String> {
         match self {
             Self::Available => None,
-            Self::NeedsWindows11 { .. } => Some(
-                "Camera sharing requires Windows 11 on this device. Only one VM at a time can use the camera here."
-                    .to_string(),
-            ),
             Self::Unavailable(reason) => Some(format!("Camera sharing is not available: {reason}")),
         }
     }
@@ -53,17 +50,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn windows_10_builds_need_windows_11() {
-        assert_eq!(
-            Support::from_probe(19045, Ok(true)),
-            Support::NeedsWindows11 { build: 19045 }
-        );
-        assert_eq!(
-            Support::from_probe(MIN_BUILD - 1, Ok(true)),
-            Support::NeedsWindows11 {
-                build: MIN_BUILD - 1
-            }
-        );
+    fn builds_before_windows_11_are_unavailable_and_say_why() {
+        for build in [19045, MIN_BUILD - 1] {
+            let support = Support::from_probe(build, Ok(true));
+            assert!(!support.is_available());
+            let message = support.message().unwrap();
+            assert!(message.contains("needs Windows 11"), "{message}");
+            assert!(message.contains(&format!("build {build}")), "{message}");
+        }
     }
 
     #[test]
@@ -73,12 +67,10 @@ mod tests {
     }
 
     #[test]
-    fn windows_10_never_asks_the_api() {
+    fn builds_before_windows_11_never_ask_the_api() {
         // The probe result is not even consulted below the minimum build.
-        assert_eq!(
-            Support::from_probe(19045, Err("missing".into())),
-            Support::NeedsWindows11 { build: 19045 }
-        );
+        let support = Support::from_probe(19045, Err("missing".into()));
+        assert!(support.message().unwrap().contains("needs Windows 11"));
     }
 
     #[test]
@@ -92,13 +84,6 @@ mod tests {
             Err("mfsensorgroup.dll has no MFCreateVirtualCamera".into()),
         );
         assert!(missing.message().unwrap().contains("MFCreateVirtualCamera"));
-    }
-
-    #[test]
-    fn the_windows_10_message_names_the_requirement_and_the_fallback() {
-        let message = Support::NeedsWindows11 { build: 19045 }.message().unwrap();
-        assert!(message.contains("requires Windows 11"));
-        assert!(message.contains("one VM at a time"));
         assert!(Support::Available.message().is_none());
     }
 }

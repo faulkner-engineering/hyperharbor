@@ -53,6 +53,7 @@ public sealed class WingetManifestTests : IDisposable
 
         var hostSetup = host["installer"];
         Assert.Equal("exe", hostSetup["InstallerType"]);
+        Assert.Equal("10.0.22000.0", hostSetup["MinimumOSVersion"]);
         Assert.Equal("machine", hostSetup["Scope"]);
         Assert.Equal("elevatesSelf", hostSetup["ElevationRequirement"]);
         Assert.Equal("install --quiet", Map(hostSetup["InstallerSwitches"])["Silent"]);
@@ -66,6 +67,7 @@ public sealed class WingetManifestTests : IDisposable
 
         var clientSetup = client["installer"];
         Assert.Equal("nullsoft", clientSetup["InstallerType"]);
+        Assert.Equal("10.0.22000.0", clientSetup["MinimumOSVersion"]);
         Assert.Equal("user", clientSetup["Scope"]);
         Assert.Equal("/S", Map(clientSetup["InstallerSwitches"])["Silent"]);
         Assert.Equal("HyperHarbor", clientSetup["ProductCode"]);
