@@ -22,6 +22,7 @@ public sealed class DataDirectoryAccessTests : IDisposable
             return;
         }
 
+        new DirectoryInfo(_directory).SetAccessControl(OwnerOnly());
         foreach (var file in Directory.EnumerateFiles(_directory, "*", SearchOption.AllDirectories))
         {
             new FileInfo(file).SetAccessControl(ProtectedFile.CreateSecurity());
@@ -72,6 +73,30 @@ public sealed class DataDirectoryAccessTests : IDisposable
     }
 
     [Fact]
+    public void GrantHostAccount_RestoresAccessToTheFolderItself()
+    {
+        // After an uninstall the folder keeps the installer's ACL (SYSTEM and Administrators), and setup used to
+        // repair only the entries inside it, so the portable host still could not start (2026-11-06).
+        ProtectedFile.WriteAllBytes(Path.Combine(_directory, "users.json"), "[]"u8);
+        var folderSecurity = new DirectorySecurity();
+        folderSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        folderSecurity.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+        new DirectoryInfo(_directory).SetAccessControl(folderSecurity);
+        Assert.Equal([_directory], DataDirectoryAccess.FindUnreadable(_directory));
+
+        var changed = DataDirectoryAccess.GrantHostAccount(_directory, _currentUser);
+
+        Assert.Equal(_directory, changed[0]);
+        Assert.Empty(DataDirectoryAccess.FindUnreadable(_directory));
+        var rule = Assert.Single(
+            new DirectoryInfo(_directory).GetAccessControl().GetAccessRules(true, false, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>(),
+            rule => rule.IdentityReference.Equals(_currentUser));
+        Assert.Equal(FileSystemRights.FullControl, rule.FileSystemRights);
+        // Inherited, so a file the host writes there later grants the account too.
+        Assert.Equal(InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, rule.InheritanceFlags);
+    }
+
+    [Fact]
     public void GrantHostAccount_LeavesFilesThatAlreadyGrantTheAccount()
     {
         ProtectedFile.WriteAllBytes(Path.Combine(_directory, "users.json"), "[]"u8);
@@ -85,6 +110,13 @@ public sealed class DataDirectoryAccessTests : IDisposable
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, AccessControlType.Allow));
         new FileInfo(path).SetAccessControl(security);
+    }
+
+    private static DirectorySecurity OwnerOnly()
+    {
+        var security = new DirectorySecurity();
+        security.AddAccessRule(new FileSystemAccessRule(CurrentUser(), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+        return security;
     }
 
     private static SecurityIdentifier CurrentUser()

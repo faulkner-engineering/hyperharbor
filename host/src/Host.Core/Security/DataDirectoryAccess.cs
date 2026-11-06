@@ -24,16 +24,24 @@ public static class DataDirectoryAccess
     }
 
     /// <summary>
-    /// Gives <paramref name="hostAccount"/> full control of every file and folder under <paramref name="directory"/>
-    /// that does not already grant it. Needs administrator rights for entries another account owns. Idempotent.
+    /// Gives <paramref name="hostAccount"/> full control of <paramref name="directory"/> and of every file and folder
+    /// under it that does not already grant it. Needs administrator rights for entries another account owns.
+    /// Idempotent.
     /// </summary>
+    /// <remarks>
+    /// The folder itself comes first: after the service is uninstalled it keeps the installer's ACL (SYSTEM and
+    /// Administrators), so the account could open no entry in it (2026-11-06). Folders get an inherited rule, so the
+    /// files the host writes there later grant the account too.
+    /// </remarks>
     /// <returns>The paths whose ACL changed.</returns>
     public static IReadOnlyList<string> GrantHostAccount(string directory, SecurityIdentifier hostAccount)
     {
         var changed = new List<string>();
         if (Directory.Exists(directory))
         {
-            Grant(new DirectoryInfo(directory), hostAccount, changed);
+            var root = new DirectoryInfo(directory);
+            GrantFolder(root, hostAccount, changed);
+            Grant(root, hostAccount, changed);
         }
 
         return changed;
@@ -92,19 +100,13 @@ public static class DataDirectoryAccess
 
             if (entry is DirectoryInfo subfolder)
             {
-                var security = subfolder.GetAccessControl(AccessControlSections.Access);
-                if (AddFullControl(security, hostAccount))
-                {
-                    subfolder.SetAccessControl(security);
-                    changed.Add(subfolder.FullName);
-                }
-
+                GrantFolder(subfolder, hostAccount, changed);
                 Grant(subfolder, hostAccount, changed);
             }
             else if (entry is FileInfo file)
             {
                 var security = file.GetAccessControl(AccessControlSections.Access);
-                if (AddFullControl(security, hostAccount))
+                if (AddFullControl(security, hostAccount, InheritanceFlags.None))
                 {
                     file.SetAccessControl(security);
                     changed.Add(file.FullName);
@@ -113,8 +115,18 @@ public static class DataDirectoryAccess
         }
     }
 
+    private static void GrantFolder(DirectoryInfo folder, SecurityIdentifier hostAccount, List<string> changed)
+    {
+        var security = folder.GetAccessControl(AccessControlSections.Access);
+        if (AddFullControl(security, hostAccount, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit))
+        {
+            folder.SetAccessControl(security);
+            changed.Add(folder.FullName);
+        }
+    }
+
     /// <returns>False when the ACL already gives the account full control.</returns>
-    private static bool AddFullControl(FileSystemSecurity security, SecurityIdentifier hostAccount)
+    private static bool AddFullControl(FileSystemSecurity security, SecurityIdentifier hostAccount, InheritanceFlags inheritance)
     {
         var granted = security.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier))
             .Cast<FileSystemAccessRule>()
@@ -126,7 +138,7 @@ public static class DataDirectoryAccess
             return false;
         }
 
-        security.AddAccessRule(new FileSystemAccessRule(hostAccount, FileSystemRights.FullControl, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(hostAccount, FileSystemRights.FullControl, inheritance, PropagationFlags.None, AccessControlType.Allow));
         return true;
     }
 }
