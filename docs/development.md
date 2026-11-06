@@ -221,6 +221,15 @@ Ignored major versions, and why (remove the entry when the reason no longer hold
   client/src-tauri together, so windows itself is ignored too: its next major arrives as one pull request that cannot
   be taken without the others.
 
+Toolchains (Dependabot does not bump them; check them on the monthly update day):
+- Rust: rust-toolchain.toml pins the release (with rustfmt and clippy) for local builds, CI, and releases; the
+  workflows run `rustup toolchain install`, which reads it. Pinned since 2026-11-06 because clippy runs with
+  -D warnings, so an unpinned "stable" could fail CI the day a release added a lint. To bump: change channel, run
+  scripts\test-all.ps1, and fix the new lints in the same commit. The release cache workflow rebuilds when the file
+  changes.
+- Node: the workflows' node-version (26, the active LTS since October 2026, supported until April 2029) and the local
+  install move together. The next LTS (28) arrives in October 2028.
+
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),
 run npm run gen:api, and lint. OpenApiEnumTests fail if C# enums or the API version drift from api.yaml.
