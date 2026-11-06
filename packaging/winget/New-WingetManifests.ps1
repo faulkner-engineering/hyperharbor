@@ -66,7 +66,7 @@ $packages = @(
         Description = @(
             'The HyperHarbor host runs as a Windows service on the PC that runs Hyper-V. Paired devices running the'
             'HyperHarbor client list, start, create, and back up its virtual machines and connect to them with Remote'
-            'Desktop in one click, with a one-time password for each connection. It needs Windows 10 or 11 Pro,'
+            'Desktop in one click, with a one-time password for each connection. It needs Windows 11 Pro,'
             'Enterprise, or Education with Hyper-V turned on.'
         ) -join ' '
         InstallationNotes = @(
@@ -158,6 +158,8 @@ try {
             "PackageVersion: $Version"
             'Platform:'
             '- Windows.Desktop'
+            # Both need Windows 11 from 0.3.0 (the host refuses older Windows; the client loses camera sharing).
+            'MinimumOSVersion: 10.0.22000.0'
         )
         if ($package.Name -eq 'Host') {
             # install --quiet installs, or updates in place when an older version is installed. The executable asks

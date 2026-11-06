@@ -18,7 +18,7 @@ jobs:
           global-json-file: global.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
           cache-dependency-path: host/src/Host.Tray/webui/package-lock.json
       # The tray window's HTML app; the host build embeds it.
@@ -52,12 +52,11 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
           cache-dependency-path: client/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      # The Rust release pinned in rust-toolchain.toml, with its components.
+      - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: client/src-tauri
@@ -95,8 +94,9 @@ jobs:
       # The host build runs npm for the tray window's HTML app.
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
-      - uses: dtolnay/rust-toolchain@stable
+          node-version: 26
+      # The Rust release pinned in rust-toolchain.toml, with its components.
+      - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: client/src-tauri

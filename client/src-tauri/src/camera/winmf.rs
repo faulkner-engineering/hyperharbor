@@ -247,10 +247,13 @@ mod tests {
     #[test]
     fn this_device_is_classified_consistently_with_its_build() {
         let support = detect_support();
-        if windows_build() < super::super::support::MIN_BUILD {
-            assert!(matches!(support, Support::NeedsWindows11 { .. }));
-        } else {
-            assert!(!matches!(support, Support::NeedsWindows11 { .. }));
-        }
+        let says_windows_11 = support
+            .message()
+            .is_some_and(|message| message.contains("needs Windows 11"));
+        assert_eq!(
+            says_windows_11,
+            windows_build() < super::super::support::MIN_BUILD,
+            "{support:?}"
+        );
     }
 }

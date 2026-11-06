@@ -74,9 +74,14 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
 - Version comes from Directory.Build.props (host) and client/src-tauri/tauri.conf.json (client); keep them equal.
 - The script refuses to run while anything is running from dist/ (Windows locks the exe).
 - After `HyperHarbor.Host.exe uninstall` (data kept), %ProgramData%\HyperHarbor keeps the installed service's ACL
-  (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts dies on data-format.json
-  (it now says which file it cannot open and exits with code 3). Start dist\host\HyperHarbor.Host.exe run elevated
-  instead (seen on the laptop 2026-10-21); the tray from Start-HyperHarbor.ps1 connects to it.
+  (Administrators, SYSTEM), so the unelevated host that Start-HyperHarbor.ps1 starts cannot open the data folder (it
+  says which file and exits with code 3; seen on the laptop 2026-10-21). Start-HyperHarbor.ps1 then asks for setup,
+  which restores the account's access to the folder and everything in it.
+- Installing the service over a portable host's data: run the installer as the signed-in user, not from a console
+  elevated as another administrator. It asks for elevation itself and makes the signed-in user the tray user; from an
+  elevated console the tray user is that administrator, the installer does not trust the signed-in user's files and
+  moves them to untrusted-<time>\ in the data folder, and the service starts with a new identity
+  (docs/platform-notes.md).
 - dist\host\Start-HyperHarbor.ps1 does one elevated setup (Private-profile firewall rule for TCP 48443,
   Hyper-V Administrators membership, console account), then starts "HyperHarbor.Host.exe run" and "--tray". It asks
   for elevation again when the current account cannot open a file in the data folder, and setup restores access
@@ -182,6 +187,9 @@ New-WingetManifests.ps1 there writes the manifests for a version. Prereleases an
   winget-pkgs and changes the version, installer URL, SHA-256, and release date, then opens the pull request from
   tylerfaulkner/winget-pkgs. Fields the first submission set (switches, scope, descriptions) carry over; to change them,
   submit a version by hand with wingetcreate as above.
+- 0.3.0 adds MinimumOSVersion 10.0.22000.0 (Windows 11) and a new host description to both manifests, which the
+  automated job would not carry over. Submit 0.3.0 by hand (New-WingetManifests.ps1, then wingetcreate submit), or
+  winget would offer it to Windows 10 PCs, where the host installer then refuses.
 - When the winget job fails: read its log (a common cause is an expired token or a fork that needs syncing; a pull
   request for the same version that is already open makes it fail too). Fix the cause, then in Actions open the
   release's Release run and choose Re-run failed jobs, which repeats only the package that failed. If that run can no
@@ -224,6 +232,15 @@ Ignored major versions, and why (remove the entry when the reason no longer hold
   paths and features, Ref renamed to InRef, raw HRESULT returns) is a deliberate upgrade of client/vcam and
   client/src-tauri together, so windows itself is ignored too: its next major arrives as one pull request that cannot
   be taken without the others.
+
+Toolchains (Dependabot does not bump them; check them on the monthly update day):
+- Rust: rust-toolchain.toml pins the release (with rustfmt and clippy) for local builds, CI, and releases; the
+  workflows run `rustup toolchain install`, which reads it. Pinned since 2026-11-06 because clippy runs with
+  -D warnings, so an unpinned "stable" could fail CI the day a release added a lint. To bump: change channel, run
+  scripts\test-all.ps1, and fix the new lints in the same commit. The release cache workflow rebuilds when the file
+  changes.
+- Node: the workflows' node-version (26, the active LTS since October 2026, supported until April 2029) and the local
+  install move together. The next LTS (28) arrives in October 2028.
 
 ## Contract changes
 Edit docs/api.yaml, then update Shared.Contracts (and ContractInfo.ApiVersion if info.version changes),

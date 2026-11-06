@@ -9,7 +9,7 @@
 [![CI](https://github.com/faulkner-engineering/hyperharbor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/faulkner-engineering/hyperharbor/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/faulkner-engineering/hyperharbor?include_prereleases&sort=semver)](https://github.com/faulkner-engineering/hyperharbor/releases)
 [![License: Apache 2.0](https://img.shields.io/github/license/faulkner-engineering/hyperharbor)](LICENSE)
-![Platform: Windows 10 and 11](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)
+![Platform: Windows 11](https://img.shields.io/badge/platform-Windows%2011-0078D6)
 
 Manage Hyper-V virtual machines on a home PC and connect to them in one click from any device.
 
@@ -38,7 +38,7 @@ question is why not use one of the existing options.
 
 | | Plain RDP | RD Gateway | Parsec or Moonlight | HyperHarbor |
 | --- | --- | --- | --- | --- |
-| Runs on | Any Windows | Windows Server | Any Windows | Windows 10 or 11 Pro with Hyper-V |
+| Runs on | Any Windows | Windows Server | Any Windows | Windows 11 Pro with Hyper-V |
 | Port exposed to the internet | Only if you forward one | Yes, 443 | No for Parsec (relayed); Moonlight needs a VPN or a forwarded port | No; your LAN or Tailscale |
 | Credentials | Typed or saved on each device | Typed on each device | Parsec account, or Moonlight PIN pairing | Paired once per device; a one-time password per connection, never stored |
 | Host can sleep | No | No | No | Yes, woken on demand |
@@ -67,9 +67,9 @@ Both are on the [Releases](https://github.com/faulkner-engineering/hyperharbor/r
 
 ### Requirements
 
-- **Host**: Windows 10 or 11 Pro, Enterprise, or Education with Hyper-V turned on (Settings > System > Optional
+- **Host**: Windows 11 Pro, Enterprise, or Education with Hyper-V turned on (Settings > System > Optional
   features > More Windows features > Hyper-V), and an administrator account to install it.
-- **Client**: Windows 10 or 11. Camera sharing for several sessions at once needs Windows 11.
+- **Client**: Windows 11. (HyperHarbor 0.2.6 is the last version for Windows 10.)
 - **Network**: the host's network must be set to **Private** in Windows, or its firewall blocks other devices.
 
 ### Host
@@ -110,7 +110,7 @@ sidebar. The **beta** channel gets prereleases.
 
 ## Build from source
 
-Requirements: .NET SDK 8.0, Rust (MSVC toolchain), and Node.js 20 or later.
+Requirements: .NET SDK 10 (global.json picks the feature band), Rust through rustup (MSVC; rust-toolchain.toml picks the version), and Node.js 26.
 
 ```powershell
 dotnet build HyperHarbor.sln

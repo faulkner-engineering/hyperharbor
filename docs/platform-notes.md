@@ -36,6 +36,20 @@ section for an area before changing it: most of these were learned from a failur
   hha-owner). The helper now takes --for-user=<SID> from portable callers (never while the service is installed),
   writes for that account, and first restores its access to existing files (DataDirectoryAccess). A portable host
   that still cannot open a data file says which and exits with code 3.
+- The installer's data folder lockdown (DataDirectoryAcl, also run by the service at each start) trusts files owned by
+  SYSTEM, Administrators, the installing account, and the tray user. Run from another administrator's console
+  (2026-11-06: hh-owner signed in, install --quiet run from a console elevated as an administrator account, so that
+  account became the tray user), it did not trust hh-owner and deleted every file the portable host had written,
+  including host-certificate.pfx.protected and paired-devices.json; the service then made a new identity. It now moves
+  such entries into untrusted-<UTC time>\ (created after the lockdown, skipped by later runs, never read); planted
+  links are still deleted, since a later copy of the folder could follow them. Run the installer as the signed-in
+  user, not from an elevated console: it asks for elevation itself and passes that user's SID to its elevated part as
+  --tray-user. The identity came back from update\backups\ (an earlier self-update's copy; it leaves out the logs and
+  the audit trail).
+- After an uninstall the data folder itself keeps the installer's protected ACL (SYSTEM, Administrators). Setup's
+  --for-user repaired only the entries inside it, so the portable host still could not open the folder and
+  Start-HyperHarbor.ps1 asked for setup again (2026-11-06). DataDirectoryAccess now grants the folder first, with an
+  inherited rule so files written later grant the account too.
 - Other LAN devices need an inbound firewall rule for TCP 48443. The packaged host's start script creates it;
   a dev run from source does not.
 - mDNS on the host goes through DnsServiceRegister (dnsapi.dll). Do not bind UDP 5353 in the host.
@@ -567,6 +581,12 @@ section for an area before changing it: most of these were learned from a failur
   Windows 10 (no MFCreateVirtualCamera) and Windows N editions. All free Media Foundation functions go through
   camera/mfapi.rs; mfapi's test parses the test exe's import table and fails on any mf*.dll. COM interfaces need no
   import. dumpbin /imports on the real exe shows only ordinary DLLs.
+- From 0.3.0 HyperHarbor needs Windows 11 (decided with the user 2026-11-06). The host refuses older Windows
+  (Host.Core/Installation/WindowsRequirement, in the installer and at every start, so the update self-test fails and
+  a Windows 10 host stays on 0.2.x). The client does not refuse: the Tauri updater has no OS condition, so a Windows
+  10 client still updates itself, and it must still open there. That is why the lazy Media Foundation lookup above
+  stays; below build 22000 camera::support reports Unavailable with the reason, and the physical camera goes to one
+  VM, as on a Windows N edition.
 - COM interface types are not Send in windows-rs; VirtualCamera has a documented unsafe impl Send (multithreaded apartment).
 - Media Foundation error codes for a busy camera (checked against the windows crate): MF_E_VIDEO_RECORDING_DEVICE_PREEMPTED
   0xC00D3EA3, MF_E_HW_MFT_FAILED_START_STREAMING 0xC00D3704, invalidated 0xC00D3EA2, E_ACCESSDENIED for the privacy
