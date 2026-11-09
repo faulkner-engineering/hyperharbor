@@ -66,6 +66,8 @@ namespace HyperHarbor.Shared.Contracts.Ipc;
 [JsonDerivedType(typeof(AmbientReportMessage), "ambientReport")]
 [JsonDerivedType(typeof(AmbientSnapshotQueryMessage), "ambientSnapshotQuery")]
 [JsonDerivedType(typeof(AmbientSnapshotMessage), "ambientSnapshot")]
+[JsonDerivedType(typeof(TrayApiRegisterMessage), "trayApiRegister")]
+[JsonDerivedType(typeof(TrayApiRegisteredMessage), "trayApiRegistered")]
 public abstract record TrayMessage;
 
 // Service to tray.

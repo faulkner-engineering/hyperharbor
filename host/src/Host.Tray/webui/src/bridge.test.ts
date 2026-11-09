@@ -179,6 +179,7 @@ const samples: HostMessage[] = [
   },
   { type: "toast", kind: "success", title: "Saved", text: "Done." },
   { type: "navigate", page: "devices" },
+  { type: "apiResponse", id: "r1", status: 200, body: "[]" },
 ];
 
 /** The shape of a value: object keys (sorted, recursively), array element shapes, and null versus a value. */

@@ -89,6 +89,13 @@ public interface ITrayActions
     void CancelPairing(Guid pairingId);
 
     void CloseWindow();
+
+    /// <summary>
+    /// Sends a request to the host's API for the VM page (Api/TrayApiForwarder.cs) and answers with
+    /// HostToPage.ApiResponse carrying the same <paramref name="id"/>. The forwarder checks the route.
+    /// </summary>
+    /// <param name="body">The JSON request body, if any.</param>
+    void ApiRequest(string id, string method, string path, string? body);
 }
 
 /// <summary>
@@ -108,6 +115,11 @@ public static class TrayCommands
         switch (type)
         {
             case "ready":
+                return true;
+            case "apiRequest" when Text(message, "id") is { Length: > 0 and <= 64 } id
+                && Text(message, "method") is { Length: > 0 } method
+                && Text(message, "path") is { Length: > 0 } path:
+                actions.ApiRequest(id, method, path, message.TryGetProperty("body", out var body) && body.ValueKind != JsonValueKind.Null ? body.GetRawText() : null);
                 return true;
             case "setPassphrase" when Text(message, "passphrase") is { } passphrase:
                 actions.SetPassphrase(passphrase);

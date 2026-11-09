@@ -76,6 +76,8 @@ public sealed partial class TrayWindowTests
         public void CancelPairing(Guid pairingId) => Calls.Add("cancel:" + pairingId);
 
         public void CloseWindow() => Calls.Add("close");
+
+        public void ApiRequest(string id, string method, string path, string? body) => Calls.Add($"api:{id}:{method}:{path}:{body}");
     }
 
     private static readonly Guid Id = Guid.Parse("0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b");
@@ -121,6 +123,8 @@ public sealed partial class TrayWindowTests
     [InlineData("""{"type":"openUrl","url":"https://github.com/faulkner-engineering/hyperharbor/releases"}""", "url:https://github.com/faulkner-engineering/hyperharbor/releases")]
     [InlineData("""{"type":"cancelPairing","pairingId":"0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b"}""", "cancel:0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b")]
     [InlineData("""{"type":"close"}""", "close")]
+    [InlineData("""{"type":"apiRequest","id":"r1","method":"GET","path":"/vms"}""", "api:r1:GET:/vms:")]
+    [InlineData("""{"type":"apiRequest","id":"r2","method":"PATCH","path":"/vms/x/compute","body":{"processorCount":4}}""", """api:r2:PATCH:/vms/x/compute:{"processorCount":4}""")]
     public void PageCommands_CallTheTray(string json, string call)
     {
         var (handled, calls) = Dispatch(json);
@@ -131,6 +135,9 @@ public sealed partial class TrayWindowTests
 
     [Theory]
     [InlineData("""{"type":"ready"}""", true)]
+    [InlineData("""{"type":"apiRequest","method":"GET","path":"/vms"}""", false)]
+    [InlineData("""{"type":"apiRequest","id":"r1","path":"/vms"}""", false)]
+    [InlineData("""{"type":"apiRequest","id":"r1","method":"GET"}""", false)]
     [InlineData("""{"type":"setPassphrase"}""", false)]
     [InlineData("""{"type":"setPassphrase","passphrase":42}""", false)]
     [InlineData("""{"type":"removeDevice","deviceId":"not-an-id"}""", false)]
@@ -316,6 +323,7 @@ public sealed partial class TrayWindowTests
             new HostToPage.State(new TrayViewState(false, null, [], null, null, null, false, false, null, null, null, null, null, null, [], null, @"C:\ProgramData\HyperHarbor")),
             new HostToPage.Toast("success", "Admin passphrase saved", "Paired devices now need it to change VMs."),
             new HostToPage.Navigate("devices"),
+            new HostToPage.ApiResponse("r1", 200, "[]", null),
         ];
 
         var computed = JsonSerializer.Serialize(

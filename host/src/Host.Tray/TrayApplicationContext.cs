@@ -31,6 +31,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private readonly ToolStripMenuItem _status;
     private readonly ToolStripMenuItem _passphraseItem;
     private readonly TrayPipeClient _pipe;
+    private readonly Api.TrayApiForwarder _api;
     private readonly ShutdownGuard _shutdownGuard;
     private readonly System.Windows.Forms.Timer _gpuVmPoll;
     private readonly System.Windows.Forms.Timer _updatePoll;
@@ -44,6 +45,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     private readonly bool _webViewAvailable = TrayWebView.RuntimeVersion is not null;
 
     private WebWindow? _hostWindow;
+    private TaskCompletionSource<TrayApiRegisteredMessage>? _apiRegistration;
     private WebWindow? _pinWindow;
     private bool _connected;
     private bool? _passphraseConfigured;
@@ -103,6 +105,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         _pipe = new TrayPipeClient();
         _pipe.ConnectionChanged += OnConnectionChanged;
         _pipe.MessageReceived += OnMessage;
+        _api = new Api.TrayApiForwarder(new Api.TrayApiIdentity(), RegisterApiAsync);
         _shutdownGuard = new ShutdownGuard(() => _connected ? _gpuVms : [], () => _ = _pipe.SendAsync(new StopGpuVmsMessage()));
 
         // The guard must answer a shutdown at once, so it uses the last known list rather than asking then.
@@ -180,6 +183,7 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
             _releaseHostWindow.Dispose();
             _shutdownGuard.Dispose();
             _pipe.Dispose();
+            _api.Dispose();
             _hostWindow?.Dispose();
             _pinWindow?.Dispose();
             _notifyIcon.Visible = false;
@@ -332,6 +336,8 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
         else
         {
             _passphraseConfigured = null;
+            _apiRegistration?.TrySetResult(new TrayApiRegisteredMessage(null, null, 0, null, "The HyperHarbor service stopped."));
+            _apiRegistration = null;
             _isoFolder = null;
             _vmFolder = null;
             _backupFolder = null;
@@ -358,6 +364,10 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
                 break;
             case PairingEndedMessage ended:
                 OnPairingEnded(ended);
+                break;
+            case TrayApiRegisteredMessage registered:
+                _apiRegistration?.TrySetResult(registered);
+                _apiRegistration = null;
                 break;
             case DeviceListMessage list:
                 _devices = list.Devices;
@@ -942,6 +952,32 @@ internal sealed class TrayApplicationContext : ApplicationContext, ITrayActions
     }
 
     public void CloseWindow() => _hostWindow?.Close();
+
+    public void ApiRequest(string id, string method, string path, string? body) => _ = ForwardApiRequestAsync(id, method, path, body);
+
+    private async Task ForwardApiRequestAsync(string id, string method, string path, string? body)
+    {
+        var response = await _api.SendAsync(method, path, body);
+        _hostWindow?.Post(new HostToPage.ApiResponse(id, response.Status, response.Body, response.Error));
+    }
+
+    /// <summary>Asks the service to make the tray's certificate a device (TrayPipeServer.RegisterTrayDevice).</summary>
+    private async Task<TrayApiRegisteredMessage> RegisterApiAsync(TrayApiRegisterMessage message)
+    {
+        static TrayApiRegisteredMessage Problem(string text) => new(null, null, 0, null, text);
+
+        if (!_connected)
+        {
+            return Problem("The HyperHarbor service is not running.");
+        }
+
+        var answer = new TaskCompletionSource<TrayApiRegisteredMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _apiRegistration?.TrySetResult(Problem("A newer request replaced this one."));
+        _apiRegistration = answer;
+        await _pipe.SendAsync(message);
+        var finished = await Task.WhenAny(answer.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+        return finished == answer.Task ? await answer.Task : Problem("The HyperHarbor service did not answer.");
+    }
 
     private static void Launch(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 }

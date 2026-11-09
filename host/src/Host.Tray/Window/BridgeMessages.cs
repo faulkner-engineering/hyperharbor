@@ -64,4 +64,13 @@ public static class HostToPage
     {
         public string Type => "navigate";
     }
+
+    /// <summary>The answer to the page's apiRequest with the same <paramref name="Id"/> (Api/TrayApiForwarder.cs).</summary>
+    /// <param name="Status">The HTTP status; 0 when the request was not sent or no answer came.</param>
+    /// <param name="Body">The response body as JSON text, if any.</param>
+    /// <param name="Error">Why there is no answer, when Status is 0.</param>
+    public sealed record ApiResponse(string Id, int Status, string? Body, string? Error)
+    {
+        public string Type => "apiResponse";
+    }
 }
