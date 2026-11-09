@@ -9,8 +9,8 @@
     type Vm,
     type VmDeletePreview,
     type VmJob,
-  } from "$lib/api/client";
-  import { ElevationCancelled, waitForJob, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
 

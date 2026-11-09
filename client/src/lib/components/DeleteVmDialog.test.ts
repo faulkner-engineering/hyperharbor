@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import DeleteVmDialog from "./DeleteVmDialog.svelte";
-import type { HostEntry, Vm, VmDeletePreview } from "$lib/api/client";
+import type { HostEntry, Vm, VmDeletePreview } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

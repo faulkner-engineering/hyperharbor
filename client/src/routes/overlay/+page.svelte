@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { getGuestAdminCard, GuestAdminCardChangedEvent, hideGuestAdminCard, type GuestAdminCard } from "$lib/api/client";
-  import { formatLeft, msLeft, passphraseParts } from "$lib/guestAdmin";
+  import { getGuestAdminCard, GuestAdminCardChangedEvent, hideGuestAdminCard, type GuestAdminCard } from "#lib/api/client.ts";
+  import { formatLeft, msLeft, passphraseParts } from "#lib/guestAdmin.ts";
 
   // The always-on-top passphrase card (src-tauri/src/guest_admin_overlay.rs). It never takes the focus, so the user
   // reads it while typing into the VM's prompt. Like the dialog, it has no copy control: with clipboard redirection on,

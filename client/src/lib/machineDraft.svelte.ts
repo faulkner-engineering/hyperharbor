@@ -1,8 +1,8 @@
 // A machine profile being edited: the seven machine sections plus the software sections (SoftwareDraft).
 // Each section keeps every field, with null meaning "leave as it is"; toProfile drops what is not set.
-import type { components } from "$lib/api/types";
-import type { ControlState } from "$lib/machine/highlights";
-import { SoftwareDraft, plural, type WorkspaceSection } from "$lib/softwareDraft.svelte";
+import type { components } from "#lib/api/types.ts";
+import type { ControlState } from "#lib/machine/highlights.ts";
+import { SoftwareDraft, plural, type WorkspaceSection } from "#lib/softwareDraft.svelte.ts";
 
 type Schemas = components["schemas"];
 export type MachineProfile = Schemas["MachineProfile"];

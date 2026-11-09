@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
 
 import Library from "./Library.svelte";
-import type { HostEntry, Library as LibraryData } from "$lib/api/client";
+import type { HostEntry, Library as LibraryData } from "#lib/api/client.ts";
 
 const host = (key: string, hostId: string, displayName: string): HostEntry => ({
   key,

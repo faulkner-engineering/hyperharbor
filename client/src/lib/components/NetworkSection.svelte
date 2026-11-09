@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { listSwitches, type HostEntry, type VirtualSwitch } from "$lib/api/client";
-  import type { MachineDraft } from "$lib/machineDraft.svelte";
+  import { listSwitches, type HostEntry, type VirtualSwitch } from "#lib/api/client.ts";
+  import type { MachineDraft } from "#lib/machineDraft.svelte.ts";
   import { onMount } from "svelte";
   import Choice from "./Choice.svelte";
 

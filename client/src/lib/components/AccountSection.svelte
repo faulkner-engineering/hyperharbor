@@ -7,8 +7,8 @@
     ProfilesConsolidatedApiVersion,
     type HostEntry,
     type UnattendProfile,
-  } from "$lib/api/client";
-  import { DEFAULT_EDITION, defaultLinux, defaultWindows, type MachineDraft } from "$lib/machineDraft.svelte";
+  } from "#lib/api/client.ts";
+  import { DEFAULT_EDITION, defaultLinux, defaultWindows, type MachineDraft } from "#lib/machineDraft.svelte.ts";
   import { onMount } from "svelte";
 
   interface Props {

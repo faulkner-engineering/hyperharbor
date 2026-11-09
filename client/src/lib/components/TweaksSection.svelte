@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { RegistryTweak, TweakCatalogItem } from "$lib/api/client";
-  import type { BrowseEntry, Detail } from "$lib/catalogBrowser";
+  import type { RegistryTweak, TweakCatalogItem } from "#lib/api/client.ts";
+  import type { BrowseEntry, Detail } from "#lib/catalogBrowser.ts";
   import CatalogBrowser from "./CatalogBrowser.svelte";
   import ProfileChips from "./ProfileChips.svelte";
 

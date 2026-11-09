@@ -8,8 +8,8 @@
     type HostEntry,
     type RestoreTestSettings,
     type RestoreTestStatus,
-  } from "$lib/api/client";
-  import { intervalText, restoreTestLine, restoreTestSummary } from "$lib/backup";
+  } from "#lib/api/client.ts";
+  import { intervalText, restoreTestLine, restoreTestSummary } from "#lib/backup.ts";
 
   interface Props {
     host: HostEntry;

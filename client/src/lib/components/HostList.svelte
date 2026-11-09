@@ -4,7 +4,7 @@
     errorMessage,
     removeManualHost,
     type HostEntry,
-  } from "$lib/api/client";
+  } from "#lib/api/client.ts";
 
   interface Props {
     hosts: HostEntry[];

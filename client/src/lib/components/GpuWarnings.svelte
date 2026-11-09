@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getHostGpu, type GpuDriverWarning, type HostEntry } from "$lib/api/client";
+  import { getHostGpu, type GpuDriverWarning, type HostEntry } from "#lib/api/client.ts";
 
   interface Props {
     host: HostEntry;

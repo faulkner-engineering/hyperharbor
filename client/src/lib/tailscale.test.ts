@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConnectionRoute, HostTailscale, ReachabilityStep, TailnetStatus } from "$lib/api/client";
+import type { ConnectionRoute, HostTailscale, ReachabilityStep, TailnetStatus } from "#lib/api/client.ts";
 import { firstProblem, hostTailscaleSummary, reachabilityVerdict, routeText, tailnetSummary } from "./tailscale";
 
 const status = (overrides: Partial<TailnetStatus> = {}): TailnetStatus => ({

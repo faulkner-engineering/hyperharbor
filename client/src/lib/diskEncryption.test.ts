@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GuestVolumeEncryption } from "$lib/api/client";
+import type { GuestVolumeEncryption } from "#lib/api/client.ts";
 import { canTurnOff, inProgress, volumeLine } from "./diskEncryption";
 
 const volume = (state: GuestVolumeEncryption["state"], extra: Partial<GuestVolumeEncryption> = {}): GuestVolumeEncryption => ({

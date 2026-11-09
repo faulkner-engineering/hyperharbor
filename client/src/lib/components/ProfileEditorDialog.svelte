@@ -8,8 +8,8 @@
     type UnattendProfile,
     type UnattendProfileRequest,
     type ValidationIssue,
-  } from "$lib/api/client";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
 
   interface Props {

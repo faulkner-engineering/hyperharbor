@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
 import ClientUpdate from "./ClientUpdate.svelte";
-import type { ClientUpdateStatus } from "$lib/api/client";
+import type { ClientUpdateStatus } from "#lib/api/client.ts";
 
 const status = (overrides: Partial<ClientUpdateStatus> = {}): ClientUpdateStatus => ({
   currentVersion: "0.1.7",

@@ -14,9 +14,9 @@
     type HostTailscale,
     type ReachabilityStep,
     type TailnetStatus,
-  } from "$lib/api/client";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import { hostTailscaleSummary, reachabilityVerdict, routeText, stepMark, tailnetSummary } from "$lib/tailscale";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { hostTailscaleSummary, reachabilityVerdict, routeText, stepMark, tailnetSummary } from "#lib/tailscale.ts";
 
   interface Props {
     host: HostEntry;

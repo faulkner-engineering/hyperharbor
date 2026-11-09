@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MachineDraft } from "$lib/machineDraft.svelte";
+  import type { MachineDraft } from "#lib/machineDraft.svelte.ts";
   import Choice from "./Choice.svelte";
 
   interface Props {

@@ -5,7 +5,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import { elevation, ElevationCancelled, pendingElevationHost, toMb, waitForJob, withElevation } from "./lifecycle.svelte";
-import type { VmJob } from "$lib/api/client";
+import type { VmJob } from "#lib/api/client.ts";
 
 const elevationRequired = {
   code: "api",

@@ -10,9 +10,9 @@
     type BackupBrowseEntry,
     type BackupBrowseSession,
     type HostEntry,
-  } from "$lib/api/client";
-  import { crumbs, formatBytes, joinPath, volumeLabel } from "$lib/backup";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { crumbs, formatBytes, joinPath, volumeLabel } from "#lib/backup.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
 
   interface Props {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GameAwareInfo, GameAwareSettings } from "$lib/api/client";
+import type { GameAwareInfo, GameAwareSettings } from "#lib/api/client.ts";
 import { addPrograms, effectiveAction, gamingNotice, normalizeProgram, withVmAction } from "./gameAware";
 
 const settings = (overrides: Partial<GameAwareSettings> = {}): GameAwareSettings => ({

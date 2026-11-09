@@ -17,7 +17,7 @@
     type HostEntry,
     type UnfocusedBehavior,
     type Vm,
-  } from "$lib/api/client";
+  } from "#lib/api/client.ts";
 
   interface Props {
     host: HostEntry;

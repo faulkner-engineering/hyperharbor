@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import PerformanceDialog from "./PerformanceDialog.svelte";
-import type { HostEntry, HostGpu, Vm, VmJob, VmPerformance, VmState } from "$lib/api/client";
+import type { HostEntry, HostGpu, Vm, VmJob, VmPerformance, VmState } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

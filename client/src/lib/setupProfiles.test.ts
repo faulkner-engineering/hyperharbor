@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProfileDraft } from "$lib/api/client";
+import type { ProfileDraft } from "#lib/api/client.ts";
 import { addItem, draftToProfile, initialChoices, policyValue, setupResultMessage } from "./setupProfiles";
 
 const draft: ProfileDraft = {

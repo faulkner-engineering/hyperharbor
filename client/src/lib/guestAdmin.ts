@@ -1,5 +1,5 @@
-import { errorMessage, hasProblemCode, openGuestAdmin, ProblemCodes, type GuestAdminWindow } from "$lib/api/client";
-import { withElevation } from "$lib/lifecycle.svelte";
+import { errorMessage, hasProblemCode, openGuestAdmin, ProblemCodes, type GuestAdminWindow } from "#lib/api/client.ts";
+import { withElevation } from "#lib/lifecycle.svelte.ts";
 
 /**
  * Opens a short administrator window in a Windows guest, or returns the open one. Opening needs elevation:

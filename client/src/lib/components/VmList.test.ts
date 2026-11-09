@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 
 import VmList from "./VmList.svelte";
-import type { Vm, VmState } from "$lib/api/client";
+import type { Vm, VmState } from "#lib/api/client.ts";
 
 function vm(state: VmState, overrides: Partial<Vm> = {}): Vm {
   return {

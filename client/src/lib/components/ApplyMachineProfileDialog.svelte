@@ -12,8 +12,8 @@
     type ValidationIssue,
     type Vm,
     type VmJob,
-  } from "$lib/api/client";
-  import { ElevationCancelled, waitForJob, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import Dialog from "./Dialog.svelte";

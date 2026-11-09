@@ -8,10 +8,10 @@
     uploadProfileImage,
     type HostEntry,
     type ProfileImage,
-  } from "$lib/api/client";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import type { MachineDraft } from "$lib/machineDraft.svelte";
-  import { toasts } from "$lib/toasts.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
+  import type { MachineDraft } from "#lib/machineDraft.svelte.ts";
+  import { toasts } from "#lib/toasts.svelte.ts";
   import { onMount } from "svelte";
   import Choice from "./Choice.svelte";
 

@@ -8,7 +8,7 @@ import type {
   NewBackupTarget,
   RestoreTestResult,
   RestoreTestStatus,
-} from "$lib/api/client";
+} from "#lib/api/client.ts";
 
 const GROUP = 4;
 /** The host asks for this many groups of the key to confirm it was saved. */

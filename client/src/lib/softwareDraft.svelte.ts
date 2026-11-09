@@ -9,7 +9,7 @@ import {
   type RegistryTweak,
   type SetupProfile,
   type SetupProfileCatalog,
-} from "$lib/api/client";
+} from "#lib/api/client.ts";
 import { SvelteMap } from "svelte/reactivity";
 
 /** The software part of a setup or machine profile. */

@@ -18,10 +18,10 @@
     type MachineProfileSummary,
     type StoredMachineProfile,
     type Vm,
-  } from "$lib/api/client";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import { machineSummary } from "$lib/machineDraft.svelte";
-  import { toasts } from "$lib/toasts.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { machineSummary } from "#lib/machineDraft.svelte.ts";
+  import { toasts } from "#lib/toasts.svelte.ts";
   import { onMount } from "svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import CreateVmFromProfileDialog from "./CreateVmFromProfileDialog.svelte";

@@ -20,7 +20,7 @@
     RestoreTestApiVersion,
     type HostEntry,
     type Vm,
-  } from "$lib/api/client";
+  } from "#lib/api/client.ts";
   import {
     ageText,
     encryptionNote,
@@ -32,8 +32,8 @@
     targetReady,
     uploadText,
     KIND_LABELS,
-  } from "$lib/backup";
-  import { ElevationCancelled, waitForJob, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/backup.ts";
+  import { ElevationCancelled, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
   import BackupTargetDialog from "./BackupTargetDialog.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import RecoveryKeyDialog from "./RecoveryKeyDialog.svelte";

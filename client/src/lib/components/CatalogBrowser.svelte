@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ALL, chipsFor, filterEntries, type BrowseEntry } from "$lib/catalogBrowser";
+  import { ALL, chipsFor, filterEntries, type BrowseEntry } from "#lib/catalogBrowser.ts";
   import type { Snippet } from "svelte";
 
   interface Props {

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { listBackupTargets, type BackupTarget, type HostEntry } from "$lib/api/client";
-  import type { MachineDraft } from "$lib/machineDraft.svelte";
+  import { listBackupTargets, type BackupTarget, type HostEntry } from "#lib/api/client.ts";
+  import type { MachineDraft } from "#lib/machineDraft.svelte.ts";
   import { onMount } from "svelte";
   import Choice from "./Choice.svelte";
 

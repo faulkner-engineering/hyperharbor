@@ -7,9 +7,9 @@
     type BackupTarget,
     type BackupTargetTest,
     type HostEntry,
-  } from "$lib/api/client";
-  import { emptyTargetForm, formProblem, KIND_LABELS, toNewTarget, type TargetForm } from "$lib/backup";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { emptyTargetForm, formProblem, KIND_LABELS, toNewTarget, type TargetForm } from "#lib/backup.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
 
   interface Props {

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { HostEntry, Vm } from "$lib/api/client";
-  import type { Detail } from "$lib/catalogBrowser";
-  import type { SoftwareDraft } from "$lib/softwareDraft.svelte";
+  import type { HostEntry, Vm } from "#lib/api/client.ts";
+  import type { Detail } from "#lib/catalogBrowser.ts";
+  import type { SoftwareDraft } from "#lib/softwareDraft.svelte.ts";
   import BrowserSection from "./BrowserSection.svelte";
   import InstallSection from "./InstallSection.svelte";
   import RemoveSection from "./RemoveSection.svelte";

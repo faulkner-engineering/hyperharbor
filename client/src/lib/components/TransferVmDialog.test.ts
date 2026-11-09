@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import TransferVmDialog from "./TransferVmDialog.svelte";
-import type { HostEntry, TransferPreview, Vm } from "$lib/api/client";
+import type { HostEntry, TransferPreview, Vm } from "#lib/api/client.ts";
 
 function entry(key: string, displayName: string, apiVersion: string | null, paired = true): HostEntry {
   return {

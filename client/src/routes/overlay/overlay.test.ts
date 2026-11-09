@@ -7,7 +7,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen }));
 
 import Overlay from "./+page.svelte";
-import type { GuestAdminCard } from "$lib/api/client";
+import type { GuestAdminCard } from "#lib/api/client.ts";
 
 function card(minutes = 5): GuestAdminCard {
   return {

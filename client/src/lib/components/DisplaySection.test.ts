@@ -4,14 +4,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
-vi.mock("$lib/lifecycle.svelte", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("$lib/lifecycle.svelte")>()),
+vi.mock("#lib/lifecycle.svelte.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("#lib/lifecycle.svelte.ts")>()),
   withElevation: <T,>(_key: string, run: () => Promise<T>) => run(),
 }));
 
 import DisplaySection from "./DisplaySection.svelte";
-import { MachineDraft } from "$lib/machineDraft.svelte";
-import type { HostEntry } from "$lib/api/client";
+import { MachineDraft } from "#lib/machineDraft.svelte.ts";
+import type { HostEntry } from "#lib/api/client.ts";
 
 const host = (apiVersion: string): HostEntry => ({
   key: "mdns:host",

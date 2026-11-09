@@ -13,11 +13,11 @@
     type StoredMachineProfile,
     type ValidationIssue,
     type Vm,
-  } from "$lib/api/client";
-  import type { Detail } from "$lib/catalogBrowser";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import { MachineDraft } from "$lib/machineDraft.svelte";
-  import { SOFTWARE_TABS } from "$lib/softwareDraft.svelte";
+  } from "#lib/api/client.ts";
+  import type { Detail } from "#lib/catalogBrowser.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { MachineDraft } from "#lib/machineDraft.svelte.ts";
+  import { SOFTWARE_TABS } from "#lib/softwareDraft.svelte.ts";
   import { onMount, untrack } from "svelte";
   import AccountSection from "./AccountSection.svelte";
   import BackupSection from "./BackupSection.svelte";

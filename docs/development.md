@@ -29,6 +29,10 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   Ambient.svelte once turned the whole window black and passed every unit test).
 - Lint contract: npx @redocly/cli lint docs/api.yaml
 - Client (from client/): npm run check | npm test (Vitest) | npm run gen:api | npm run tauri dev
+  SvelteKit 3 (since 2026-11-09): its options (adapter-static, the preprocessor) are passed to the sveltekit() plugin in
+  vite.config.js, and vitest.config.ts passes the preprocessor too; there is no svelte.config.js. Code under src/lib is
+  imported as `#lib/...` with the file extension (`#lib/api/client.ts`, `#lib/components/VmList.svelte`), through the
+  "imports" map in package.json; the `$lib` alias is gone. tsconfig.json extends the generated `$app/tsconfig`.
 - Rust (from client/src-tauri, in PowerShell): cargo fmt --all; cargo clippy --workspace --all-targets -- -D warnings;
   cargo test --workspace (the workspace includes the camera DLL and the shared frame format)
 - Live mDNS browse (host service running): cargo test live_browse -- --ignored --nocapture

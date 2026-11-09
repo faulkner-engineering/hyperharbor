@@ -8,7 +8,7 @@
     type GuestAdminWindow,
     type HostEntry,
     type Vm,
-  } from "$lib/api/client";
+  } from "#lib/api/client.ts";
   import {
     formatLeft,
     guestAdminError,
@@ -16,9 +16,9 @@
     passphraseParts,
     requestGuestAdmin,
     SLOW_AFTER_MS,
-  } from "$lib/guestAdmin";
-  import { ElevationCancelled } from "$lib/lifecycle.svelte";
-  import { toasts } from "$lib/toasts.svelte";
+  } from "#lib/guestAdmin.ts";
+  import { ElevationCancelled } from "#lib/lifecycle.svelte.ts";
+  import { toasts } from "#lib/toasts.svelte.ts";
   import Dialog from "./Dialog.svelte";
 
   interface Props {

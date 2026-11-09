@@ -1,4 +1,4 @@
-import type { GameAwareInfo, GameAwareSettings, GameAwareState, GameVmAction } from "$lib/api/client";
+import type { GameAwareInfo, GameAwareSettings, GameAwareState, GameVmAction } from "#lib/api/client.ts";
 
 export const ACTION_LABELS: Record<GameVmAction, string> = {
   pause: "Pause",

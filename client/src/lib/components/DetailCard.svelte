@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { categoryLabel, describeValue, type Detail } from "$lib/catalogBrowser";
+  import { categoryLabel, describeValue, type Detail } from "#lib/catalogBrowser.ts";
 
   interface Props {
     detail: Detail;

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { elevate, errorMessage, hasProblemCode, ProblemCodes, type HostEntry } from "$lib/api/client";
-  import { elevation } from "$lib/lifecycle.svelte";
+  import { elevate, errorMessage, hasProblemCode, ProblemCodes, type HostEntry } from "#lib/api/client.ts";
+  import { elevation } from "#lib/lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
 
   interface Props {

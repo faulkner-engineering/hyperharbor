@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-import type { SetupProfileCatalog } from "$lib/api/client";
+import type { SetupProfileCatalog } from "#lib/api/client.ts";
 import { SoftwareDraft } from "./softwareDraft.svelte";
 
 const catalog = {

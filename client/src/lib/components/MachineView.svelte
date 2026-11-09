@@ -7,10 +7,10 @@
 </script>
 
 <script lang="ts">
-  import { loadMachineData, readPalette, type MachineData } from "$lib/machine/assets";
-  import { prefersReducedMotion, watchReducedMotion, webglAvailable } from "$lib/machine/fallback";
-  import { NO_HIGHLIGHT, resolveHighlight, type ControlState } from "$lib/machine/highlights";
-  import type { MachineScene } from "$lib/machine/scene";
+  import { loadMachineData, readPalette, type MachineData } from "#lib/machine/assets.ts";
+  import { prefersReducedMotion, watchReducedMotion, webglAvailable } from "#lib/machine/fallback.ts";
+  import { NO_HIGHLIGHT, resolveHighlight, type ControlState } from "#lib/machine/highlights.ts";
+  import type { MachineScene } from "#lib/machine/scene.ts";
   import { onMount } from "svelte";
   import MachineStill from "./MachineStill.svelte";
 
@@ -67,7 +67,7 @@
         return;
       }
       try {
-        const { createMachineScene } = await import("$lib/machine/scene");
+        const { createMachineScene } = await import("#lib/machine/scene.ts");
         const created = await createMachineScene(stage, loaded, {
           palette: readPalette(),
           reducedMotion,

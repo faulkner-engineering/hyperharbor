@@ -1,6 +1,6 @@
 // Words for the Tailscale panel and the connection line. Pure functions, so tests check them directly.
 
-import type { ConnectionRoute, HostTailscale, ReachabilityStep, TailnetStatus } from "$lib/api/client";
+import type { ConnectionRoute, HostTailscale, ReachabilityStep, TailnetStatus } from "#lib/api/client.ts";
 
 /** One line on Tailscale on this PC. */
 export function tailnetSummary(status: TailnetStatus | null): string {

@@ -5,7 +5,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import MonitorsDialog from "./MonitorsDialog.svelte";
-import type { HostEntry, Monitor, MonitorChoice, Vm } from "$lib/api/client";
+import type { HostEntry, Monitor, MonitorChoice, Vm } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",
