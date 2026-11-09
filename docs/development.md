@@ -237,6 +237,13 @@ Ignored major versions, and why (remove the entry when the reason no longer hold
   paths and features, Ref renamed to InRef, raw HRESULT returns) is a deliberate upgrade of client/vcam and
   client/src-tauri together, so windows itself is ignored too: its next major arrives as one pull request that cannot
   be taken without the others.
+- typescript (npm, the client and the tray window app), while the Svelte tooling needs the TypeScript 6 API.
+  TypeScript 7 (the native compiler) no longer exports the JavaScript compiler API: its package's main entry gives
+  only the version, and the API is under typescript/unstable/*. SvelteKit's sync reads files through ts.sys, so with
+  7.0.2 installed `svelte-kit sync` stopped with "Cannot read properties of undefined (reading 'readFile')", which
+  broke npm run check, Vitest, and the build together (tried 2026-11-09). svelte-check 4.7.8 and SvelteKit 3.1.1
+  still list typescript ^6 as their peer. Remove the entry when both accept 7; minor and patch updates of 6 still
+  arrive in the npm group. (gen:api pins its own TypeScript for openapi-typescript and is not affected.)
 
 Toolchains (Dependabot does not bump them; check them on the monthly update day):
 - Rust: rust-toolchain.toml pins the release (with rustfmt and clippy) for local builds, CI, and releases; the
