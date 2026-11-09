@@ -233,10 +233,18 @@ Ignored major versions, and why (remove the entry when the reason no longer hold
   the host nothing, and patches on the current major still arrive as minor and patch updates.
 - windows, windows-core, and windows-sys (cargo; for a 0.x crate Dependabot treats a minor bump as major). The
   windows-rs crates move in lockstep: windows-core 0.100 does not compile with windows 0.62 (E0277 on every
-  #[implement] in client/vcam), and windows 0.100 was not published as of 2026-11-04. The port (renamed Win32 module
-  paths and features, Ref renamed to InRef, raw HRESULT returns) is a deliberate upgrade of client/vcam and
-  client/src-tauri together, so windows itself is ignored too: its next major arrives as one pull request that cannot
-  be taken without the others.
+  #[implement] in client/vcam). The port (renamed Win32 module paths and features, Ref renamed to InRef, raw HRESULT
+  returns) is a deliberate upgrade of client/vcam and client/src-tauri together, so windows itself is ignored too: its
+  next major arrives as one pull request that cannot be taken without the others.
+  windows-rs release 74 (2026-09-03) published the smaller crates at 0.100 and held back windows and windows-sys on
+  purpose: their bindings are now generated from the SDK headers rather than Win32Metadata, and the project is still
+  checking that API surface ("Rust for Windows - August 2026", microsoft/windows-rs#4867; no date given, and none
+  announced as of 2026-11-09). The same newsletter suggests generating the APIs a project needs with windows-bindgen
+  instead of the umbrella crates. Either way every call site changes (Media Foundation, COM, registry, and Foundation
+  types; 15 files in client/src-tauri and 5 in client/vcam). Tauri, wry, tao, and webview2-com are on windows 0.62.2
+  too, so moving first would build and ship two copies of the bindings. Plan the port as its own phase when Tauri
+  moves to 0.100, and take whichever route (windows 0.100 or windows-bindgen) it shows; until then 0.62 is not
+  deprecated and has no advisory against it.
 - typescript (npm, the client and the tray window app), while the Svelte tooling needs the TypeScript 6 API.
   TypeScript 7 (the native compiler) no longer exports the JavaScript compiler API: its package's main entry gives
   only the version, and the API is under typescript/unstable/*. SvelteKit's sync reads files through ts.sys, so with
