@@ -38,6 +38,9 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 - Pairing secrets (PIN, w, x, y, K) and transfer tickets must never be logged or persisted. Audit summaries must never
   contain a secret. Types that hold a secret override ToString or Debug to hide it.
 - Ask before any destructive Hyper-V operation, except on throwaway VMs created for tests (deleting those is allowed).
+- Send a push notification (the PushNotification tool) whenever the user is needed: a question or decision before work
+  can continue, a step only they can do (an elevated command, a sign-in, a click on the host), a failure that stops
+  the work, or a long task finished and waiting for their review. One short line that says what they need to do.
 - After any change, without asking (the user's standing instruction): stop everything running from dist/
   (HyperHarbor.Host processes: host and tray; the portable client), rebuild with
   scripts\package.ps1 -Fast (add -SkipTests once the change's tests have passed, and -HostOnly or -ClientOnly
