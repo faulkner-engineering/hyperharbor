@@ -6,7 +6,7 @@ import type {
   ProfileTweak,
   SetupProfile,
   UnattendedInstallStatus,
-} from "$lib/api/client";
+} from "#lib/api/client.ts";
 
 /** How many problems a ready toast lists before it says "and N more". */
 export const SHOWN_PROBLEMS = 3;

@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { IsoImage as CachedImage } from "$lib/api/client";
+  import type { IsoImage as CachedImage } from "#lib/api/client.ts";
 
   /** The last library seen for each host, so returning to the screen shows it at once. */
   const libraryCache = new Map<string, { images: CachedImage[]; folder: string | null }>();
@@ -29,8 +29,8 @@
     type HostEntry,
     type IsoImage,
     type PickedIso,
-  } from "$lib/api/client";
-  import { ElevationCancelled, ensureElevated, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, ensureElevated, withElevation } from "#lib/lifecycle.svelte.ts";
   import ConfirmDialog from "./ConfirmDialog.svelte";
 
   interface Props {

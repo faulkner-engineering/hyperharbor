@@ -8,9 +8,9 @@
     type InstallOs,
     type UnattendProfile,
     type UnattendProfileRequest,
-  } from "$lib/api/client";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import { toasts } from "$lib/toasts.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { toasts } from "#lib/toasts.svelte.ts";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import ProfileEditorDialog from "./ProfileEditorDialog.svelte";
 

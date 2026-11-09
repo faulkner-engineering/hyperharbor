@@ -6,10 +6,10 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import GuestAdminDialog from "./GuestAdminDialog.svelte";
-import { elevation } from "$lib/lifecycle.svelte";
-import { toasts } from "$lib/toasts.svelte";
-import { SLOW_AFTER_MS } from "$lib/guestAdmin";
-import type { GuestAdminWindow, HostEntry, Vm } from "$lib/api/client";
+import { elevation } from "#lib/lifecycle.svelte.ts";
+import { toasts } from "#lib/toasts.svelte.ts";
+import { SLOW_AFTER_MS } from "#lib/guestAdmin.ts";
+import type { GuestAdminWindow, HostEntry, Vm } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

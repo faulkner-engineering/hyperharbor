@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, waitFor } from "@testing-library/svelte";
-import { webglAvailable } from "$lib/machine/fallback";
-import { createMachineScene, type MachineSceneOptions } from "$lib/machine/scene";
+import { webglAvailable } from "#lib/machine/fallback.ts";
+import { createMachineScene, type MachineSceneOptions } from "#lib/machine/scene.ts";
 import MachineView from "./MachineView.svelte";
 
-vi.mock("$lib/machine/fallback", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("$lib/machine/fallback")>()),
+vi.mock("#lib/machine/fallback.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("#lib/machine/fallback.ts")>()),
   webglAvailable: vi.fn(() => false),
 }));
 
-vi.mock("$lib/machine/scene", () => ({ createMachineScene: vi.fn() }));
+vi.mock("#lib/machine/scene.ts", () => ({ createMachineScene: vi.fn() }));
 
 const targets = {
   overview: { node: "Case", lookAtOffset: [0, 0, 0], distance: 1.6, elevation: 22, azimuth: 35 },

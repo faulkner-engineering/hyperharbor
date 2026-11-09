@@ -11,9 +11,9 @@
     type PackageCatalogItem,
     type PackageSearchResult,
     type ProfileItem,
-  } from "$lib/api/client";
-  import { looksLikeWingetId, type BrowseEntry, type Detail } from "$lib/catalogBrowser";
-  import { addItem } from "$lib/setupProfiles";
+  } from "#lib/api/client.ts";
+  import { looksLikeWingetId, type BrowseEntry, type Detail } from "#lib/catalogBrowser.ts";
+  import { addItem } from "#lib/setupProfiles.ts";
   import { onMount } from "svelte";
   import CatalogBrowser from "./CatalogBrowser.svelte";
   import ProfileChips from "./ProfileChips.svelte";

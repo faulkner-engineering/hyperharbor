@@ -9,9 +9,9 @@
     type HostEntry,
     type ProfileItem,
     type SetupProfileCatalog,
-  } from "$lib/api/client";
-  import type { BrowseEntry, Detail } from "$lib/catalogBrowser";
-  import { addItem, policyValue, removeItem } from "$lib/setupProfiles";
+  } from "#lib/api/client.ts";
+  import type { BrowseEntry, Detail } from "#lib/catalogBrowser.ts";
+  import { addItem, policyValue, removeItem } from "#lib/setupProfiles.ts";
   import type { SvelteMap } from "svelte/reactivity";
   import CatalogBrowser from "./CatalogBrowser.svelte";
   import ProfileChips from "./ProfileChips.svelte";

@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import HostUpdatePanel from "./HostUpdatePanel.svelte";
-import type { HostEntry, HostUpdateStatus } from "$lib/api/client";
+import type { HostEntry, HostUpdateStatus } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

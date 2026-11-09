@@ -9,9 +9,9 @@
     type GameAwareSettings,
     type GameVmAction,
     type HostEntry,
-  } from "$lib/api/client";
-  import { ACTION_LABELS, addPrograms, effectiveAction, gamingNotice, withVmAction } from "$lib/gameAware";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { ACTION_LABELS, addPrograms, effectiveAction, gamingNotice, withVmAction } from "#lib/gameAware.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
 
   interface Props {
     host: HostEntry;

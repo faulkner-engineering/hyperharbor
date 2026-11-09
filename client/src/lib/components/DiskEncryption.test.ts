@@ -8,8 +8,8 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 import AccountSection from "./AccountSection.svelte";
 import BackupPanel from "./BackupPanel.svelte";
 import DiskEncryptionDialog from "./DiskEncryptionDialog.svelte";
-import { defaultWindows, MachineDraft } from "$lib/machineDraft.svelte";
-import type { BackupRun, GuestVolumeEncryption, HostEntry, Vm, VmJob } from "$lib/api/client";
+import { defaultWindows, MachineDraft } from "#lib/machineDraft.svelte.ts";
+import type { BackupRun, GuestVolumeEncryption, HostEntry, Vm, VmJob } from "#lib/api/client.ts";
 
 const host = (apiVersion = "1.37.0"): HostEntry => ({
   key: "mdns:host",

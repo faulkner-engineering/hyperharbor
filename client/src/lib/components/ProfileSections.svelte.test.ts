@@ -11,8 +11,8 @@ import DetailCard from "./DetailCard.svelte";
 import InstallSection from "./InstallSection.svelte";
 import RemoveSection from "./RemoveSection.svelte";
 import TweaksSection from "./TweaksSection.svelte";
-import type { Detail } from "$lib/catalogBrowser";
-import type { HostEntry, ProfileItem, Vm } from "$lib/api/client";
+import type { Detail } from "#lib/catalogBrowser.ts";
+import type { HostEntry, ProfileItem, Vm } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

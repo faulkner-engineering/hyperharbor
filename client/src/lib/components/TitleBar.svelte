@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import BrandMark from "$lib/brand/BrandMark.svelte";
+  import BrandMark from "#lib/brand/BrandMark.svelte";
 
   // The window has no Windows title bar (decorations off in tauri.conf.json); this bar replaces it. Empty space and
   // the brand drag the window and maximize it on double-click (data-tauri-drag-region); the buttons are the window's

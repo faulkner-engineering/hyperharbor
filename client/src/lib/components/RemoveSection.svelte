@@ -10,10 +10,10 @@
     type ProfileItem,
     type Vm,
     type VmAppxInventory,
-  } from "$lib/api/client";
-  import type { BrowseEntry, Detail } from "$lib/catalogBrowser";
-  import { addItem, removeItem } from "$lib/setupProfiles";
-  import { toasts } from "$lib/toasts.svelte";
+  } from "#lib/api/client.ts";
+  import type { BrowseEntry, Detail } from "#lib/catalogBrowser.ts";
+  import { addItem, removeItem } from "#lib/setupProfiles.ts";
+  import { toasts } from "#lib/toasts.svelte.ts";
   import { untrack } from "svelte";
   import CatalogBrowser from "./CatalogBrowser.svelte";
   import ProfileChips from "./ProfileChips.svelte";

@@ -3,8 +3,8 @@ import {
   enableHostRemoteDesktop,
   getHostRemoteDesktop,
   type HostRemoteDesktop,
-} from "$lib/api/client";
-import { withElevation } from "$lib/lifecycle.svelte";
+} from "#lib/api/client.ts";
+import { withElevation } from "#lib/lifecycle.svelte.ts";
 
 export type HostRemoteDesktopOutcome = "opened" | "declined" | "unsupported";
 

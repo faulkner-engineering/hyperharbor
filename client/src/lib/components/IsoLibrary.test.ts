@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
 import IsoLibrary from "./IsoLibrary.svelte";
-import type { HostEntry, IsoImage } from "$lib/api/client";
+import type { HostEntry, IsoImage } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",
@@ -90,7 +90,7 @@ describe("IsoLibrary", () => {
 
   it("asks for the passphrase before uploading when the device is not elevated", async () => {
     respond({ picked: { pickId: "pick-1", fileName: "debian.iso", sizeBytes: 1024 }, active: false });
-    const { elevation } = await import("$lib/lifecycle.svelte");
+    const { elevation } = await import("#lib/lifecycle.svelte.ts");
     render(IsoLibrary, { host });
     await screen.findByText("ubuntu.iso");
 

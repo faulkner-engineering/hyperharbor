@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { errorMessage, getRdpTrustStatus, removeRdpTrust, setUpRdpTrust, type RdpTrustStatus } from "$lib/api/client";
+  import { errorMessage, getRdpTrustStatus, removeRdpTrust, setUpRdpTrust, type RdpTrustStatus } from "#lib/api/client.ts";
 
   let status = $state<RdpTrustStatus | null>(null);
   let busy = $state(false);

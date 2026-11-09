@@ -12,8 +12,8 @@
     type HostUpdateMode,
     type HostUpdateProgress,
     type HostUpdateStatus,
-  } from "$lib/api/client";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
 
   interface Props {
     host: HostEntry;

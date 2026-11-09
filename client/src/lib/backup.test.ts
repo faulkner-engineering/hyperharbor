@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BackupItemStatus, BackupTarget, RestoreTestResult, RestoreTestStatus } from "$lib/api/client";
+import type { BackupItemStatus, BackupTarget, RestoreTestResult, RestoreTestStatus } from "#lib/api/client.ts";
 import {
   ageText,
   confirmationComplete,

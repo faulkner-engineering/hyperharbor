@@ -24,9 +24,9 @@
     type ValidationIssue,
     type VirtualSwitch,
     type VmJob,
-  } from "$lib/api/client";
-  import { ElevationCancelled, toGb, toMb, waitForJob, withElevation } from "$lib/lifecycle.svelte";
-  import { machineSummary } from "$lib/machineDraft.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, toGb, toMb, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { machineSummary } from "#lib/machineDraft.svelte.ts";
   import { onMount, untrack } from "svelte";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";

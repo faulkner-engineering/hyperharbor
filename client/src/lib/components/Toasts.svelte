@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { TOAST_DURATION_MS, toasts } from "$lib/toasts.svelte";
+  import { TOAST_DURATION_MS, toasts } from "#lib/toasts.svelte.ts";
 </script>
 
 <div class="toasts" aria-live="polite">

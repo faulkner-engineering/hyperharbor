@@ -5,7 +5,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import CameraDialog from "./CameraDialog.svelte";
-import type { CameraPrefs, CameraStatus, HostEntry, Vm } from "$lib/api/client";
+import type { CameraPrefs, CameraStatus, HostEntry, Vm } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

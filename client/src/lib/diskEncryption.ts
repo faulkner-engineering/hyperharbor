@@ -1,4 +1,4 @@
-import type { GuestVolumeEncryption } from "$lib/api/client";
+import type { GuestVolumeEncryption } from "#lib/api/client.ts";
 
 const STATES: Record<GuestVolumeEncryption["state"], string> = {
   decrypted: "is not encrypted",

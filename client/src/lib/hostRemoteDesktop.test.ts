@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import { openHostRemoteDesktop } from "./hostRemoteDesktop";
 import { elevation } from "./lifecycle.svelte";
-import type { HostRemoteDesktop } from "$lib/api/client";
+import type { HostRemoteDesktop } from "#lib/api/client.ts";
 
 const on: HostRemoteDesktop = { supported: true, enabled: true, port: 3389, firewallOpen: true, edition: "Windows 11 Pro" };
 const off: HostRemoteDesktop = { ...on, enabled: false, firewallOpen: false };

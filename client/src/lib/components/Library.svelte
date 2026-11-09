@@ -28,9 +28,9 @@
     type LibraryProfile,
     type LinkState,
     type MachineProfile,
-  } from "$lib/api/client";
-  import { ElevationCancelled, ensureElevated, withElevation } from "$lib/lifecycle.svelte";
-  import { toasts } from "$lib/toasts.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, ensureElevated, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { toasts } from "#lib/toasts.svelte.ts";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import MachineProfileEditor from "./MachineProfileEditor.svelte";
 

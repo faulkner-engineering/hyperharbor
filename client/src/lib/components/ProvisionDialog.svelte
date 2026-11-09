@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { errorMessage, provisionVm, type HostEntry, type Vm } from "$lib/api/client";
+  import { errorMessage, provisionVm, type HostEntry, type Vm } from "#lib/api/client.ts";
 
   interface Props {
     host: HostEntry;

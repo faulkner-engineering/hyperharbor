@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { getGameAware, type HostEntry } from "$lib/api/client";
-  import { gamingNotice } from "$lib/gameAware";
+  import { getGameAware, type HostEntry } from "#lib/api/client.ts";
+  import { gamingNotice } from "#lib/gameAware.ts";
 
   interface Props {
     host: HostEntry;

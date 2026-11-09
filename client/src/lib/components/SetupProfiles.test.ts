@@ -7,7 +7,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import CaptureReview from "./CaptureReview.svelte";
 import SetupProfiles from "./SetupProfiles.svelte";
-import type { HostEntry, ProfileDraft, Vm } from "$lib/api/client";
+import type { HostEntry, ProfileDraft, Vm } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

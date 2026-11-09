@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 
-import Toasts from "$lib/components/Toasts.svelte";
+import Toasts from "#lib/components/Toasts.svelte";
 import { MAX_TOASTS, TOAST_DURATION_MS, toasts } from "./toasts.svelte";
 
 const messages = () => toasts.items.map((toast) => toast.message);

@@ -12,7 +12,7 @@
     type ClientUpdateChannel,
     type ClientUpdateSettings,
     type ClientUpdateStatus,
-  } from "$lib/api/client";
+  } from "#lib/api/client.ts";
   import ConfirmDialog from "./ConfirmDialog.svelte";
 
   let status = $state<ClientUpdateStatus | null>(null);

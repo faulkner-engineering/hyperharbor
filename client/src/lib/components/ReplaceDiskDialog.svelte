@@ -8,9 +8,9 @@
     type HostEntry,
     type Vm,
     type VmJob,
-  } from "$lib/api/client";
-  import { snapshotLabel, targetReady } from "$lib/backup";
-  import { ElevationCancelled, waitForJob, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { snapshotLabel, targetReady } from "#lib/backup.ts";
+  import { ElevationCancelled, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
 

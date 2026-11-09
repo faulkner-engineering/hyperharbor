@@ -8,10 +8,10 @@
     type StoredSetupProfile,
     type ValidationIssue,
     type Vm,
-  } from "$lib/api/client";
-  import type { Detail } from "$lib/catalogBrowser";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import { SoftwareDraft } from "$lib/softwareDraft.svelte";
+  } from "#lib/api/client.ts";
+  import type { Detail } from "#lib/catalogBrowser.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { SoftwareDraft } from "#lib/softwareDraft.svelte.ts";
   import { onMount, untrack } from "svelte";
   import ProfileWorkspace from "./ProfileWorkspace.svelte";
   import SoftwarePanel from "./SoftwarePanel.svelte";

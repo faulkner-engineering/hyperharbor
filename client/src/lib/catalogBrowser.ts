@@ -1,6 +1,6 @@
 // Discovery in the profile editor: one filterable list per section over the host's curated catalogs, with
 // category chips, and the details shown on the machine view for the selected entry.
-import type { TweakCatalogValue } from "$lib/api/client";
+import type { TweakCatalogValue } from "#lib/api/client.ts";
 
 /** One row of a catalog list. key is what the profile stores (a winget id, an Appx name, a tweak id). */
 export interface BrowseEntry {

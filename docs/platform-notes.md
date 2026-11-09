@@ -607,7 +607,7 @@ section for an area before changing it: most of these were learned from a failur
 
 ## Machine view (three.js in the client, 2026-10-22)
 - jsdom has no WebGLRenderingContext, and calling canvas.getContext there logs "Not implemented". webglAvailable()
-  checks the constructor first, so component tests take the still path quietly; tests mock $lib/machine/scene.
+  checks the constructor first, so component tests take the still path quietly; tests mock #lib/machine/scene.ts.
 - glTF from trimesh bakes positions into the vertices (node transforms are identity). Rotating a LineSegments built from
   them turns it about the world origin; center the edges and set the object's position to the center first.
 - Headless Edge renders the scene with `--enable-unsafe-swiftshader --use-angle=swiftshader`; `--virtual-time-budget`

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DEFAULT_SHARE, type MachineDraft } from "$lib/machineDraft.svelte";
+  import { DEFAULT_SHARE, type MachineDraft } from "#lib/machineDraft.svelte.ts";
   import Choice from "./Choice.svelte";
 
   interface Props {

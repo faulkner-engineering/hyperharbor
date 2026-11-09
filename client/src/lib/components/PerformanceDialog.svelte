@@ -22,8 +22,8 @@
     type VmComputeSettings,
     type VmJob,
     type VmPerformance,
-  } from "$lib/api/client";
-  import { ElevationCancelled, toGb, toMb, waitForJob, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, toGb, toMb, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
 

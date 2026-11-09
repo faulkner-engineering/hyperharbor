@@ -8,7 +8,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 import BackupBrowseDialog from "./BackupBrowseDialog.svelte";
 import RecoveryKeyDialog from "./RecoveryKeyDialog.svelte";
 import ReplaceDiskDialog from "./ReplaceDiskDialog.svelte";
-import type { BackupTarget, HostEntry, Vm } from "$lib/api/client";
+import type { BackupTarget, HostEntry, Vm } from "#lib/api/client.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

@@ -16,9 +16,9 @@
     type StoredSetupProfile,
     type ValidationIssue,
     type Vm,
-  } from "$lib/api/client";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import { draftToProfile, initialChoices, type CaptureChoices } from "$lib/setupProfiles";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { draftToProfile, initialChoices, type CaptureChoices } from "#lib/setupProfiles.ts";
   import { onMount } from "svelte";
   import Dialog from "./Dialog.svelte";
 

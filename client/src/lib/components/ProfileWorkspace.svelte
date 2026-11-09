@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { ValidationIssue } from "$lib/api/client";
-  import type { Detail } from "$lib/catalogBrowser";
-  import { prefersReducedMotion } from "$lib/machine/fallback";
-  import type { ControlState } from "$lib/machine/highlights";
-  import type { WorkspaceSection } from "$lib/softwareDraft.svelte";
+  import type { ValidationIssue } from "#lib/api/client.ts";
+  import type { Detail } from "#lib/catalogBrowser.ts";
+  import { prefersReducedMotion } from "#lib/machine/fallback.ts";
+  import type { ControlState } from "#lib/machine/highlights.ts";
+  import type { WorkspaceSection } from "#lib/softwareDraft.svelte.ts";
   import type { Snippet } from "svelte";
   import DetailCard from "./DetailCard.svelte";
   import Dialog from "./Dialog.svelte";

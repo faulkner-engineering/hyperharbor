@@ -8,9 +8,9 @@
     type HostEntry,
     type Vm,
     type VmJob,
-  } from "$lib/api/client";
-  import { ElevationCancelled, waitForJob, withElevation } from "$lib/lifecycle.svelte";
-  import { canTurnOff, inProgress, volumeLine } from "$lib/diskEncryption";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { canTurnOff, inProgress, volumeLine } from "#lib/diskEncryption.ts";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
 

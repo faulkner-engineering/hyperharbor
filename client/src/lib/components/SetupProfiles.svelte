@@ -13,10 +13,10 @@
     type SetupProfileSummary,
     type StoredSetupProfile,
     type Vm,
-  } from "$lib/api/client";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
-  import { emptyProfile } from "$lib/setupProfiles";
-  import { toasts } from "$lib/toasts.svelte";
+  } from "#lib/api/client.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { emptyProfile } from "#lib/setupProfiles.ts";
+  import { toasts } from "#lib/toasts.svelte.ts";
   import { onMount } from "svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import InfoTip from "./InfoTip.svelte";

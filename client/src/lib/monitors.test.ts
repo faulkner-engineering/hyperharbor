@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { areContiguous } from "./monitors";
-import type { Monitor } from "$lib/api/client";
+import type { Monitor } from "#lib/api/client.ts";
 
 const monitor = (key: string, x: number, y: number, width: number, height: number): Monitor => ({
   key,

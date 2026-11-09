@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { loadExplodedStill, readPalette, type ExplodedStill } from "$lib/machine/assets";
-  import type { ResolvedHighlight } from "$lib/machine/highlights";
+  import { loadExplodedStill, readPalette, type ExplodedStill } from "#lib/machine/assets.ts";
+  import type { ResolvedHighlight } from "#lib/machine/highlights.ts";
   import { onMount } from "svelte";
 
   interface Props {

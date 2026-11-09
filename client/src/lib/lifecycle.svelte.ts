@@ -1,4 +1,4 @@
-import { getElevation, getJob, hasProblemCode, ProblemCodes, type VmJob } from "$lib/api/client";
+import { getElevation, getJob, hasProblemCode, ProblemCodes, type VmJob } from "#lib/api/client.ts";
 
 interface PendingElevation {
   hostKey: string;

@@ -10,8 +10,8 @@
     type Monitor,
     type MonitorMode,
     type Vm,
-  } from "$lib/api/client";
-  import { areContiguous } from "$lib/monitors";
+  } from "#lib/api/client.ts";
+  import { areContiguous } from "#lib/monitors.ts";
 
   interface Props {
     host: HostEntry;

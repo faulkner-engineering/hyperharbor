@@ -1,4 +1,4 @@
-import type { Monitor } from "$lib/api/client";
+import type { Monitor } from "#lib/api/client.ts";
 
 /** True when two monitors share part of an edge. */
 function touching(a: Monitor, b: Monitor): boolean {

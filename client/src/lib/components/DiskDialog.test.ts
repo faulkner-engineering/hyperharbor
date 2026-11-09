@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import DiskDialog from "./DiskDialog.svelte";
-import type { HostEntry, Vm, VmDisk, VmJob } from "$lib/api/client";
+import type { HostEntry, Vm, VmDisk, VmJob } from "#lib/api/client.ts";
 
 const GB = 1024 ** 3;
 const path = "D:\\VMs\\Dev\\Virtual Hard Disks\\Dev.vhdx";

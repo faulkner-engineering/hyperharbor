@@ -9,9 +9,9 @@
     type BackupTarget,
     type HostEntry,
     type RecoveryKeyOffer,
-  } from "$lib/api/client";
-  import { confirmationComplete, groupKey } from "$lib/backup";
-  import { ElevationCancelled, withElevation } from "$lib/lifecycle.svelte";
+  } from "#lib/api/client.ts";
+  import { confirmationComplete, groupKey } from "#lib/backup.ts";
+  import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
 
   interface Props {

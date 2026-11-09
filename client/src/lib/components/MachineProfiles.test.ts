@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import MachineProfiles from "./MachineProfiles.svelte";
-import type { HostEntry } from "$lib/api/client";
+import type { HostEntry } from "#lib/api/client.ts";
 
 const host = (apiVersion: string): HostEntry => ({
   key: "mdns:host",
