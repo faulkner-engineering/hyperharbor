@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 
-import Menu from "./Menu.svelte";
+import Menu from "@hyperharbor/ui/components/Menu.svelte";
 
 const items = createRawSnippet(() => ({
   render: () => `<div><button type="button">Refresh</button><button type="button" disabled>Unpair</button></div>`,

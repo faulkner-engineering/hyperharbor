@@ -33,6 +33,9 @@ Toolchains are not on Git Bash PATH. Prefix: export PATH="/c/Program Files/dotne
   vite.config.js, and vitest.config.ts passes the preprocessor too; there is no svelte.config.js. Code under src/lib is
   imported as `#lib/...` with the file extension (`#lib/api/client.ts`, `#lib/components/VmList.svelte`), through the
   "imports" map in package.json; the `$lib` alias is gone. tsconfig.json extends the generated `$app/tsconfig`.
+- Shared UI (from ui/; phase 33): npm ci | npm run check. The client and the tray window import its files as
+  `@hyperharbor/ui/...` (a file: dependency); install ui/ first, because the client's type check reads them with
+  ui/node_modules. gen:api (run in client/) writes ui/src/api/types.ts.
 - Rust (from client/src-tauri, in PowerShell): cargo fmt --all; cargo clippy --workspace --all-targets -- -D warnings;
   cargo test --workspace (the workspace includes the camera DLL and the shared frame format)
 - Live mDNS browse (host service running): cargo test live_browse -- --ignored --nocapture

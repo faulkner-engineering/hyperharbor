@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { elevate, errorMessage, hasProblemCode, ProblemCodes, type HostEntry } from "#lib/api/client.ts";
-  import { elevation } from "#lib/lifecycle.svelte.ts";
+  import { errorMessage, hasProblemCode, ProblemCodes } from "../api/model.ts";
+  import { hostApi, type HostRef } from "../api/hostApi.ts";
+  import { elevation } from "../lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
 
   interface Props {
-    host: HostEntry;
+    host: HostRef;
   }
 
   let { host }: Props = $props();
@@ -18,7 +19,7 @@
     busy = true;
     error = null;
     try {
-      const granted = await elevate(host.key, passphrase);
+      const granted = await hostApi().elevate(host.key, passphrase);
       passphrase = "";
       elevation.finish(true, granted.expiresAt);
     } catch (e) {

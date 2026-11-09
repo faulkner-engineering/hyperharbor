@@ -6,7 +6,7 @@
   import type { WorkspaceSection } from "#lib/softwareDraft.svelte.ts";
   import type { Snippet } from "svelte";
   import DetailCard from "./DetailCard.svelte";
-  import Dialog from "./Dialog.svelte";
+  import Dialog from "@hyperharbor/ui/components/Dialog.svelte";
   import MachineView, { type MachineStatus, type MotionSetting } from "./MachineView.svelte";
 
   interface Props {

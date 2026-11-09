@@ -5,7 +5,8 @@
 .DESCRIPTION
     Host:     dotnet build -warnaserror (security analyzers and NuGet audit run here), dotnet test.
     Contract: Redocly lint of docs/api.yaml; regenerated TypeScript types must match the committed file.
-    Client:   npm ci, svelte-check, Vitest, npm audit (high and above).
+    Client:   the shared ui/ package (npm ci, svelte-check, npm audit), then npm ci, svelte-check, Vitest, npm audit
+              (high and above).
     Rust:     cargo fmt --check, clippy -D warnings, cargo test, cargo audit.
     E2E:      scripts\e2e.ps1, every end-to-end test that needs no Hyper-V (the real kopia, the host service on loopback,
               the Rust client against it). CI runs it in its e2e job; run it before every pull request.
@@ -30,6 +31,8 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $client = Join-Path $repo 'client'
 $tauri = Join-Path $client 'src-tauri'
+# Components shared by the client and the tray window (@hyperharbor/ui; docs/host-vm-management.md).
+$sharedUi = Join-Path $repo 'ui'
 
 # Toolchains are often missing from PATH in non-interactive shells.
 $toolPaths = @(
@@ -94,13 +97,16 @@ if (-not $ClientOnly) {
 }
 
 if (-not $HostOnly) {
+    # Before the client: the client's type check reads the shared components with their own packages.
+    Invoke-Check 'Shared UI npm ci' $sharedUi { npm ci --no-audit --no-fund }
+    Invoke-Check 'Shared UI type check' $sharedUi { npm run check }
     Invoke-Check 'npm ci' $client { npm ci --no-audit --no-fund }
     Invoke-Check 'Generated API types match api.yaml' $client {
         npm run gen:api
         if ($LASTEXITCODE -eq 0) {
-            git diff --exit-code -- src/lib/api/types.ts
+            git diff --exit-code -- ../ui/src/api/types.ts
             if ($LASTEXITCODE -ne 0) {
-                Write-Host 'src/lib/api/types.ts is out of date. Run npm run gen:api and commit the result.'
+                Write-Host 'ui/src/api/types.ts is out of date. Run npm run gen:api in client/ and commit the result.'
             }
         }
     }
@@ -112,6 +118,7 @@ if (-not $HostOnly) {
 
     if (-not $SkipAudit) {
         Invoke-Check 'npm audit' $client { npm audit --audit-level=high }
+        Invoke-Check 'Shared UI npm audit' $sharedUi { npm audit --audit-level=high }
         if (Get-Command cargo-audit -ErrorAction SilentlyContinue) {
             Invoke-Check 'cargo audit' $tauri { cargo audit }
         }

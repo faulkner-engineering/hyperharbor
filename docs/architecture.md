@@ -11,6 +11,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   - Hyper-V via CIM/WMI (root\virtualization\v2); PowerShell Direct through Windows PowerShell (powershell.exe)
     with an encoded script and secrets on stdin (PowerShellDirectAccountManager)
 - client/ (Tauri v2, Rust + TypeScript): discovery, pairing, VM dashboard, RDP launcher
+- ui/ (@hyperharbor/ui): the VM list and VM dialogs shared by the client and the host's tray window, with the API
+  types and HostApi, the interface each app implements to reach its host (phase 33, docs/host-vm-management.md)
 - Discovery: mDNS _hyperharbor._tcp on LAN; manual add by IP/hostname otherwise
 - Pairing: PIN shown in tray, certificate exchange and pinning, mTLS afterward
 - Users and devices: a User owns many Devices; pairing creates a Device under the current User. The MVP has
@@ -129,7 +131,9 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   own window buttons (window permissions in capabilities/default.json), and overlays start below --titlebar-height
   (app.css). The administrator passphrase card is a second window (guest_admin_overlay.rs, routes/overlay, always on
   top, never focused) that GuestAdminDialog shows and hides. Lifecycle UI:
-  lib/lifecycle.svelte.ts (elevation prompt, job polling) and lib/components/*Dialog.svelte on a shared Dialog
+  lib/lifecycle.svelte.ts (elevation prompt, job polling; a re-export of ui/src/lifecycle.svelte.ts) and
+  lib/components/*Dialog.svelte on a shared Dialog (ui/src/components: Dialog, VmList, ComputeDialog, DiskDialog,
+  DeleteVmDialog, ElevationDialog, JobProgress, Menu; lib/api/hostApi.ts gives them the client's Tauri commands)
 - Machine view (the setup profile editor's left pane; each tab is a section of targets.json): client/src/lib/machine:
   camera.ts (targetFor, rigFor, CameraRig: 900 ms eased fly, tilted rest orbit slowing with distance, cuts under reduced
   motion), highlights.ts (resolveHighlight for perItem, blink, pulse, spin; applyHighlight; reactionFrame), fallback.ts

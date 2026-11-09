@@ -18,6 +18,12 @@ export default defineConfig(() => ({
     }),
   ],
 
+  // The shared components (@hyperharbor/ui, a link to ../ui) import svelte from ../ui/node_modules; one copy of the
+  // runtime must serve both, or their reactivity would not connect.
+  resolve: {
+    dedupe: ["svelte"],
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
@@ -37,6 +43,10 @@ export default defineConfig(() => ({
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
+    },
+    // 4. serve the shared components, which live outside this folder
+    fs: {
+      allow: ["../ui"],
     },
   },
 }));

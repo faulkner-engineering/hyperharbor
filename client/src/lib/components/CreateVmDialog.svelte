@@ -30,8 +30,8 @@
   } from "#lib/api/client.ts";
   import { ElevationCancelled, toGb, toMb, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
   import { machineSummary } from "#lib/machineDraft.svelte.ts";
-  import Dialog from "./Dialog.svelte";
-  import JobProgress from "./JobProgress.svelte";
+  import Dialog from "@hyperharbor/ui/components/Dialog.svelte";
+  import JobProgress from "@hyperharbor/ui/components/JobProgress.svelte";
   import { toasts } from "#lib/toasts.svelte.ts";
 
   interface Props {

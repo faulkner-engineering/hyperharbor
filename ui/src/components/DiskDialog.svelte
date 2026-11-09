@@ -2,23 +2,21 @@
   import { onDestroy, onMount } from "svelte";
   import {
     errorMessage,
-    growVmDisk,
     hasProblemCode,
     isClientError,
-    listVmDisks,
     ProblemCodes,
-    type HostEntry,
     type ValidationIssue,
     type Vm,
     type VmDisk,
     type VmJob,
-  } from "#lib/api/client.ts";
-  import { ElevationCancelled, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
+  } from "../api/model.ts";
+  import { hostApi, type HostRef } from "../api/hostApi.ts";
+  import { ElevationCancelled, waitForJob, withElevation } from "../lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
 
   interface Props {
-    host: HostEntry;
+    host: HostRef;
     vm: Vm;
     onclose: (changed: boolean) => void;
   }
@@ -48,7 +46,7 @@
 
   onMount(async () => {
     try {
-      const list = await listVmDisks(host.key, vm.id);
+      const list = await hostApi().listVmDisks(host.key, vm.id);
       if (dismissed) return;
       disks = list.disks;
       if (list.disks.length > 0) select(list.disks[0].path);
@@ -105,7 +103,7 @@
     issues = [];
     const request = { path: disk.path, sizeGb, extendPartition, shutDownToApply: needsOff && shutDownToApply, acknowledgeWarnings };
     try {
-      const started = await withElevation(host.key, () => growVmDisk(host.key, vm.id, request));
+      const started = await withElevation(host.key, () => hostApi().growVmDisk(host.key, vm.id, request));
       if (dismissed) return;
       warnings = [];
       // The host keeps the job running if the dialog closes; it is listed again like any other job.

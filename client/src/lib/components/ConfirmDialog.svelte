@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Dialog from "./Dialog.svelte";
+  import Dialog from "@hyperharbor/ui/components/Dialog.svelte";
 
   interface Props {
     title: string;

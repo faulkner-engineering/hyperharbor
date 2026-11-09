@@ -7,6 +7,8 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) })
 
 import Library from "./Library.svelte";
 import type { HostEntry, Library as LibraryData } from "#lib/api/client.ts";
+// The shared components reach the (mocked) host through the client's HostApi.
+import "#lib/api/hostApi.ts";
 
 const host = (key: string, hostId: string, displayName: string): HostEntry => ({
   key,

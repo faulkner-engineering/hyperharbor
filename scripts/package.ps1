@@ -90,7 +90,7 @@ if (-not $SkipTests) {
         try {
             Invoke-Step 'Generated API types match api.yaml' {
                 npm run gen:api
-                if ($LASTEXITCODE -eq 0) { git diff --exit-code -- src/lib/api/types.ts }
+                if ($LASTEXITCODE -eq 0) { git diff --exit-code -- ../ui/src/api/types.ts }
             }
             Invoke-Step 'Frontend type check' { npm run check }
             Invoke-Step 'Frontend tests' { npm test }

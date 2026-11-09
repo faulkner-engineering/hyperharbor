@@ -54,18 +54,27 @@ jobs:
         with:
           node-version: 26
           cache: npm
-          cache-dependency-path: client/package-lock.json
+          cache-dependency-path: |
+            client/package-lock.json
+            ui/package-lock.json
       # The Rust release pinned in rust-toolchain.toml, with its components.
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: client/src-tauri
+      # The components shared with the tray window (docs/host-vm-management.md), before the client reads them.
+      - name: Shared UI package
+        working-directory: ui
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+          npm audit --audit-level=high
       - run: npm ci --no-audit --no-fund
       - name: Generated API types match api.yaml
         shell: pwsh
         run: |
           npm run gen:api
-          git diff --exit-code -- src/lib/api/types.ts
+          git diff --exit-code -- ../ui/src/api/types.ts
       - run: npm run check
       - run: npm test
       - run: npm audit --audit-level=high

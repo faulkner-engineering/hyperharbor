@@ -84,8 +84,10 @@ jobs:
         run: ./scripts/release-notes.ps1 -Version ('${{ github.ref_name }}'.TrimStart('v')) -OutFile "$env:RUNNER_TEMP/release-notes.md"
 
       - name: Install client dependencies
-        working-directory: client
-        run: npm ci --no-audit --no-fund
+        shell: pwsh
+        run: |
+          npm ci --no-audit --no-fund --prefix ui
+          npm ci --no-audit --no-fund --prefix client
 
       - name: Code signing is configured
         if: vars.SIGNING_ENDPOINT == ''

@@ -10,7 +10,7 @@
     type ValidationIssue,
   } from "#lib/api/client.ts";
   import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
-  import Dialog from "./Dialog.svelte";
+  import Dialog from "@hyperharbor/ui/components/Dialog.svelte";
 
   interface Props {
     host: HostEntry;

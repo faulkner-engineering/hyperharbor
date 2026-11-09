@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 
-import Dialog from "./Dialog.svelte";
+import Dialog from "@hyperharbor/ui/components/Dialog.svelte";
 
 const body = createRawSnippet(() => ({ render: () => "<p>Body</p>" }));
 

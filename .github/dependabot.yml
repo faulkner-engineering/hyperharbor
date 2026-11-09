@@ -37,10 +37,11 @@ updates:
       - dependency-name: windows
         update-types: ["version-update:semver-major"]
 
-  # The client and the tray window app share one pull request.
+  # The client, the components it shares with the tray window (ui/), and the tray window app share one pull request.
   - package-ecosystem: npm
     directories:
       - /client
+      - /ui
       - /host/src/Host.Tray/webui
     schedule:
       interval: monthly

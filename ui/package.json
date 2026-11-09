@@ -1,0 +1,22 @@
+{
+  "name": "@hyperharbor/ui",
+  "version": "0.0.0",
+  "description": "VM list, VM dialogs, and their helpers, shared by the client (client/) and the host's tray window (host/src/Host.Tray/webui)",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "peerDependencies": {
+    "svelte": "^5.57.3"
+  },
+  "devDependencies": {
+    "svelte": "^5.57.3",
+    "svelte-check": "^4.7.8",
+    "typescript": "~6.0.3"
+  }
+}

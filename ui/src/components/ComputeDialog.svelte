@@ -2,27 +2,24 @@
   import { onMount } from "svelte";
   import {
     errorMessage,
-    getHostResources,
-    getVmCompute,
     hasProblemCode,
     isClientError,
     ProblemCodes,
-    updateVmCompute,
     type ComputeSetting,
-    type HostEntry,
     type HostResources,
     type UpdateComputeRequest,
     type ValidationIssue,
     type Vm,
     type VmComputeSettings,
     type VmJob,
-  } from "#lib/api/client.ts";
-  import { ElevationCancelled, toGb, toMb, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
+  } from "../api/model.ts";
+  import { hostApi, type HostRef } from "../api/hostApi.ts";
+  import { ElevationCancelled, toGb, toMb, waitForJob, withElevation } from "../lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
 
   interface Props {
-    host: HostEntry;
+    host: HostRef;
     vm: Vm;
     onclose: (changed: boolean) => void;
   }
@@ -59,7 +56,7 @@
 
   onMount(async () => {
     try {
-      [current, resources] = await Promise.all([getVmCompute(host.key, vm.id), getHostResources(host.key)]);
+      [current, resources] = await Promise.all([hostApi().getVmCompute(host.key, vm.id), hostApi().getHostResources(host.key)]);
       reset(current);
     } catch (e) {
       loadError = errorMessage(e);
@@ -120,7 +117,7 @@
     issues = [];
     const body = { ...request, shutDownToApply: running && needOff.length > 0 && shutDownToApply, acknowledgeWarnings };
     try {
-      const update = await withElevation(host.key, () => updateVmCompute(host.key, vm.id, body));
+      const update = await withElevation(host.key, () => hostApi().updateVmCompute(host.key, vm.id, body));
       warnings = [];
       if (update.settings) {
         current = update.settings;

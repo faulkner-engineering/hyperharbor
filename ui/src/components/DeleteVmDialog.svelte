@@ -1,21 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import {
-    deleteVm,
-    errorMessage,
-    getDeletePreview,
-    type DeleteBlocker,
-    type HostEntry,
-    type Vm,
-    type VmDeletePreview,
-    type VmJob,
-  } from "#lib/api/client.ts";
-  import { ElevationCancelled, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
+  import { errorMessage, type DeleteBlocker, type Vm, type VmDeletePreview, type VmJob } from "../api/model.ts";
+  import { hostApi, type HostRef } from "../api/hostApi.ts";
+  import { ElevationCancelled, waitForJob, withElevation } from "../lifecycle.svelte.ts";
   import Dialog from "./Dialog.svelte";
   import JobProgress from "./JobProgress.svelte";
 
   interface Props {
-    host: HostEntry;
+    host: HostRef;
     vm: Vm;
     onclose: (deleted: boolean) => void;
   }
@@ -56,7 +48,7 @@
 
   onMount(async () => {
     try {
-      preview = await getDeletePreview(host.key, vm.id);
+      preview = await hostApi().getDeletePreview(host.key, vm.id);
     } catch (e) {
       loadError = errorMessage(e);
     }
@@ -69,7 +61,7 @@
     error = null;
     try {
       const started = await withElevation(host.key, () =>
-        deleteVm(host.key, vm.id, { deleteDisks, deleteCheckpoints, confirmName }),
+        hostApi().deleteVm(host.key, vm.id, { deleteDisks, deleteCheckpoints, confirmName }),
       );
       await waitForJob(host.key, started, (update) => (job = update));
     } catch (e) {

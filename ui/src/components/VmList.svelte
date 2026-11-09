@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GuestAdminStatus, UnattendedInstallState, Vm, VmAction, VmState } from "#lib/api/client.ts";
+  import type { GuestAdminStatus, UnattendedInstallState, Vm, VmAction, VmState } from "../api/model.ts";
   import Menu from "./Menu.svelte";
 
   interface Props {

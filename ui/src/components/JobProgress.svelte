@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { VmJob } from "#lib/api/client.ts";
+  import type { VmJob } from "../api/model.ts";
 
   interface Props {
     job: VmJob;

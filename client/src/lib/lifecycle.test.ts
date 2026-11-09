@@ -6,6 +6,8 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import { elevation, ElevationCancelled, pendingElevationHost, toMb, waitForJob, withElevation } from "./lifecycle.svelte";
 import type { VmJob } from "#lib/api/client.ts";
+// The shared components reach the (mocked) host through the client's HostApi.
+import "#lib/api/hostApi.ts";
 
 const elevationRequired = {
   code: "api",

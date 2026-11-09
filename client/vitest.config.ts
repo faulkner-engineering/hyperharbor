@@ -7,6 +7,10 @@ import { svelteTesting } from "@testing-library/svelte/vite";
 // SvelteKit 3 takes its options through the plugin (vite.config.js); tests need the preprocessor but not the adapter.
 export default defineConfig({
   plugins: [sveltekit({ preprocess: vitePreprocess() }), svelteTesting()],
+  // One Svelte runtime for the client and the shared components (vite.config.js says why).
+  resolve: {
+    dedupe: ["svelte"],
+  },
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.ts"],
