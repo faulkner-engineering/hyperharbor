@@ -118,8 +118,11 @@ impl ClientIdentity {
 }
 
 fn keyring_entry() -> Result<keyring::Entry, ClientError> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
-        .map_err(|e| ClientError::Storage(e.to_string()))
+    keyring_entry_for(KEYRING_ACCOUNT)
+}
+
+fn keyring_entry_for(account: &str) -> Result<keyring::Entry, ClientError> {
+    keyring::Entry::new(KEYRING_SERVICE, account).map_err(|e| ClientError::Storage(e.to_string()))
 }
 
 /// Decodes the first CERTIFICATE block of a PEM string.
@@ -181,5 +184,50 @@ mod tests {
         let expected: [u8; 32] = Sha256::digest(&identity.certificate_der).into();
 
         assert_eq!(identity.certificate_hash(), expected);
+    }
+
+    /// A Credential Manager account name of its own, so the test never touches the real identity key.
+    fn test_account(direction: &str) -> String {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        format!(
+            "{KEYRING_ACCOUNT}-test-{direction}-{}-{nanos}",
+            std::process::id()
+        )
+    }
+
+    // Clients up to 0.2.6 stored the key with keyring 3. If keyring 4 could not read it, an updated client would make
+    // a new identity, and every host it was paired with would have to pair with it again.
+    #[test]
+    fn reads_the_key_that_keyring_3_stored() {
+        let account = test_account("from3");
+        let (_, key_pem) = ClientIdentity::generate("test").unwrap();
+        let old = keyring3::Entry::new(KEYRING_SERVICE, &account).unwrap();
+        old.set_password(&key_pem).unwrap();
+
+        let read = keyring_entry_for(&account).unwrap().get_password();
+        old.delete_credential().unwrap();
+
+        assert_eq!(read.unwrap(), key_pem);
+    }
+
+    // The reverse, for a client that goes back to an earlier version (a reinstall of 0.2.6): it must find the key
+    // this version stored, and must not find one after it is deleted.
+    #[test]
+    fn keyring_3_reads_the_key_this_version_stores() {
+        let account = test_account("to3");
+        let (_, key_pem) = ClientIdentity::generate("test").unwrap();
+        let entry = keyring_entry_for(&account).unwrap();
+        entry.set_password(&key_pem).unwrap();
+
+        let old = keyring3::Entry::new(KEYRING_SERVICE, &account).unwrap();
+        let read = old.get_password();
+        entry.delete_credential().unwrap();
+
+        assert_eq!(read.unwrap(), key_pem);
+        assert!(matches!(old.get_password(), Err(keyring3::Error::NoEntry)));
+        assert!(matches!(entry.get_password(), Err(keyring::Error::NoEntry)));
     }
 }
