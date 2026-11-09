@@ -84,6 +84,12 @@ section for an area before changing it: most of these were learned from a failur
 - A window's height in tauri.conf.json is its content height. With the native title bar the page had all 640 px; the
   app's own bar (36 px) comes out of that, so the default height is 676 and the minimum 516 to keep the page's space.
   The Create VM dialog is tuned to fit that space unscrolled; at 640 its buttons were cut off (checked by screenshot).
+- The client's identity key is a generic credential in Credential Manager, target "client-tls-key.HyperHarbor"
+  (`cmdkey /list:client-tls-key.HyperHarbor`). keyring 4 (2026-11-09) split the crate into keyring-core and one crate
+  per store; its default "v1" feature keeps keyring 3's Windows format (target "<account>.<service>", UTF-16 secret,
+  enterprise persistence), so the move kept existing identities: a portable client rebuilt with 4.2.0 read the key
+  keyring 3.6.3 had stored and left client-certificate.pem untouched. identity.rs tests both directions against
+  keyring 3. A store with other delimiters, or the "target" modifier, would orphan existing keys.
 
 ## Tray windows (WebView2, 2026-10-05)
 

@@ -46,7 +46,10 @@ bytes = "1"
 tauri-plugin-dialog = "2"
 # No "zip" feature: updates are the signed NSIS installer itself (createUpdaterArtifacts: true), never an archive.
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
-keyring = { version = "3", features = ["windows-native"] }
+# The default "v1" feature keeps keyring 3's API and, on Windows, its Credential Manager entries: the same target name
+# ("<account>.<service>"), UTF-16 secret, and persistence, so a client updated from keyring 3 keeps its identity
+# (identity.rs tests this against keyring 3 itself).
+keyring = "4"
 base64 = "0.23.1"
 if-addrs = "0.15"
 windows-sys = { version = "0.61", features = ["Win32_Devices_Display", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security_Credentials", "Win32_UI_WindowsAndMessaging"] }
@@ -90,6 +93,8 @@ strip = true
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }
+# Clients up to 0.2.6 stored the identity key with keyring 3; the identity tests read what it wrote, and the reverse.
+keyring3 = { package = "keyring", version = "3", features = ["windows-native"] }
 
 # Unsafe code is denied crate-wide; only the Win32 wrappers in rdp.rs opt out.
 [lints.rust]
