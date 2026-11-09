@@ -197,20 +197,21 @@ mod tests {
 
     #[test]
     fn every_code_is_known_to_the_frontend() {
-        let client_ts = include_str!("../../src/lib/api/client.ts");
-        let union = client_ts
+        // The union lives with the types shared by the client and the tray window (ui/src/api/model.ts).
+        let model_ts = include_str!("../../../ui/src/api/model.ts");
+        let union = model_ts
             .split("code:")
             .nth(1)
             .and_then(|rest| rest.split(';').next())
-            .expect("ClientError.code union in client.ts");
+            .expect("ClientError.code union in model.ts");
 
         for error in every_variant() {
             let code = format!("\"{}\"", error.code());
-            assert!(union.contains(&code), "client.ts does not list {code}");
+            assert!(union.contains(&code), "model.ts does not list {code}");
         }
     }
 
-    /// The frontend reads exactly these fields (ClientError in src/lib/api/client.ts).
+    /// The frontend reads exactly these fields (ClientError in ui/src/api/model.ts).
     #[test]
     fn serializes_code_message_status_and_problem_details() {
         let api = serde_json::to_value(ClientError::Api {
