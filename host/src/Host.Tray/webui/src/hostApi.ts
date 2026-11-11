@@ -100,6 +100,7 @@ export function createTrayHostApi(
     getDeletePreview: (_key, vmId) => request("GET", vm(vmId, "/delete-preview")),
     deleteVm: (_key, vmId, body) => request("POST", vm(vmId, "/delete"), body),
     getHostResources: () => request("GET", "/host/resources"),
+    listSwitches: () => request("GET", "/switches"),
     getElevation: () => request("GET", "/auth/elevation"),
     elevate: (_key, passphrase) => request("POST", "/auth/elevation", { passphrase }),
     getJob: (_key, jobId) => request("GET", `/jobs/${encodeURIComponent(jobId)}`),

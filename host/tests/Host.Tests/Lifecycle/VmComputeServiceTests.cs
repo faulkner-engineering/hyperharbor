@@ -24,7 +24,7 @@ public sealed class VmComputeServiceTests : IDisposable
     {
         _power = new StatefulPowerInvoker(_inventory);
         _jobs = new VmJobStore(_locks, TimeProvider.System, NullLogger<VmJobStore>.Instance);
-        _service = new VmComputeService(_inventory, _compute, _power, _capacity, _locks, _jobs, _options, TimeProvider.System, NullLogger<VmComputeService>.Instance);
+        _service = new VmComputeService(_inventory, _compute, _power, _capacity, new FakeHyperVHost(), _locks, _jobs, _options, TimeProvider.System, NullLogger<VmComputeService>.Instance);
         _inventory.Vms.Add(FakeVmInventory.CreateVm(VmId, "Dev", VmState.Off));
         _compute.States[VmId] = new ComputeState(2, 4096, 4096, false, false, false, 1);
     }
@@ -253,6 +253,62 @@ public sealed class VmComputeServiceTests : IDisposable
 
         await Assert.ThrowsAsync<VmBusyException>(() => UpdateAsync(new UpdateVmComputeRequest(ProcessorCount: 4)));
     }
+
+    [Fact]
+    public async Task RunningVm_Switch_ChangesAtOnce()
+    {
+        _inventory.SetState(VmId, VmState.Running);
+        _compute.States[VmId] = new ComputeState(2, 4096, 4096, false, false, false, 1, CimHyperVHost.DefaultSwitchId, 1);
+
+        var update = await UpdateAsync(new UpdateVmComputeRequest(SwitchId: ExternalId));
+
+        Assert.Equal(ExternalId, update.Settings!.SwitchId);
+        Assert.Equal(1, update.Settings.AdapterCount);
+        Assert.DoesNotContain(ComputeSetting.SwitchId, update.Settings.RequiresOff);
+        Assert.Equal(ExternalId, Assert.Single(_compute.Applied).Change.SwitchId);
+        Assert.Empty(_power.Calls);
+    }
+
+    [Fact]
+    public async Task SameSwitch_InAnyCase_AppliesNothing()
+    {
+        _compute.States[VmId] = new ComputeState(2, 4096, 4096, false, false, false, 1, ExternalId, 1);
+
+        await UpdateAsync(new UpdateVmComputeRequest(SwitchId: ExternalId.ToUpperInvariant()));
+
+        Assert.Empty(_compute.Applied);
+    }
+
+    [Fact]
+    public async Task Switch_ConnectsAnUnconnectedAdapter()
+    {
+        _compute.States[VmId] = new ComputeState(2, 4096, 4096, false, false, false, 0, null, 1);
+
+        var update = await UpdateAsync(new UpdateVmComputeRequest(SwitchId: ExternalId));
+
+        Assert.Equal(ExternalId, update.Settings!.SwitchId);
+    }
+
+    [Fact]
+    public async Task UnknownSwitch_IsInvalid()
+    {
+        _compute.States[VmId] = new ComputeState(2, 4096, 4096, false, false, false, 1, CimHyperVHost.DefaultSwitchId, 1);
+
+        var ex = await Assert.ThrowsAsync<LifecycleValidationException>(() => UpdateAsync(new UpdateVmComputeRequest(SwitchId: "no-such-switch")));
+
+        Assert.Contains(ex.Errors, error => error.Field == "switchId");
+        Assert.Empty(_compute.Applied);
+    }
+
+    [Fact]
+    public async Task Switch_WithoutANetworkAdapter_IsInvalid()
+    {
+        var ex = await Assert.ThrowsAsync<LifecycleValidationException>(() => UpdateAsync(new UpdateVmComputeRequest(SwitchId: ExternalId)));
+
+        Assert.Contains("no network adapter", Assert.Single(ex.Errors, error => error.Field == "switchId").Message, StringComparison.Ordinal);
+    }
+
+    private const string ExternalId = "1d6e5b3c-0000-4000-8000-000000000001";
 
     private Task<VmComputeUpdate> UpdateAsync(UpdateVmComputeRequest request) =>
         _service.UpdateAsync(VmId, UserId, request, ToContract, null, CancellationToken.None);

@@ -91,7 +91,7 @@ public sealed partial class CimHyperVDefinitionReader(IHyperVCompute compute) : 
                 connections
                     .Select(connection => new AdapterConnection(
                         connection.CimInstanceProperties["Parent"]?.Value as string,
-                        connection.CimInstanceProperties["HostResource"]?.Value is string[] { Length: > 0 } hosts ? hosts[0] : null))
+                        CimVmSettings.ConnectedSwitchPath(connection)))
                     .ToList(),
                 switchNames);
 
@@ -151,14 +151,17 @@ public sealed partial class CimHyperVDefinitionReader(IHyperVCompute compute) : 
     internal sealed record AdapterPort(string InstanceId, string? Address);
 
     /// <param name="Parent">The object path of the adapter the connection belongs to.</param>
-    /// <param name="HostResource">The switch's object path, or null when the connection names none.</param>
+    /// <param name="HostResource">
+    /// The switch's object path, or null when the connection names none or is disconnected (CimVmSettings.ConnectedSwitchPath).
+    /// </param>
     internal sealed record AdapterConnection(string? Parent, string? HostResource);
 
     /// <summary>
     /// One entry per network adapter, in the order given (synthetic adapters first, in Hyper-V's order, which a transfer
     /// matches by position). An adapter's switch comes from the connection whose Parent names it; an adapter connected to
     /// nothing has no connection object at all, so it was dropped when the list was built from the connections (seen
-    /// live: a VM copied with an unconnected adapter could not be moved on, because its preview listed no adapters).
+    /// live: a VM copied with an unconnected adapter could not be moved on, because its preview listed no adapters). An
+    /// adapter disconnected in Hyper-V keeps a disabled connection, which names no switch here.
     /// </summary>
     internal static IReadOnlyList<VmAdapterDefinition> Adapters(
         IReadOnlyList<AdapterPort> ports,

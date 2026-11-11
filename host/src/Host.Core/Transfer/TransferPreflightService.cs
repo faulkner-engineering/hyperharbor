@@ -50,7 +50,11 @@ public sealed class TransferPreflightService
 
     /// <exception cref="TransferException">This host's TPM capability could not be found out.</exception>
     public async Task<TransferPlan> CheckAsync(
-        TransferPreview preview, TransferMode mode, CancellationToken cancellationToken, TransferTpmMode tpmMode = TransferTpmMode.Keep)
+        TransferPreview preview,
+        TransferMode mode,
+        CancellationToken cancellationToken,
+        TransferTpmMode tpmMode = TransferTpmMode.Keep,
+        string? switchId = null)
     {
         ArgumentNullException.ThrowIfNull(preview);
         var vms = await _inventory.ListAsync(cancellationToken).ConfigureAwait(false);
@@ -73,7 +77,7 @@ public sealed class TransferPreflightService
             switches,
             localGuardian,
             tpm);
-        return TransferPreflight.Evaluate(preview, mode, facts, tpmMode);
+        return TransferPreflight.Evaluate(preview, mode, facts, tpmMode, switchId);
     }
 
     private static IEnumerable<string> ListFolders(string root) =>

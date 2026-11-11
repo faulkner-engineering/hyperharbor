@@ -11,6 +11,13 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Added
+- A VM's virtual switch can be chosen in its Settings, in the client and in the host window: every network adapter of
+  the VM connects to the chosen switch, also while the VM runs, and a VM whose adapter is not connected can be
+  connected. No more PowerShell on the host to move a VM off the Default Switch. Needs an updated host (API 1.39.0).
+- Moving or copying a VM to another host asks which of that host's virtual switches its network adapters connect to.
+  A switch with the same name is suggested, else a switch other than the Default Switch (which reaches only its own
+  host). Before, a VM whose switch name the other host did not have always landed on the Default Switch. Needs the
+  receiving host updated (API 1.39.0); an older one matches switches by name as before.
 - The client shows how busy the selected host is, above its tabs: processor use with the number of cores and logical
   processors, and memory in use out of the total, refreshed every 5 seconds. Free memory below what the host keeps for
   itself is marked. Use it to size new VMs and to see what running VMs take. Processor use and the core count need an
@@ -35,6 +42,9 @@ note anything that needs action, such as updating the host, a new elevation requ
   carries WPF, which it never used) and the host starts about 9% faster.
 
 ### Fixed
+- A network adapter disconnected in Hyper-V Manager (or with Disconnect-VMNetworkAdapter) is now seen as not connected.
+  Before, a moved or copied VM, or one restored from a backup, was connected again on the other host, and the MAC
+  address spoofing setting counted the adapter.
 - Installing the host no longer deletes data files that another account created. The installer (and the service at
   each start) still keeps the service from using them, but now moves them into an `untrusted-<date>` folder in
   `%ProgramData%\HyperHarbor`, and says which account created them, so they can be restored by hand. Installing from

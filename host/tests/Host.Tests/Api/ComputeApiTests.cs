@@ -70,6 +70,21 @@ public sealed class ComputeApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Patch_RunningVm_Switch_Returns200WithTheNewSwitch()
+    {
+        _host.Inventory.SetState(VmId, VmState.Running);
+        _host.Compute.States[VmId] = new ComputeState(2, 4096, 4096, false, false, false, 1, CimHyperVHost.DefaultSwitchId, 1);
+        var external = _host.HyperVHost.Switches.Single(item => !item.IsDefault).Id;
+
+        var response = await SendElevated(new { switchId = external });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var settings = (await response.Content.ReadFromJsonAsync<JsonObject>())!["settings"]!;
+        Assert.Equal(external, (string?)settings["switchId"]);
+        Assert.Equal(1, (int?)settings["adapterCount"]);
+    }
+
+    [Fact]
     public async Task Patch_RunningVm_NeedingOff_Returns409RequiresShutdown()
     {
         _host.Inventory.SetState(VmId, VmState.Running);

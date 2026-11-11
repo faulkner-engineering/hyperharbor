@@ -56,6 +56,7 @@ describe("tray HostApi", () => {
     void api.growVmDisk("local", "vm-1", { path: "D:\\VMs\\a.vhdx", sizeGb: 64 });
     void api.deleteVm("local", "vm-1", { deleteDisks: true, deleteCheckpoints: false, confirmName: "Dev" });
     void api.elevate("local", "correct horse");
+    void api.listSwitches("local");
 
     expect(sent.map((request) => [request.method, request.path, request.body])).toEqual([
       ["POST", "/vms/vm-1/actions", { action: "shutdown" }],
@@ -63,6 +64,7 @@ describe("tray HostApi", () => {
       ["POST", "/vms/vm-1/disks/grow", { extendPartition: true, path: "D:\\VMs\\a.vhdx", sizeGb: 64 }],
       ["POST", "/vms/vm-1/delete", { deleteDisks: true, deleteCheckpoints: false, confirmName: "Dev" }],
       ["POST", "/auth/elevation", { passphrase: "correct horse" }],
+      ["GET", "/switches", undefined],
     ]);
   });
 

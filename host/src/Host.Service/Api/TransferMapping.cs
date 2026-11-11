@@ -63,7 +63,7 @@ public static class TransferMapping
         preview.TpmOwnedBySource);
 
     public static Domain.IncomingTransferRequest ToCore(this Wire.IncomingTransferRequest request) =>
-        new(request.Preview.ToCore(), request.Mode, request.SourceFingerprint, request.AcknowledgeWarnings, request.TpmMode);
+        new(request.Preview.ToCore(), request.Mode, request.SourceFingerprint, request.AcknowledgeWarnings, request.TpmMode, request.SwitchId);
 
     public static Wire.TransferOffer ToContract(this Domain.IncomingTransferOffer offer, IReadOnlyList<string> addresses) =>
         new(offer.TransferId, offer.Ticket, offer.Plan.Name, offer.Plan.VmFolder, offer.Plan.VmId, offer.Plan.Warnings, offer.Guardian, addresses);

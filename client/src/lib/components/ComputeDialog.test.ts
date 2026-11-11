@@ -52,12 +52,23 @@ function settings(state: VmComputeSettings["state"]): VmComputeSettings {
   };
 }
 
-function respond(current: VmComputeSettings) {
-  invoke.mockImplementation((command: string) => {
+const switches = [
+  { id: "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", name: "Default Switch", isDefault: true },
+  { id: "1D6E5B3C-0000-4000-8000-000000000001", name: "External", isDefault: false },
+];
+
+/** Settings as a host of API 1.39.0 or later reports them, with the VM's switch. */
+function withSwitch(state: VmComputeSettings["state"], switchId: string | null, adapterCount = 1): VmComputeSettings {
+  return { ...settings(state), switchId, adapterCount };
+}
+
+function respond(current: VmComputeSettings, listed: () => Promise<unknown> = () => Promise.resolve(switches)) {
+  invoke.mockImplementation((command: string, args?: { resource?: string }) => {
     switch (command) {
       case "get_vm_compute":
         return Promise.resolve(current);
       case "get_host_resource":
+        if (args?.resource === "switches") return listed();
         return Promise.resolve({
           logicalProcessorCount: 8,
           totalMemoryMb: 32768,
@@ -133,5 +144,65 @@ describe("ComputeDialog", () => {
 
     await vi.waitFor(() => expect(updates()).toHaveLength(1));
     expect(updates()[0]).toEqual({ macAddressSpoofing: true, shutDownToApply: false, acknowledgeWarnings: false });
+  });
+
+  it("shows the VM's switch, and on a running VM changes it without shutting down", async () => {
+    // Hyper-V's object paths can spell the ID in another case than the switch list.
+    respond(withSwitch("running", "c08cb7b8-9b3c-408e-8e30-5e16a3aeb444"));
+    render(ComputeDialog, { host, vm, onclose: vi.fn() });
+
+    const select = (await screen.findByLabelText(/Virtual switch/)) as HTMLSelectElement;
+    expect(select.selectedOptions[0].textContent).toBe("Default Switch");
+    expect(saveButton().disabled).toBe(true);
+
+    await fireEvent.change(select, { target: { value: switches[1].id } });
+    expect(screen.queryByText(/needs the VM off/)).toBeNull();
+    await fireEvent.click(saveButton());
+
+    await vi.waitFor(() => expect(updates()).toHaveLength(1));
+    expect(updates()[0]).toEqual({ switchId: switches[1].id, shutDownToApply: false, acknowledgeWarnings: false });
+  });
+
+  it("offers to connect a VM whose adapter is not connected", async () => {
+    respond(withSwitch("off", null));
+    render(ComputeDialog, { host, vm, onclose: vi.fn() });
+
+    const select = (await screen.findByLabelText(/Virtual switch/)) as HTMLSelectElement;
+    expect(select.selectedOptions[0].textContent).toBe("Not connected");
+    expect(saveButton().disabled).toBe(true);
+
+    await fireEvent.change(select, { target: { value: switches[1].id } });
+    await fireEvent.click(saveButton());
+
+    await vi.waitFor(() => expect(updates()[0]).toMatchObject({ switchId: switches[1].id }));
+  });
+
+  it("cannot choose a switch for a VM without a network adapter", async () => {
+    respond(withSwitch("off", null, 0));
+    render(ComputeDialog, { host, vm, onclose: vi.fn() });
+
+    const select = (await screen.findByLabelText(/Virtual switch/)) as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(select.selectedOptions[0].textContent).toBe("No network adapter");
+  });
+
+  it("still offers the other settings when the switches cannot be read", async () => {
+    respond(withSwitch("off", null), () => Promise.reject(new Error("unreachable")));
+    render(ComputeDialog, { host, vm, onclose: vi.fn() });
+
+    await screen.findByRole("button", { name: "Developer mode" });
+
+    expect(screen.queryByLabelText(/Virtual switch/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("a host older than 1.39.0 shows no switch choice and is not asked for its switches", async () => {
+    respond(settings("off"));
+    render(ComputeDialog, { host, vm, onclose: vi.fn() });
+
+    await screen.findByRole("button", { name: "Developer mode" });
+
+    expect(screen.queryByLabelText(/Virtual switch/)).toBeNull();
+    expect(invoke.mock.calls.some(([, args]) => args?.resource === "switches")).toBe(false);
   });
 });

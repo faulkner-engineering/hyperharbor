@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HyperHarbor.Host.Core;
 using HyperHarbor.Host.Core.HyperV;
 using HyperHarbor.Host.Core.Lifecycle;
@@ -10,12 +11,14 @@ namespace HyperHarbor.Host.Tests.Lifecycle;
 
 /// <summary>
 /// Creates a throwaway VM named HyperHarbor-Test through the real services, checks its settings in
-/// Hyper-V, then deletes it with its disk. Changes the host, so it runs only when HH_LIFECYCLE_LIVE is set:
+/// Hyper-V, moves it to a throwaway private switch and back, then deletes it with its disk and the switch.
+/// Changes the host, so it runs only when HH_LIFECYCLE_LIVE is set:
 /// HH_LIFECYCLE_LIVE=1 dotnet test --filter LifecycleLiveTests
 /// </summary>
 public sealed class LifecycleLiveTests(ITestOutputHelper output) : IDisposable
 {
     private const string VmName = "HyperHarbor-Test";
+    private const string SwitchName = "HyperHarbor-Test-Switch";
     private static readonly Guid UserId = Guid.Parse("11111111-2222-4333-8444-555555555555");
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "hyperharbor-live", Guid.NewGuid().ToString("N"));
@@ -65,7 +68,7 @@ public sealed class LifecycleLiveTests(ITestOutputHelper output) : IDisposable
 
             // The developer preset on the (off) VM: static memory, nested virtualization, MAC spoofing, one processor.
             var compute = new VmComputeService(
-                inventory, new CimHyperVCompute(), new Core.Power.CimHyperVPowerInvoker(), new WindowsHostCapacityReader(),
+                inventory, new CimHyperVCompute(), new Core.Power.CimHyperVPowerInvoker(), new WindowsHostCapacityReader(), new CimHyperVHost(),
                 new VmOperationLocks(), jobs, options, TimeProvider.System, NullLogger<VmComputeService>.Instance);
             var update = await compute.UpdateAsync(
                 vmId,
@@ -77,7 +80,10 @@ public sealed class LifecycleLiveTests(ITestOutputHelper output) : IDisposable
             var applied = await new CimHyperVCompute().ReadAsync(vmId, CancellationToken.None);
             output.WriteLine($"Applied: {applied}");
             Assert.NotNull(update.Settings);
-            Assert.Equal(new ComputeState(1, 1024, 1024, false, true, true, 1), applied);
+            Assert.Equal(new ComputeState(1, 1024, 1024, false, true, true, 1, applied.SwitchId, 1), applied);
+            Assert.Equal(CimHyperVHost.DefaultSwitchId, applied.SwitchId, ignoreCase: true);
+
+            await CheckSwitchChangesAsync(compute, vmId);
 
             // A checkpoint, so deletion has to merge it (DestroySnapshotTree) before removing the VM.
             await CreateCheckpointAsync(vmId);
@@ -101,6 +107,61 @@ public sealed class LifecycleLiveTests(ITestOutputHelper output) : IDisposable
         Assert.DoesNotContain(await inventory.ListAsync(CancellationToken.None), vm => vm.Id == vmId);
         Assert.False(File.Exists(Path.Combine(_root, "vms", VmName, "Virtual Hard Disks", VmName + ".vhdx")));
         Assert.True(File.Exists(Path.Combine(isoFolder, "placeholder.iso")), "Deleting the VM's disks must keep its ISO.");
+    }
+
+    /// <summary>
+    /// Moves the VM's adapter to a throwaway private switch (an existing connection is pointed elsewhere), disconnects it,
+    /// connects it again through the service (a new connection is added), and puts it back on the Default Switch.
+    /// </summary>
+    private async Task CheckSwitchChangesAsync(VmComputeService compute, Guid vmId)
+    {
+        await RunPowerShellAsync($"New-VMSwitch -Name '{SwitchName}' -SwitchType Private | Out-Null");
+        try
+        {
+            var created = (await new CimHyperVHost().ListSwitchesAsync(CancellationToken.None)).Single(item => item.Name == SwitchName);
+
+            var moved = await ChangeSwitchAsync(compute, vmId, created.Id);
+            output.WriteLine($"Moved to {SwitchName}: {moved}");
+            Assert.Equal(created.Id, moved.SwitchId, ignoreCase: true);
+            Assert.True(moved.MacAddressSpoofing, "Pointing the connection at another switch must keep its security settings.");
+
+            await RunPowerShellAsync($"Disconnect-VMNetworkAdapter -VMName '{VmName}'");
+            var disconnected = await new CimHyperVCompute().ReadAsync(vmId, CancellationToken.None);
+            output.WriteLine($"Disconnected: {disconnected}");
+            Assert.Null(disconnected.SwitchId);
+            Assert.Equal(1, disconnected.AdapterCount);
+
+            var back = await ChangeSwitchAsync(compute, vmId, CimHyperVHost.DefaultSwitchId);
+            output.WriteLine($"Connected again: {back}");
+            Assert.Equal(CimHyperVHost.DefaultSwitchId, back.SwitchId, ignoreCase: true);
+            Assert.Equal(1, back.NetworkAdapterCount);
+        }
+        finally
+        {
+            await RunPowerShellAsync($"Get-VMNetworkAdapter -VMName '{VmName}' | Where-Object SwitchName -eq '{SwitchName}' | Connect-VMNetworkAdapter -SwitchName 'Default Switch'; Remove-VMSwitch -Name '{SwitchName}' -Force");
+        }
+    }
+
+    private static async Task<ComputeState> ChangeSwitchAsync(VmComputeService compute, Guid vmId, string switchId)
+    {
+        var update = await compute.UpdateAsync(
+            vmId, UserId, new UpdateVmComputeRequest(SwitchId: switchId), snapshot => throw new InvalidOperationException("A switch needs no job."), null, CancellationToken.None);
+        Assert.NotNull(update.Settings);
+        return await new CimHyperVCompute().ReadAsync(vmId, CancellationToken.None);
+    }
+
+    private static async Task RunPowerShellAsync(string script)
+    {
+        var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
+        foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-Command", script })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(start)!;
+        var errors = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        Assert.True(process.ExitCode == 0, await errors);
     }
 
     private static async Task CreateCheckpointAsync(Guid vmId)

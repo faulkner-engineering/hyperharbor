@@ -1,12 +1,13 @@
 using HyperHarbor.Host.Core.Power;
 using HyperHarbor.Shared.Contracts;
+using HyperHarbor.Shared.Contracts.Hosts;
 using HyperHarbor.Shared.Contracts.Vms;
 using Microsoft.Extensions.Logging;
 
 namespace HyperHarbor.Host.Core.Lifecycle;
 
 /// <summary>
-/// Reads and changes processor, memory, nested virtualization, and MAC address spoofing settings.
+/// Reads and changes processor, memory, nested virtualization, MAC address spoofing, and virtual switch settings.
 /// Settings in <see cref="RequiresOff"/> can change only while the VM is off. For a running VM,
 /// the caller can ask for a job that shuts the guest down, applies the changes, and starts it again.
 /// </summary>
@@ -16,6 +17,7 @@ public sealed class VmComputeService
     private readonly IHyperVCompute _compute;
     private readonly IHyperVPowerInvoker _power;
     private readonly IHostCapacityReader _capacity;
+    private readonly IHyperVHost _host;
     private readonly VmOperationLocks _locks;
     private readonly VmJobStore _jobs;
     private readonly LifecycleOptions _options;
@@ -27,6 +29,7 @@ public sealed class VmComputeService
         IHyperVCompute compute,
         IHyperVPowerInvoker power,
         IHostCapacityReader capacity,
+        IHyperVHost host,
         VmOperationLocks locks,
         VmJobStore jobs,
         LifecycleOptions options,
@@ -37,6 +40,7 @@ public sealed class VmComputeService
         _compute = compute;
         _power = power;
         _capacity = capacity;
+        _host = host;
         _locks = locks;
         _jobs = jobs;
         _options = options;
@@ -46,7 +50,7 @@ public sealed class VmComputeService
 
     /// <summary>
     /// Settings that need the VM off. Maximum memory can change on a running VM only while dynamic
-    /// memory is on before and after the change; MAC address spoofing can always change.
+    /// memory is on before and after the change; MAC address spoofing and the switch can always change.
     /// </summary>
     public static IReadOnlyList<ComputeSetting> RequiresOff(bool dynamicMemoryBefore, bool dynamicMemoryAfter)
     {
@@ -90,7 +94,8 @@ public sealed class VmComputeService
         var vm = await _inventory.GetAsync(vmId, cancellationToken).ConfigureAwait(false) ?? throw new VmNotFoundException(vmId);
         var current = await _compute.ReadAsync(vmId, cancellationToken).ConfigureAwait(false);
         var (change, desired) = Merge(current, request);
-        Validate(vm.State, current, desired, change, request.AcknowledgeWarnings);
+        var switches = change.SwitchId is null ? [] : await _host.ListSwitchesAsync(cancellationToken).ConfigureAwait(false);
+        Validate(vm.State, current, desired, change, switches, request.AcknowledgeWarnings);
 
         var changed = Changed(change);
         if (changed.Count == 0)
@@ -141,7 +146,8 @@ public sealed class VmComputeService
         await _power.InvokeAsync(vmId, VmAction.Start, context.Stopping).ConfigureAwait(false);
     }
 
-    private void Validate(VmState state, ComputeState current, ComputeState desired, ComputeChange change, bool acknowledgeWarnings)
+    private void Validate(
+        VmState state, ComputeState current, ComputeState desired, ComputeChange change, IReadOnlyList<VirtualSwitch> switches, bool acknowledgeWarnings)
     {
         var errors = new List<ValidationIssue>();
         var warnings = new List<ValidationIssue>();
@@ -178,6 +184,18 @@ public sealed class VmComputeService
             errors.Add(new("macAddressSpoofing", "The VM has no network adapter connected to a switch."));
         }
 
+        if (change.SwitchId is { } switchId)
+        {
+            if (current.AdapterCount == 0)
+            {
+                errors.Add(new("switchId", "The VM has no network adapter. Add one in Hyper-V Manager first."));
+            }
+            else if (!switches.Any(item => string.Equals(item.Id, switchId, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add(new("switchId", "This host has no virtual switch with that ID."));
+            }
+        }
+
         if (errors.Count > 0)
         {
             throw new LifecycleValidationException(errors[0].Message, errors);
@@ -207,7 +225,8 @@ public sealed class VmComputeService
             dynamicMemory && Diff<long>(maximum, current.MaximumMemoryMb) is { } newMaximum ? newMaximum : null,
             Diff(request.DynamicMemory, current.DynamicMemory),
             Diff(request.NestedVirtualization, current.NestedVirtualization),
-            Diff(request.MacAddressSpoofing, current.MacAddressSpoofing));
+            Diff(request.MacAddressSpoofing, current.MacAddressSpoofing),
+            request.SwitchId is { } switchId && !string.Equals(switchId, current.SwitchId, StringComparison.OrdinalIgnoreCase) ? switchId : null);
         var desired = current with
         {
             ProcessorCount = change.ProcessorCount ?? current.ProcessorCount,
@@ -216,6 +235,7 @@ public sealed class VmComputeService
             DynamicMemory = dynamicMemory,
             NestedVirtualization = change.NestedVirtualization ?? current.NestedVirtualization,
             MacAddressSpoofing = change.MacAddressSpoofing ?? current.MacAddressSpoofing,
+            SwitchId = change.SwitchId ?? current.SwitchId,
         };
         return (change, desired);
     }
@@ -253,6 +273,11 @@ public sealed class VmComputeService
             changed.Add(ComputeSetting.MacAddressSpoofing);
         }
 
+        if (change.SwitchId is not null)
+        {
+            changed.Add(ComputeSetting.SwitchId);
+        }
+
         return changed;
     }
 
@@ -263,6 +288,7 @@ public sealed class VmComputeService
         ComputeSetting.MaximumMemoryMb => "the maximum memory",
         ComputeSetting.DynamicMemory => "dynamic memory",
         ComputeSetting.NestedVirtualization => "nested virtualization",
+        ComputeSetting.SwitchId => "the virtual switch",
         _ => "MAC address spoofing",
     }));
 
@@ -276,5 +302,7 @@ public sealed class VmComputeService
         current.NestedVirtualization,
         current.MacAddressSpoofing,
         current.NetworkAdapterCount,
-        RequiresOff(current.DynamicMemory, current.DynamicMemory));
+        RequiresOff(current.DynamicMemory, current.DynamicMemory),
+        current.SwitchId,
+        current.AdapterCount);
 }

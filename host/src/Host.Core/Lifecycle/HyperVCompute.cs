@@ -1,9 +1,13 @@
+using HyperHarbor.Host.Core.Backup;
 using HyperHarbor.Host.Core.HyperV;
 using Microsoft.Management.Infrastructure;
 
 namespace HyperHarbor.Host.Core.Lifecycle;
 
 /// <summary>A VM's compute settings as Hyper-V stores them.</summary>
+/// <param name="NetworkAdapterCount">Network adapters connected to a switch.</param>
+/// <param name="SwitchId">The switch of the first connected network adapter; null when none is connected.</param>
+/// <param name="AdapterCount">Network adapters, connected or not.</param>
 public sealed record ComputeState(
     int ProcessorCount,
     long StartupMemoryMb,
@@ -11,16 +15,20 @@ public sealed record ComputeState(
     bool DynamicMemory,
     bool NestedVirtualization,
     bool MacAddressSpoofing,
-    int NetworkAdapterCount);
+    int NetworkAdapterCount,
+    string? SwitchId = null,
+    int AdapterCount = 0);
 
 /// <summary>Settings to change; null leaves a setting as it is.</summary>
+/// <param name="SwitchId">A switch that every network adapter connects to.</param>
 public sealed record ComputeChange(
     int? ProcessorCount = null,
     long? StartupMemoryMb = null,
     long? MaximumMemoryMb = null,
     bool? DynamicMemory = null,
     bool? NestedVirtualization = null,
-    bool? MacAddressSpoofing = null)
+    bool? MacAddressSpoofing = null,
+    string? SwitchId = null)
 {
     public bool ChangesMemory => StartupMemoryMb is not null || MaximumMemoryMb is not null || DynamicMemory is not null;
 
@@ -37,8 +45,8 @@ public interface IHyperVCompute
 
 /// <summary>
 /// <see cref="IHyperVCompute"/> through root\virtualization\v2: Msvm_ProcessorSettingData (VirtualQuantity,
-/// ExposeVirtualizationExtensions), Msvm_MemorySettingData, and Msvm_EthernetSwitchPortSecuritySettingData
-/// (AllowMacSpoofing) on each switch connection.
+/// ExposeVirtualizationExtensions), Msvm_MemorySettingData, Msvm_EthernetSwitchPortSecuritySettingData
+/// (AllowMacSpoofing) on each switch connection, and each network adapter's switch connection (HostResource).
 /// </summary>
 public sealed class CimHyperVCompute : IHyperVCompute
 {
@@ -54,9 +62,15 @@ public sealed class CimHyperVCompute : IHyperVCompute
                 using var security = SecurityOf(session, connection);
                 return security?.CimInstanceProperties["AllowMacSpoofing"]?.Value is true;
             });
-            foreach (var connection in connections)
+            var ports = Ports(session, settings);
+            var switchId = ports
+                .Select(port => ConnectionOf(connections, port) is { } connection && CimVmSettings.ConnectedSwitchPath(connection) is { } path
+                    ? CimHyperVDefinitionReader.SwitchIdOf(path)
+                    : null)
+                .FirstOrDefault(id => id is not null);
+            foreach (var item in connections.Concat(ports))
             {
-                connection.Dispose();
+                item.Dispose();
             }
 
             return Task.FromResult(new ComputeState(
@@ -66,7 +80,9 @@ public sealed class CimHyperVCompute : IHyperVCompute
                 memory.CimInstanceProperties["DynamicMemoryEnabled"]?.Value is true,
                 processor.CimInstanceProperties["ExposeVirtualizationExtensions"]?.Value is true,
                 spoofing,
-                connections.Count));
+                connections.Count,
+                switchId,
+                ports.Count));
         }, cancellationToken);
 
     public Task ApplyAsync(Guid vmId, ComputeChange change, ComputeState desired, CancellationToken cancellationToken) =>
@@ -108,13 +124,55 @@ public sealed class CimHyperVCompute : IHyperVCompute
                     }
                 }
             }
+
+            if (change.SwitchId is { } switchId)
+            {
+                var ports = Ports(session, settings);
+                var connections = CimVmSettings.Associated(session, settings, "Msvm_EthernetPortAllocationSettingData");
+                try
+                {
+                    foreach (var port in ports)
+                    {
+                        await CimVmSettings.ConnectAdapterAsync(session, settings, port, ConnectionOf(connections, port), switchId, cancellationToken);
+                    }
+                }
+                finally
+                {
+                    ports.Concat(connections).ToList().ForEach(item => item.Dispose());
+                }
+            }
         }, cancellationToken);
 
-    /// <summary>Switch connections (Msvm_EthernetPortAllocationSettingData) that point at a switch.</summary>
-    private static List<CimInstance> Connections(CimSession session, CimInstance settings) =>
-        CimVmSettings.Associated(session, settings, "Msvm_EthernetPortAllocationSettingData")
-            .Where(connection => connection.CimInstanceProperties["HostResource"]?.Value is string[] { Length: > 0 } hosts && !string.IsNullOrEmpty(hosts[0]))
-            .ToList();
+    /// <summary>The VM's network adapters: synthetic ones first, then legacy ones.</summary>
+    private static List<CimInstance> Ports(CimSession session, CimInstance settings) =>
+        [
+            .. CimVmSettings.Associated(session, settings, "Msvm_SyntheticEthernetPortSettingData"),
+            .. CimVmSettings.Associated(session, settings, "Msvm_EmulatedEthernetPortSettingData"),
+        ];
+
+    /// <summary>The switch connection whose Parent is <paramref name="port"/>, if it has one.</summary>
+    private static CimInstance? ConnectionOf(IEnumerable<CimInstance> connections, CimInstance port) =>
+        connections.FirstOrDefault(connection => CimHyperVDefinitionReader.ParentMatches(
+            connection.CimInstanceProperties["Parent"]?.Value as string, (string)port.CimInstanceProperties["InstanceID"].Value));
+
+    /// <summary>Switch connections (Msvm_EthernetPortAllocationSettingData) that point at a switch and are not disconnected.</summary>
+    private static List<CimInstance> Connections(CimSession session, CimInstance settings)
+    {
+        var connected = new List<CimInstance>();
+        foreach (var connection in CimVmSettings.Associated(session, settings, "Msvm_EthernetPortAllocationSettingData"))
+        {
+            if (CimVmSettings.ConnectedSwitchPath(connection) is not null)
+            {
+                connected.Add(connection);
+            }
+            else
+            {
+                connection.Dispose();
+            }
+        }
+
+        return connected;
+    }
 
     private static CimInstance? SecurityOf(CimSession session, CimInstance connection) =>
         CimVmSettings.Associated(session, connection, "Msvm_EthernetSwitchPortSecuritySettingData").FirstOrDefault();
