@@ -1,8 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import type { ComponentProps } from "svelte";
 
 import VmList from "@hyperharbor/ui/components/VmList.svelte";
 import type { Vm, VmState } from "#lib/api/client.ts";
+
+/** The handlers the client always passes; a test passes its own to check the calls. VmList hides an action with none. */
+const clientHandlers = {
+  onconnect: () => {},
+  onconsole: () => {},
+  onprovision: () => {},
+  onaction: () => {},
+  onsettings: () => {},
+  onperformance: () => {},
+  onmonitors: () => {},
+  ondelete: () => {},
+};
+
+function renderList(props: Partial<ComponentProps<typeof VmList>> & { vms: Vm[] }) {
+  return render(VmList, { ...clientHandlers, ...props });
+}
 
 function vm(state: VmState, overrides: Partial<Vm> = {}): Vm {
   return {
@@ -44,8 +61,21 @@ async function openMenu(name = "Dev Box") {
 }
 
 describe("VmList row actions", () => {
+  // The host's tray window gives only power actions, settings, disks, and delete (docs/host-vm-management.md).
+  it("shows no button for an action the page did not give a handler for", async () => {
+    render(VmList, { vms: [provisioned("running")], onaction: () => {}, onsettings: () => {} });
+
+    expect(rowButtons()).toEqual([]);
+    const menu = await openMenu();
+    expect(menu.getByRole("button", { name: "Shut down" })).toBeTruthy();
+    expect(menu.getByRole("button", { name: "Settings…" })).toBeTruthy();
+    for (const missing of ["Console", "Performance mode…", "Monitors…", "Delete…"]) {
+      expect(menu.queryByRole("button", { name: missing })).toBeNull();
+    }
+  });
+
   it("shows Connect as the only button for a provisioned running VM, with the rest in the menu", async () => {
-    render(VmList, { vms: [provisioned("running")] });
+    renderList({ vms: [provisioned("running")] });
 
     expect(rowButtons()).toEqual(["Connect"]);
     const menu = await openMenu();
@@ -57,13 +87,13 @@ describe("VmList row actions", () => {
   it("offers Capture setup profile only for running Windows VMs, and only when the host has it", async () => {
     const oncapture = vi.fn();
     const running = provisioned("running");
-    const { unmount } = render(VmList, { vms: [running], oncapture });
+    const { unmount } = renderList({ vms: [running], oncapture });
 
     await fireEvent.click((await openMenu()).getByRole("button", { name: "Capture setup profile…" }));
     expect(oncapture).toHaveBeenCalledWith(running);
     unmount();
 
-    render(VmList, { vms: [provisioned("off")], oncapture });
+    renderList({ vms: [provisioned("off")], oncapture });
     expect((await openMenu()).queryByRole("button", { name: "Capture setup profile…" })).toBeNull();
   });
 
@@ -73,7 +103,7 @@ describe("VmList row actions", () => {
     const onmenuopen = vi.fn();
     const running = provisioned("running");
     const expiresAt = "2026-10-25T12:10:00Z";
-    render(VmList, {
+    renderList({
       vms: [running],
       onguestadmin,
       onguestadminend,
@@ -91,7 +121,7 @@ describe("VmList row actions", () => {
 
   it("leaves out the badge and End when no window is open", async () => {
     const running = provisioned("running");
-    render(VmList, {
+    renderList({
       vms: [running],
       onguestadmin: vi.fn(),
       onguestadminend: vi.fn(),
@@ -105,7 +135,7 @@ describe("VmList row actions", () => {
   it("offers Administrator access for running, set-up Windows VMs when the host has it, and reports which VM", async () => {
     const onguestadmin = vi.fn();
     const running = provisioned("running");
-    const { unmount } = render(VmList, { vms: [running], onguestadmin });
+    const { unmount } = renderList({ vms: [running], onguestadmin });
 
     await fireEvent.click((await openMenu()).getByRole("button", { name: "Administrator access…" }));
     expect(onguestadmin).toHaveBeenCalledWith(running);
@@ -116,52 +146,52 @@ describe("VmList row actions", () => {
       vm("running", { guestOs: { family: "windows", name: "Windows 11 Pro" } }),
       { ...provisioned("running"), guestOs: { family: "linux" as const, name: "Ubuntu" } },
     ]) {
-      const view = render(VmList, { vms: [other], onguestadmin });
+      const view = renderList({ vms: [other], onguestadmin });
       expect((await openMenu()).queryByRole("button", { name: "Administrator access…" })).toBeNull();
       view.unmount();
     }
 
-    render(VmList, { vms: [running] });
+    renderList({ vms: [running] });
     expect((await openMenu()).queryByRole("button", { name: "Administrator access…" })).toBeNull();
   });
 
   it("offers Move or copy only for off VMs, and only when the host has transfers", async () => {
     const ontransfer = vi.fn();
     const off = provisioned("off");
-    const first = render(VmList, { vms: [off], ontransfer });
+    const first = renderList({ vms: [off], ontransfer });
 
     await fireEvent.click((await openMenu()).getByRole("button", { name: "Move or copy to another host…" }));
     expect(ontransfer).toHaveBeenCalledWith(off);
     first.unmount();
 
-    const second = render(VmList, { vms: [provisioned("running")], ontransfer });
+    const second = renderList({ vms: [provisioned("running")], ontransfer });
     expect((await openMenu()).queryByRole("button", { name: "Move or copy to another host…" })).toBeNull();
     second.unmount();
 
-    render(VmList, { vms: [off] });
+    renderList({ vms: [off] });
     expect((await openMenu()).queryByRole("button", { name: "Move or copy to another host…" })).toBeNull();
   });
 
   it("offers Apply setup profile for running Windows VMs that are not still installing", async () => {
     const onapplyprofile = vi.fn();
     const running = provisioned("running");
-    const { unmount } = render(VmList, { vms: [running], onapplyprofile });
+    const { unmount } = renderList({ vms: [running], onapplyprofile });
 
     await fireEvent.click((await openMenu()).getByRole("button", { name: "Apply setup profile…" }));
     expect(onapplyprofile).toHaveBeenCalledWith(running);
     unmount();
 
-    const installing = render(VmList, { vms: [{ ...running, installState: "applyingProfile" }], onapplyprofile });
+    const installing = renderList({ vms: [{ ...running, installState: "applyingProfile" }], onapplyprofile });
     expect((await openMenu()).queryByRole("button", { name: "Apply setup profile…" })).toBeNull();
     installing.unmount();
 
     // A host without the route gets no handler, so no item.
-    render(VmList, { vms: [running] });
+    renderList({ vms: [running] });
     expect((await openMenu()).queryByRole("button", { name: "Apply setup profile…" })).toBeNull();
   });
 
   it("leaves Capture setup profile out for hosts without setup profiles", async () => {
-    render(VmList, { vms: [provisioned("running")] });
+    renderList({ vms: [provisioned("running")] });
 
     expect((await openMenu()).queryByRole("button", { name: "Capture setup profile…" })).toBeNull();
   });
@@ -169,7 +199,7 @@ describe("VmList row actions", () => {
   it("offers Force shut off from the menu and reports the turnOff action", async () => {
     const onaction = vi.fn();
     const running = provisioned("running");
-    render(VmList, { vms: [running], onaction });
+    renderList({ vms: [running], onaction });
 
     const menu = await openMenu();
     await fireEvent.click(menu.getByRole("button", { name: "Force shut off…" }));
@@ -180,7 +210,7 @@ describe("VmList row actions", () => {
   it("starts an off VM from the row and offers no power actions in the menu", async () => {
     const onaction = vi.fn();
     const off = vm("off");
-    render(VmList, { vms: [off], onaction });
+    renderList({ vms: [off], onaction });
 
     expect(rowButtons()).toEqual(["Start"]);
     await fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -193,7 +223,7 @@ describe("VmList row actions", () => {
   });
 
   it("resumes a paused VM and can still force it off", async () => {
-    render(VmList, { vms: [provisioned("paused")] });
+    renderList({ vms: [provisioned("paused")] });
 
     expect(rowButtons()).toEqual(["Resume"]);
     const menu = await openMenu();
@@ -202,7 +232,7 @@ describe("VmList row actions", () => {
   });
 
   it("offers Set up for a running VM whose OS is known", () => {
-    render(VmList, { vms: [vm("running", { guestOs: { family: "linux", name: "Ubuntu" } })] });
+    renderList({ vms: [vm("running", { guestOs: { family: "linux", name: "Ubuntu" } })] });
 
     expect(rowButtons()).toEqual(["Set up…"]);
   });
@@ -212,7 +242,7 @@ describe("VmList console", () => {
   it("is the row button while the OS is unknown, and opens that VM's console", async () => {
     const onconsole = vi.fn();
     const running = vm("running");
-    render(VmList, { vms: [running], onconsole });
+    renderList({ vms: [running], onconsole });
 
     expect(rowButtons()).toEqual(["Console"]);
     await fireEvent.click(screen.getByRole("button", { name: "Console" }));
@@ -223,7 +253,7 @@ describe("VmList console", () => {
   it("shows progress and disables other Console buttons while one opens", () => {
     const first = vm("running");
     const second = vm("running", { id: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f", name: "Other" });
-    render(VmList, { vms: [first, second], consoleVmId: first.id });
+    renderList({ vms: [first, second], consoleVmId: first.id });
 
     expect((screen.getByRole("button", { name: "Opening…" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Console" }) as HTMLButtonElement).disabled).toBe(true);
@@ -232,20 +262,20 @@ describe("VmList console", () => {
 
 describe("VmList OS detection", () => {
   it("says Detecting OS shortly after the VM starts", () => {
-    render(VmList, { vms: [vm("running", { uptimeSeconds: 60 })] });
+    renderList({ vms: [vm("running", { uptimeSeconds: 60 })] });
 
     expect(screen.getByText("Detecting OS…")).toBeTruthy();
   });
 
   it("stops detecting after a few minutes without a report", () => {
-    render(VmList, { vms: [vm("running", { uptimeSeconds: 600 })] });
+    renderList({ vms: [vm("running", { uptimeSeconds: 600 })] });
 
     expect(screen.queryByText("Detecting OS…")).toBeNull();
     expect(screen.getByText("OS not detected")).toBeTruthy();
   });
 
   it("says nothing about the OS while the VM is off", () => {
-    render(VmList, { vms: [vm("off")] });
+    renderList({ vms: [vm("off")] });
 
     expect(screen.queryByText("Detecting OS…")).toBeNull();
     expect(screen.queryByText("OS not detected")).toBeNull();
@@ -254,20 +284,20 @@ describe("VmList OS detection", () => {
 
 describe("VmList unattended install", () => {
   it("shows the install step and keeps Console as the row button while it runs", () => {
-    render(VmList, { vms: [vm("running", { installState: "waitingForRemoteAccess", guestOs: { family: "windows", name: "Windows 11 Pro" } })] });
+    renderList({ vms: [vm("running", { installState: "waitingForRemoteAccess", guestOs: { family: "windows", name: "Windows 11 Pro" } })] });
 
     expect(screen.getByText("Waiting for Remote Desktop…")).toBeTruthy();
     expect(rowButtons()).toEqual(["Console"]);
   });
 
   it("asks Ubuntu installs to be confirmed in the console", () => {
-    render(VmList, { vms: [vm("running", { installState: "awaitingConfirmation" })] });
+    renderList({ vms: [vm("running", { installState: "awaitingConfirmation" })] });
 
     expect(screen.getByText("Installing (type yes in the console if asked)")).toBeTruthy();
   });
 
   it("offers manual setup again after an install failed", () => {
-    render(VmList, { vms: [vm("running", { installState: "failed", guestOs: { family: "windows", name: "Windows 11 Pro" } })] });
+    renderList({ vms: [vm("running", { installState: "failed", guestOs: { family: "windows", name: "Windows 11 Pro" } })] });
 
     expect(screen.getByText("Install failed")).toBeTruthy();
     expect(rowButtons()).toEqual(["Set up…"]);
@@ -278,7 +308,7 @@ describe("VmList Performance mode", () => {
   it("offers Performance mode for a Windows VM and reports which VM", async () => {
     const onperformance = vi.fn();
     const windows = provisioned("off");
-    render(VmList, { vms: [windows], onperformance });
+    renderList({ vms: [windows], onperformance });
 
     const menu = await openMenu();
     await fireEvent.click(menu.getByRole("button", { name: "Performance mode…" }));
@@ -287,14 +317,14 @@ describe("VmList Performance mode", () => {
   });
 
   it("does not offer it for a Linux VM", async () => {
-    render(VmList, { vms: [vm("off", { guestOs: { family: "linux", name: "Ubuntu 24.04" } })] });
+    renderList({ vms: [vm("off", { guestOs: { family: "linux", name: "Ubuntu 24.04" } })] });
 
     const menu = await openMenu();
     expect(menu.queryByRole("button", { name: "Performance mode…" })).toBeNull();
   });
 
   it("marks a VM in Performance mode with a GPU badge", () => {
-    render(VmList, { vms: [vm("off", { performanceMode: true }), vm("off", { id: "other", name: "Plain" })] });
+    renderList({ vms: [vm("off", { performanceMode: true }), vm("off", { id: "other", name: "Plain" })] });
 
     expect(screen.getAllByText("GPU")).toHaveLength(1);
   });
@@ -304,7 +334,7 @@ describe("VmList camera", () => {
   it("offers Camera settings for a Windows VM and reports which VM", async () => {
     const oncamera = vi.fn();
     const machine = provisioned("running");
-    render(VmList, { vms: [machine], oncamera });
+    renderList({ vms: [machine], oncamera });
 
     const menu = await openMenu();
     await fireEvent.click(menu.getByRole("button", { name: "Camera…" }));
@@ -313,7 +343,7 @@ describe("VmList camera", () => {
   });
 
   it("leaves Camera settings out for Linux guests, which have no camera redirection", async () => {
-    render(VmList, {
+    renderList({
       vms: [provisioned("running")].map((machine) => ({ ...machine, guestOs: { family: "linux" as const, name: "Ubuntu" } })),
       oncamera: vi.fn(),
     });
@@ -323,7 +353,7 @@ describe("VmList camera", () => {
   });
 
   it("leaves the entry out when the page does not handle it", async () => {
-    render(VmList, { vms: [provisioned("running")] });
+    renderList({ vms: [provisioned("running")] });
 
     const menu = await openMenu();
     expect(menu.queryByRole("button", { name: "Camera…" })).toBeNull();
