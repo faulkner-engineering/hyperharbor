@@ -10,6 +10,20 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Added
+- The host window (double-click the HyperHarbor tray icon) has a Virtual machines page: the same VM list as the client,
+  where VMs on the host can be started, shut down, restarted, saved, or forced off, their processors and memory changed,
+  a disk grown, and a VM deleted, without opening the client. Changes that need it ask for the admin passphrase, as in
+  the client. The window calls the host as a device of its own, which the Devices page lists as "Host tray"; removing
+  it is harmless (the window adds it again when it next needs it). Creating VMs, profiles, backups, transfers, the
+  console, and Remote Desktop stay in the client.
+
+### Security
+- The tray now checks who serves its connection to the service before it sends anything: the service's own
+  connection is owned by SYSTEM or Administrators (or by the user, for a host started with Start-HyperHarbor.ps1). A
+  program another account started before the service could otherwise have received the tray's commands, and with the
+  new Virtual machines page the admin passphrase.
+
 ### Changed
 - The host runs on .NET 10 (LTS, supported until November 2028) instead of .NET 8, which reaches end of support on
   November 10, 2026. The host is self-contained, so nothing needs to be installed; it updates itself as before, and

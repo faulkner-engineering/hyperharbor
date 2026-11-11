@@ -20,7 +20,13 @@ jobs:
         with:
           node-version: 26
           cache: npm
-          cache-dependency-path: host/src/Host.Tray/webui/package-lock.json
+          cache-dependency-path: |
+            host/src/Host.Tray/webui/package-lock.json
+            ui/package-lock.json
+      # The components the tray window shares with the client; the window's checks read them with their packages.
+      - name: Shared UI package
+        working-directory: ui
+        run: npm ci --no-audit --no-fund
       # The tray window's HTML app; the host build embeds it.
       - name: Tray window app
         working-directory: host/src/Host.Tray/webui

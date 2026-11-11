@@ -6,21 +6,30 @@ import type { Page } from "@playwright/test";
 const fixtures = JSON.parse(readFileSync(new URL("../src/bridge.fixtures.json", import.meta.url), "utf8")) as Array<Record<string, unknown>>;
 export const fullState = fixtures[0];
 
+/** What the stand-in host answers for GET /vms, so the VM page shows its list. */
+const vms = readFileSync(new URL("./vms.json", import.meta.url), "utf8");
+
 /**
  * Opens the page the way the tray does: a stand-in for window.chrome.webview exists before the page's scripts run, and
  * the state is delivered as a message once the page has asked for it.
  */
 export async function openTray(page: Page, hash = "#/host"): Promise<void> {
-  await page.addInitScript(() => {
+  await page.addInitScript((vmList) => {
     const handlers: Array<(event: { data: unknown }) => void> = [];
+    const deliver = (message: unknown) => handlers.forEach((handler) => handler({ data: message }));
     (window as unknown as { chrome: unknown }).chrome = {
       webview: {
-        postMessage: () => {},
+        // The VM page's API requests: the list for GET /vms, an empty answer for anything else.
+        postMessage: (message: { type?: string; id?: string; method?: string; path?: string }) => {
+          if (message?.type !== "apiRequest") return;
+          const body = message.method === "GET" && message.path === "/vms" ? vmList : undefined;
+          setTimeout(() => deliver({ type: "apiResponse", id: message.id, status: 200, body }));
+        },
         addEventListener: (_type: string, handler: (event: { data: unknown }) => void) => handlers.push(handler),
       },
     };
-    (window as unknown as { __deliver: (message: unknown) => void }).__deliver = (message) => handlers.forEach((handler) => handler({ data: message }));
-  });
+    (window as unknown as { __deliver: (message: unknown) => void }).__deliver = deliver;
+  }, vms);
   await page.goto("/" + hash);
   await page.waitForFunction(() => typeof (window as unknown as { __deliver?: unknown }).__deliver === "function");
   if (hash === "#/host") {

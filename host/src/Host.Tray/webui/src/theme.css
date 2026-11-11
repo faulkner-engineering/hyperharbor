@@ -1,12 +1,7 @@
-/* HyperHarbor tokens, the same as the client (client/src/app.css and +page.svelte), so tray and client match.
-   Light and dark follow Windows. The tray paints --bg behind the page before it loads (WebWindow.Theme). */
+/* HyperHarbor tokens, the same as the client (client/src/routes/+page.svelte), so tray and client match. The brand
+   tokens (--hh-*) come from @hyperharbor/ui/theme.css, imported first (main.ts). Light and dark follow Windows. The
+   tray paints --bg behind the page before it loads (WebWindow.Theme). */
 :root {
-  --hh-ink: #121a26;
-  --hh-fog: #f3f1ec;
-  --hh-accent: #e39b2e;
-  --hh-text-muted: #5b6470;
-  --hh-border: #e2ded5;
-
   --bg: var(--hh-fog);
   --surface: #ffffff;
   --surface-2: #faf9f6;

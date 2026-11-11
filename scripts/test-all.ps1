@@ -69,6 +69,13 @@ function Invoke-Check([string]$Title, [string]$Directory, [scriptblock]$Command)
     }
 }
 
+# The components the client and the tray window share; both read them with ui/node_modules, so they come first.
+Invoke-Check 'Shared UI npm ci' $sharedUi { npm ci --no-audit --no-fund }
+Invoke-Check 'Shared UI type check' $sharedUi { npm run check }
+if (-not $SkipAudit) {
+    Invoke-Check 'Shared UI npm audit' $sharedUi { npm audit --audit-level=high }
+}
+
 if (-not $ClientOnly) {
     # The tray window's HTML app (the host build embeds it, and runs npm ci when node_modules is missing).
     $trayUi = Join-Path $repo 'host\src\Host.Tray\webui'
@@ -97,9 +104,6 @@ if (-not $ClientOnly) {
 }
 
 if (-not $HostOnly) {
-    # Before the client: the client's type check reads the shared components with their own packages.
-    Invoke-Check 'Shared UI npm ci' $sharedUi { npm ci --no-audit --no-fund }
-    Invoke-Check 'Shared UI type check' $sharedUi { npm run check }
     Invoke-Check 'npm ci' $client { npm ci --no-audit --no-fund }
     Invoke-Check 'Generated API types match api.yaml' $client {
         npm run gen:api
@@ -118,7 +122,6 @@ if (-not $HostOnly) {
 
     if (-not $SkipAudit) {
         Invoke-Check 'npm audit' $client { npm audit --audit-level=high }
-        Invoke-Check 'Shared UI npm audit' $sharedUi { npm audit --audit-level=high }
         if (Get-Command cargo-audit -ErrorAction SilentlyContinue) {
             Invoke-Check 'cargo audit' $tauri { cargo audit }
         }

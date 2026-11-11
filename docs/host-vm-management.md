@@ -1,7 +1,6 @@
 # Managing VMs from the host (phase 33)
 
-Status: design agreed with the user on 2026-11-09; work in three pull requests, listed below. Step 1 (ui/) and step 2
-(the tray device and forwarding) are done. What was verified is
+Status: done (2026-11-09 to 2026-11-11), in three pull requests; what was verified is in docs/history.md, entry 33. What was verified is
 recorded in docs/history.md when the phase is done.
 
 ## Why
@@ -68,9 +67,14 @@ calls the API like a client:
 - The components' tests stay in the client and run them through the client's HostApi against a mocked Tauri invoke
   (each such test imports #lib/api/hostApi.ts). ui/ has no tests of its own yet; the tray's page tests add a fake
   HostApi in pull request 3.
-- The semantic color tokens (client/src/routes/+page.svelte, and the tray's theme.css, which differs slightly) move
-  to ui/ in pull request 3, where the tray first draws these components; the merged set keeps every token either app
-  uses.
+- ui/src/theme.css (pull request 3) holds what the shared components need from the page around them: the brand
+  tokens, the terminal palette, --idle-bg, and the base look of buttons and inputs, scoped to the hh-controls class.
+  The client loads it from app.css and puts hh-controls on <html>, so it looks as before; the tray loads it before its
+  theme.css and puts the class on the VM page only, so its own buttons keep their look. Each app keeps its own
+  semantic colors (--bg, --surface, --accent, and the rest): they differ slightly on purpose (the tray's --selected,
+  its --surface-2 and --link), and the shared components use only the ones both define.
+- VmList hides an action whose handler the page leaves out (the tray gives no Connect, Console, Set up, Performance
+  mode, or Monitors), rather than showing a button that does nothing.
 
 ### The tray's VM page
 - A "Virtual machines" page in the host window's nav, first after Overview. It polls the VM list every 5 seconds
@@ -99,6 +103,8 @@ calls the API like a client:
   fingerprint, and the tray would then send it the VM page's requests, including the admin passphrase when the page
   asks for it. The tray already sends that process the passphrase today (the passphrase page sends only its hash, but
   the Devices page's removals and other commands go there too), so this widens an existing gap rather than opening a
-  new one. The fix is the one that limitation names: the tray checks that the pipe's server process is the
-  HyperHarbor service (GetNamedPipeServerProcessId) before it trusts it. That check is planned before the VM page
-  ships (pull request 3).
+  new one. Pull request 3 closes it before the page ships: the tray checks the pipe's owner before it sends anything
+  (PipeServerCheck). The installed service runs as LocalSystem, so its pipe is owned by SYSTEM or Administrators,
+  which a standard user's process cannot set; a portable host runs as the tray's own user, and a process of that
+  user can already read the tray's files. This was simpler and stronger than identifying the server process by its
+  image path, which a standard user's tray cannot always read for a LocalSystem process.

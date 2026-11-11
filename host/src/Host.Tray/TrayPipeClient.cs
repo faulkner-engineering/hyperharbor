@@ -67,6 +67,12 @@ internal sealed class TrayPipeClient : IDisposable
                 await using var pipe = new NamedPipeClientStream(".", TrayPipe.Name, PipeDirection.InOut, PipeOptions.Asynchronous);
                 await pipe.ConnectAsync(stop);
 
+                // Another account's process may hold the pipe name; send it nothing and try again later.
+                if (!PipeServerCheck.IsTrusted(pipe))
+                {
+                    throw new UnauthorizedAccessException("The tray pipe is not served by the HyperHarbor service.");
+                }
+
                 _pipe = pipe;
                 _writer = new StreamWriter(pipe, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true, NewLine = "\n" };
                 SetConnected(true);

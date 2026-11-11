@@ -623,3 +623,28 @@ per-device VM accounts and a user management UI.
      uninstall left the data folder unreadable to hh-owner. The identity came back from update\backups\ (the logs and
      the audit trail did not); both bugs are fixed on branch fix/data-folder-safety (docs/platform-notes.md, General).
      Not verified live: the preshutdown shutdown of a Performance mode VM (no GPU VM), and a signed build.
+33. Managing VMs from the host (2026-11-09 to 2026-11-11; no API change; PRs #77, #78, and step 3). The host window
+   (double-click the tray icon) gets a Virtual machines page with the client's list and dialogs. Design and decisions
+   in docs/host-vm-management.md. Decided with the user: the first version is the list, power actions, compute and
+   disk settings, and delete; elevated changes ask for the admin passphrase, because the tray user can be a standard
+   account; the shared code is a ui/ package at the repository root, not the client's folder.
+   - Step 1: ui/ (@hyperharbor/ui, a file: dependency) holds VmList, the compute, disk, delete, and elevation dialogs,
+     the generated API types, and HostApi, the host calls each app implements. Both Vite configurations dedupe svelte
+     (two runtimes would not share reactivity; the client build has one). No visible change in the client.
+   - Step 2: the tray is a paired device of its own host ("Host tray", added over the pipe for the default User) and
+     forwards the page's requests to the API with its own certificate, only on an allow list of routes, keeping the
+     elevation token itself. Tested end to end against the real service executable over TLS.
+   - Step 3: the page, the shared theme (brand tokens, terminal palette, and control styles scoped to .hh-controls),
+     and the pipe owner check that closes the squatting limitation before the page could send the passphrase to
+     another account's process. Checking the owner was simpler and stronger than reading the server process's image
+     path, which a standard user cannot always read for a LocalSystem process.
+   - Found while building it: the tests' pipe helpers deadlocked when they wrote before reading, because the service
+     writes its status messages on connect and waits for them to be read (the tray reads all the time); the forced
+     shut off confirmation captured a Svelte {@const} that was already null when the handler ran (a component test
+     caught it). A Windows path given to Playwright as /c/... from Git Bash is written under C:\c\.
+   - Verified live on the development VM: the host window opened through the tray's show-window event, the page
+     registered the tray (the device, its audit entry trayApiRegister, and the DPAPI certificate in
+     %LOCALAPPDATA%\HyperHarbor), and listed this host's VMs through the forwarder (none on this VM). Not verified live:
+     an elevated change from the page (no VM here, and the passphrase is the user's); the forwarder tests cover
+     elevation against the real service. The client's device on this host had been removed from the host window
+     (trayRemoveDevice, 2026-11-09 18:06 UTC) before this work touched pairing.

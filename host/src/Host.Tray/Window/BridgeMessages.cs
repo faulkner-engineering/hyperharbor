@@ -59,7 +59,7 @@ public static class HostToPage
         public string Type => "toast";
     }
 
-    /// <param name="Page">overview, devices, storage, gameReady, gameAware, lean, updates, logs, or passphrase (the passphrase dialog).</param>
+    /// <param name="Page">overview, vms, devices, storage, gameReady, gameAware, lean, updates, logs, or passphrase (the passphrase dialog).</param>
     public sealed record Navigate(string Page)
     {
         public string Type => "navigate";

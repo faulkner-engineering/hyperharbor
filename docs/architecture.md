@@ -119,6 +119,10 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   BridgeMessages (TrayViewState and the messages to the page), TrayCommands (the page's messages to ITrayActions).
   webui/: the app (Vite + Svelte 5 + TypeScript, no SvelteKit): store.svelte.ts, bridge.ts (mirrors BridgeMessages;
   bridge.fixtures.json from TrayWindowTests, HH_WRITE_TRAY_FIXTURES=1), text.ts (all status words), pages/, components/.
+  pages/Vms.svelte is the VM page on the shared components (@hyperharbor/ui): hostApi.ts implements HostApi with
+  apiRequest and apiResponse over the bridge (errors in the client's ClientError shape), and main.ts provides it and
+  loads ui/src/theme.css before theme.css. The page's root has the hh-controls class for the shared control styles.
+  e2e/vms.json is what the Playwright stand-in answers for GET /vms.
   The project's EmbedTrayUi target runs npm ci (when node_modules is missing) and npm run build, then embeds dist.
   Without the WebView2 Runtime the tray offers its download and shows the PIN in a notification.
   Api/ (phase 33, docs/host-vm-management.md): the tray calls the host's API as a paired device of its own host.
@@ -204,11 +208,11 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   README.md.
 
 ## Known limitations
-- Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray
-  should verify the pipe server process. (The pipe ACL now admits only SYSTEM, Administrators, and the
-  service account; TrayPipeServerTests check it.) Such a process would also answer the tray's API registration
-  (phase 33) with its own address and certificate fingerprint, and receive the tray's elevation passphrase when the VM
-  page asks for it; verifying the server process closes both.
+- Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. Since phase 33
+  the tray checks the pipe's owner before it sends anything (PipeServerCheck: SYSTEM, Administrators, or the tray's own
+  user, whose processes can read the tray's files anyway), so another account's process gets no commands, no API
+  registration, and no passphrase. The pipe ACL admits only SYSTEM, Administrators, the service account, and the
+  tray's user; TrayPipeServerTests check it.
 - Anyone on the LAN can repeatedly start pairing requests (PIN window spam). Consider rate limiting.
 - Installed service, not yet verified live as LocalSystem: Connect (PowerShell Direct), console password
   rotation (NetUserChangePassword), Wake-on-LAN fixes from the tray, the double-click launcher dialogs, and a
