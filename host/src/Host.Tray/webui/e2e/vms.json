@@ -1,0 +1,61 @@
+[
+  {
+    "id": "0b9a6f53-1c2d-4e8f-a1b2-3c4d5e6f7a8b",
+    "name": "Dev Box",
+    "state": "running",
+    "generation": 2,
+    "rdpAvailable": true,
+    "ipAddresses": [
+      "192.168.0.50"
+    ],
+    "provisioned": true,
+    "remoteDesktop": {
+      "address": "192.168.0.50",
+      "reachableFromHost": true
+    },
+    "guestOs": {
+      "family": "windows",
+      "name": "Windows 11 Pro"
+    },
+    "performanceMode": false,
+    "uptimeSeconds": 5400,
+    "memoryAssignedMb": 8192,
+    "cpuUsagePercent": 12
+  },
+  {
+    "id": "6f1d2c3b-4a59-4e8d-9c7b-1a2b3c4d5e6f",
+    "name": "Ubuntu Server",
+    "state": "off",
+    "generation": 2,
+    "rdpAvailable": false,
+    "ipAddresses": [],
+    "provisioned": false,
+    "remoteDesktop": {
+      "address": null,
+      "reachableFromHost": false
+    },
+    "guestOs": {
+      "family": "linux",
+      "name": "Ubuntu 24.04"
+    },
+    "performanceMode": false
+  },
+  {
+    "id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+    "name": "Gaming",
+    "state": "saved",
+    "generation": 2,
+    "rdpAvailable": false,
+    "ipAddresses": [],
+    "provisioned": true,
+    "remoteDesktop": {
+      "address": null,
+      "reachableFromHost": false
+    },
+    "guestOs": {
+      "family": "windows",
+      "name": "Windows 11 Pro"
+    },
+    "performanceMode": true
+  }
+]

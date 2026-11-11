@@ -3,6 +3,7 @@
   const paths = {
     overview: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
     devices: "M4 5h16v10H4z M2 19h20 M9 15v4 M15 15v4",
+    vms: "M3 4h18v6H3z M3 14h18v6H3z M7 7h.5 M7 17h.5",
     storage: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
     updates: "M20 12a8 8 0 1 1-2.34-5.66 M20 4v4h-4",
     logs: "M7 3h7l5 5v13H7z M14 3v5h5 M10 13h6 M10 17h6",

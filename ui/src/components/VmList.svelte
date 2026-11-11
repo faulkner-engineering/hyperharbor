@@ -10,6 +10,7 @@
     actionVmId?: string | null;
     /** VM whose console is being opened. */
     consoleVmId?: string | null;
+    /** Every action's handler is optional: one that is left out hides its button (the host's tray window uses few). */
     onconnect?: (vm: Vm) => void;
     onconsole?: (vm: Vm) => void;
     onprovision?: (vm: Vm) => void;
@@ -94,8 +95,17 @@
     return state === "running" || state === "paused" || state === "starting" || state === "stopping";
   }
 
-  /** The one action shown as a button; everything else is in the menu. */
+  /**
+   * The one action shown as a button; everything else is in the menu. None when the page did not give that action's
+   * handler (the host's tray window has no Remote Desktop, console, or setup), so no button leads nowhere.
+   */
   function primaryAction(vm: Vm): "start" | "connect" | "setup" | "console" | null {
+    const wanted = wantedPrimary(vm);
+    const handled = { start: onaction, connect: onconnect, setup: onprovision, console: onconsole };
+    return wanted && handled[wanted] ? wanted : null;
+  }
+
+  function wantedPrimary(vm: Vm): "start" | "connect" | "setup" | "console" | null {
     if (vm.state === "off" || vm.state === "saved" || vm.state === "paused") return "start";
     if (vm.state !== "running") return null;
     // An unattended install sets up the account itself; until then the console shows its progress.
@@ -228,7 +238,7 @@
               >
             {/if}
             <Menu label="⋮" ariaLabel="Actions for {vm.name}" title="More actions" onopen={() => onmenuopen?.(vm)}>
-              {#if (vm.state === "running" || vm.state === "paused") && primary !== "console"}
+              {#if onconsole && (vm.state === "running" || vm.state === "paused") && primary !== "console"}
                 <button
                   type="button"
                   disabled={consoleVmId !== null}
@@ -267,17 +277,21 @@
                 >
               {/if}
               <hr />
-              <button type="button" onclick={() => onsettings?.(vm)}>Settings…</button>
+              {#if onsettings}
+                <button type="button" onclick={() => onsettings(vm)}>Settings…</button>
+              {/if}
               {#if ondisks && (vm.state === "running" || vm.state === "off")}
                 <button type="button" onclick={() => ondisks(vm)}>Disk size…</button>
               {/if}
               {#if onencryption && vm.state === "running" && vm.guestOs.family !== "linux" && vm.provisioned}
                 <button type="button" onclick={() => onencryption(vm)}>Disk encryption…</button>
               {/if}
-              {#if vm.guestOs.family !== "linux"}
-                <button type="button" onclick={() => onperformance?.(vm)}>Performance mode…</button>
+              {#if onperformance && vm.guestOs.family !== "linux"}
+                <button type="button" onclick={() => onperformance(vm)}>Performance mode…</button>
               {/if}
-              <button type="button" onclick={() => onmonitors?.(vm)}>Monitors…</button>
+              {#if onmonitors}
+                <button type="button" onclick={() => onmonitors(vm)}>Monitors…</button>
+              {/if}
               {#if oncamera && vm.guestOs.family !== "linux"}
                 <button type="button" onclick={() => oncamera(vm)}>Camera…</button>
               {/if}
@@ -296,7 +310,9 @@
               {#if ontransfer && vm.state === "off"}
                 <button type="button" onclick={() => ontransfer(vm)}>Move or copy to another host…</button>
               {/if}
-              <button type="button" class="danger" onclick={() => ondelete?.(vm)}>Delete…</button>
+              {#if ondelete}
+                <button type="button" class="danger" onclick={() => ondelete(vm)}>Delete…</button>
+              {/if}
             </Menu>
           </td>
         </tr>

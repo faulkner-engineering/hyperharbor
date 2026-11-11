@@ -12,10 +12,12 @@
   import Restore from "./pages/Restore.svelte";
   import Storage from "./pages/Storage.svelte";
   import Updates from "./pages/Updates.svelte";
+  import Vms from "./pages/Vms.svelte";
   import { tray, type Page } from "./store.svelte";
 
   const pages: { id: Page; label: string; icon: IconName; heading: string }[] = [
     { id: "overview", label: "Overview", icon: "overview", heading: "Overview" },
+    { id: "vms", label: "Virtual machines", icon: "vms", heading: "Virtual machines" },
     { id: "devices", label: "Devices", icon: "devices", heading: "Paired devices" },
     { id: "storage", label: "Storage", icon: "storage", heading: "Storage" },
     { id: "gameReady", label: "Game ready", icon: "gamepad", heading: "Game ready" },
@@ -83,6 +85,8 @@
           <div class="page" in:fly={{ y: 10, duration: 220, opacity: 0 }}>
             {#if tray.page === "overview"}
               <Overview view={state} />
+            {:else if tray.page === "vms"}
+              <Vms view={state} />
             {:else if tray.page === "devices"}
               <Devices view={state} />
             {:else if tray.page === "storage"}

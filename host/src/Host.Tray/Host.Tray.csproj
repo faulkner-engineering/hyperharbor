@@ -11,6 +11,8 @@
     <!-- The window's HTML app has its own build (webui/, npm); none of its files are items of this project. -->
     <DefaultItemExcludes>$(DefaultItemExcludes);webui\**</DefaultItemExcludes>
     <TrayUiDirectory>$(MSBuildProjectDirectory)\webui</TrayUiDirectory>
+    <!-- The components the window shares with the client (@hyperharbor/ui; docs/host-vm-management.md). -->
+    <SharedUiDirectory>$(MSBuildProjectDirectory)\..\..\..\ui</SharedUiDirectory>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,15 +36,20 @@
   <ItemGroup>
     <TrayUiInput Include="$(TrayUiDirectory)\src\**\*" />
     <TrayUiInput Include="$(TrayUiDirectory)\index.html;$(TrayUiDirectory)\package.json;$(TrayUiDirectory)\package-lock.json;$(TrayUiDirectory)\vite.config.ts" />
+    <TrayUiInput Include="$(SharedUiDirectory)\src\**\*;$(SharedUiDirectory)\package.json" />
   </ItemGroup>
 
-  <!-- Installs the UI's packages once (npm ci). -->
+  <!-- Installs the UI's packages once (npm ci), the shared components' first: the window links to them. -->
+  <Target Name="RestoreSharedUi" Condition="!Exists('$(SharedUiDirectory)\node_modules')">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(SharedUiDirectory)" />
+  </Target>
+
   <Target Name="RestoreTrayUi" Condition="!Exists('$(TrayUiDirectory)\node_modules')">
     <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(TrayUiDirectory)" />
   </Target>
 
   <!-- Builds the UI into webui\dist when its sources changed. -->
-  <Target Name="BuildTrayUi" DependsOnTargets="RestoreTrayUi" Inputs="@(TrayUiInput)" Outputs="$(TrayUiDirectory)\dist\index.html">
+  <Target Name="BuildTrayUi" DependsOnTargets="RestoreSharedUi;RestoreTrayUi" Inputs="@(TrayUiInput)" Outputs="$(TrayUiDirectory)\dist\index.html">
     <Exec Command="npm run build" WorkingDirectory="$(TrayUiDirectory)" />
   </Target>
 

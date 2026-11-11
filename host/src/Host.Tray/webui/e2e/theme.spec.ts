@@ -45,6 +45,22 @@ for (const scheme of ["light", "dark"] as const) {
         expect(overflow.x, `${label}: the window scrolls sideways`).toBeLessThanOrEqual(0);
       }
     });
+
+    // The shared VM list (@hyperharbor/ui) styled by the tray's theme: its rows and its open actions menu.
+    test("the VM page shows the shared list and menu readably", async ({ page }) => {
+      await openTray(page);
+      await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: /^Virtual machines/ }).click();
+
+      await expect(page.getByText("Dev Box")).toBeVisible();
+      await expect(page.getByText("Ubuntu Server")).toBeVisible();
+      await page.getByLabel("Actions for Dev Box").click();
+      await expect(page.getByRole("button", { name: "Settings…" })).toBeVisible();
+      await page.waitForTimeout(300);
+
+      expect(await contrastProblems(page), "text that cannot be read").toEqual([]);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow, "the window scrolls sideways").toBeLessThanOrEqual(0);
+    });
   });
 }
 
