@@ -167,6 +167,8 @@ export interface paths {
          * Get the host's processors, memory, and VM folders.
          * @description Used to bound VM settings in the client. The host validates every request against the
          *     same figures and warns when a VM would leave less free memory than `memoryReserveMb`.
+         *     Since 1.38.0 it also reports the host's physical cores and current processor use, which the
+         *     client shows while it is open.
          */
         get: operations["getHostResources"];
         put?: never;
@@ -3590,6 +3592,14 @@ export interface components {
         };
         HostResources: {
             logicalProcessorCount: number;
+            /** @description Physical cores across all processors (API 1.38.0); null when Windows cannot say. */
+            physicalCoreCount?: number | null;
+            /**
+             * @description Processor use across all logical processors, including running VMs, from 0 to 100 (API 1.38.0).
+             *     Measured since the previous request when that was a few seconds ago, otherwise over half a
+             *     second. Null when it cannot be read.
+             */
+            cpuUsagePercent?: number | null;
             /** Format: int64 */
             totalMemoryMb: number;
             /**

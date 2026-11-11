@@ -308,6 +308,7 @@ builder.Services.AddSingleton<VmDiskExportService>();
 builder.Services.AddSingleton<CheckpointMergeService>();
 builder.Services.AddOptions<LifecycleOptions>().Bind(builder.Configuration.GetSection(LifecycleOptions.SectionName));
 builder.Services.AddSingleton<IHostCapacityReader, WindowsHostCapacityReader>();
+builder.Services.AddSingleton<IHostProcessorLoad, HostProcessorLoad>();
 builder.Services.AddSingleton<IRemoteDesktopSettings, WindowsRemoteDesktopSettings>();
 builder.Services.AddSingleton<HostRemoteDesktopService>();
 builder.Services.AddSingleton<IHyperVHost, CimHyperVHost>();

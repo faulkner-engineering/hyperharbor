@@ -75,6 +75,7 @@ internal sealed class TestHost : IDisposable
                 services.AddSingleton<IDiskFiles>(DiskFiles);
                 services.AddSingleton<IDiskCopier>(DiskCopier);
                 services.AddSingleton<IHostCapacityReader>(Capacity);
+                services.AddSingleton<IHostProcessorLoad>(Processors);
                 services.AddSingleton<Core.Power.IPowerRequest>(PowerRequest);
                 services.AddSingleton<Core.Power.IRemoteSessions>(RemoteSessions);
 
@@ -151,6 +152,8 @@ internal sealed class TestHost : IDisposable
     public FakeDiskCopier DiskCopier { get; } = new();
 
     public FakeHostCapacity Capacity { get; } = new();
+
+    public FakeHostProcessorLoad Processors { get; } = new();
 
     public Power.FakePowerRequest PowerRequest { get; } = new();
 

@@ -37,6 +37,21 @@ public sealed class HostResourcesApiTests : IDisposable
         Assert.Equal(4096, (long?)resources["memoryReserveMb"]);
         Assert.Equal(@"C:\Hyper-V\Virtual Hard Disks", (string?)resources["virtualHardDiskFolder"]);
         Assert.Equal(_host.IsoFolder, (string?)resources["isoFolder"]);
+        Assert.Equal(8, (int?)resources["physicalCoreCount"]);
+        Assert.Equal(12.5, (double?)resources["cpuUsagePercent"]);
+    }
+
+    [Fact]
+    public async Task Resources_LeaveOutProcessorFiguresWindowsCannotGive()
+    {
+        _host.Processors.PhysicalCoreCount = null;
+        _host.Processors.UsagePercent = null;
+
+        var resources = await _client.GetFromJsonAsync<JsonObject>("/api/v1/host/resources");
+
+        Assert.False(resources!.ContainsKey("physicalCoreCount"));
+        Assert.False(resources.ContainsKey("cpuUsagePercent"));
+        Assert.Equal(16, (int?)resources["logicalProcessorCount"]);
     }
 
     [Fact]

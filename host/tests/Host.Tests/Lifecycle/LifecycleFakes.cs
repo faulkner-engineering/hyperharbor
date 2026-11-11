@@ -128,6 +128,16 @@ internal sealed class FakeHostCapacity : IHostCapacityReader
     public HostCapacity Read() => Capacity;
 }
 
+/// <summary>Fixed processor figures.</summary>
+internal sealed class FakeHostProcessorLoad : IHostProcessorLoad
+{
+    public int? PhysicalCoreCount { get; set; } = 8;
+
+    public double? UsagePercent { get; set; } = 12.5;
+
+    public Task<double?> ReadUsagePercentAsync(CancellationToken cancellationToken) => Task.FromResult(UsagePercent);
+}
+
 /// <summary>Hyper-V defaults and switches that tests can change.</summary>
 internal sealed class FakeHyperVHost : IHyperVHost
 {
