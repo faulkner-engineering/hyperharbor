@@ -10,6 +10,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.3.0-beta.1] - 2026-11-11 (API 1.39.0)
+
+The first beta of 0.3.0: VMs managed from the host's own window, host usage in the client, and a VM's virtual switch
+chosen in its settings and when moving or copying it. The host runs on .NET 10, and the host and the client now need
+Windows 11 (0.2.6 stays the last version for Windows 10). Update both the host and the client to try it.
+
 ### Added
 - A VM's virtual switch can be chosen in its Settings, in the client and in the host window: every network adapter of
   the VM connects to the chosen switch, also while the VM runs, and a VM whose adapter is not connected can be
