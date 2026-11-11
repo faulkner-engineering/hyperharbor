@@ -14,6 +14,8 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 - docs/machine-profiles.md: the machine profile document, API, migration, and apply design (phase 26).
 - docs/guest-elevation.md: administrator windows in guests (phase 28) and the planned guest agent.
 - docs/dotnet10-migration.md: the move of the host to .NET 10 (phase 32): the spike, the measurements, and the checks.
+- docs/host-vm-management.md: managing VMs from the host's tray window, and the ui/ package it shares with the client
+  (phase 33).
 - docs/ui-principles.md: how the client UI must behave so a failure never traps the user. Read before any UI change.
 
 ## Rules

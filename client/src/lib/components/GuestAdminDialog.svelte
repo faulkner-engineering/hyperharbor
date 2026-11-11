@@ -19,7 +19,7 @@
   } from "#lib/guestAdmin.ts";
   import { ElevationCancelled } from "#lib/lifecycle.svelte.ts";
   import { toasts } from "#lib/toasts.svelte.ts";
-  import Dialog from "./Dialog.svelte";
+  import Dialog from "@hyperharbor/ui/components/Dialog.svelte";
 
   interface Props {
     host: HostEntry;

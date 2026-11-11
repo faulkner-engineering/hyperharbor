@@ -52,7 +52,7 @@
   import { SvelteMap } from "svelte/reactivity";
   import HostList from "#lib/components/HostList.svelte";
   import PairingPanel from "#lib/components/PairingPanel.svelte";
-  import VmList from "#lib/components/VmList.svelte";
+  import VmList from "@hyperharbor/ui/components/VmList.svelte";
   import WakePanel from "#lib/components/WakePanel.svelte";
   import HostUpdatePanel from "#lib/components/HostUpdatePanel.svelte";
   import GameAwarePanel from "#lib/components/GameAwarePanel.svelte";
@@ -63,13 +63,13 @@
   import ClientUpdate from "#lib/components/ClientUpdate.svelte";
   import RdpTrust from "#lib/components/RdpTrust.svelte";
   import ProvisionDialog from "#lib/components/ProvisionDialog.svelte";
-  import ElevationDialog from "#lib/components/ElevationDialog.svelte";
-  import DeleteVmDialog from "#lib/components/DeleteVmDialog.svelte";
+  import ElevationDialog from "@hyperharbor/ui/components/ElevationDialog.svelte";
+  import DeleteVmDialog from "@hyperharbor/ui/components/DeleteVmDialog.svelte";
   import TransferVmDialog from "#lib/components/TransferVmDialog.svelte";
   import CreateVmDialog from "#lib/components/CreateVmDialog.svelte";
   import CreateVmFromProfileDialog from "#lib/components/CreateVmFromProfileDialog.svelte";
-  import ComputeDialog from "#lib/components/ComputeDialog.svelte";
-  import DiskDialog from "#lib/components/DiskDialog.svelte";
+  import ComputeDialog from "@hyperharbor/ui/components/ComputeDialog.svelte";
+  import DiskDialog from "@hyperharbor/ui/components/DiskDialog.svelte";
   import DiskEncryptionDialog from "#lib/components/DiskEncryptionDialog.svelte";
   import PerformanceDialog from "#lib/components/PerformanceDialog.svelte";
   import GpuWarnings from "#lib/components/GpuWarnings.svelte";
@@ -87,7 +87,7 @@
   import CameraDialog from "#lib/components/CameraDialog.svelte";
   import GuestAdminDialog from "#lib/components/GuestAdminDialog.svelte";
   import MonitorsDialog from "#lib/components/MonitorsDialog.svelte";
-  import Menu from "#lib/components/Menu.svelte";
+  import Menu from "@hyperharbor/ui/components/Menu.svelte";
   import { openHostRemoteDesktop } from "#lib/hostRemoteDesktop.ts";
   import TitleBar from "#lib/components/TitleBar.svelte";
   import { toasts } from "#lib/toasts.svelte.ts";

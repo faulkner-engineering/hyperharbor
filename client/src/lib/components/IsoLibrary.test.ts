@@ -7,6 +7,8 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(()
 
 import IsoLibrary from "./IsoLibrary.svelte";
 import type { HostEntry, IsoImage } from "#lib/api/client.ts";
+// The shared components reach the (mocked) host through the client's HostApi.
+import "#lib/api/hostApi.ts";
 
 const host: HostEntry = {
   key: "mdns:host",

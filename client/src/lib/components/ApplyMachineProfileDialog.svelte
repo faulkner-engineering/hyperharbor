@@ -16,8 +16,8 @@
   import { ElevationCancelled, waitForJob, withElevation } from "#lib/lifecycle.svelte.ts";
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
-  import Dialog from "./Dialog.svelte";
-  import JobProgress from "./JobProgress.svelte";
+  import Dialog from "@hyperharbor/ui/components/Dialog.svelte";
+  import JobProgress from "@hyperharbor/ui/components/JobProgress.svelte";
 
   interface Props {
     host: HostEntry;

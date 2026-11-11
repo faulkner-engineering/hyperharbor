@@ -5,8 +5,10 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import DiskDialog from "./DiskDialog.svelte";
+import DiskDialog from "@hyperharbor/ui/components/DiskDialog.svelte";
 import type { HostEntry, Vm, VmDisk, VmJob } from "#lib/api/client.ts";
+// The shared components reach the (mocked) host through the client's HostApi.
+import "#lib/api/hostApi.ts";
 
 const GB = 1024 ** 3;
 const path = "D:\\VMs\\Dev\\Virtual Hard Disks\\Dev.vhdx";

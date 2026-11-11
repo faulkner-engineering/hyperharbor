@@ -13,7 +13,7 @@
   } from "#lib/api/client.ts";
   import { crumbs, formatBytes, joinPath, volumeLabel } from "#lib/backup.ts";
   import { ElevationCancelled, withElevation } from "#lib/lifecycle.svelte.ts";
-  import Dialog from "./Dialog.svelte";
+  import Dialog from "@hyperharbor/ui/components/Dialog.svelte";
 
   interface Props {
     host: HostEntry;

@@ -13,7 +13,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
-    "gen:api": "npx --yes -p openapi-typescript@7.13.0 -p typescript@5.9 openapi-typescript ../docs/api.yaml -o src/lib/api/types.ts",
+    "gen:api": "npx --yes -p openapi-typescript@7.13.0 -p typescript@5.9 openapi-typescript ../docs/api.yaml -o ../ui/src/api/types.ts",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -21,6 +21,7 @@
     "three": "0.187.0"
   },
   "devDependencies": {
+    "@hyperharbor/ui": "file:../ui",
     "@sveltejs/adapter-static": "^4.0.1",
     "@sveltejs/kit": "^3.1.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

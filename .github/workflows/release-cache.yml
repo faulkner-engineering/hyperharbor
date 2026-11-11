@@ -45,8 +45,10 @@ jobs:
       # (the Tauri CLI adds its own features to the tauri crate). No installer is bundled or signed.
       - name: Install client dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        working-directory: client
-        run: npm ci --no-audit --no-fund
+        shell: pwsh
+        run: |
+          npm ci --no-audit --no-fund --prefix ui
+          npm ci --no-audit --no-fund --prefix client
       - name: Build camera source DLL
         if: steps.cache.outputs.cache-hit != 'true'
         working-directory: client/src-tauri
