@@ -121,6 +121,13 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   bridge.fixtures.json from TrayWindowTests, HH_WRITE_TRAY_FIXTURES=1), text.ts (all status words), pages/, components/.
   The project's EmbedTrayUi target runs npm ci (when node_modules is missing) and npm run build, then embeds dist.
   Without the WebView2 Runtime the tray offers its download and shows the PIN in a notification.
+  Api/ (phase 33, docs/host-vm-management.md): the tray calls the host's API as a paired device of its own host.
+  TrayApiIdentity (a P-256 client certificate, DPAPI for the tray's user in %LOCALAPPDATA%HyperHarbor, with the
+  device ID beside it), TrayApiForwarder (the page's apiRequest goes out over TLS with that certificate to the address
+  and pinned host certificate the service gave; keeps the elevation token, as the client's Rust side does; registers
+  again after a 401), TrayApiRoutes (the allow list of routes the page may call). Registration is a pipe message
+  (TrayApiRegisterMessage); TrayPipeServer.RegisterTrayDevice adds a "Host tray" device for the default User, audited
+  as trayApiRegister, and replaces only an earlier tray device.
 - host/tests/Host.Tests: xUnit; Api tests use TestHost (WebApplicationFactory, fakes, client cert via header)
 - client/src-tauri/src: hosts.rs, discovery.rs (mdns-sd), api.rs (reqwest), spake2.rs, tls.rs (pinning),
   identity.rs (key in Credential Manager), paired.rs, rdp.rs (mstsc launch), console.rs (loopback listener and
@@ -199,7 +206,9 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 ## Known limitations
 - Tray pipe squatting: a local process started before the service could claim HyperHarbor.Host.Tray. The tray
   should verify the pipe server process. (The pipe ACL now admits only SYSTEM, Administrators, and the
-  service account; TrayPipeServerTests check it.)
+  service account; TrayPipeServerTests check it.) Such a process would also answer the tray's API registration
+  (phase 33) with its own address and certificate fingerprint, and receive the tray's elevation passphrase when the VM
+  page asks for it; verifying the server process closes both.
 - Anyone on the LAN can repeatedly start pairing requests (PIN window spam). Consider rate limiting.
 - Installed service, not yet verified live as LocalSystem: Connect (PowerShell Direct), console password
   rotation (NetUserChangePassword), Wake-on-LAN fixes from the tray, the double-click launcher dialogs, and a

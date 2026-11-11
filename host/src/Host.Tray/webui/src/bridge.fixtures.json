@@ -299,5 +299,11 @@
   {
     "page": "devices",
     "type": "navigate"
+  },
+  {
+    "id": "r1",
+    "status": 200,
+    "body": "[]",
+    "type": "apiResponse"
   }
 ]

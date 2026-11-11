@@ -370,6 +370,9 @@ export type HostMessage =
   | { type: "state"; value: TrayViewState }
   | { type: "toast"; kind: ToastKind; title: string; text: string }
   | { type: "navigate"; page: string }
+  // The answer to an apiRequest with the same id (Api/TrayApiForwarder.cs). status is 0 when the request was not sent
+  // or no answer came, and error says why; body is the response's JSON text. The tray leaves out a field that is null.
+  | { type: "apiResponse"; id: string; status: number; body?: string; error?: string }
   // Sent to the ambient screen only: its data (the tray writes it) and the unlock chord hint.
   | ({ type: "data" } & AmbientData)
   | { type: "hint"; seconds: number };
@@ -378,6 +381,8 @@ export type FolderKind = "vm" | "iso" | "backup";
 
 export type PageMessage =
   | { type: "ready" }
+  // A request to the host's API for the VM page; the tray sends only the routes in Api/TrayApiRoutes.cs.
+  | { type: "apiRequest"; id: string; method: string; path: string; body?: unknown }
   | { type: "setPassphrase"; passphrase: string }
   | { type: "removeDevice"; deviceId: string }
   | { type: "chooseFolder"; folder: FolderKind }

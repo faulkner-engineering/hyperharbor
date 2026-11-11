@@ -1,6 +1,7 @@
 # Managing VMs from the host (phase 33)
 
-Status: design agreed with the user on 2026-11-09; work in three pull requests, listed below. What was verified is
+Status: design agreed with the user on 2026-11-09; work in three pull requests, listed below. Step 1 (ui/) and step 2
+(the tray device and forwarding) are done. What was verified is
 recorded in docs/history.md when the phase is done.
 
 ## Why
@@ -93,6 +94,11 @@ calls the API like a client:
 ## Risks
 - Svelte components compiled by two Vite configurations: the tray has no SvelteKit, so ui/ must not import $app/* or
   #lib (checked by its own svelte-check, which runs without SvelteKit).
-- The pipe squatting limitation (docs/architecture.md, Known limitations) also applies to the registration message:
-  a process that took the pipe name first could receive the tray's certificate fingerprint. The fingerprint is public
-  (the certificate is sent in every TLS handshake), so this gives it nothing it could not see anyway.
+- The pipe squatting limitation (docs/architecture.md, Known limitations) also applies to the registration: a process
+  that took the pipe name before the service started could answer it with its own address and certificate
+  fingerprint, and the tray would then send it the VM page's requests, including the admin passphrase when the page
+  asks for it. The tray already sends that process the passphrase today (the passphrase page sends only its hash, but
+  the Devices page's removals and other commands go there too), so this widens an existing gap rather than opening a
+  new one. The fix is the one that limitation names: the tray checks that the pipe's server process is the
+  HyperHarbor service (GetNamedPipeServerProcessId) before it trusts it. That check is planned before the VM page
+  ships (pull request 3).

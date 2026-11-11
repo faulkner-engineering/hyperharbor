@@ -198,6 +198,9 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
 
         public int Port { get; } = FreePort();
 
+        /// <summary>The service's tray pipe, for tests that act as the tray.</summary>
+        public string PipeName { get; } = "HyperHarbor.Tests." + Guid.NewGuid().ToString("N");
+
         public const string Passphrase = "correct horse battery";
 
         public string IsoFolder => Path.Combine(_dataDirectory, "isos");
@@ -233,7 +236,7 @@ public sealed class RealTlsTests : IClassFixture<RealTlsTests.ServiceProcess>
                 "--Api:ListenAddress", "127.0.0.1",
                 "--Discovery:Enabled", "false",
                 "--Lifecycle:IsoFolder", IsoFolder,
-                "--Tray:PipeName", "HyperHarbor.Tests." + Guid.NewGuid().ToString("N"),
+                "--Tray:PipeName", PipeName,
             })
             {
                 start.ArgumentList.Add(argument);

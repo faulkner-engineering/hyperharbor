@@ -415,8 +415,61 @@ public sealed class TrayPipeServer : BackgroundService, IPairingNotifier, Wake.I
                 AuditTrayAction("trayConsoleSignInDisable", null, null, null, $"deleteUser={disable.DeleteUser}");
                 _ = RunGameReadyAsync(gameReady => gameReady.DisableConsoleSignInAsync(disable.DeleteUser, CancellationToken.None));
                 break;
+            case TrayApiRegisterMessage register:
+                await connection.SendAsync(RegisterTrayDevice(register));
+                break;
         }
     }
+
+    /// <summary>
+    /// Makes the tray's certificate a paired device, so the tray window can call the API like a client
+    /// (docs/host-vm-management.md). Only the pipe's admitted accounts can ask, which is why no PIN is needed.
+    /// </summary>
+    private TrayApiRegisteredMessage RegisterTrayDevice(TrayApiRegisterMessage register)
+    {
+        static TrayApiRegisteredMessage Refused(string problem) => new(null, null, 0, null, problem);
+
+        if (!IsSha256Hex(register.CertificateFingerprint))
+        {
+            return Refused("The tray's certificate fingerprint is not a SHA-256 hash.");
+        }
+
+        if (_services.GetService<UserStore>() is not { } users
+            || _services.GetService<HostCertificateStore>() is not { } hostCertificate
+            || _services.GetService<Microsoft.Extensions.Options.IOptions<Api.ApiOptions>>()?.Value is not { } api)
+        {
+            return Refused("The API is not available in this run of the host.");
+        }
+
+        // Only a tray device is replaced: the message cannot be used to unpair a client.
+        if (register.ReplacesDeviceId is { } previous
+            && _devices.List().FirstOrDefault(device => device.DeviceId == previous) is { Name: TrayApiDevice.Name } old
+            && !string.Equals(old.CertificateFingerprint, register.CertificateFingerprint, StringComparison.OrdinalIgnoreCase))
+        {
+            _devices.Remove(previous);
+        }
+
+        var time = _services.GetService<TimeProvider>() ?? TimeProvider.System;
+        var known = _devices.FindByFingerprint(register.CertificateFingerprint);
+        var device = known ?? _devices.Add(
+            users.GetOrCreateDefault().UserId, TrayApiDevice.Name, register.CertificateFingerprint, time.GetUtcNow());
+        if (known is null)
+        {
+            _logger.LogInformation("The tray was added as device {DeviceId} to call the API.", device.DeviceId);
+            AuditTrayAction("trayApiRegister", device.UserId, device.DeviceId, device.Name);
+        }
+
+        // Listening on all interfaces includes loopback; a single bound address is the only one that answers.
+        var address = System.Net.IPAddress.TryParse(api.ListenAddress, out var bound)
+            && !bound.Equals(System.Net.IPAddress.Any) && !bound.Equals(System.Net.IPAddress.IPv6Any)
+                ? bound.ToString()
+                : "127.0.0.1";
+        var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(hostCertificate.GetOrCreate().RawData));
+        return new TrayApiRegisteredMessage(device.DeviceId, address, api.Port, fingerprint, null);
+    }
+
+    private static bool IsSha256Hex(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
     /// <summary>A paired device counts as using the host for this long after its last request.</summary>
     private static readonly TimeSpan RecentUse = TimeSpan.FromMinutes(10);
