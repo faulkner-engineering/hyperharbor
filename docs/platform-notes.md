@@ -130,6 +130,12 @@ section for an area before changing it: most of these were learned from a failur
 - The Default Switch's Name is C08CB7B8-9B3C-408E-8E30-5E16A3AEB444. The development host's default VHD folder is
   C:\ProgramData\Microsoft\Windows\Virtual Hard Disks; HyperHarbor-Linux lives in Public Documents.
 - A running VM holds its disk files open, so a delete-access check only means something once it is off.
+- A network adapter's switch is the HostResource of its Msvm_EthernetPortAllocationSettingData (Parent names the
+  adapter). Disconnect-VMNetworkAdapter, like Hyper-V Manager's "Not connected", keeps that object and its switch path
+  and sets EnabledState 3; Connect-VMNetworkAdapter sets it back to 2 (seen live 2026-11-11). So a connection counts only
+  when it is not disabled (CimVmSettings.ConnectedSwitchPath), and connecting sets EnabledState 2 with the new
+  HostResource. An adapter created without a switch has no such object; one is added. Changing HostResource keeps the
+  port's security settings (MAC address spoofing), and both work on a running VM (LifecycleLiveTests, API 1.39.0).
 - Host processor use (HostProcessorLoad, API 1.38.0, 2026-11-11) comes from GetSystemTimes, as in the Lean host and
   Game-ready code. Client editions of Windows run Hyper-V with the root scheduler, so guest virtual processors are host
   threads and the figure includes running VMs. The "Hyper-V Hypervisor Logical Processor" counters read 0 on the

@@ -11,8 +11,14 @@ namespace HyperHarbor.Host.Core.Transfer;
 /// <summary>A source host's proposal, as the authorizing client sends it to this (receiving) host.</summary>
 /// <param name="SourceFingerprint">The SHA-256 fingerprint of the source host's certificate, which must present it on every data request.</param>
 /// <param name="TpmMode">For a VM with a TPM: keep it (this host is given access to its key) or give it a fresh one.</param>
+/// <param name="SwitchId">A switch on this host that every network adapter connects to; null matches switches by name.</param>
 public sealed record IncomingTransferRequest(
-    TransferPreview Preview, TransferMode Mode, string SourceFingerprint, bool AcknowledgeWarnings, TransferTpmMode TpmMode = TransferTpmMode.Keep);
+    TransferPreview Preview,
+    TransferMode Mode,
+    string SourceFingerprint,
+    bool AcknowledgeWarnings,
+    TransferTpmMode TpmMode = TransferTpmMode.Keep,
+    string? SwitchId = null);
 
 /// <summary>This host's acceptance. ToString never includes the ticket.</summary>
 /// <param name="Ticket">The one-time ticket the source host sends with every data request for this transfer.</param>
@@ -129,7 +135,7 @@ public sealed partial class TransferReceiver
                 throw new LifecycleConflictException($"{request.Preview.Name} is already being moved to this host.", ContractInfo.ProblemCodes.TransferInProgress);
             }
 
-            var plan = await _preflight.CheckAsync(request.Preview, request.Mode, cancellationToken, request.TpmMode).ConfigureAwait(false);
+            var plan = await _preflight.CheckAsync(request.Preview, request.Mode, cancellationToken, request.TpmMode, request.SwitchId).ConfigureAwait(false);
             if (!plan.CanAccept)
             {
                 throw new LifecycleValidationException(plan.Errors[0].Message, plan.Errors);

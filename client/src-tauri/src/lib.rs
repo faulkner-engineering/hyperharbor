@@ -921,9 +921,11 @@ async fn get_transfer_preview(
 }
 
 /// Asks the receiving host to take the VM described by `preview`. The sending host's pinned certificate fingerprint
-/// goes with it, so the receiving host accepts data only from that host. Returns the offer without its ticket and
-/// guardian, which stay here for `start_transfer`.
+/// goes with it, so the receiving host accepts data only from that host. `switch_id` (API 1.39.0) is the receiving
+/// host's switch for every network adapter; without it, that host matches switches by name. Returns the offer without
+/// its ticket and guardian, which stay here for `start_transfer`.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn offer_transfer(
     state: State<'_, AppState>,
     source_key: String,
@@ -932,6 +934,7 @@ async fn offer_transfer(
     mode: String,
     acknowledge_warnings: bool,
     tpm_mode: Option<String>,
+    switch_id: Option<String>,
 ) -> Result<serde_json::Value, ClientError> {
     if mode != "move" && mode != "copy" {
         return Err(ClientError::InvalidRequest(
@@ -952,13 +955,26 @@ async fn offer_transfer(
         ));
     }
 
-    let body = serde_json::json!({
+    if switch_id
+        .as_deref()
+        .is_some_and(|id| !crate::hosts::is_guid(id))
+    {
+        return Err(ClientError::InvalidRequest(
+            "a virtual switch is chosen by its ID".into(),
+        ));
+    }
+
+    let mut body = serde_json::json!({
         "preview": preview,
         "mode": mode,
         "sourceFingerprint": source.host_certificate_fingerprint,
         "acknowledgeWarnings": acknowledge_warnings,
         "tpmMode": tpm_mode,
     });
+    // Sent only when chosen, so an offer to a host older than 1.39.0 stays as it was.
+    if let Some(id) = switch_id {
+        body["switchId"] = serde_json::Value::String(id);
+    }
     let mut offer = state
         .api
         .offer_incoming_transfer(&target_host, &target, &body)

@@ -70,12 +70,17 @@ public sealed record TransferPreview(
 /// <param name="SourceFingerprint">The SHA-256 fingerprint of the source host's certificate, as the client pinned it.</param>
 /// <param name="AcknowledgeWarnings">Set after the user has seen the warnings of a first attempt.</param>
 /// <param name="TpmMode">For a VM with a TPM: keep it, or give it a fresh one (and a new VM ID).</param>
+/// <param name="SwitchId">
+/// Since 1.39.0. A switch ID from the receiving host's GET /switches that every network adapter connects to; null matches
+/// the sending host's switches by name, then the Default Switch.
+/// </param>
 public sealed record IncomingTransferRequest(
     [property: JsonRequired] TransferPreview Preview,
     [property: JsonRequired] TransferMode Mode,
     [property: JsonRequired] string SourceFingerprint,
     bool AcknowledgeWarnings = false,
-    TransferTpmMode TpmMode = TransferTpmMode.Keep);
+    TransferTpmMode TpmMode = TransferTpmMode.Keep,
+    string? SwitchId = null);
 
 /// <summary>The receiving host's acceptance. ToString never includes the ticket. Schema: TransferOffer.</summary>
 /// <param name="Ticket">One-time ticket for the source host's data requests. Pass it to the source host and nowhere else.</param>

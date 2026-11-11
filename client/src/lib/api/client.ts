@@ -388,6 +388,9 @@ export const getJob = (key: string, jobId: string) => invoke<VmJob>("get_job", {
 /** Moving or copying a VM to another host (API 1.24.0). */
 export const TransferApiVersion = "1.24.0";
 
+/** The API version that lets the receiving host's switch be chosen for a transfer. */
+export const TransferSwitchApiVersion = "1.39.0";
+
 export type TransferPreview = components["schemas"]["TransferPreview"];
 export type TransferMode = components["schemas"]["TransferMode"];
 export type TransferTpmMode = components["schemas"]["TransferTpmMode"];
@@ -414,7 +417,8 @@ export const offerTransfer = (
   mode: TransferMode,
   acknowledgeWarnings: boolean,
   tpmMode: TransferTpmMode = "keep",
-) => invoke<TransferOfferView>("offer_transfer", { sourceKey, targetKey, preview, mode, acknowledgeWarnings, tpmMode });
+  switchId: string | null = null,
+) => invoke<TransferOfferView>("offer_transfer", { sourceKey, targetKey, preview, mode, acknowledgeWarnings, tpmMode, switchId });
 
 /** Tells the sending host to push the VM to the host that made the offer; needs elevation there. Returns the job. */
 export const startTransfer = (vmId: string, transferId: string, confirmName: string | null) =>

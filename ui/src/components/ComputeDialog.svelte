@@ -9,6 +9,7 @@
     type HostResources,
     type UpdateComputeRequest,
     type ValidationIssue,
+    type VirtualSwitch,
     type Vm,
     type VmComputeSettings,
     type VmJob,
@@ -33,10 +34,13 @@
     dynamicMemory: "Dynamic memory",
     nestedVirtualization: "Nested virtualization",
     macAddressSpoofing: "MAC address spoofing",
+    switchId: "Virtual switch",
   };
 
   let current = $state<VmComputeSettings | null>(null);
   let resources = $state<HostResources | null>(null);
+  /** The host's switches; empty from a host older than 1.39.0, which cannot change a VM's switch. */
+  let switches = $state<VirtualSwitch[]>([]);
   let loadError = $state<string | null>(null);
 
   let processorCount = $state(1);
@@ -45,6 +49,8 @@
   let dynamicMemory = $state(false);
   let nestedVirtualization = $state(false);
   let macAddressSpoofing = $state(false);
+  /** The chosen switch's ID, or "" for none (a VM whose adapters are not connected, until one is chosen). */
+  let switchId = $state("");
   let shutDownToApply = $state(false);
 
   let busy = $state(false);
@@ -56,8 +62,11 @@
 
   onMount(async () => {
     try {
-      [current, resources] = await Promise.all([hostApi().getVmCompute(host.key, vm.id), hostApi().getHostResources(host.key)]);
-      reset(current);
+      const [settings, hostResources] = await Promise.all([hostApi().getVmCompute(host.key, vm.id), hostApi().getHostResources(host.key)]);
+      // Only a host that reports the VM's switch (1.39.0) can change it. Without the list, the other settings still work.
+      if (settings.switchId !== undefined) switches = await hostApi().listSwitches(host.key).catch(() => []);
+      [current, resources] = [settings, hostResources];
+      reset(settings);
     } catch (e) {
       loadError = errorMessage(e);
     }
@@ -71,6 +80,8 @@
     dynamicMemory = settings.dynamicMemory;
     nestedVirtualization = settings.nestedVirtualization;
     macAddressSpoofing = settings.macAddressSpoofing;
+    // The list's spelling of the ID, so the choice shows it.
+    switchId = switchOf(settings.switchId)?.id ?? "";
   }
 
   /** Only the settings that differ from the VM's, so the host leaves the rest alone. */
@@ -83,6 +94,7 @@
     if (dynamicMemory !== current.dynamicMemory) changes.dynamicMemory = dynamicMemory;
     if (nestedVirtualization !== current.nestedVirtualization) changes.nestedVirtualization = nestedVirtualization;
     if (macAddressSpoofing !== current.macAddressSpoofing) changes.macAddressSpoofing = macAddressSpoofing;
+    if (switchId !== "" && switchId.toLowerCase() !== (current.switchId ?? "").toLowerCase()) changes.switchId = switchId;
     return changes;
   });
 
@@ -100,6 +112,11 @@
     dynamicMemory = false;
     if ((current?.networkAdapterCount ?? 0) > 0) macAddressSpoofing = true;
     warnings = [];
+  }
+
+  /** The host's switch with this ID, compared without regard to case as Hyper-V does. */
+  function switchOf(id: string | null | undefined): VirtualSwitch | undefined {
+    return id ? switches.find((item) => item.id.toLowerCase() === id.toLowerCase()) : undefined;
   }
 
   function issueFor(field: string): string | undefined {
@@ -191,6 +208,25 @@
         MAC address spoofing {current.networkAdapterCount === 0 ? "(no connected network adapter)" : ""}
       </label>
       {#if issueFor("macAddressSpoofing")}<p class="error">{issueFor("macAddressSpoofing")}</p>{/if}
+
+      {#if switches.length > 0}
+        <div class="grid">
+          {@render field("switchId", "vm-switch")}
+          <select id="vm-switch" bind:value={switchId} disabled={!current.adapterCount || job !== null || saved}>
+            {#if !switchOf(current.switchId)}
+              <option value="">{current.adapterCount ? "Not connected" : "No network adapter"}</option>
+            {/if}
+            {#each switches as item (item.id)}
+              <option value={item.id}>{item.name}</option>
+            {/each}
+          </select>
+        </div>
+        <p class="muted">
+          Every network adapter of the VM connects to this switch. It can change while the VM runs; the Default Switch
+          reaches only this host.
+        </p>
+        {#if issueFor("switchId")}<p class="error">{issueFor("switchId")}</p>{/if}
+      {/if}
 
       {#if running && needOff.length > 0 && job === null}
         <p class="warning">

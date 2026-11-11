@@ -5,6 +5,7 @@ import type {
   GrowVmDiskRequest,
   HostResources,
   UpdateComputeRequest,
+  VirtualSwitch,
   Vm,
   VmAction,
   VmComputeSettings,
@@ -36,6 +37,7 @@ export interface HostApi {
   getDeletePreview(key: string, vmId: string): Promise<VmDeletePreview>;
   deleteVm(key: string, vmId: string, request: DeleteVmRequest): Promise<VmJob>;
   getHostResources(key: string): Promise<HostResources>;
+  listSwitches(key: string): Promise<VirtualSwitch[]>;
   getElevation(key: string): Promise<ElevationStatus>;
   elevate(key: string, passphrase: string): Promise<{ expiresAt: string }>;
   getJob(key: string, jobId: string): Promise<VmJob>;

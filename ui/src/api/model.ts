@@ -98,6 +98,7 @@ export type UpdateComputeRequest = {
   dynamicMemory?: boolean;
   nestedVirtualization?: boolean;
   macAddressSpoofing?: boolean;
+  switchId?: string;
   shutDownToApply?: boolean;
   acknowledgeWarnings?: boolean;
 };

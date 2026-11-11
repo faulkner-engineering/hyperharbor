@@ -242,25 +242,7 @@ public sealed class CimHyperVTransfer : IHyperVTransfer
                 var portId = (string)port.CimInstanceProperties["InstanceID"].Value;
                 var connection = connections.FirstOrDefault(item =>
                     CimHyperVDefinitionReader.ParentMatches(item.CimInstanceProperties["Parent"]?.Value as string, portId));
-                if (adapter.SwitchId is null)
-                {
-                    if (connection is not null)
-                    {
-                        await CimVmSettings.RemoveResourcesAsync(session, [connection], cancellationToken).ConfigureAwait(false);
-                    }
-                }
-                else if (connection is not null)
-                {
-                    await CimVmSettings.ModifyResourceAsync(session, connection, cancellationToken,
-                        new CimXml.Property("HostResource", CimType.StringArray, new[] { CimVmSettings.SwitchPath(adapter.SwitchId) })).ConfigureAwait(false);
-                }
-                else
-                {
-                    using var template = CimVmSettings.Default(session, "Msvm_EthernetPortAllocationSettingData");
-                    await CimVmSettings.AddResourceAsync(session, settings, template, cancellationToken,
-                        new("Parent", CimType.String, CimVmSettings.ObjectPath(port.CimSystemProperties.ClassName, portId)),
-                        new("HostResource", CimType.StringArray, new[] { CimVmSettings.SwitchPath(adapter.SwitchId) })).ConfigureAwait(false);
-                }
+                await CimVmSettings.ConnectAdapterAsync(session, settings, port, connection, adapter.SwitchId, cancellationToken).ConfigureAwait(false);
             }
         }
         finally

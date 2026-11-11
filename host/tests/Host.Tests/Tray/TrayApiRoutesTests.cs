@@ -17,6 +17,7 @@ public sealed class TrayApiRoutesTests
     [InlineData("GET", "/vms/" + Vm + "/delete-preview")]
     [InlineData("POST", "/vms/" + Vm + "/delete")]
     [InlineData("GET", "/host/resources")]
+    [InlineData("GET", "/switches")]
     [InlineData("GET", "/auth/elevation")]
     [InlineData("POST", "/auth/elevation")]
     [InlineData("GET", "/jobs/" + Vm)]

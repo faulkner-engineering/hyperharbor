@@ -8,6 +8,11 @@ internal static class CimVmSettings
 {
     public const string RealizedType = "Microsoft:Hyper-V:System:Realized";
 
+    /// <summary>EnabledState of a switch connection, which Disconnect-VMNetworkAdapter (or Hyper-V Manager) sets to disabled.</summary>
+    private const ushort ConnectionEnabled = 2;
+
+    private const ushort ConnectionDisabled = 3;
+
     /// <summary>The VM's current (not checkpoint) Msvm_VirtualSystemSettingData.</summary>
     public static CimInstance Realized(CimSession session, Guid vmId) =>
         HyperVCim.QuerySingle(session,
@@ -90,4 +95,50 @@ internal static class CimVmSettings
 
     public static string SwitchPath(string switchId) =>
         $@"\\{Environment.MachineName}\root\virtualization\v2:Msvm_VirtualEthernetSwitch.CreationClassName=""Msvm_VirtualEthernetSwitch"",Name=""{switchId}""";
+
+    /// <summary>
+    /// The switch path a connection (Msvm_EthernetPortAllocationSettingData) points at, or null when it names none or is
+    /// disconnected: a disconnected adapter keeps its connection and its switch path, with EnabledState 3 (seen live).
+    /// </summary>
+    public static string? ConnectedSwitchPath(CimInstance connection)
+    {
+        if (connection.CimInstanceProperties["EnabledState"]?.Value is { } state
+            && Convert.ToUInt16(state, System.Globalization.CultureInfo.InvariantCulture) == ConnectionDisabled)
+        {
+            return null;
+        }
+
+        return connection.CimInstanceProperties["HostResource"]?.Value is string[] { Length: > 0 } hosts && !string.IsNullOrEmpty(hosts[0]) ? hosts[0] : null;
+    }
+
+    /// <summary>
+    /// Connects a network adapter (<paramref name="port"/>) to a switch, or disconnects it when <paramref name="switchId"/>
+    /// is null. <paramref name="connection"/> is the adapter's Msvm_EthernetPortAllocationSettingData, if it has one: it is
+    /// pointed at the switch and enabled (a disconnected adapter keeps a disabled one), or removed; an adapter without one
+    /// gets a new one. Works on a running VM.
+    /// </summary>
+    public static async Task ConnectAdapterAsync(
+        CimSession session, CimInstance settings, CimInstance port, CimInstance? connection, string? switchId, CancellationToken cancellationToken)
+    {
+        if (switchId is null)
+        {
+            if (connection is not null)
+            {
+                await RemoveResourcesAsync(session, [connection], cancellationToken).ConfigureAwait(false);
+            }
+        }
+        else if (connection is not null)
+        {
+            await ModifyResourceAsync(session, connection, cancellationToken,
+                new CimXml.Property("HostResource", CimType.StringArray, new[] { SwitchPath(switchId) }),
+                new CimXml.Property("EnabledState", CimType.UInt16, ConnectionEnabled)).ConfigureAwait(false);
+        }
+        else
+        {
+            using var template = Default(session, "Msvm_EthernetPortAllocationSettingData");
+            await AddResourceAsync(session, settings, template, cancellationToken,
+                new("Parent", CimType.String, ObjectPath(port.CimSystemProperties.ClassName, (string)port.CimInstanceProperties["InstanceID"].Value)),
+                new("HostResource", CimType.StringArray, new[] { SwitchPath(switchId) })).ConfigureAwait(false);
+        }
+    }
 }

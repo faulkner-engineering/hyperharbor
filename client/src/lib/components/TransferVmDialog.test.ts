@@ -86,11 +86,24 @@ const job = {
   transferResult: { targetVmId: copyId, targetName: "Web (copy)", sourceRemoved: false, warnings: [] },
 };
 
-function respond(previewValue: TransferPreview, offerResults: Array<() => Promise<unknown>> = [() => Promise.resolve(offer)]) {
-  invoke.mockImplementation((command: string) => {
+const defaultSwitch = { id: "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", name: "Default Switch", isDefault: true };
+const external = { id: "1D6E5B3C-0000-4000-8000-000000000001", name: "Uplink", isDefault: false };
+const lab = { id: "2E7F6C4D-0000-4000-8000-000000000002", name: "Lab", isDefault: false };
+
+/** A host that can be given a switch for the VM (API 1.39.0). */
+const server = entry("mdns:server", "SERVER", "1.39.0");
+
+function respond(
+  previewValue: TransferPreview,
+  offerResults: Array<() => Promise<unknown>> = [() => Promise.resolve(offer)],
+  switches: () => Promise<unknown> = () => Promise.resolve([defaultSwitch, external, lab]),
+) {
+  invoke.mockImplementation((command: string, args?: { resource?: string }) => {
     switch (command) {
       case "get_transfer_preview":
         return Promise.resolve(previewValue);
+      case "get_host_resource":
+        return args?.resource === "switches" ? switches() : Promise.reject(new Error("unexpected resource"));
       case "offer_transfer":
         return (offerResults.shift() ?? (() => Promise.resolve(offer)))();
       case "start_transfer":
@@ -163,7 +176,7 @@ describe("TransferVmDialog", () => {
 
     expect(await screen.findByText(/Copied to LAPTOP as Web \(copy\)/)).toBeTruthy();
     expect(calls("offer_transfer")).toEqual([
-      { sourceKey: "mdns:desktop", targetKey: "mdns:laptop", preview: preview(), mode: "copy", acknowledgeWarnings: false, tpmMode: "keep" },
+      { sourceKey: "mdns:desktop", targetKey: "mdns:laptop", preview: preview(), mode: "copy", acknowledgeWarnings: false, tpmMode: "keep", switchId: null },
     ]);
     expect(calls("start_transfer")).toEqual([{ vmId: vm.id, transferId, confirmName: null }]);
     await waitFor(() =>
@@ -239,5 +252,77 @@ describe("TransferVmDialog", () => {
 
     await screen.findByText(/Shut it down first/);
     expect(screen.queryByRole("button", { name: "Merge checkpoints" })).toBeNull();
+  });
+
+  describe("the receiving host's switch", () => {
+    const onExternal = (name: string) => preview({ adapters: [{ switchId: "aaaa", switchName: name, macAddress: "00155D010203" }] });
+
+    function showToServer() {
+      render(TransferVmDialog, { host: desktop, vm, hosts: [desktop, server], onclose: vi.fn() });
+    }
+
+    const switchChoice = async () => (await screen.findByLabelText(/Virtual switch on SERVER/)) as HTMLSelectElement;
+
+    it("suggests the switch with the same name, and sends the one chosen", async () => {
+      respond(onExternal("lab"));
+      showToServer();
+
+      const select = await switchChoice();
+      await waitFor(() => expect(select.value).toBe(lab.id));
+      expect(screen.getByText(/here: lab/)).toBeTruthy();
+
+      await fireEvent.change(select, { target: { value: external.id } });
+      await chooseCopy();
+      await fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+
+      await screen.findByText(/Copied to SERVER/);
+      expect(calls("offer_transfer").map((args) => (args as { switchId: string | null }).switchId)).toEqual([external.id]);
+    });
+
+    it("suggests a switch other than the Default Switch when no name matches", async () => {
+      respond(onExternal("External Switch"));
+      showToServer();
+
+      const select = await switchChoice();
+      await waitFor(() => expect(select.value).toBe(external.id));
+    });
+
+    it("keeps a VM that was on a Default Switch on the Default Switch", async () => {
+      respond(onExternal("Default Switch"));
+      showToServer();
+
+      const select = await switchChoice();
+      await waitFor(() => expect(select.value).toBe(defaultSwitch.id));
+    });
+
+    it("is not offered for a VM without network adapters", async () => {
+      respond(preview());
+      showToServer();
+
+      await screen.findByLabelText("To");
+      await waitFor(() => expect(calls("get_host_resource")).toHaveLength(1));
+      expect(screen.queryByLabelText(/Virtual switch/)).toBeNull();
+    });
+
+    it("leaves the choice to the other host when its switches cannot be read", async () => {
+      respond(onExternal("Lab"), undefined, () => Promise.reject(new Error("unreachable")));
+      showToServer();
+      await chooseCopy();
+
+      await fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+
+      await screen.findByText(/Copied to SERVER/);
+      expect(screen.queryByLabelText(/Virtual switch/)).toBeNull();
+      expect(calls("offer_transfer").map((args) => (args as { switchId: string | null }).switchId)).toEqual([null]);
+    });
+
+    it("does not ask a host older than 1.39.0 for its switches", async () => {
+      respond(onExternal("Lab"));
+      show();
+
+      await screen.findByLabelText("To");
+      expect(calls("get_host_resource")).toEqual([]);
+      expect(screen.queryByLabelText(/Virtual switch/)).toBeNull();
+    });
   });
 });

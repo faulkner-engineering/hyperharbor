@@ -34,7 +34,7 @@ public static partial class TransferEndpoints
         var transfers = endpoints.MapGroup(TransfersPath);
         transfers.MapPost("/incoming", OfferAsync).WithName("offerIncomingTransfer")
             .Audited<Wire.IncomingTransferRequest>(request =>
-                $"mode={request.Mode}, tpm={request.TpmMode}, vm={request.Preview.Name} ({request.Preview.VmId}), disks={request.Preview.Disks.Count}, bytes={request.Preview.TotalBytes}")
+                $"mode={request.Mode}, tpm={request.TpmMode}, vm={request.Preview.Name} ({request.Preview.VmId}), disks={request.Preview.Disks.Count}, bytes={request.Preview.TotalBytes}, switch={request.SwitchId ?? "by name"}")
             .RequireElevation();
 
         // The sending host's data requests: the transfer's ticket and the sending host's certificate, nothing else.

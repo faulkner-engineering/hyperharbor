@@ -19,6 +19,7 @@ public static class TrayApiRoutes
         ("GET", ["vms", "{id}", "delete-preview"]),
         ("POST", ["vms", "{id}", "delete"]),
         ("GET", ["host", "resources"]),
+        ("GET", ["switches"]),
         ("GET", ["auth", "elevation"]),
         ("POST", ["auth", "elevation"]),
         ("GET", ["jobs", "{id}"]),

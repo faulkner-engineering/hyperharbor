@@ -152,6 +152,9 @@ pub struct UpdateComputeRequest {
     pub nested_virtualization: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mac_address_spoofing: Option<bool>,
+    /// API 1.39.0: a switch ID from GET /switches that every network adapter connects to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub switch_id: Option<String>,
     #[serde(default)]
     pub shut_down_to_apply: bool,
     #[serde(default)]

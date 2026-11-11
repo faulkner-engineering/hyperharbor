@@ -44,6 +44,7 @@ function fakeApi(): { [K in keyof HostApi]: ReturnType<typeof vi.fn> } {
     getDeletePreview: vi.fn(),
     deleteVm: vi.fn(),
     getHostResources: vi.fn(),
+    listSwitches: vi.fn(async () => []),
     getElevation: vi.fn(),
     elevate: vi.fn(async () => ({ expiresAt: "2026-11-11T12:05:00Z" })),
     getJob: vi.fn(),

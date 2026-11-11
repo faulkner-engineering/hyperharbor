@@ -9,17 +9,20 @@
     hasProblemCode,
     hostKnownToSupport,
     isClientError,
+    listSwitches,
     mergeVmCheckpoints,
     offerTransfer,
     ProblemCodes,
     startTransfer,
     TransferApiVersion,
+    TransferSwitchApiVersion,
     type HostEntry,
     type TransferMode,
     type TransferOfferView,
     type TransferPreview,
     type TransferTpmMode,
     type ValidationIssue,
+    type VirtualSwitch,
     type Vm,
     type VmJob,
   } from "#lib/api/client.ts";
@@ -43,6 +46,10 @@
   let targetKey = $state<string | null>(null);
   let mode = $state<TransferMode>("move");
   let tpmMode = $state<TransferTpmMode>("keep");
+  /** The receiving host's switches; null while they load, or when it is older than 1.39.0 or did not answer. */
+  let targetSwitches = $state<VirtualSwitch[] | null>(null);
+  /** The receiving host's switch for every network adapter; "" leaves the choice to it (matching by name). */
+  let switchId = $state("");
   let merging = $state(false);
   let mergeJob = $state<VmJob | null>(null);
   let confirmName = $state("");
@@ -82,16 +89,56 @@
   onMount(() => {
     targetKey = targets.find((choice) => choice.ready)?.host.key ?? null;
     void loadPreview();
+    void loadSwitches();
   });
 
   async function loadPreview() {
     try {
       preview = await getTransferPreview(host.key, vm.id);
       loadError = null;
+      suggestSwitch();
     } catch (e) {
       loadError = errorMessage(e);
     }
   }
+
+  /**
+   * Reads the chosen host's switches. A failure leaves the choice to that host, which matches switches by name as before
+   * 1.39.0, so it never stops the transfer.
+   */
+  async function loadSwitches() {
+    const chosen = target;
+    targetSwitches = null;
+    switchId = "";
+    if (chosen === null || !hostKnownToSupport(chosen, TransferSwitchApiVersion)) return;
+    try {
+      const switches = await listSwitches(chosen.key);
+      if (target?.key !== chosen.key) return;
+      targetSwitches = switches;
+      suggestSwitch();
+    } catch {
+      targetSwitches = null;
+    }
+  }
+
+  /**
+   * The switch of the same name as the VM's own, as the host would match it; otherwise a switch other than the Default
+   * Switch, since that one reaches only its host, unless the VM was on a Default Switch here too.
+   */
+  function suggestSwitch() {
+    if (preview === null || targetSwitches === null || switchId !== "") return;
+    const names = preview.adapters.map((adapter) => adapter.switchName?.toLowerCase()).filter((name) => name !== undefined);
+    const byName = targetSwitches.find((item) => names.includes(item.name.toLowerCase()));
+    const onDefault = names.includes("default switch");
+    const other = targetSwitches.find((item) => !item.isDefault);
+    const fallback = targetSwitches.find((item) => item.isDefault);
+    switchId = (byName ?? (onDefault ? (fallback ?? other) : (other ?? fallback)))?.id ?? "";
+  }
+
+  /** The VM's switches on this host, for the note under the choice. */
+  const sourceSwitches = $derived(
+    [...new Set((preview?.adapters ?? []).map((adapter) => adapter.switchName ?? "no switch"))].join(", "),
+  );
 
   /** Deletes the checkpoints (merging them into the disks), then checks the VM again. */
   async function merge() {
@@ -119,6 +166,11 @@
     error = null;
   }
 
+  function targetChanged() {
+    changed();
+    void loadSwitches();
+  }
+
   function gigabytes(bytes: number): string {
     return `${Math.max(0.1, Math.round((bytes / 1024 ** 3) * 10) / 10)} GB`;
   }
@@ -134,7 +186,7 @@
       if (offer === null) {
         try {
           offer = await withElevation(destination.key, () =>
-            offerTransfer(host.key, destination.key, checked, mode, warnings !== null, tpmMode),
+            offerTransfer(host.key, destination.key, checked, mode, warnings !== null, tpmMode, switchId || null),
           );
         } catch (e) {
           if (hasProblemCode(e, ProblemCodes.resourceWarnings) && isClientError(e)) {
@@ -208,13 +260,25 @@
         <p class="warning">Pair this device with the other host first.</p>
       {:else}
         <label for="transfer-target">To</label>
-        <select id="transfer-target" bind:value={targetKey} onchange={changed} disabled={busy || job !== null}>
+        <select id="transfer-target" bind:value={targetKey} onchange={targetChanged} disabled={busy || job !== null}>
           {#each targets as choice (choice.host.key)}
             <option value={choice.host.key} disabled={!choice.ready}>
               {choice.host.displayName}{choice.ready ? "" : choice.host.apiVersion === null ? " (connect to it first)" : " (update it first)"}
             </option>
           {/each}
         </select>
+
+        {#if targetSwitches !== null && targetSwitches.length > 0 && preview.adapters.length > 0}
+          <label for="transfer-switch">Virtual switch on {target?.displayName}</label>
+          <select id="transfer-switch" bind:value={switchId} onchange={changed} disabled={busy || job !== null}>
+            {#each targetSwitches as item (item.id)}
+              <option value={item.id}>{item.name}</option>
+            {/each}
+          </select>
+          <p class="muted">
+            Its network adapters connect to this switch (here: {sourceSwitches}). The Default Switch reaches only its host.
+          </p>
+        {/if}
       {/if}
 
       <fieldset disabled={busy || job !== null}>

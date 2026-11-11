@@ -53,7 +53,12 @@ public static partial class TransferPreflight
             || preview.TpmKeyHolders is not { } holders
             || !string.Equals(holders.Owner, localGuardianId, StringComparison.OrdinalIgnoreCase));
 
-    public static TransferPlan Evaluate(TransferPreview preview, TransferMode mode, TransferTargetFacts facts, TransferTpmMode tpmMode = TransferTpmMode.Keep)
+    /// <param name="switchId">
+    /// A switch on this host that every network adapter connects to, as the user chose it; null matches the sending host's
+    /// switches by name, then the Default Switch.
+    /// </param>
+    public static TransferPlan Evaluate(
+        TransferPreview preview, TransferMode mode, TransferTargetFacts facts, TransferTpmMode tpmMode = TransferTpmMode.Keep, string? switchId = null)
     {
         ArgumentNullException.ThrowIfNull(preview);
         ArgumentNullException.ThrowIfNull(facts);
@@ -96,10 +101,7 @@ public static partial class TransferPreflight
             errors.Add(new("space", $"The VM needs about {VmSettingsValidator.Mb(neededMb)} on this host, but {facts.DestinationRoot} has {VmSettingsValidator.Mb(freeMb)} free."));
         }
 
-        var network = SwitchMapper.Map(
-            preview.Adapters.Select(adapter => new ManifestAdapter(adapter.SwitchName, adapter.SwitchId, adapter.MacAddress)).ToList(),
-            facts.Switches);
-        warnings.AddRange(network.Warnings.Select(warning => new ValidationIssue("network", warning)));
+        var network = PlanSwitches(preview.Adapters, facts.Switches, switchId, errors, warnings);
         var adapters = new List<TransferAdapterPlan>();
         for (var i = 0; i < preview.Adapters.Count; i++)
         {
@@ -109,7 +111,7 @@ public static partial class TransferPreflight
                 warnings.Add(new("network", $"Network adapter {i + 1} has no MAC address to keep; it gets a new one on this host."));
             }
 
-            adapters.Add(new TransferAdapterPlan(network.Adapters[i].SwitchId, mac));
+            adapters.Add(new TransferAdapterPlan(network[i], mac));
         }
 
         if (mode == TransferMode.Copy)
@@ -123,6 +125,32 @@ public static partial class TransferPreflight
         // A rebuilt VM is a new VM, so even a move gets a new ID; its MAC addresses are kept all the same.
         var keepsId = mode == TransferMode.Move && effectiveTpm == TransferTpmMode.Keep;
         return new TransferPlan(mode, keepsId ? preview.VmId : null, name, vmFolder, disks, adapters, errors, warnings, effectiveTpm, grantNeeded);
+    }
+
+    /// <summary>The switch each adapter connects to: the one the user chose for all of them, else the mapping by name.</summary>
+    private static IReadOnlyList<string?> PlanSwitches(
+        IReadOnlyList<VmAdapterDefinition> adapters,
+        IReadOnlyList<VirtualSwitch> switches,
+        string? switchId,
+        List<ValidationIssue> errors,
+        List<ValidationIssue> warnings)
+    {
+        if (switchId is not null)
+        {
+            var chosen = switches.FirstOrDefault(item => string.Equals(item.Id, switchId, StringComparison.OrdinalIgnoreCase));
+            if (chosen is null)
+            {
+                errors.Add(new("switchId", "This host has no virtual switch with that ID. Choose one of its switches again."));
+            }
+
+            return adapters.Select(_ => chosen?.Id).ToList();
+        }
+
+        var network = SwitchMapper.Map(
+            adapters.Select(adapter => new ManifestAdapter(adapter.SwitchName, adapter.SwitchId, adapter.MacAddress)).ToList(),
+            switches);
+        warnings.AddRange(network.Warnings.Select(warning => new ValidationIssue("network", warning)));
+        return network.Adapters.Select(adapter => adapter.SwitchId).ToList();
     }
 
     /// <summary>

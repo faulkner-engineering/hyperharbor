@@ -1453,10 +1453,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a VM's processor, memory, nested virtualization, and MAC spoofing settings.
+         * Get a VM's processor, memory, nested virtualization, MAC spoofing, and virtual switch settings.
          * @description `requiresOff` lists the settings that can change only while the VM is off. Maximum memory
-         *     can change on a running VM while dynamic memory stays on; MAC address spoofing can change
-         *     at any time.
+         *     can change on a running VM while dynamic memory stays on; MAC address spoofing and the
+         *     virtual switch (since 1.39.0) can change at any time.
          */
         get: operations["getVmCompute"];
         put?: never;
@@ -1465,7 +1465,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a VM's processor, memory, nested virtualization, or MAC spoofing settings.
+         * Change a VM's processor, memory, nested virtualization, MAC spoofing, or virtual switch settings.
          * @description Omitted settings stay as they are. Changes are applied at once when the VM is off, or
          *     when it is running and no change needs it off (200 with `settings`). When a running VM
          *     must be off for a change, the host returns 409 with `code: requiresShutdown`, unless
@@ -1474,6 +1474,8 @@ export interface paths {
          *     in time, it fails and nothing changes. Saved and paused VMs cannot be changed.
          *
          *     Nested virtualization needs static memory. Resource warnings work as for `createVm`.
+         *     A `switchId` (since 1.39.0) connects every network adapter of the VM to that switch; a VM
+         *     without a network adapter, or an ID that is not one of `GET /switches`, is 400 on `switchId`.
          */
         patch: operations["updateVmCompute"];
         trace?: never;
@@ -1813,7 +1815,8 @@ export interface paths {
          *     ID must be new here; the configuration version must be one this Hyper-V supports; processors, memory, and free
          *     space must fit; disk file names must be plain .vhdx or .vhd names). Errors are 400 with `errors`; warnings (a
          *     renamed VM, a missing switch, a copy's identity) are 409 `code: resourceWarnings` until the request is sent again
-         *     with `acknowledgeWarnings`. The VM gets a folder of its own under the host's VM folder. The answer carries a
+         *     with `acknowledgeWarnings`. With `switchId` (since 1.39.0), every network adapter connects to that switch of this
+         *     host instead of being matched by name; an unknown ID is 400 on `switchId`. The VM gets a folder of its own under the host's VM folder. The answer carries a
          *     one-time ticket for the sending host's data requests and, for a VM with a TPM, this host's guardian with public
          *     certificates only. A ticket unused for 30 minutes ends, and the transfer is rolled back.
          */
@@ -2788,6 +2791,11 @@ export interface components {
             acknowledgeWarnings: boolean;
             /** @default keep */
             tpmMode: components["schemas"]["TransferTpmMode"];
+            /**
+             * @description Since 1.39.0. A switch `id` from this (receiving) host's `GET /switches` that every network adapter connects
+             *     to. Omitted or null matches the sending host's switches by name, then the Default Switch.
+             */
+            switchId?: string | null;
         };
         TransferOffer: {
             /** Format: uuid */
@@ -4410,8 +4418,11 @@ export interface components {
             /** @description GPU driver errors in the host's System log in the last seven days. */
             warnings: components["schemas"]["GpuDriverWarning"][];
         };
-        /** @enum {string} */
-        ComputeSetting: "processorCount" | "startupMemoryMb" | "maximumMemoryMb" | "dynamicMemory" | "nestedVirtualization" | "macAddressSpoofing";
+        /**
+         * @description `switchId` since 1.39.0.
+         * @enum {string}
+         */
+        ComputeSetting: "processorCount" | "startupMemoryMb" | "maximumMemoryMb" | "dynamicMemory" | "nestedVirtualization" | "macAddressSpoofing" | "switchId";
         VmComputeSettings: {
             /** Format: uuid */
             vmId: string;
@@ -4432,6 +4443,13 @@ export interface components {
             networkAdapterCount: number;
             /** @description Settings that can change only while the VM is off. */
             requiresOff: components["schemas"]["ComputeSetting"][];
+            /**
+             * @description Since 1.39.0. The `id` of the switch the VM's network adapters connect to (the first connected adapter's);
+             *     null when none is connected. Absent from older hosts.
+             */
+            switchId?: string | null;
+            /** @description Since 1.39.0. Network adapters, connected or not. A switch can be chosen only when there is one. */
+            adapterCount?: number;
         };
         UpdateVmComputeRequest: {
             processorCount?: number | null;
@@ -4442,6 +4460,8 @@ export interface components {
             dynamicMemory?: boolean | null;
             nestedVirtualization?: boolean | null;
             macAddressSpoofing?: boolean | null;
+            /** @description Since 1.39.0. A switch `id` from `GET /switches` that every network adapter connects to. */
+            switchId?: string | null;
             /**
              * @description For a running VM, shut it down, apply, and start it again as a job.
              * @default false

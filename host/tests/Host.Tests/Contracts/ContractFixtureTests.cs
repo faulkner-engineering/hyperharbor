@@ -39,7 +39,9 @@ public class ContractFixtureTests
 
     private static readonly VmComputeSettings ComputeSample = new(
         VmId, VmState.Running, 4, 4096, 4096, false, true, true, 1,
-        [ComputeSetting.ProcessorCount, ComputeSetting.StartupMemoryMb, ComputeSetting.MaximumMemoryMb, ComputeSetting.DynamicMemory, ComputeSetting.NestedVirtualization]);
+        [ComputeSetting.ProcessorCount, ComputeSetting.StartupMemoryMb, ComputeSetting.MaximumMemoryMb, ComputeSetting.DynamicMemory, ComputeSetting.NestedVirtualization],
+        "1d6e5b3c-0000-4000-8000-000000000001",
+        1);
 
     private static readonly MachineProfile MachineProfileSample = new(
         "Gaming rig",
@@ -153,7 +155,7 @@ public class ContractFixtureTests
         // Null on purpose: expiresAt is required but nullable.
         ["ElevationStatus"] = new ElevationStatus(true, false, null),
         ["VmComputeSettings"] = ComputeSample,
-        ["UpdateVmComputeRequest"] = new UpdateVmComputeRequest(4, null, null, false, true, true, ShutDownToApply: true),
+        ["UpdateVmComputeRequest"] = new UpdateVmComputeRequest(4, null, null, false, true, true, ShutDownToApply: true, SwitchId: "1d6e5b3c-0000-4000-8000-000000000001"),
         ["VmComputeUpdate"] = new VmComputeUpdate(ComputeSample, null),
         ["CreateVmRequest"] = new CreateVmRequest("Win11 Dev", "Win11_24H2.iso", 64, 4, 4096, 8192, true, "C08CB7B8-9B3C-408E-8E30-5E16A3AEB444", true, false,
             new UnattendedInstallRequest("windows-workstation", "Windows 11 Pro", "WIN11-DEV")),
@@ -369,7 +371,7 @@ public class ContractFixtureTests
         ["TransferDisk"] = TransferPreviewSample.Disks[0],
         ["TransferCompute"] = TransferPreviewSample.Compute,
         ["TransferPreview"] = TransferPreviewSample,
-        ["IncomingTransferRequest"] = new IncomingTransferRequest(TransferPreviewSample with { Blockers = [] }, TransferMode.Move, new string('A', 64), AcknowledgeWarnings: true, TransferTpmMode.Fresh),
+        ["IncomingTransferRequest"] = new IncomingTransferRequest(TransferPreviewSample with { Blockers = [] }, TransferMode.Move, new string('A', 64), AcknowledgeWarnings: true, TransferTpmMode.Fresh, "1d6e5b3c-0000-4000-8000-000000000001"),
 
         // Nulls on purpose: vmId and guardian are required but nullable (a copy of a VM without a TPM).
         ["TransferOffer"] = new TransferOffer(TransferId, "fixture-ticket", "Web (copy)", @"D:\VMs\Web (copy)", null,

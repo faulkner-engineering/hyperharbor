@@ -161,6 +161,27 @@ public sealed class TransferPreflightTests
     }
 
     [Fact]
+    public void ChosenSwitch_ConnectsEveryAdapter_WithoutASwitchWarning()
+    {
+        var preview = Preview() with { Adapters = [new VmAdapterDefinition("gone", "Lab", "00155D010203"), new VmAdapterDefinition(null, null, null)] };
+
+        var plan = TransferPreflight.Evaluate(preview, TransferMode.Move, Facts(), switchId: ExternalId.ToUpperInvariant());
+
+        Assert.True(plan.CanAccept, string.Join(" ", plan.Errors.Select(error => error.Message)));
+        Assert.All(plan.Adapters, adapter => Assert.Equal(ExternalId, adapter.SwitchId));
+        Assert.DoesNotContain(plan.Warnings, warning => warning.Message.Contains("virtual switch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ChosenSwitch_ThatThisHostLacks_IsAnError()
+    {
+        var plan = TransferPreflight.Evaluate(Preview(), TransferMode.Copy, Facts(), switchId: "no-such-switch");
+
+        Assert.False(plan.CanAccept);
+        Assert.Contains(plan.Errors, error => error.Field == "switchId");
+    }
+
+    [Fact]
     public void SourceBlockers_AreErrors_AndSourceWarningsArePassedOn()
     {
         var preview = Preview() with
