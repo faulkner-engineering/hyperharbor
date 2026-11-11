@@ -73,6 +73,7 @@
   import DiskEncryptionDialog from "#lib/components/DiskEncryptionDialog.svelte";
   import PerformanceDialog from "#lib/components/PerformanceDialog.svelte";
   import GpuWarnings from "#lib/components/GpuWarnings.svelte";
+  import HostUsage from "#lib/components/HostUsage.svelte";
   import ConfirmDialog from "#lib/components/ConfirmDialog.svelte";
   import { elevation, ElevationCancelled, pendingElevationHost, withElevation } from "#lib/lifecycle.svelte.ts";
   import IsoLibrary from "#lib/components/IsoLibrary.svelte";
@@ -669,6 +670,7 @@
       {:else}
         {#key selectedHost.key}
           <GpuWarnings host={selectedHost} />
+          <HostUsage host={selectedHost} />
         {/key}
         <div class="views" role="tablist" aria-label="Host views">
           <button type="button" role="tab" aria-selected={view === "vms"} class:active={view === "vms"} onclick={() => (view = "vms")}>

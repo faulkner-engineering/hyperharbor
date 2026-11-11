@@ -41,7 +41,8 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   Pairing/ (Spake2, PairingService), Security/ (host certificate, paired devices, ProtectedFile,
   DataDirectoryAccess: finds and repairs data files a portable host cannot open),
   Audit/ (FileAuditLog), Elevation/ (AdminPassphraseStore, ElevationService), Lifecycle/ (create, delete,
-  compute, jobs, locks, ISO library, VmDiskService and VmDisks: listing and growing disks and extending the
+  compute, jobs, locks, ISO library, HostProcessorLoad (processor use and physical cores for GET /host/resources),
+  VmDiskService and VmDisks: listing and growing disks and extending the
   partition), HyperV/HyperVCim, CimXml, CimVmSettings (shared CIM helpers),
   VmConsole/ (console account store and setup, password rotator, tickets, tunnel pump, CIM console grants),
   Power/ (VM power actions; KeepAwake: the power request that keeps the host awake during remote use),
@@ -144,7 +145,9 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   top, never focused) that GuestAdminDialog shows and hides. Lifecycle UI:
   lib/lifecycle.svelte.ts (elevation prompt, job polling; a re-export of ui/src/lifecycle.svelte.ts) and
   lib/components/*Dialog.svelte on a shared Dialog (ui/src/components: Dialog, VmList, ComputeDialog, DiskDialog,
-  DeleteVmDialog, ElevationDialog, JobProgress, Menu; lib/api/hostApi.ts gives them the client's Tauri commands)
+  DeleteVmDialog, ElevationDialog, JobProgress, Menu; lib/api/hostApi.ts gives them the client's Tauri commands).
+  lib/components/HostUsage.svelte shows the selected host's processor and memory use above its tabs, polling GET
+  /host/resources every 5 seconds while the window is visible.
 - Machine view (the setup profile editor's left pane; each tab is a section of targets.json): client/src/lib/machine:
   camera.ts (targetFor, rigFor, CameraRig: 900 ms eased fly, tilted rest orbit slowing with distance, cuts under reduced
   motion), highlights.ts (resolveHighlight for perItem, blink, pulse, spin; applyHighlight; reactionFrame), fallback.ts

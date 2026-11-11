@@ -91,8 +91,11 @@ public static class HostEndpoints
         VmStorageLocation location,
         IOptions<LifecycleOptions> options,
         IsoLibrary library,
+        IHostProcessorLoad processors,
         CancellationToken cancellationToken)
     {
+        // Processor use first: it may wait half a second, and memory read afterwards is then the more current figure.
+        var cpuUsage = await processors.ReadUsagePercentAsync(cancellationToken);
         var host = capacity.Read();
         return TypedResults.Ok(new HostResources(
             host.LogicalProcessorCount,
@@ -100,7 +103,9 @@ public static class HostEndpoints
             host.AvailableMemoryMb,
             options.Value.HostMemoryReserveMb,
             await location.DisplayFolderAsync(cancellationToken),
-            library.Folder));
+            library.Folder,
+            processors.PhysicalCoreCount,
+            cpuUsage));
     }
 
     private static Ok<HostRemoteDesktop> GetRemoteDesktop(HostRemoteDesktopService remoteDesktop) =>

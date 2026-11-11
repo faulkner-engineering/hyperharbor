@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HyperHarbor Host API
-  version: 1.37.0
+  version: 1.38.0
   summary: Manage Hyper-V virtual machines on a HyperHarbor host.
   description: |
     Contract between the HyperHarbor host service and HyperHarbor clients.
@@ -286,6 +286,8 @@ paths:
       description: |
         Used to bound VM settings in the client. The host validates every request against the
         same figures and warns when a VM would leave less free memory than `memoryReserveMb`.
+        Since 1.38.0 it also reports the host's physical cores and current processor use, which the
+        client shows while it is open.
       responses:
         "200":
           description: Host resources.
@@ -5922,6 +5924,18 @@ components:
         logicalProcessorCount:
           type: integer
           minimum: 1
+        physicalCoreCount:
+          type: [integer, "null"]
+          minimum: 1
+          description: Physical cores across all processors (API 1.38.0); null when Windows cannot say.
+        cpuUsagePercent:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+          description: |
+            Processor use across all logical processors, including running VMs, from 0 to 100 (API 1.38.0).
+            Measured since the previous request when that was a few seconds ago, otherwise over half a
+            second. Null when it cannot be read.
         totalMemoryMb:
           type: integer
           format: int64

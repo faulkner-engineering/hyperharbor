@@ -252,7 +252,7 @@ public class ContractFixtureTests
             [@"C:\VMs\Ubuntu Dev.vhdx"],
             [new DeleteBlocker(DeleteBlockerCode.DiskNotDeletable, DeleteBlockerScope.DeleteDisks, "In use.")]),
         ["JobError"] = new JobError("Deleting disks failed", "The file is in use."),
-        ["HostResources"] = new HostResources(16, 32768, 20000, 4096, @"C:\ProgramData\Microsoft\Windows\Virtual Hard Disks", @"C:\Users\Public\Documents\HyperHarbor ISOs"),
+        ["HostResources"] = new HostResources(16, 32768, 20000, 4096, @"C:\ProgramData\Microsoft\Windows\Virtual Hard Disks", @"C:\Users\Public\Documents\HyperHarbor ISOs", 8, 23.4),
         ["HostRemoteDesktop"] = new HostRemoteDesktop(true, true, 3389, true, "Windows 11 Pro"),
         ["IsoImage"] = new IsoImage("Win11_24H2.iso", 5_800_000_000, Time, ["Win11 Dev"]),
 

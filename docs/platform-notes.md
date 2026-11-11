@@ -130,6 +130,11 @@ section for an area before changing it: most of these were learned from a failur
 - The Default Switch's Name is C08CB7B8-9B3C-408E-8E30-5E16A3AEB444. The development host's default VHD folder is
   C:\ProgramData\Microsoft\Windows\Virtual Hard Disks; HyperHarbor-Linux lives in Public Documents.
 - A running VM holds its disk files open, so a delete-access check only means something once it is off.
+- Host processor use (HostProcessorLoad, API 1.38.0, 2026-11-11) comes from GetSystemTimes, as in the Lean host and
+  Game-ready code. Client editions of Windows run Hyper-V with the root scheduler, so guest virtual processors are host
+  threads and the figure includes running VMs. The "Hyper-V Hypervisor Logical Processor" counters read 0 on the
+  development VM (nested, not elevated), so they are not used. Physical cores come from
+  GetLogicalProcessorInformationEx (RelationProcessorCore records), read once.
 
 ## Remote Desktop (Phase 7)
 

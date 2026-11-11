@@ -11,6 +11,10 @@ note anything that needs action, such as updating the host, a new elevation requ
 ## [Unreleased]
 
 ### Added
+- The client shows how busy the selected host is, above its tabs: processor use with the number of cores and logical
+  processors, and memory in use out of the total, refreshed every 5 seconds. Free memory below what the host keeps for
+  itself is marked. Use it to size new VMs and to see what running VMs take. Processor use and the core count need an
+  updated host (API 1.38.0); an older host shows its logical processors and memory only.
 - The host window (double-click the HyperHarbor tray icon) has a Virtual machines page: the same VM list as the client,
   where VMs on the host can be started, shut down, restarted, saved, or forced off, their processors and memory changed,
   a disk grown, and a VM deleted, without opening the client. Changes that need it ask for the admin passphrase, as in
