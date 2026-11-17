@@ -548,6 +548,70 @@ impl ApiClient {
         .map(|_| ())
     }
 
+    /// GET /vms/{vmId}/admin-credential: what the host recorded about the VM's stored administrator credential,
+    /// never the password. Returns the VmAdminCredential.
+    pub async fn get_vm_admin_credential(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.get_json(host, paired, &vm_path(vm_id, "admin-credential")?)
+            .await
+    }
+
+    /// POST /vms/{vmId}/admin-credential/check (needs elevation): the host signs in to the running guest with the
+    /// stored credential, and can turn off the account's password expiry. Returns the VmAdminCredential.
+    pub async fn check_vm_admin_credential(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        password_never_expires: bool,
+    ) -> Result<serde_json::Value, ClientError> {
+        let body = json!({ "passwordNeverExpires": password_never_expires });
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::POST,
+                &vm_path(vm_id, "admin-credential/check")?,
+                Some(&body),
+                Some(GUEST_ADMIN_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
+    /// PUT /vms/{vmId}/admin-credential (needs elevation): stores another administrator credential once the guest
+    /// accepts it. The password goes to the host over mTLS and is not kept here.
+    pub async fn set_vm_admin_credential(
+        &self,
+        host: &HostEntry,
+        paired: &PairedHost,
+        vm_id: &str,
+        user_name: &str,
+        password: &str,
+        password_never_expires: bool,
+    ) -> Result<serde_json::Value, ClientError> {
+        let body = json!({
+            "userName": user_name,
+            "password": password,
+            "passwordNeverExpires": password_never_expires,
+        });
+        let response = self
+            .send_paired_with(
+                host,
+                paired,
+                reqwest::Method::PUT,
+                &vm_path(vm_id, "admin-credential")?,
+                Some(&body),
+                Some(GUEST_ADMIN_TIMEOUT),
+            )
+            .await?;
+        parse(response).await
+    }
+
     /// POST /vms/{vmId}/console: the host console account, a fresh password, and a tunnel ticket.
     pub async fn open_console(
         &self,
@@ -3335,6 +3399,76 @@ mod server_tests {
     }
 
     #[tokio::test]
+    async fn admin_credential_routes_use_the_contract_paths_and_bodies() {
+        let server = TestServer::start("127.0.0.1:0", |request| {
+            match (request.method.as_str(), request.path.as_str()) {
+                ("PUT", path) if path.ends_with("/admin-credential") => Reply::json(
+                    422,
+                    r#"{"title":"Administrator credential rejected","status":422,"detail":"The credential is invalid.","code":"adminCredentialRejected"}"#,
+                ),
+                (_, path) if path.contains("/admin-credential") => Reply::json(
+                    200,
+                    r#"{"userName":"hhadmin","managed":true,"state":"working","checkedAt":"2026-11-17T12:00:00Z","passwordExpiresAt":null,"detail":null}"#,
+                ),
+                _ => Reply::json(500, "{}"),
+            }
+        });
+        let target = host(&["127.0.0.1"], server.address.port());
+        let api = api();
+        let paired = paired(server.certificate_hash());
+
+        let status = api
+            .get_vm_admin_credential(&target, &paired, VM_ID)
+            .await
+            .unwrap();
+        let checked = api
+            .check_vm_admin_credential(&target, &paired, VM_ID, true)
+            .await
+            .unwrap();
+        let rejected = api
+            .set_vm_admin_credential(&target, &paired, VM_ID, "hhadmin", "Typed-Secret2!", true)
+            .await;
+
+        assert_eq!(status["userName"], "hhadmin");
+        assert_eq!(checked["state"], "working");
+        let error = rejected.unwrap_err();
+        assert_eq!(error.problem_code(), Some("adminCredentialRejected"));
+        assert!(!format!("{error:?}").contains("Typed-Secret2!"));
+
+        let requests = server.requests();
+        let path = format!("{API_BASE_PATH}/vms/{VM_ID}/admin-credential");
+        let check_path = format!("{path}/check");
+        let routes: Vec<(&str, &str)> = requests
+            .iter()
+            .map(|request| (request.method.as_str(), request.path.as_str()))
+            .collect();
+        assert_eq!(
+            routes,
+            [
+                ("GET", path.as_str()),
+                ("POST", check_path.as_str()),
+                ("PUT", path.as_str()),
+            ]
+        );
+        let check: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+        let set: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+        assert_eq!(
+            keys(&check),
+            keys(&fixture("CheckVmAdminCredentialRequest"))
+        );
+        assert_eq!(keys(&set), keys(&fixture("SetVmAdminCredentialRequest")));
+        assert_eq!(set["password"], "Typed-Secret2!");
+
+        let invalid = api
+            .get_vm_admin_credential(&target, &paired, "../auth/elevation")
+            .await;
+        assert!(
+            matches!(invalid, Err(ClientError::InvalidVmId)),
+            "{invalid:?}"
+        );
+    }
+
+    #[tokio::test]
     async fn closing_a_window_that_is_not_open_reports_the_hosts_detail() {
         let server = TestServer::start("127.0.0.1:0", |_| {
             Reply::json(
@@ -3759,7 +3893,14 @@ mod server_tests {
             serde_json::from_value(fixture("VmConnection")).unwrap();
         assert_eq!(connection.guest_os, crate::rdp::GuestOs::Windows);
         assert_eq!(connection.port, 3389);
+        assert!(!connection.password_rotated);
         connection.validate().unwrap();
+
+        // A host before API 1.40.0 does not send passwordRotated; it always rotates.
+        let mut older = fixture("VmConnection");
+        older.as_object_mut().unwrap().remove("passwordRotated");
+        let older: crate::rdp::VmConnection = serde_json::from_value(older).unwrap();
+        assert!(older.password_rotated);
 
         let console: crate::console::ConsoleSession =
             serde_json::from_value(fixture("ConsoleSession")).unwrap();

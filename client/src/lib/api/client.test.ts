@@ -6,6 +6,9 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
 import {
   connectVm,
+  getVmAdminCredential,
+  checkVmAdminCredential,
+  setVmAdminCredential,
   downloadHostLogs,
   errorMessage,
   getCameraPrefs,
@@ -74,12 +77,29 @@ describe("commands", () => {
     });
   });
 
-  it("connectVm returns the notice the client has for the user", async () => {
-    invoke.mockResolvedValue("Camera sharing requires Windows 11 on this device.");
+  it("connectVm returns the notice the client has for the user, and whether the password was rotated", async () => {
+    invoke.mockResolvedValue({ notice: "Camera sharing requires Windows 11 on this device.", passwordRotated: false });
 
-    expect(await connectVm("mdns:host", "vm-1", "192.168.0.50", "Work")).toBe(
-      "Camera sharing requires Windows 11 on this device.",
-    );
+    expect(await connectVm("mdns:host", "vm-1", "192.168.0.50", "Work")).toEqual({
+      notice: "Camera sharing requires Windows 11 on this device.",
+      passwordRotated: false,
+    });
+  });
+
+  it("administrator credential calls name the host key and VM, and the password only when setting one", async () => {
+    await getVmAdminCredential("mdns:host", "vm-1");
+    await checkVmAdminCredential("mdns:host", "vm-1", true);
+    await setVmAdminCredential("mdns:host", "vm-1", "hhadmin", "Typed-Secret2!", false);
+
+    expect(invoke).toHaveBeenCalledWith("get_vm_admin_credential", { key: "mdns:host", vmId: "vm-1" });
+    expect(invoke).toHaveBeenCalledWith("check_vm_admin_credential", { key: "mdns:host", vmId: "vm-1", passwordNeverExpires: true });
+    expect(invoke).toHaveBeenCalledWith("set_vm_admin_credential", {
+      key: "mdns:host",
+      vmId: "vm-1",
+      userName: "hhadmin",
+      password: "Typed-Secret2!",
+      passwordNeverExpires: false,
+    });
   });
 
   it("camera calls name the host key and VM", async () => {

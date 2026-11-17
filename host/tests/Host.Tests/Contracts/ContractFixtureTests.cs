@@ -113,7 +113,8 @@ public class ContractFixtureTests
             ["192.168.0.50", "fe80::5"],
             Provisioned: true,
             RemoteDesktop: new VmRemoteDesktop("192.168.0.50", true),
-            GuestOs: new VmGuestOs(GuestOsFamily.Linux, "Ubuntu")),
+            GuestOs: new VmGuestOs(GuestOsFamily.Linux, "Ubuntu"),
+            AdminCredentialAlert: new VmAdminCredentialAlert(VmAdminCredentialAlertKind.Expiring, Time.AddDays(6))),
         // Nulls on purpose: these properties are required but nullable, so null must still be sent.
         ["VmRemoteDesktop"] = new VmRemoteDesktop(null, false),
         ["VmGuestOs"] = new VmGuestOs(GuestOsFamily.Unknown, null),
@@ -121,7 +122,13 @@ public class ContractFixtureTests
         ["VmActionResult"] = new VmActionResult(VmId, VmAction.Shutdown, true, VmState.Running),
         ["ProvisionVmRequest"] = new ProvisionVmRequest("hhadmin", "Fixture-Admin1!", true, true, true),
         ["VmProvisioning"] = new VmProvisioning(VmId, "hh-owner", Time),
-        ["VmConnection"] = new VmConnection("hh-owner","Fixture-Pass1!", "192.168.0.50", 3389, Time, GuestOsFamily.Windows),
+        ["VmConnection"] = new VmConnection("hh-owner","Fixture-Pass1!", "192.168.0.50", 3389, Time, GuestOsFamily.Windows, PasswordRotated: false),
+        ["VmAdminCredential"] = new VmAdminCredential("hhadmin", true, VmAdminCredentialState.Rejected, Time, Time.AddDays(-1), "The credential is invalid."),
+
+        // Null on purpose: passwordExpiresAt is required but nullable.
+        ["VmAdminCredentialAlert"] = new VmAdminCredentialAlert(VmAdminCredentialAlertKind.Rejected, null),
+        ["SetVmAdminCredentialRequest"] = new SetVmAdminCredentialRequest("hhadmin", "Fixture-Admin2!", true),
+        ["CheckVmAdminCredentialRequest"] = new CheckVmAdminCredentialRequest(true),
         ["GuestAdminWindow"] = new GuestAdminWindow("hha-owner", "Maple-River-Orbit-7", Time.AddMinutes(5)),
 
         // Null on purpose: expiresAt is required but nullable.
@@ -395,7 +402,7 @@ public class ContractFixtureTests
     // Null on purpose: sshHostKey is required but nullable (a Windows guest).
     private static readonly TransferRecords TransferRecordsSample = new(
         [new TransferAccount("hh-owner", GuestOsFamily.Windows, null, Time, Time.AddDays(1))],
-        new TransferCredential("hhadmin", "Fixture-Admin1!"),
+        new TransferCredential("hhadmin", "Fixture-Admin1!", true),
         new TransferGamePolicy(GameVmAction.Save, false));
 
     private static readonly TransferTarget TransferTargetSample = new(

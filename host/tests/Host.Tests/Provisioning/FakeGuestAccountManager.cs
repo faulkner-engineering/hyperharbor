@@ -94,8 +94,44 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
             PasswordsSet.Add((target.VmId, accountName, password));
             var accepted = AcceptedCurrentPasswords.Remove(currentPassword);
             AcceptedCurrentPasswords.Add(password);
-            return accepted ? PasswordChange.Success : new PasswordChange(false, "The current password is not valid.");
+            var change = accepted ? PasswordChange.Success : new PasswordChange(false, "The current password is not valid.");
+            return change with { Administrator = ReportAdministrator(admin, passwordNeverExpires: false) };
         }
+    }
+
+    /// <summary>What the fake guest says about the administrator account a call signed in with.</summary>
+    public GuestAdministrator Administrator { get; set; } = new(true, null);
+
+    /// <summary>Administrator passwords the fake guest refuses, as it would an expired or changed one.</summary>
+    public HashSet<string> RejectedAdminPasswords { get; } = [];
+
+    /// <summary>When true, the guest cannot turn off password expiry and says why.</summary>
+    public bool KeepPasswordFails { get; set; }
+
+    /// <summary>Administrator checks, with whether password expiry was to be turned off (asked for, or a managed account).</summary>
+    public List<(GuestCredential Admin, bool KeepPassword)> AdministratorChecks { get; } = [];
+
+    public async Task<GuestAdministrator> CheckAdministratorAsync(GuestTarget target, GuestCredential admin, bool passwordNeverExpires, CancellationToken cancellationToken)
+    {
+        await Enter(target, admin, password: null);
+        lock (_gate)
+        {
+            AdministratorChecks.Add((admin, admin.Managed || passwordNeverExpires));
+            return ReportAdministrator(admin, passwordNeverExpires);
+        }
+    }
+
+    /// <summary>Like the guest script: expiry is turned off first for a managed account or on request, then the account is reported.</summary>
+    private GuestAdministrator ReportAdministrator(GuestCredential admin, bool passwordNeverExpires)
+    {
+        if ((admin.Managed || passwordNeverExpires) && Administrator.PasswordExpiresAt is not null)
+        {
+            Administrator = KeepPasswordFails
+                ? Administrator with { Problem = "Access is denied." }
+                : Administrator with { PasswordExpiresAt = null };
+        }
+
+        return Administrator;
     }
 
     /// <summary>Administrator window accounts by VM and account name.</summary>
@@ -190,6 +226,11 @@ internal sealed class FakeGuestAccountManager : IGuestAccountManager
         if (Failure is not null)
         {
             throw Failure;
+        }
+
+        if (RejectedAdminPasswords.Contains(admin.Password))
+        {
+            throw new GuestCredentialRejectedException($"The guest rejected the administrator credential. The credential is invalid. ({admin.Password})");
         }
 
         if (EchoSecretsInFailure)

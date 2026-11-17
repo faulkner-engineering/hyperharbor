@@ -16,6 +16,7 @@ public sealed class PasswordRotatorTests : IDisposable
     private readonly FakeGuestAccountManager _guest = new();
     private readonly VmCredentialStore _credentials;
     private readonly VmAccountPasswordStore _passwords;
+    private readonly VmAdminCredentialStatusStore _status;
     private readonly PasswordRotator _rotator;
 
     public PasswordRotatorTests()
@@ -23,7 +24,8 @@ public sealed class PasswordRotatorTests : IDisposable
         _credentials = new VmCredentialStore(_directory);
         _passwords = new VmAccountPasswordStore(_directory);
         _credentials.Save(VmId, new GuestCredential("Administrator", "Adm1n!"));
-        _rotator = new PasswordRotator(_guest, _credentials, _passwords, _time, TimeSpan.FromSeconds(60), NullLogger<PasswordRotator>.Instance);
+        _status = new VmAdminCredentialStatusStore(_directory);
+        _rotator = new PasswordRotator(_guest, _credentials, _passwords, _time, TimeSpan.FromSeconds(60), NullLogger<PasswordRotator>.Instance, _status);
     }
 
     public void Dispose()
@@ -156,6 +158,73 @@ public sealed class PasswordRotatorTests : IDisposable
     }
 
     [Fact]
+    public async Task ARejectedAdministrator_WithAnEarlierPassword_IssuesItAgainWithoutRotating()
+    {
+        var first = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+        _time.Advance(TimeSpan.FromSeconds(60));
+        _guest.RejectedAdminPasswords.Add("Adm1n!");
+
+        var second = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+
+        Assert.False(second.Rotated);
+        Assert.Equal(first.Password, second.Password);
+        Assert.Equal(first.Password, _passwords.Find(VmId, UserId));
+        Assert.Single(_guest.PasswordsSet);
+
+        // Not cached: the next connect tries the administrator again, and succeeds once it works.
+        Assert.False(_rotator.HasCachedPassword(VmId, UserId));
+        var status = _status.Find(VmId)!;
+        Assert.Equal(VmAdminCredentialState.Rejected, status.State);
+        Assert.DoesNotContain("Adm1n!", status.Detail, StringComparison.Ordinal);
+        Assert.Contains("[redacted]", status.Detail, StringComparison.Ordinal);
+
+        _guest.RejectedAdminPasswords.Clear();
+        _guest.AcceptedCurrentPasswords.Add(first.Password);
+        var third = await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+
+        Assert.True(third.Rotated);
+        Assert.NotEqual(first.Password, third.Password);
+        Assert.Equal(VmAdminCredentialState.Working, _status.Find(VmId)!.State);
+    }
+
+    [Fact]
+    public async Task ARejectedAdministrator_OnTheFirstConnect_FailsWithoutTheSecret()
+    {
+        _guest.RejectedAdminPasswords.Add("Adm1n!");
+
+        var error = await Assert.ThrowsAsync<GuestCredentialRejectedException>(() => _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None));
+
+        Assert.DoesNotContain("Adm1n!", error.Message, StringComparison.Ordinal);
+        Assert.Null(_passwords.Find(VmId, UserId));
+        Assert.Equal(VmAdminCredentialState.Rejected, _status.Find(VmId)!.State);
+    }
+
+    [Fact]
+    public async Task ARotation_RecordsWhenTheAdministratorPasswordExpires()
+    {
+        var expires = _time.GetUtcNow().AddDays(30);
+        _guest.Administrator = new GuestAdministrator(true, expires);
+        _passwords.Save(VmId, UserId, "previous-password");
+
+        await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+
+        Assert.Equal(new AdminCredentialStatus(VmId, VmAdminCredentialState.Working, _time.GetUtcNow(), expires), _status.Find(VmId));
+    }
+
+    [Fact]
+    public async Task AManagedAdministrator_IsKeptFromExpiringOnARotation()
+    {
+        _credentials.Save(VmId, new GuestCredential("hhadmin", "Adm1n!", Managed: true));
+        _guest.Administrator = new GuestAdministrator(true, _time.GetUtcNow().AddDays(3));
+        _passwords.Save(VmId, UserId, "previous-password");
+
+        await _rotator.GetPasswordAsync(Target, UserId, "hh-owner", CancellationToken.None);
+
+        Assert.Null(_guest.Administrator.PasswordExpiresAt);
+        Assert.Null(_status.Find(VmId)!.PasswordExpiresAt);
+    }
+
+    [Fact]
     public async Task MissingAdminCredential_IsConflict()
     {
         await Assert.ThrowsAsync<GuestAccountConflictException>(() => _rotator.GetPasswordAsync(Target with { VmId = Guid.NewGuid() }, UserId, "hh-owner", CancellationToken.None));
@@ -165,5 +234,6 @@ public sealed class PasswordRotatorTests : IDisposable
     public void RotatedPassword_HidesPasswordInToString()
     {
         Assert.DoesNotContain("Secret-123", new RotatedPassword("Secret-123", DateTimeOffset.UtcNow).ToString());
+        Assert.DoesNotContain("Secret-123", new GuestCredential("hhadmin", "Secret-123", Managed: true).ToString());
     }
 }

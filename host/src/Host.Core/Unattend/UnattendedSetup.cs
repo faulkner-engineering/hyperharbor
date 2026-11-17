@@ -273,7 +273,8 @@ public sealed partial class UnattendedSetup
     /// <summary>Stores the credential, records the install, starts the VM, and presses Space for Windows media.</summary>
     public async Task BeginAsync(Guid vmId, Guid userId, InstallPlan plan, string password, Action<string> report, CancellationToken cancellationToken)
     {
-        _credentials.Save(vmId, new GuestCredential(plan.Profile.AdminAccountName, password));
+        // Managed: the install creates this account and only the host knows its password, so the host keeps it from expiring.
+        _credentials.Save(vmId, new GuestCredential(plan.Profile.AdminAccountName, password, Managed: true));
         var now = _time.GetUtcNow();
         var profile = plan.Profile;
         _installs.Save(new UnattendedInstall(

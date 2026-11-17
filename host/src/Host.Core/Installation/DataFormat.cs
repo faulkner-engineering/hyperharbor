@@ -23,7 +23,7 @@ public static class DataFormat
     public const string FileName = "data-format.json";
 
     /// <summary>Raise this, and add the step to <see cref="Migrations"/>, when a release changes how data is written.</summary>
-    public const int Current = 4;
+    public const int Current = 5;
 
     /// <summary>Steps from format N to N + 1, keyed by N, run in order on the data directory.</summary>
     private static readonly IReadOnlyDictionary<int, Action<string>> Migrations = new Dictionary<int, Action<string>>
@@ -38,6 +38,10 @@ public static class DataFormat
         // Format 4: machine profiles are the one place for profiles. Each User's unattended install and setup profiles
         // are converted to machine profiles; the older files stay for older clients.
         [3] = dataDirectory => Profiles.ProfileConsolidation.Run(dataDirectory),
+
+        // Format 5: stored administrator credentials say whether HyperHarbor made the account, and
+        // vm-admin-credential-status.json is a new file. The credentials unattended installs created are marked.
+        [4] = dataDirectory => Provisioning.ManagedAdministratorMigration.Run(dataDirectory),
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };

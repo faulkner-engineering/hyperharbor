@@ -102,6 +102,20 @@ public sealed class AutounattendBuilderTests
         Assert.All(commands, command => Assert.True(command.Length <= 1024, command));
     }
 
+    /// <summary>
+    /// Windows expires a local account's password after 42 days by default. Only the host knows the administrator's, so
+    /// an expired one locked the host out of the guest (2026-11-17). The commands run as that administrator.
+    /// </summary>
+    [Fact]
+    public void FirstLogonKeepsTheAdministratorPasswordFromExpiring()
+    {
+        var commands = FirstLogonCommands(Build().Document);
+
+        var keep = Assert.Single(commands, command => command.Contains("-PasswordNeverExpires $true", StringComparison.Ordinal));
+        Assert.Contains("Set-LocalUser -Name $env:USERNAME", keep, StringComparison.Ordinal);
+        Assert.True(commands.ToList().IndexOf(keep) < commands.Count - 1, "It must run before the session signs out.");
+    }
+
     [Fact]
     public void PrivacyToggles_AddOnlyTheChosenPolicies()
     {

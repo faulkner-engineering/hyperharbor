@@ -174,13 +174,48 @@ export const provisionVm = (
     options,
   });
 
+/** What a connect has to say besides the Remote Desktop window it opened. Mirrors ConnectOutcome in src-tauri/src/lib.rs. */
+export interface ConnectOutcome {
+  /** Something to tell the user, for example that camera sharing is unavailable; null when there is nothing. */
+  notice: string | null;
+  /**
+   * False when the VM rejected the host's stored administrator credential: the session opens with the password from the
+   * last connect, and the credential needs replacing (AdminCredentialDialog).
+   */
+  passwordRotated: boolean;
+}
+
 /**
- * Opens Remote Desktop to a provisioned VM. Resolves once mstsc has been launched, with something to
- * tell the user (for example that camera sharing is unavailable), or null. `vmName` names the VM's
- * virtual camera and titles the Remote Desktop window.
+ * Opens Remote Desktop to a provisioned VM. Resolves once mstsc has been launched. `vmName` names the VM's virtual
+ * camera and titles the Remote Desktop window.
  */
 export const connectVm = (key: string, vmId: string, address: string, vmName?: string) =>
-  invoke<string | null>("connect_vm", { key, vmId, address, vmName });
+  invoke<ConnectOutcome>("connect_vm", { key, vmId, address, vmName });
+
+/** The API version that added the stored administrator credential's state, its check, and its replacement. */
+export const AdminCredentialApiVersion = "1.40.0";
+
+export type VmAdminCredential = components["schemas"]["VmAdminCredential"];
+export type VmAdminCredentialAlert = components["schemas"]["VmAdminCredentialAlert"];
+
+/** What the host recorded about the VM's stored administrator credential. The guest is not contacted; never the password. */
+export const getVmAdminCredential = (key: string, vmId: string) =>
+  invoke<VmAdminCredential>("get_vm_admin_credential", { key, vmId });
+
+/**
+ * The host signs in to the running guest with the stored credential and records the answer; a refusal resolves with
+ * state "rejected". With `passwordNeverExpires` it also turns off the account's password expiry. Needs elevation: run it
+ * inside withElevation.
+ */
+export const checkVmAdminCredential = (key: string, vmId: string, passwordNeverExpires: boolean) =>
+  invoke<VmAdminCredential>("check_vm_admin_credential", { key, vmId, passwordNeverExpires });
+
+/**
+ * Stores another administrator credential once the guest accepts it. The password is sent to the host over mTLS and not
+ * kept here. Needs elevation: run it inside withElevation.
+ */
+export const setVmAdminCredential = (key: string, vmId: string, userName: string, password: string, passwordNeverExpires: boolean) =>
+  invoke<VmAdminCredential>("set_vm_admin_credential", { key, vmId, userName, password, passwordNeverExpires });
 
 /** The API version that added browser.makeDefault to setup and machine profiles. */
 export const DefaultBrowserApiVersion = "1.36.0";

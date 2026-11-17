@@ -36,12 +36,12 @@ public static class TransferRecordsWire
 {
     public static Wire.TransferRecords ToWire(this TransferRecords records) => new(
         records.Accounts.Select(account => new Wire.TransferAccount(account.AccountName, account.GuestOs, account.SshHostKey, account.ProvisionedAt, account.VerifiedAt)).ToList(),
-        records.AdminCredential is { } credential ? new Wire.TransferCredential(credential.UserName, credential.Password) : null,
+        records.AdminCredential is { } credential ? new Wire.TransferCredential(credential.UserName, credential.Password, credential.Managed) : null,
         records.GamePolicy is { } policy ? new Wire.TransferGamePolicy(GameAwareService.ToWire(policy.Policy), policy.AlwaysPause) : null);
 
     public static TransferRecords ToCore(this Wire.TransferRecords records) => new(
         records.Accounts.Select(account => new TransferAccountRecord(account.AccountName, account.GuestOs, account.SshHostKey, account.ProvisionedAt, account.VerifiedAt)).ToList(),
-        records.AdminCredential is { } credential ? new GuestCredential(credential.UserName, credential.Password) : null,
+        records.AdminCredential is { } credential ? new GuestCredential(credential.UserName, credential.Password, credential.Managed) : null,
         records.GamePolicy is { } policy ? new GameVmPolicy(GameAwareService.ToCore(policy.Action), policy.AlwaysPause) : null);
 }
 

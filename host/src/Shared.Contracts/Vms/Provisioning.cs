@@ -30,6 +30,7 @@ public sealed record VmProvisioning(Guid VmId, string AccountName, DateTimeOffse
 /// <param name="PerformanceMode">The client tunes the connection for a LAN (connection type LAN, auto-detection off).</param>
 /// <param name="GuestOs">Linux guests use xrdp, which signs in over TLS instead of CredSSP.</param>
 /// <param name="Defaults">The Remote Desktop defaults of the machine profile the VM was made from or last given; a device's own monitor choice wins.</param>
+/// <param name="PasswordRotated">False when the guest rejected the stored administrator credential, so the password is the one set at the last successful connect.</param>
 public sealed record VmConnection(
     string UserName,
     string Password,
@@ -38,8 +39,10 @@ public sealed record VmConnection(
     DateTimeOffset ExpiresAt,
     GuestOsFamily GuestOs,
     bool PerformanceMode = false,
-    Profiles.MachineConnection? Defaults = null)
+    Profiles.MachineConnection? Defaults = null,
+    bool PasswordRotated = true)
 {
     /// <summary>Keeps the password out of logs and exception messages.</summary>
-    public override string ToString() => $"VmConnection {{ UserName = {UserName}, Address = {Address}, Port = {Port}, ExpiresAt = {ExpiresAt:u}, GuestOs = {GuestOs} }}";
+    public override string ToString() =>
+        $"VmConnection {{ UserName = {UserName}, Address = {Address}, Port = {Port}, ExpiresAt = {ExpiresAt:u}, GuestOs = {GuestOs}, PasswordRotated = {PasswordRotated} }}";
 }

@@ -38,6 +38,15 @@ public static class VmEndpoints
                 $"installDesktop={request.InstallDesktop}, trustNewHostKey={request.TrustNewHostKey}");
         vms.MapPost("/{vmId:guid}/connect", ConnectAsync).WithName("connectVm").Audited();
 
+        // The stored administrator credential. The password is deliberately left out of the summary.
+        vms.MapGet("/{vmId:guid}/admin-credential", GetAdminCredentialAsync).WithName("getVmAdminCredential");
+        vms.MapPut("/{vmId:guid}/admin-credential", SetAdminCredentialAsync).WithName("setVmAdminCredential")
+            .Audited<SetVmAdminCredentialRequest>(request => $"userName={request.UserName}, passwordNeverExpires={request.PasswordNeverExpires}")
+            .RequireElevation();
+        vms.MapPost("/{vmId:guid}/admin-credential/check", CheckAdminCredentialAsync).WithName("checkVmAdminCredential")
+            .Audited<CheckVmAdminCredentialRequest>(request => $"passwordNeverExpires={request.PasswordNeverExpires}")
+            .RequireElevation();
+
         vms.MapPost("/", CreateAsync).WithName("createVm")
             .Audited<CreateVmRequest>(request =>
                 $"name={request.Name}, iso={request.IsoName}, diskSizeGb={request.DiskSizeGb}, processors={request.ProcessorCount}, " +
@@ -86,12 +95,13 @@ public static class VmEndpoints
         ProvisioningStore provisioning,
         UnattendedInstallStore installs,
         PerformanceStore performance,
+        VmAdminCredentialService adminCredential,
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var userId = user.UserId();
         var vms = await inventory.ListAsync(cancellationToken);
-        return TypedResults.Ok<IReadOnlyList<Vm>>(vms.Select(vm => ForUser(vm, userId, provisioning, installs, performance)).ToList());
+        return TypedResults.Ok<IReadOnlyList<Vm>>(vms.Select(vm => ForUser(vm, userId, provisioning, installs, performance, adminCredential)).ToList());
     }
 
     private static async Task<Results<Ok<Vm>, ProblemHttpResult>> GetVmAsync(
@@ -100,13 +110,14 @@ public static class VmEndpoints
         ProvisioningStore provisioning,
         UnattendedInstallStore installs,
         PerformanceStore performance,
+        VmAdminCredentialService adminCredential,
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var vm = await inventory.GetAsync(vmId, cancellationToken);
         return vm is null
             ? TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: "Virtual machine not found", detail: $"Virtual machine {vmId} was not found.")
-            : TypedResults.Ok(ForUser(vm, user.UserId(), provisioning, installs, performance));
+            : TypedResults.Ok(ForUser(vm, user.UserId(), provisioning, installs, performance, adminCredential));
     }
 
     private static async Task<Accepted<VmActionResult>> PerformVmActionAsync(
@@ -136,11 +147,38 @@ public static class VmEndpoints
         CancellationToken cancellationToken)
     {
         var connection = await connect.ConnectAsync(vmId, context.User.UserId(), context.User.Identity?.Name ?? "unknown device", cancellationToken);
+        if (!connection.PasswordRotated)
+        {
+            // The guest rejected the stored administrator credential, so the password set last time was issued again.
+            context.Audit()!.Detail = "passwordRotated=False";
+        }
 
         // The body carries a password; no cache may keep it.
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
         return TypedResults.Ok(connection);
+    }
+
+    private static async Task<Ok<VmAdminCredential>> GetAdminCredentialAsync(Guid vmId, VmAdminCredentialService adminCredential, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await adminCredential.GetAsync(vmId, cancellationToken));
+
+    private static async Task<Ok<VmAdminCredential>> SetAdminCredentialAsync(
+        Guid vmId,
+        SetVmAdminCredentialRequest request,
+        VmAdminCredentialService adminCredential,
+        CancellationToken cancellationToken) =>
+        TypedResults.Ok(await adminCredential.ReplaceAsync(vmId, request, cancellationToken));
+
+    private static async Task<Ok<VmAdminCredential>> CheckAdminCredentialAsync(
+        Guid vmId,
+        CheckVmAdminCredentialRequest request,
+        VmAdminCredentialService adminCredential,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var result = await adminCredential.CheckAsync(vmId, request.PasswordNeverExpires, cancellationToken);
+        context.Audit()!.Detail = $"passwordNeverExpires={request.PasswordNeverExpires}, state={result.State}";
+        return TypedResults.Ok(result);
     }
 
     private static async Task<Accepted<VmJob>> CreateAsync(
@@ -245,8 +283,15 @@ public static class VmEndpoints
     }
 
     /// <summary>Adds the per-User fields; the inventory itself is shared by all Users.</summary>
-    private static Vm ForUser(Vm vm, Guid userId, ProvisioningStore provisioning, UnattendedInstallStore installs, PerformanceStore performance) => vm with
+    private static Vm ForUser(
+        Vm vm,
+        Guid userId,
+        ProvisioningStore provisioning,
+        UnattendedInstallStore installs,
+        PerformanceStore performance,
+        VmAdminCredentialService adminCredential) => vm with
     {
+        AdminCredentialAlert = adminCredential.AlertFor(vm.Id),
         PerformanceMode = performance.Find(vm.Id) is not null,
         Provisioned = provisioning.Find(vm.Id, userId) is not null,
         InstallState = installs.Find(vm.Id) is { } install && (install.IsActive || install.State == UnattendedInstallState.Failed) ? install.State : null,

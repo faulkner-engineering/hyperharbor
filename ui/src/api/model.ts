@@ -74,6 +74,7 @@ export type DraftItem = components["schemas"]["DraftItem"];
 export type DraftBrowser = components["schemas"]["DraftBrowser"];
 export type GuestAdminWindow = components["schemas"]["GuestAdminWindow"];
 export type GuestAdminStatus = components["schemas"]["GuestAdminStatus"];
+export type VmAdminCredentialAlert = components["schemas"]["VmAdminCredentialAlert"];
 
 /** Request bodies, as the Rust side expects them. */
 export interface DeleteVmRequest {
@@ -132,6 +133,8 @@ export const ProblemCodes = {
   vmNotProvisioned: "vmNotProvisioned",
   guestAdminUnsupported: "guestAdminUnsupported",
   guestUnavailable: "guestUnavailable",
+  /** 422: the VM did not accept an administrator credential (hosts with API 1.40.0). */
+  adminCredentialRejected: "adminCredentialRejected",
 } as const;
 
 /**

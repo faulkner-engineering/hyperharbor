@@ -6,7 +6,7 @@ namespace HyperHarbor.Shared.Contracts;
 public static class ContractInfo
 {
     /// <summary>Matches info.version in docs/api.yaml.</summary>
-    public const string ApiVersion = "1.39.0";
+    public const string ApiVersion = "1.40.0";
 
     /// <summary>Base path of all API routes.</summary>
     public const string BasePath = "/api/v1";
@@ -98,6 +98,9 @@ public static class ContractInfo
 
         /// <summary>409: PowerShell Direct cannot reach the guest yet (still starting, or integration services are off).</summary>
         public const string GuestUnavailable = "guestUnavailable";
+
+        /// <summary>422: the guest did not accept an administrator credential, or the account is not an administrator there.</summary>
+        public const string AdminCredentialRejected = "adminCredentialRejected";
     }
 
     /// <summary>The Authorization scheme of the transferTicket security scheme: "HyperHarbor-Transfer &lt;ticket&gt;".</summary>

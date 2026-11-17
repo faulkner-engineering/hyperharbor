@@ -90,6 +90,7 @@ public sealed class UnattendedCreationTests : IDisposable
             Assert.Contains("New-LocalUser -Name 'hh-owner'", xml, StringComparison.Ordinal);
             var credential = _credentials.Find(vmId)!;
             Assert.Equal("hhadmin", credential.UserName);
+            Assert.True(credential.Managed, "The host made this account, so it keeps its password from expiring.");
             Assert.DoesNotContain(credential.Password, xml, StringComparison.Ordinal);
         }
 

@@ -79,6 +79,7 @@ internal sealed class SelfTestRun(string resultFile, int port)
         var devices = services.GetRequiredService<PairedDeviceStore>().List().Count;
         _ = services.GetRequiredService<AdminPassphraseStore>().IsConfigured;
         services.GetRequiredService<VmCredentialStore>().Find(Guid.Empty);
+        services.GetRequiredService<VmAdminCredentialStatusStore>().Find(Guid.Empty);
         services.GetRequiredService<ProvisioningStore>().Find(Guid.Empty, user.UserId);
         services.GetRequiredService<ConsoleAccountStore>().List();
         services.GetRequiredService<UnattendedInstallStore>().List();

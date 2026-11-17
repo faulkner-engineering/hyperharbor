@@ -648,3 +648,43 @@ per-device VM accounts and a user management UI.
      an elevated change from the page (no VM here, and the passphrase is the user's); the forwarder tests cover
      elevation against the real service. The client's device on this host had been removed from the host window
      (trayRemoveDevice, 2026-11-09 18:06 UTC) before this work touched pairing.
+34. The stored administrator credential (2026-11-17; API 1.40.0; data format 5). A user's Windows VM answered every
+   connect with "The guest rejected the administrator credential" from one morning on, and a copy restored from a few
+   days earlier did the same. Cause: the answer file created hhadmin without "password never expires", the host's
+   one-time rotation after the install (Set-LocalUser -Password) did not add it, and Windows expires a local account's
+   password after 42 days; every connect signs in as that account over PowerShell Direct to rotate the User's
+   password, so the whole VM was locked out, and a restored copy carries the same password date (docs/platform-notes.md,
+   Remote Desktop). Decided with the user: fix the cause, heal existing VMs, keep Connect working, let the credential
+   be replaced without setting the VM up again, and say what is wrong; all five, in one beta.
+   - Cause: the first-logon commands set PasswordNeverExpires on the administrator (they run as it).
+   - Healing: GuestCredential.Managed marks an account HyperHarbor made. The guest script turns expiry off for a managed
+     account in the session of every rotation and check, and only reports the date for any other account, because that
+     one is the user's own (they can turn it off in the dialog). Data format 5 marks the credentials stored before:
+     the VM has an install record and the account is still named hhadmin (ManagedAdministratorMigration). An install
+     with another administrator name stays unmarked and gets the warning instead, since the install record does not
+     say which account it made. Transfers carry the mark (TransferCredential.managed).
+   - Connect: when the guest refuses the administrator, PasswordRotator issues the password it set last time
+     (VmConnection.passwordRotated false) instead of failing; nothing is cached, so the next connect tries again. The
+     user's choice of a reused password over no access. Only a VM without an earlier password on this host still gets
+     422 (code adminCredentialRejected): one moved from another host and not yet connected to here.
+   - Replacement: VmAdminCredentialService and three routes under /vms/{vmId}/admin-credential (GET from what the host
+     recorded, no guest call; POST check and PUT, both elevated). PUT signs in with the typed credential first, needs it
+     to be an administrator, and for Linux the SSH host key pinned at setup, then stores it; the User's account is not
+     touched (Set up… resets its password, which loses its DPAPI data). Vm.adminCredentialAlert drives the list's badge
+     (rejected, or expiring within 14 days) from VmAdminCredentialStatusStore, written on each rotation, check, and
+     setup, so the list never asks a guest.
+   - Client: AdminCredentialDialog (Administrator account… in the VM's menu and the badge), the degraded connect's
+     toast, and the badge in the shared VmList, which the host window shows without the dialog.
+   - Not built: automatic recovery of an account that has already expired. The host knows its old password and Windows
+     lets any caller change an expired password from the old one, but PowerShell Direct gives no session to do it in;
+     a session as the User's hh- account might, and is untested. Such a VM needs docs/recover-vm-administrator.md once.
+     Also not built: showing the stored password in the client, a sweep that heals running VMs nobody connects to, and
+     the dialog in the host window.
+   - Verified: the host, client, and tray test suites, the tray's browser tests with both badges in both themes, and
+     scripts	est-all.ps1 with the end-to-end tests. Read on the development VM (itself installed by HyperHarbor):
+     hhadmin's PasswordExpires of 12/4 for a password set 10/23, a 42-day maximum password age, and the script's
+     $administrator block run locally in Windows PowerShell 5.1. Not verified live, because the development VM has no
+     Windows image for a nested guest: that PowerShell Direct's refusal of an expired password is classed as a rejected
+     credential (the user's report says so), the new guest script over PowerShell Direct, and an install with the new
+     first-logon command. AdminCredentialLiveTests (HH_ADMIN_CREDENTIAL_LIVE) checks the first two on a throwaway VM
+     and has not been run.

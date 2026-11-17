@@ -17,6 +17,8 @@ public class OpenApiEnumTests
     [InlineData("VmState", typeof(VmState))]
     [InlineData("VmAction", typeof(VmAction))]
     [InlineData("GuestOsFamily", typeof(GuestOsFamily))]
+    [InlineData("VmAdminCredentialState", typeof(VmAdminCredentialState))]
+    [InlineData("VmAdminCredentialAlertKind", typeof(VmAdminCredentialAlertKind))]
     [InlineData("WakeCheckStatus", typeof(WakeCheckStatus))]
     [InlineData("DeleteBlockerCode", typeof(DeleteBlockerCode))]
     [InlineData("DeleteBlockerScope", typeof(DeleteBlockerScope))]

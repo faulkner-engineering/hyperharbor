@@ -159,8 +159,33 @@ section for an area before changing it: most of these were learned from a failur
   logs them out and Brave disables extensions as "changed by another program". PasswordRotator therefore changes the
   password from the one VmAccountPasswordStore kept, and falls back to a reset (logged with the guest's reason) when that
   fails; hh- accounts are created with UserMayNotChangePassword, which the change clears first.
-- Secrets: ProvisionVmRequest, VmConnection, GuestCredential, RotatedPassword, and the Rust VmConnection
-  override ToString or Debug to hide passwords. Keep it that way for any new type that holds one.
+- A local account's password expires: `net accounts` in a fresh Windows 11 guest gives a maximum password age of 42
+  days, and an account made by the answer file's LocalAccounts, by New-LocalUser, or by Set-LocalUser -Password has no
+  "password never expires" mark unless it is asked for. On the development VM (installed by HyperHarbor 2026-10-23)
+  Get-LocalUser showed hhadmin with PasswordLastSet 10/23 and PasswordExpires 12/4, while hh-, hha-, and hhc- accounts
+  (all created with -PasswordNeverExpires) had none. A user's VM installed 42 days earlier started to answer every
+  PowerShell Direct call with "The guest rejected the administrator credential" on 2026-11-17, and a copy restored
+  from a few days before did the same: the copy carries the same password date. Not reproduced here (no Windows image
+  on the development VM): that the refusal text for an expired password matches IsCredentialError, and Set-LocalUser
+  -SID -PasswordNeverExpires over PowerShell Direct; AdminCredentialLiveTests checks both on a throwaway VM. Read
+  locally in Windows PowerShell 5.1 as a standard user: Get-LocalUser -SID of the current identity and its
+  PasswordExpires (ToUniversalTime().ToString('o') gives 2026-12-04T22:06:35.0439036Z, which DateTimeOffset parses).
+- So (API 1.40.0): the answer file's first-logon commands set PasswordNeverExpires on the administrator; a stored
+  credential carries Managed (HyperHarbor made the account), and the guest script turns expiry off for a managed account
+  in the same session as every password rotation (the $administrator block; a failure there never fails the rotation);
+  for any other account it only reports the date, which VmAdminCredentialStatusStore keeps for the VM list's warning.
+  A user's own administrator account is changed only when they ask (the Administrator account… dialog).
+- A refused administrator is not always final: during a user's first sign-in PowerShell Direct refused a valid one for
+  a while (the SessionLiveTests finding below). The rotator therefore issues the password it set last time instead of
+  failing (passwordRotated false), does not cache that answer, and records "rejected" until the next sign-in works. A
+  host that provisioned the VM always has an earlier password (ProvisioningService stores the first one); a VM moved
+  from another host has none until its first connect, because transfer records do not carry it.
+- An expired password can be changed from the old one without any administrator (the sign-in screen does it, and so
+  does IADsUser.ChangePassword as any caller), but PowerShell Direct gives no session to do it in. Not tried: a session
+  as the User's own hh- account, whose password the host knows, changing the administrator's from there. Until then the
+  repair is by hand (docs/recover-vm-administrator.md).
+- Secrets: ProvisionVmRequest, VmConnection, GuestCredential, RotatedPassword, SetVmAdminCredentialRequest, and the
+  Rust VmConnection override ToString or Debug to hide passwords. Keep it that way for any new type that holds one.
 - Guest error text reaches logs and problem details. ProvisioningService and PasswordRotator pass it
   through GuestErrors.Sanitize (secrets replaced, control characters removed, length capped).
 - The client validates VmConnection (IP address, plain account name) before writing the .rdp file.

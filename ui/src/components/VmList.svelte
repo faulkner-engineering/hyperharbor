@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { GuestAdminStatus, UnattendedInstallState, Vm, VmAction, VmState } from "../api/model.ts";
+  import { adminAlertText } from "../adminCredential.ts";
   import Menu from "./Menu.svelte";
 
   interface Props {
@@ -30,6 +31,11 @@
     onguestadminend?: (vm: Vm) => void;
     /** What the host said about each VM's administrator window, by VM ID; read again when a menu opens. */
     guestAdmin?: Record<string, GuestAdminStatus>;
+    /**
+     * The administrator account the host keeps for a VM: its state, a check, and its replacement (hosts with API
+     * 1.40.0). Leave unset to hide the menu entry; the warning badge then only explains itself.
+     */
+    onadmincredential?: (vm: Vm) => void;
     /** A VM's menu opened. */
     onmenuopen?: (vm: Vm) => void;
     /** Capture a setup profile from a running Windows VM; leave unset for hosts without setup profiles. */
@@ -62,6 +68,7 @@
     onguestadmin,
     onguestadminend,
     guestAdmin = {},
+    onadmincredential,
     onmenuopen,
     oncapture,
     onapplyprofile,
@@ -187,6 +194,14 @@
                 >Admin until {adminUntil(guestAdmin[vm.id].expiresAt!)}</span
               >
             {/if}
+            {#if vm.adminCredentialAlert}
+              {@const alert = adminAlertText(vm.adminCredentialAlert)}
+              {#if onadmincredential}
+                <button type="button" class="alert {alert.tone}" title={alert.title} onclick={() => onadmincredential(vm)}>{alert.label}</button>
+              {:else}
+                <span class="alert {alert.tone}" title={alert.title}>{alert.label}</span>
+              {/if}
+            {/if}
             {#if vm.performanceMode}
               <span class="gpu" title="Performance mode: this VM has a share of the host's GPU">GPU</span>
             {/if}
@@ -254,6 +269,13 @@
                 {#if guestAdmin[vm.id]?.open && onguestadminend}
                   <button type="button" onclick={() => onguestadminend(vm)}>End administrator access</button>
                 {/if}
+              {/if}
+              {#if onadmincredential && (vm.provisioned || vm.adminCredentialAlert)}
+                <button
+                  type="button"
+                  title="The administrator account HyperHarbor signs in to this VM with: check it, or store a working one"
+                  onclick={() => onadmincredential(vm)}>Administrator account…</button
+                >
               {/if}
               {#if vm.state === "running"}
                 <button type="button" disabled={actionVmId !== null} onclick={() => onaction?.(vm, "shutdown")}>
@@ -361,6 +383,31 @@
     font-weight: 600;
     background: var(--warn-bg);
     color: var(--warn-fg);
+  }
+
+  .alert {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.4rem;
+    border: none;
+    border-radius: 999px;
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  button.alert {
+    cursor: pointer;
+  }
+
+  .alert.warn {
+    background: var(--warn-bg);
+    color: var(--warn-fg);
+  }
+
+  .alert.danger {
+    background: var(--error-bg);
+    color: var(--danger);
   }
 
   .gpu {
