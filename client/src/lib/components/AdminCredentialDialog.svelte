@@ -141,7 +141,7 @@
   }
 </script>
 
-<Dialog title="Administrator account of {vm.name}">
+<Dialog title="Administrator account of {vm.name}" wide>
   {#if credential === null && loadError}
     <p class="error" role="alert">{loadError}</p>
   {:else if credential === null}
@@ -219,7 +219,7 @@
   {#if done}<p role="status">{done}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 
-  <div class="actions">
+  <div class="actions wrap">
     {#if credential?.userName && !editing}
       <button type="button" disabled={busy !== null} onclick={() => (editing = true)}>Change…</button>
     {/if}
@@ -273,5 +273,10 @@
   .row {
     display: flex;
     justify-content: flex-end;
+  }
+
+  /* Up to four buttons, one of them long: they wrap rather than leave the dialog. */
+  .wrap {
+    flex-wrap: wrap;
   }
 </style>
