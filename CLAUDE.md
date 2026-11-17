@@ -9,7 +9,7 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 - docs/platform-notes.md: Windows, Hyper-V, Remote Desktop, camera, and library behavior found by running the code, by area.
   Read the section for the area you are changing; most entries record a failure.
 - docs/development.md: commands, packaging, releases, contract changes, and live tests (environment variables and harness).
-- docs/history.md: each phase's design decisions and what was verified live. Entry 33 (managing VMs from the host) is the latest.
+- docs/history.md: each phase's design decisions and what was verified live. Entry 34 (the stored administrator credential) is the latest.
 - docs/pairing.md: the SPAKE2 pairing protocol.
 - docs/machine-profiles.md: the machine profile document, API, migration, and apply design (phase 26).
 - docs/guest-elevation.md: administrator windows in guests (phase 28) and the planned guest agent.
@@ -17,6 +17,7 @@ SvelteKit) discovers, pairs, manages VMs, and launches Remote Desktop. docs/api.
 - docs/host-vm-management.md: managing VMs from the host's tray window, and the ui/ package it shares with the client
   (phase 33).
 - docs/ui-principles.md: how the client UI must behave so a failure never traps the user. Read before any UI change.
+- docs/recover-vm-administrator.md: for users, repairing a VM whose administrator account expired (before 0.3.0-beta.2).
 
 ## Rules
 - MVP scope only. Do not implement later phases early.

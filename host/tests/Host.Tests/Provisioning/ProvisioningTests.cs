@@ -114,6 +114,19 @@ public sealed class ProvisioningTests : IDisposable
     }
 
     [Fact]
+    public async Task SettingUpAgain_WithTheAccountAnInstallMade_KeepsItManaged_AndAnotherAccountIsNot()
+    {
+        _credentials.Save(VmId, new GuestCredential("hhadmin", "One-Time-Pass1!", Managed: true));
+
+        await _service.ProvisionAsync(VmId, _userId, new ProvisionVmRequest("HHAdmin", AdminPassword), CancellationToken.None);
+        Assert.Equal(new GuestCredential("HHAdmin", AdminPassword, Managed: true), _credentials.Find(VmId));
+        Assert.True(_guest.AdminCredentialsUsed.All(admin => admin.Managed));
+
+        await _service.ProvisionAsync(VmId, _userId, Request(), CancellationToken.None);
+        Assert.Equal(new GuestCredential("Administrator", AdminPassword), _credentials.Find(VmId));
+    }
+
+    [Fact]
     public void GuestCredential_HidesPasswordInToString()
     {
         Assert.DoesNotContain(AdminPassword, new GuestCredential("Administrator", AdminPassword).ToString());

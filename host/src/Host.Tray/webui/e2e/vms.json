@@ -20,7 +20,11 @@
     "performanceMode": false,
     "uptimeSeconds": 5400,
     "memoryAssignedMb": 8192,
-    "cpuUsagePercent": 12
+    "cpuUsagePercent": 12,
+    "adminCredentialAlert": {
+      "kind": "expiring",
+      "passwordExpiresAt": "2099-01-05T12:00:00Z"
+    }
   },
   {
     "id": "6f1d2c3b-4a59-4e8d-9c7b-1a2b3c4d5e6f",
@@ -56,6 +60,10 @@
       "family": "windows",
       "name": "Windows 11 Pro"
     },
-    "performanceMode": true
+    "performanceMode": true,
+    "adminCredentialAlert": {
+      "kind": "rejected",
+      "passwordExpiresAt": null
+    }
   }
 ]

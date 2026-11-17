@@ -4,14 +4,30 @@ using HyperHarbor.Shared.Contracts.Vms;
 namespace HyperHarbor.Host.Core.Provisioning;
 
 /// <summary>A credential for a guest account. ToString never includes the password.</summary>
-public sealed record GuestCredential(string UserName, string Password)
+/// <param name="Managed">
+/// HyperHarbor created the account (an unattended install) and only the host knows its password, so the host turns off
+/// password expiry for it whenever it signs in. Windows expires a local account's password after 42 days by default,
+/// and an expired administrator locks the host out of the guest. An account the user supplied is left as it is.
+/// </param>
+public sealed record GuestCredential(string UserName, string Password, bool Managed = false)
 {
-    public override string ToString() => $"GuestCredential {{ UserName = {UserName} }}";
+    public override string ToString() => $"GuestCredential {{ UserName = {UserName}, Managed = {Managed} }}";
+
+    /// <summary>Whether this is the same guest account as <paramref name="other"/> (Windows account names ignore case).</summary>
+    public bool IsSameAccount(GuestCredential? other) =>
+        other is not null && string.Equals(UserName.Trim(), other.UserName.Trim(), StringComparison.OrdinalIgnoreCase);
 }
+
+/// <summary>What the guest said about the account the host signed in with.</summary>
+/// <param name="IsAdministrator">Windows: a member of Administrators. Linux: sudo accepted the password.</param>
+/// <param name="PasswordExpiresAt">Windows: when the local account's password expires; null when it never does or the guest could not say.</param>
+/// <param name="Problem">Why the guest could not read the account or turn off its password expiry; null when it could.</param>
+public sealed record GuestAdministrator(bool IsAdministrator, DateTimeOffset? PasswordExpiresAt, string? Problem = null);
 
 /// <summary>What a password change did: changed from the current password, or reset, and why.</summary>
 /// <param name="ResetReason">The guest's error from the change that failed, which can contain no secret; null when it changed.</param>
-public sealed record PasswordChange(bool Changed, string? ResetReason)
+/// <param name="Administrator">What the guest said about the administrator account in the same session; null when it was not asked.</param>
+public sealed record PasswordChange(bool Changed, string? ResetReason, GuestAdministrator? Administrator = null)
 {
     public static readonly PasswordChange Success = new(true, null);
 }
@@ -84,6 +100,14 @@ public interface IGuestAccountManager
     /// <returns>Whether it was changed, or why it had to be reset (Linux guests always reset).</returns>
     Task<PasswordChange> ChangePasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string currentPassword, string password, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Signs in with <paramref name="admin"/> and reports whether it is an administrator in the guest and, for a
+    /// Windows guest, when its password expires. Changes nothing, except that a Windows guest turns off the account's
+    /// password expiry first when <paramref name="passwordNeverExpires"/> is set or the credential is managed.
+    /// </summary>
+    /// <exception cref="GuestCredentialRejectedException">The guest rejected the credential.</exception>
+    Task<GuestAdministrator> CheckAdministratorAsync(GuestTarget target, GuestCredential admin, bool passwordNeverExpires, CancellationToken cancellationToken);
+
     /// <summary>Windows only: the state of a User's administrator account.</summary>
     Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken);
 
@@ -137,6 +161,9 @@ public sealed class GuestAccountRouter : IGuestAccountManager
 
     public Task<PasswordChange> ChangePasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string currentPassword, string password, CancellationToken cancellationToken) =>
         For(target).ChangePasswordAsync(target, admin, accountName, currentPassword, password, cancellationToken);
+
+    public Task<GuestAdministrator> CheckAdministratorAsync(GuestTarget target, GuestCredential admin, bool passwordNeverExpires, CancellationToken cancellationToken) =>
+        For(target).CheckAdministratorAsync(target, admin, passwordNeverExpires, cancellationToken);
 
     public Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken) =>
         For(target).InspectAdminAsync(target, admin, accountName, cancellationToken);

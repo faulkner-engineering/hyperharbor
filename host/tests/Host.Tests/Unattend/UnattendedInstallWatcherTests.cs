@@ -43,7 +43,7 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         _provisioning = new ProvisioningService(_inventory, users, _guest, _credentials, _accounts, _time, NullLogger<ProvisioningService>.Instance);
         _seedPath = Path.Combine(_directory, "Dev Box.hyperharbor-seed.iso");
         File.WriteAllBytes(_seedPath, [1]);
-        _credentials.Save(VmId, new GuestCredential("hhadmin", OneTimePassword));
+        _credentials.Save(VmId, new GuestCredential("hhadmin", OneTimePassword, Managed: true));
         _power = new RestartingPower(_probe);
     }
 
@@ -181,6 +181,9 @@ public sealed class UnattendedInstallWatcherTests : IDisposable
         var rotated = Assert.Single(_guest.PasswordsSet, set => set.Account == "hhadmin");
         Assert.Equal(rotated.Password, _credentials.Find(VmId)!.Password);
         Assert.NotEqual(OneTimePassword, rotated.Password);
+
+        // Setting up the User's account with it and rotating it keep the mark that the host made the account.
+        Assert.True(_credentials.Find(VmId)!.Managed);
         Assert.Equal([(VmId, _seedPath)], _media.Ejected);
         Assert.False(File.Exists(_seedPath));
     }

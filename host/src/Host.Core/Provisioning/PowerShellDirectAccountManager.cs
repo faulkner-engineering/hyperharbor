@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace HyperHarbor.Host.Core.Provisioning;
@@ -37,18 +38,42 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
 
     public async Task SetPasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string password, CancellationToken cancellationToken)
     {
-        await RunAsync(new { operation = "setPassword", vmId = target.VmId, admin.UserName, admin.Password, accountName, accountPassword = password }, cancellationToken);
+        await RunAsync(
+            new { operation = "setPassword", vmId = target.VmId, admin.UserName, admin.Password, accountName, accountPassword = password, keepAdminPassword = admin.Managed },
+            cancellationToken);
     }
 
     public async Task<PasswordChange> ChangePasswordAsync(GuestTarget target, GuestCredential admin, string accountName, string currentPassword, string password, CancellationToken cancellationToken)
     {
         var result = await RunAsync(
-            new { operation = "changePassword", vmId = target.VmId, admin.UserName, admin.Password, accountName, currentPassword, accountPassword = password },
+            new { operation = "changePassword", vmId = target.VmId, admin.UserName, admin.Password, accountName, currentPassword, accountPassword = password, keepAdminPassword = admin.Managed },
             cancellationToken);
+        var administrator = ParseAdministrator(result?["administrator"]);
         return (bool?)result?["changed"] == true
-            ? PasswordChange.Success
-            : new PasswordChange(false, (string?)result?["reason"] is { Length: > 0 } reason ? reason : "The guest did not say why.");
+            ? PasswordChange.Success with { Administrator = administrator }
+            : new PasswordChange(false, (string?)result?["reason"] is { Length: > 0 } reason ? reason : "The guest did not say why.", administrator);
     }
+
+    public async Task<GuestAdministrator> CheckAdministratorAsync(GuestTarget target, GuestCredential admin, bool passwordNeverExpires, CancellationToken cancellationToken)
+    {
+        var result = await RunAsync(
+            new { operation = "checkAdmin", vmId = target.VmId, admin.UserName, admin.Password, keepAdminPassword = admin.Managed || passwordNeverExpires },
+            cancellationToken);
+        return ParseAdministrator(result?["administrator"])
+            ?? throw new GuestOperationException("The guest did not report on the administrator account.");
+    }
+
+    /// <summary>The script's "administrator" value; null when the guest did not report one.</summary>
+    internal static GuestAdministrator? ParseAdministrator(JsonNode? node) => node is JsonObject
+        ? new GuestAdministrator(
+            (bool?)node["isAdministrator"] ?? false,
+            DateTimeOffset.TryParse(
+                (string?)node["passwordExpires"],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var expires) ? expires : null,
+            (string?)node["error"] is { Length: > 0 } problem ? problem : null)
+        : null;
 
     public async Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken)
     {
@@ -355,6 +380,39 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
             Set-LocalUser -Name $name -Password $password
         }
 
+        # The account this session signed in as: whether it is an administrator, and when its password expires.
+        # Windows expires a local account's password after 42 days by default, and PowerShell Direct refuses an
+        # expired one, which locks the host out of the guest. So expiry is turned off first when $keep is set (an
+        # account HyperHarbor made, or the user asked for it); otherwise the date is only reported.
+        $administrator = {
+            param([bool]$keep)
+            $state = @{ isAdministrator = $false; passwordExpires = ''; error = '' }
+            try {
+                $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+                $state.isAdministrator = (New-Object Security.Principal.WindowsPrincipal $identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+                $user = Get-LocalUser -SID $identity.User -ErrorAction Stop
+                if ([string]$user.PrincipalSource -eq 'Local') {
+                    if ($keep -and $user.PasswordExpires) {
+                        Set-LocalUser -SID $user.SID -PasswordNeverExpires $true -ErrorAction Stop
+                        $user = Get-LocalUser -SID $user.SID -ErrorAction Stop
+                    }
+                    if ($user.PasswordExpires) { $state.passwordExpires = $user.PasswordExpires.ToUniversalTime().ToString('o') }
+                }
+            }
+            catch { $state.error = $_.Exception.Message }
+            $state
+        }
+
+        function AdministratorReply($state) {
+            @{ isAdministrator = [bool]$state.isAdministrator; passwordExpires = [string]$state.passwordExpires; error = [string]$state.error }
+        }
+
+        # After a password operation, in the same session. A failure here never fails the operation itself.
+        function AdministratorAfter([bool]$keep) {
+            try { AdministratorReply (Invoke-Command -Session $session -ScriptBlock $administrator -ArgumentList $keep) }
+            catch { $null }
+        }
+
         # A change from the current password keeps the account's DPAPI data readable; a reset does not. Accounts
         # HyperHarbor made may not change their own password, which a change counts as, so that is allowed first.
         $changePassword = {
@@ -386,11 +444,15 @@ public sealed class PowerShellDirectAccountManager : IGuestAccountManager
                 }
                 'setPassword' {
                     Invoke-Command -Session $session -ScriptBlock $setPassword -ArgumentList $request.accountName, (Secure $request.accountPassword)
-                    $result = $null
+                    $result = @{ administrator = (AdministratorAfter ([bool]$request.keepAdminPassword)) }
                 }
                 'changePassword' {
                     $how = Invoke-Command -Session $session -ScriptBlock $changePassword -ArgumentList $request.accountName, (Secure $request.currentPassword), (Secure $request.accountPassword)
-                    $result = @{ changed = [bool]$how.changed; reason = [string]$how.reason }
+                    $result = @{ changed = [bool]$how.changed; reason = [string]$how.reason; administrator = (AdministratorAfter ([bool]$request.keepAdminPassword)) }
+                }
+                'checkAdmin' {
+                    $state = Invoke-Command -Session $session -ScriptBlock $administrator -ArgumentList ([bool]$request.keepAdminPassword)
+                    $result = @{ administrator = (AdministratorReply $state) }
                 }
                 default { throw "Unknown operation $($request.operation)." }
             }

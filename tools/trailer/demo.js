@@ -79,10 +79,10 @@
   async function fake(cmd, args) {
     if (cmd === 'get_elevation') return { configured: true, active: true, expiresAt: iso(5 * 60_000) };
     // Connect: the button shows Connecting… for about as long as a real connect, then the toast; no Remote
-    // Desktop window opens and no password is rotated. Null means no extra notice (such as camera sharing).
+    // Desktop window opens and no password is rotated. A null notice means nothing extra to say (such as camera sharing).
     if (cmd === 'connect_vm') {
       await new Promise((r) => setTimeout(r, 1600));
-      return null;
+      return { notice: null, passwordRotated: true };
     }
     if (cmd === 'save_profile' && args?.kind === 'machine') {
       const existing = state.profiles.find((p) => p.id === args.profileId);

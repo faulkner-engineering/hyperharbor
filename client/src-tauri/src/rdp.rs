@@ -117,6 +117,14 @@ pub struct VmConnection {
     pub performance_mode: bool,
     #[serde(default)]
     pub defaults: Option<ConnectionDefaults>,
+    /// False when the guest rejected the host's stored administrator credential, so the password is the one the
+    /// host set at the last connect. Hosts before API 1.40.0 do not send it and always rotate.
+    #[serde(default = "rotated")]
+    pub password_rotated: bool,
+}
+
+fn rotated() -> bool {
+    true
 }
 
 impl std::fmt::Debug for VmConnection {
@@ -127,6 +135,7 @@ impl std::fmt::Debug for VmConnection {
             .field("port", &self.port)
             .field("guest_os", &self.guest_os)
             .field("performance_mode", &self.performance_mode)
+            .field("password_rotated", &self.password_rotated)
             .finish_non_exhaustive()
     }
 }
@@ -962,6 +971,7 @@ mod tests {
             guest_os: GuestOs::Windows,
             performance_mode: false,
             defaults: None,
+            password_rotated: true,
         }
     }
 
@@ -1142,6 +1152,7 @@ mod tests {
             guest_os: GuestOs::Windows,
             performance_mode: false,
             defaults: None,
+            password_rotated: true,
         };
         assert!(!format!("{connection:?}").contains("Secret-Pass1!"));
     }

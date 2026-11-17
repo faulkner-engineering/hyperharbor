@@ -328,6 +328,12 @@ Redocly does not). The tests read api.yaml from the build output, so rebuild bef
   hha-owner is enabled, in Administrators, not in Remote Desktop Users, and denied network and Remote Desktop sign-in,
   closes it, and checks it is still ready for UAC (enabled, with a new random password). The account stays in the VM. A throwaway VM for it:
   MachineProfileLiveTests with HH_MACHINE_KEEP=1 (HyperHarbor-Test, kept), then HH_GUEST_ADMIN_DATA=%LOCALAPPDATA%\HyperHarborHarness.
+- The stored administrator credential: HH_ADMIN_CREDENTIAL_LIVE=1 with HH_LIVE_GUEST_VM=<VM id> runs
+  AdminCredentialLiveTests against a running Windows VM with a stored credential (same data folder rules as
+  GuestAdminLiveTests). Use a throwaway VM: it turns off password expiry for the stored administrator, and for a moment
+  creates a second administrator (hh-expiry-test) that must change its password at the next sign-in, to see that
+  PowerShell Direct refuses an expired password as a rejected credential. Two refused sign-ins count toward the guest's
+  lockout. Written 2026-11-17 and not yet run: the development VM had no Windows image.
 - The UAC prompt itself is checked by hand (after a host and client with API 1.35.0 are running; SessionLiveTests
   covers the account and passphrase, but not the prompt):
   1. Connect to a set-up Windows VM, and in the client choose the VM's menu > Administrator access…; enter the admin

@@ -132,6 +132,40 @@ describe("VmList row actions", () => {
     expect((await openMenu()).queryByRole("button", { name: "End administrator access" })).toBeNull();
   });
 
+  it("warns when the VM refused HyperHarbor's administrator account, and the badge and the menu open its dialog", async () => {
+    const onadmincredential = vi.fn();
+    const refused = { ...provisioned("running"), adminCredentialAlert: { kind: "rejected" as const, passwordExpiresAt: null } };
+    renderList({ vms: [refused], onadmincredential });
+
+    const badge = screen.getByRole("button", { name: "Admin password rejected" });
+    expect(badge.title).toContain("Connect reuses the last password");
+    await fireEvent.click(badge);
+    await fireEvent.click((await openMenu()).getByRole("button", { name: "Administrator account…" }));
+
+    expect(onadmincredential.mock.calls).toEqual([[refused], [refused]]);
+  });
+
+  it("warns before the administrator password expires, as text only when the page has no dialog for it", async () => {
+    const expiring = { ...provisioned("running"), adminCredentialAlert: { kind: "expiring" as const, passwordExpiresAt: "2099-12-04T12:00:00Z" } };
+    renderList({ vms: [expiring] });
+
+    const badge = screen.getByText("Admin password expires December 4");
+    expect(badge.tagName).toBe("SPAN");
+    expect(badge.className).toContain("warn");
+    expect((await openMenu()).queryByRole("button", { name: "Administrator account…" })).toBeNull();
+  });
+
+  it("offers Administrator account for a set-up VM without a warning, also while it is off, and never for one that is not set up", async () => {
+    const off = provisioned("off");
+    const { unmount } = renderList({ vms: [off], onadmincredential: vi.fn() });
+    expect(screen.queryByText(/^Admin password/)).toBeNull();
+    expect((await openMenu()).getByRole("button", { name: "Administrator account…" })).toBeTruthy();
+    unmount();
+
+    renderList({ vms: [vm("running", { guestOs: { family: "windows", name: "Windows 11 Pro" } })], onadmincredential: vi.fn() });
+    expect((await openMenu()).queryByRole("button", { name: "Administrator account…" })).toBeNull();
+  });
+
   it("offers Administrator access for running, set-up Windows VMs when the host has it, and reports which VM", async () => {
     const onguestadmin = vi.fn();
     const running = provisioned("running");

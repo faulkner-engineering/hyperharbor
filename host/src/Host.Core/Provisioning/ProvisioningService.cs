@@ -19,6 +19,7 @@ public sealed class ProvisioningService
     private readonly TimeProvider _time;
     private readonly ILogger<ProvisioningService> _logger;
     private readonly VmAccountPasswordStore? _passwords;
+    private readonly VmAdminCredentialStatusStore? _status;
 
     public ProvisioningService(
         IVmInventory inventory,
@@ -28,8 +29,10 @@ public sealed class ProvisioningService
         ProvisioningStore provisioning,
         TimeProvider time,
         ILogger<ProvisioningService> logger,
-        VmAccountPasswordStore? passwords = null)
+        VmAccountPasswordStore? passwords = null,
+        VmAdminCredentialStatusStore? status = null)
     {
+        _status = status;
         _inventory = inventory;
         _users = users;
         _guest = guest;
@@ -81,6 +84,10 @@ public sealed class ProvisioningService
         var user = _users.Find(userId) ?? throw new InvalidOperationException($"User {userId} does not exist.");
         var admin = new GuestCredential(request.AdminUserName.Trim(), request.AdminPassword);
 
+        // The account keeps its origin when the VM is set up again with it: the one an unattended install made stays
+        // managed (the install watcher provisions with it, and a user may type its new password here).
+        admin = admin with { Managed = _credentials.Find(vmId) is { Managed: true } stored && admin.IsSameAccount(stored) };
+
         // Setting a VM up again keeps the pinned SSH host key, so a guest that changed its key (or an
         // impostor at its address) does not receive the admin credential. After a reinstall the user
         // opts in with TrustNewHostKey.
@@ -122,6 +129,9 @@ public sealed class ProvisioningService
 
         var now = _time.GetUtcNow();
         _credentials.Save(vmId, admin);
+
+        // The guest just accepted it. Its expiry date is read at the next connect; an earlier account's date is dropped.
+        _status?.Save(new AdminCredentialStatus(vmId, VmAdminCredentialState.Working, now));
         _provisioning.Save(new ProvisionedAccount(vmId, userId, user.VmAccountName, now, now, os, target.SshHostKey));
         _logger.LogInformation(
             "Provisioned {Account} on {Os} VM {Name} ({VmId}) for user {UserId}.",

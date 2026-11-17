@@ -1101,8 +1101,77 @@ export interface paths {
          *     returns it. Rotations are serialized per VM and User; requests within the reuse
          *     window (60 seconds by default) receive the same password. The response is sent
          *     with `Cache-Control: no-store`.
+         *
+         *     Since 1.40.0: when the guest rejects the VM's stored administrator credential (its password expired or was
+         *     changed in the guest) and the host still holds the password it last set on the User's account, the host
+         *     answers with that password and `passwordRotated: false` instead of failing, so the User can still sign in.
+         *     The VM's `adminCredentialAlert` then says `rejected` until a working credential is stored
+         *     (`setVmAdminCredential`). A connect for which the host holds no earlier password (the first one after the VM
+         *     moved here from another host) fails with 422 as before.
          */
         post: operations["connectVm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/admin-credential": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get what the host knows about the VM's stored administrator credential.
+         * @description Since 1.40.0. The account name, whether the guest accepted the credential when the host last used it, and
+         *     when the account's password expires. Answers from what the host recorded (on each connect, and on
+         *     `checkVmAdminCredential`); it does not contact the guest and never returns the password. `userName` is null
+         *     when no credential is stored.
+         */
+        get: operations["getVmAdminCredential"];
+        /**
+         * Store another administrator credential for the VM, after the guest accepts it.
+         * @description Since 1.40.0. Signs in to the running guest with the given credential (Windows: PowerShell Direct; Linux:
+         *     SSH with the pinned host key, then sudo) and stores it only when the guest accepts it and the account is an
+         *     administrator there. Unlike `provisionVm` it leaves the User's account and its password alone, so nothing
+         *     the account protected with its password is lost. Use it when the stored credential stopped working, for
+         *     example after the account's password expired and was changed in the guest.
+         *
+         *     With `passwordNeverExpires: true` the host also turns off password expiry for that account in a Windows guest
+         *     (ignored for Linux guests). The password is stored on the host with DPAPI and never logged.
+         */
+        put: operations["setVmAdminCredential"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vms/{vmId}/admin-credential/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in to the running guest with the stored administrator credential and record the result.
+         * @description Since 1.40.0. Answers 200 with `state: rejected` when the guest does not accept the credential; that is the
+         *     check's result, not a failure of the request. With `passwordNeverExpires: true` the host also turns off
+         *     password expiry for the account in a Windows guest, without needing its password again.
+         */
+        post: operations["checkVmAdminCredential"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2682,7 +2751,8 @@ export interface components {
              *     `resourceWarnings` (see `warnings`), `requiresShutdown`, `consoleSetupRequired`,
              *     `vmNotRunning`, `consolePasswordPolicy`, `profileReadOnly`, `vmMustBeOff`, `gpuUnavailable`, `credentialRequired`,
              *     `remoteDesktopUnsupported`, `requiresInstalledService`, `updateNotReady`, `wingetUnavailable`,
-             *     `vmNotProvisioned`, `guestAdminUnsupported`, `guestUnavailable`.
+             *     `vmNotProvisioned`, `guestAdminUnsupported`, `guestUnavailable`, `adminCredentialRejected` (422, since
+             *     1.40.0; the guest did not accept an administrator credential).
              */
             code?: string;
             /** @description Field-level validation problems (400). */
@@ -2899,6 +2969,12 @@ export interface components {
         TransferCredential: {
             userName: string;
             password: string;
+            /**
+             * @description Since 1.40.0. HyperHarbor created the account during an unattended install, so the receiving host keeps
+             *     its password from expiring too.
+             * @default false
+             */
+            managed: boolean;
         };
         TransferGamePolicy: {
             action: components["schemas"]["GameVmAction"];
@@ -3104,6 +3180,8 @@ export interface components {
              * @default false
              */
             performanceMode: boolean;
+            /** @description Since 1.40.0. Set when the VM's stored administrator credential needs attention; absent otherwise. */
+            adminCredentialAlert?: components["schemas"]["VmAdminCredentialAlert"] | null;
         };
         VmRemoteDesktop: {
             /** @description The guest address clients connect to, or null when the guest reports none. */
@@ -3176,6 +3254,82 @@ export interface components {
              *     when it has none. A device's own monitor choice for the VM wins over these.
              */
             defaults?: components["schemas"]["MachineConnection"] | null;
+            /**
+             * @description Since 1.40.0. False when the guest rejected the stored administrator credential, so `password` is the one
+             *     the host set at the last successful connect rather than a new one. Clients tell the User, who can store a
+             *     working credential with `setVmAdminCredential`.
+             * @default true
+             */
+            passwordRotated: boolean;
+        };
+        /**
+         * @description Since 1.40.0. `unchecked`: the host has not used the credential since it started recording. `working`: the
+         *     guest accepted it at `checkedAt`. `rejected`: the guest refused it at `checkedAt`, or the account is not an
+         *     administrator there.
+         * @enum {string}
+         */
+        VmAdminCredentialState: "unchecked" | "working" | "rejected";
+        /** @description Since 1.40.0. The VM's stored administrator credential as the host last saw it; never the password. */
+        VmAdminCredential: {
+            /** @description The administrator account the host signs in to the guest with; null when none is stored. */
+            userName: string | null;
+            /**
+             * @description HyperHarbor created the account during an unattended install. The host turns off password expiry for such
+             *     an account whenever it signs in; for any other account it only reports `passwordExpiresAt`.
+             */
+            managed: boolean;
+            state: components["schemas"]["VmAdminCredentialState"];
+            /**
+             * Format: date-time
+             * @description When the host last signed in to the guest with the credential, or tried to.
+             */
+            checkedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the account's password expires in a Windows guest, as of `checkedAt`; null when it never expires,
+             *     for Linux guests, and when the host has not read it.
+             */
+            passwordExpiresAt: string | null;
+            /** @description Why the guest refused the credential, when `state` is `rejected`. */
+            detail: string | null;
+        };
+        /**
+         * @description Since 1.40.0. `rejected`: the guest refused the stored credential when the host last used it. `expiring`:
+         *     the account's password expires within 14 days, or its expiry date has passed.
+         * @enum {string}
+         */
+        VmAdminCredentialAlertKind: "rejected" | "expiring";
+        /** @description Since 1.40.0. Why the VM's stored administrator credential needs attention. */
+        VmAdminCredentialAlert: {
+            kind: components["schemas"]["VmAdminCredentialAlertKind"];
+            /**
+             * Format: date-time
+             * @description When the account's password expires or expired, when the host knows.
+             */
+            passwordExpiresAt: string | null;
+        };
+        /** @description Since 1.40.0. */
+        SetVmAdminCredentialRequest: {
+            /**
+             * @description Windows: a local administrator, for example "hhadmin".
+             *     Linux: an account that can sign in over SSH with a password and use sudo.
+             */
+            userName: string;
+            /** @description Stored on the host with DPAPI once the guest accepts it. Never logged. */
+            password: string;
+            /**
+             * @description Windows guests only. Also turn off password expiry for the account.
+             * @default false
+             */
+            passwordNeverExpires: boolean;
+        };
+        /** @description Since 1.40.0. */
+        CheckVmAdminCredentialRequest: {
+            /**
+             * @description Windows guests only. Also turn off password expiry for the stored account.
+             * @default false
+             */
+            passwordNeverExpires: boolean;
         };
         /** @description Since 1.35.0. An open administrator window in a Windows guest. */
         GuestAdminWindow: {
@@ -6830,6 +6984,147 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             /** @description The VM is not provisioned for this User, is not running, or has no address. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The guest rejected the stored administrator credential (`code: adminCredentialRejected`) and the host
+             *     holds no earlier password for the User's account.
+             */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+            503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    getVmAdminCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stored administrator credential's state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmAdminCredential"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setVmAdminCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetVmAdminCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description The guest accepted the credential and the host stored it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmAdminCredential"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not running (`code: vmNotRunning`); it is a Linux guest that was never set up, so no SSH host
+             *     key is pinned (`code: vmNotProvisioned`); or its guest OS is not known yet, or a Linux guest has not
+             *     reported an address.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The guest rejected the credential, or the account is not an administrator in the guest
+             *     (`code: adminCredentialRejected`). Nothing was stored.
+             */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            502: components["responses"]["GuestOperationFailed"];
+            503: components["responses"]["GuestUnavailable"];
+        };
+    };
+    checkVmAdminCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Hyper-V virtual machine ID. */
+                vmId: components["parameters"]["VmId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckVmAdminCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description What the guest answered. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VmAdminCredential"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["ElevationRequired"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The VM is not running (`code: vmNotRunning`); it has no stored administrator credential, or is a Linux
+             *     guest that was never set up (`code: vmNotProvisioned`); or its guest OS is not known yet, or a Linux
+             *     guest has not reported an address.
+             */
             409: {
                 headers: {
                     [name: string]: unknown;

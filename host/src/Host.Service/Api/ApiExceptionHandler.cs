@@ -108,6 +108,7 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
         ConsoleConflictException conflict => conflict.Code,
         RemoteDesktopConflictException conflict => conflict.Code,
         GuestAdminConflictException conflict => conflict.Code,
+        GuestCredentialRejectedException => ContractInfo.ProblemCodes.AdminCredentialRejected,
         PackageSearchUnavailableException => ContractInfo.ProblemCodes.WingetUnavailable,
         TransferOffsetException => ContractInfo.ProblemCodes.TransferOffset,
         TransferException => ContractInfo.ProblemCodes.TransferFailed,

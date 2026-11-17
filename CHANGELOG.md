@@ -10,6 +10,36 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+### Fixed
+- A Windows VM that HyperHarbor installed stopped working 42 days after its install: Connect and everything else that
+  reaches into the VM failed with "The guest rejected the administrator credential". Windows had expired the password
+  of the administrator account the install creates (`hhadmin`), which only the host knows. New installs create the
+  account with a password that does not expire, and the updated host turns expiry off in existing VMs the next time it
+  signs in to them: on a connect, or with Check now in the new Administrator account… dialog. Update the host, then
+  connect once to each Windows VM that HyperHarbor installed, or it stops working on its own 42nd day. A VM that
+  already stopped needs the steps in
+  [Recovering a VM whose administrator account stopped working](https://github.com/faulkner-engineering/hyperharbor/blob/main/docs/recover-vm-administrator.md)
+  once.
+
+### Added
+- Connect keeps working when a VM refuses the host's administrator account (API 1.40.0). The host could not change your
+  password then, so Remote Desktop opens with the one from your last connect, the client says so, and the VM's row
+  shows "Admin password rejected" until the account works again. Before, the VM could not be reached at all. Only a VM
+  that was moved from another host and never connected to on this one still fails, because this host has no earlier
+  password for it.
+- Administrator account… in a VM's menu (API 1.40.0; needs the admin passphrase to change anything): the account
+  HyperHarbor signs in to the VM with, whether the VM accepted it the last time, and when its password expires. Check
+  now signs in again. A password that stopped working can be replaced there without setting the VM up again, which
+  would reset your own account's password and sign browsers in the VM out. For an administrator account of your own
+  that you gave HyperHarbor, the dialog offers to stop its password from expiring; HyperHarbor does not change your
+  account by itself.
+- The VM list warns 14 days before the password of a VM's administrator account expires ("Admin password expires
+  December 4"), in the client and in the host window.
+
+### Changed
+- The host's data is now format 5 (stored administrator accounts say whether HyperHarbor created them). The update
+  converts it and keeps a backup, as always; an older host version does not start on the converted data.
+
 ## [0.3.0-beta.1] - 2026-11-11 (API 1.39.0)
 
 The first beta of 0.3.0: VMs managed from the host's own window, host usage in the client, and a VM's virtual switch

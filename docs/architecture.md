@@ -20,7 +20,10 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
 - Credentials: each User has one local VM account hh-<username> (local, never a Microsoft account), created
   by a one-time Provision VM flow. On each connect the host rotates its password via PowerShell Direct
   (serialized per VM and User, short reuse window), returns it to the requesting paired Device over mTLS,
-  and the client removes it from the OS credential store after launching RDP. For UAC prompts inside a Windows
+  and the client removes it from the OS credential store after launching RDP. The host signs in to the guest with
+  an administrator credential it stores per VM (the account an unattended install created, or one the user gave at
+  Set up); when the guest refuses it, the connect is answered with the password set last time rather than failing,
+  and the VM list warns (docs/history.md, entry 34). For UAC prompts inside a Windows
   VM, each User also has a local administrator account hha-<username>, always listed in UAC prompts
   but usable only during a short administrator window (GuestAdminService; elevated to open, one-time passphrase in
   host memory only, a random password nobody keeps otherwise). Design and the planned guest agent: [guest-elevation.md](guest-elevation.md).
@@ -52,7 +55,10 @@ Platform behavior found while building it is in [platform-notes.md](platform-not
   through WinSqlite over winsqlite3.dll), ExtensionResolver, ProfileCaptureService),
   Provisioning/ (ProvisioningService, ConnectService, PasswordRotator, VmCredentialStore, VmAccountPasswordStore, GuestAccounts with
   IGuestAccountManager, PowerShellDirectAccountManager (its Script and AdminScript), SshAccountManager; administrator
-  windows: GuestAdminService, GuestAdminStore (guest-admin.json), PassphraseGenerator with PassphraseWords.txt (embedded))
+  windows: GuestAdminService, GuestAdminStore (guest-admin.json), PassphraseGenerator with PassphraseWords.txt (embedded);
+  the stored administrator credential: VmAdminCredentialService (what the host last saw, a check, and its replacement),
+  VmAdminCredentialStatusStore (vm-admin-credential-status.json, read by the VM list for its warning), and
+  ManagedAdministratorMigration (data format 5); client: AdminCredentialDialog, with the badge text in ui/src/adminCredential.ts)
 - catalogs/*.yaml (packages, extensions, appx, tweaks, browsers) and schemas/profile.v1.schema.json at the repository
   root, embedded in Host.Core; they are data people read and edit, checked by CatalogTests and ProfileFormatTests
 - host/src/Host.Service: Kestrel API (Api/, including AuthEndpoints and JobEndpoints), device auth and

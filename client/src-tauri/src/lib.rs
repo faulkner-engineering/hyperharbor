@@ -257,14 +257,24 @@ async fn provision_vm(
     result
 }
 
+/// What a connect has for the page besides the Remote Desktop window it opened.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConnectOutcome {
+    /// Something to tell the user (camera sharing unavailable, say), if any.
+    notice: Option<String>,
+    /// False when the guest rejected the host's stored administrator credential: the session opens with the
+    /// password from the last connect, and the page says how to store a working credential.
+    password_rotated: bool,
+}
+
 /// Opens Remote Desktop to a provisioned VM: checks reachability first (so no password is rotated
 /// for a VM this device cannot reach), requests credentials, and launches mstsc. The credential is
 /// removed from the OS store once the session opens.
 ///
 /// Windows guests also get the camera: on Windows 11 a virtual camera of their own (so several VMs
 /// can show video at once), otherwise the physical camera for one VM at a time. `vm_name` names the
-/// virtual camera and titles the session window. The result is something to tell the user (camera
-/// sharing unavailable, say), if any.
+/// virtual camera and titles the session window.
 #[tauri::command]
 async fn connect_vm(
     state: State<'_, AppState>,
@@ -272,7 +282,7 @@ async fn connect_vm(
     vm_id: String,
     address: String,
     vm_name: Option<String>,
-) -> Result<Option<String>, ClientError> {
+) -> Result<ConnectOutcome, ClientError> {
     let (host, paired) = state.paired_host(&key)?;
 
     let probe_address = address.clone();
@@ -286,6 +296,7 @@ async fn connect_vm(
 
     let connection = state.api.connect_vm(&host, &paired, &vm_id).await?;
     connection.validate()?;
+    let password_rotated = connection.password_rotated;
 
     // The VM may report a different address by now; launch only to an address this device reaches.
     if connection.address != address {
@@ -347,7 +358,10 @@ async fn connect_vm(
     match launched {
         Ok(pid) => {
             state.camera.attach_process(&camera_key, pid);
-            Ok(prepared.notice)
+            Ok(ConnectOutcome {
+                notice: prepared.notice,
+                password_rotated,
+            })
         }
         Err(error) => {
             state.camera.end(&camera_key);
@@ -1248,6 +1262,61 @@ async fn get_vm_disk_encryption(
         .api
         .get_vm_disk_encryption(&host, &paired, &vm_id)
         .await
+}
+
+/// What the host recorded about the VM's stored administrator credential; the guest is not contacted.
+#[tauri::command]
+async fn get_vm_admin_credential(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .get_vm_admin_credential(&host, &paired, &vm_id)
+        .await
+}
+
+/// The host signs in to the guest with the stored administrator credential (needs elevation).
+#[tauri::command]
+async fn check_vm_admin_credential(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    password_never_expires: bool,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    state
+        .api
+        .check_vm_admin_credential(&host, &paired, &vm_id, password_never_expires)
+        .await
+}
+
+/// Stores another administrator credential for the VM once its guest accepts it (needs elevation).
+#[tauri::command]
+async fn set_vm_admin_credential(
+    state: State<'_, AppState>,
+    key: String,
+    vm_id: String,
+    user_name: String,
+    mut password: String,
+    password_never_expires: bool,
+) -> Result<serde_json::Value, ClientError> {
+    let (host, paired) = state.paired_host(&key)?;
+    let result = state
+        .api
+        .set_vm_admin_credential(
+            &host,
+            &paired,
+            &vm_id,
+            &user_name,
+            &password,
+            password_never_expires,
+        )
+        .await;
+    zeroize::Zeroize::zeroize(&mut password);
+    result
 }
 
 #[tauri::command]
@@ -3178,6 +3247,9 @@ pub fn run() {
             grow_vm_disk,
             get_vm_disk_encryption,
             turn_off_vm_disk_encryption,
+            get_vm_admin_credential,
+            check_vm_admin_credential,
+            set_vm_admin_credential,
             pick_iso_file,
             upload_iso,
             cancel_iso_upload,

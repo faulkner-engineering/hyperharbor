@@ -84,7 +84,7 @@ public sealed class ProfileConsolidationTests : IDisposable
         DataFormat.EnsureCurrent(_data);
         DataFormat.EnsureCurrent(_data);
 
-        Assert.Equal(4, DataFormat.Read(_data));
+        Assert.Equal(DataFormat.Current, DataFormat.Read(_data));
         Assert.Equal("Office", Assert.Single(Machines().List(_alice)).Name);
     }
 }

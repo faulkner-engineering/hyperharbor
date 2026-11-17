@@ -155,9 +155,10 @@ public sealed record TransferAccount(
     [property: JsonRequired] DateTimeOffset VerifiedAt);
 
 /// <summary>HyperHarbor's administrator account in the guest. ToString never includes the password. Schema: TransferCredential.</summary>
-public sealed record TransferCredential([property: JsonRequired] string UserName, [property: JsonRequired] string Password)
+/// <param name="Managed">HyperHarbor created the account during an unattended install, so the receiving host keeps its password from expiring too.</param>
+public sealed record TransferCredential([property: JsonRequired] string UserName, [property: JsonRequired] string Password, bool Managed = false)
 {
-    public override string ToString() => $"TransferCredential {{ UserName = {UserName} }}";
+    public override string ToString() => $"TransferCredential {{ UserName = {UserName}, Managed = {Managed} }}";
 }
 
 /// <summary>The VM's own game-aware action. Schema: TransferGamePolicy.</summary>

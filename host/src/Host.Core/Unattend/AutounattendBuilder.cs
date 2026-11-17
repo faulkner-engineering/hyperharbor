@@ -188,6 +188,13 @@ public static class AutounattendBuilder
             PowerShell($"Enable-NetFirewallRule -Group '{RemoteDesktopFirewallGroup}'"),
             "Allow Remote Desktop through the firewall");
 
+        // These commands run as the administrator Setup just created. Windows expires a local account's password
+        // after 42 days unless told otherwise, and only the host knows this one: once it expired, PowerShell Direct
+        // refused it and nothing could manage the guest (seen 2026-11-17, 42 days after an install).
+        yield return (
+            PowerShell("Set-LocalUser -Name $env:USERNAME -PasswordNeverExpires $true"),
+            "Keep the administrator account's password from expiring");
+
         // The password is random and never leaves the guest; the host sets a new one on every connect.
         yield return (
             PowerShell(

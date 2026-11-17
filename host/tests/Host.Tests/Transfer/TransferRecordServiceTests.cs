@@ -31,7 +31,7 @@ public sealed class TransferRecordServiceTests : IDisposable
     {
         var sourceUser = _source.Users.GetOrCreateDefault();
         _source.Accounts.Save(new ProvisionedAccount(VmId, sourceUser.UserId, sourceUser.VmAccountName, Time, Time.AddDays(1)));
-        _source.Credentials.Save(VmId, new GuestCredential("hhadmin", "Admin-Secret1!"));
+        _source.Credentials.Save(VmId, new GuestCredential("hhadmin", "Admin-Secret1!", Managed: true));
         _source.GameAware.Update(settings => settings with
         {
             VmPolicies = new Dictionary<string, GameVmPolicy> { [VmId.ToString("D")] = new(GamePolicy.Save, AlwaysPause: true) },
@@ -45,7 +45,8 @@ public sealed class TransferRecordServiceTests : IDisposable
         var account = _target.Accounts.Find(CopyId, targetUser.UserId);
         Assert.NotNull(account);
         Assert.Equal((targetUser.VmAccountName, Time, Time.AddDays(1)), (account!.AccountName, account.ProvisionedAt, account.VerifiedAt));
-        Assert.Equal(new GuestCredential("hhadmin", "Admin-Secret1!"), _target.Credentials.Find(CopyId));
+        // Managed travels with it, so the receiving host keeps the account's password from expiring too.
+        Assert.Equal(new GuestCredential("hhadmin", "Admin-Secret1!", Managed: true), _target.Credentials.Find(CopyId));
         Assert.Equal(new GameVmPolicy(GamePolicy.Save, true), _target.GameAware.Load().VmPolicies[CopyId.ToString("D")]);
         Assert.Null(_target.Accounts.Find(VmId, targetUser.UserId));
     }

@@ -10,6 +10,7 @@ namespace HyperHarbor.Shared.Contracts.Vms;
 /// <param name="GuestOs">Guest operating system reported through Hyper-V data exchange.</param>
 /// <param name="PerformanceMode">True when Performance mode (GPU partition and Remote Desktop tuning) is on.</param>
 /// <param name="InstallState">The unattended install while it runs or after it failed; omitted otherwise.</param>
+/// <param name="AdminCredentialAlert">Set when the stored administrator credential needs attention; omitted otherwise.</param>
 public sealed record Vm(
     Guid Id,
     string Name,
@@ -24,7 +25,8 @@ public sealed record Vm(
     VmRemoteDesktop? RemoteDesktop = null,
     VmGuestOs? GuestOs = null,
     Unattend.UnattendedInstallState? InstallState = null,
-    bool PerformanceMode = false);
+    bool PerformanceMode = false,
+    VmAdminCredentialAlert? AdminCredentialAlert = null);
 
 /// <summary>Remote Desktop endpoint of a VM. Schema: VmRemoteDesktop.</summary>
 /// <param name="Address">Guest address clients connect to, or null when none is reported. Sent as null (required in the schema).</param>

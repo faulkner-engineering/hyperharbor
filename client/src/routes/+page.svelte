@@ -23,6 +23,8 @@
     RemoteDesktopApiVersion,
     HostLogsApiVersion,
     GuestAdminApiVersion,
+    AdminCredentialApiVersion,
+    ProblemCodes,
     getGuestAdmin,
     getGuestAdminCard,
     hideGuestAdminCard,
@@ -87,6 +89,7 @@
   import Toasts from "#lib/components/Toasts.svelte";
   import CameraDialog from "#lib/components/CameraDialog.svelte";
   import GuestAdminDialog from "#lib/components/GuestAdminDialog.svelte";
+  import AdminCredentialDialog from "#lib/components/AdminCredentialDialog.svelte";
   import MonitorsDialog from "#lib/components/MonitorsDialog.svelte";
   import Menu from "@hyperharbor/ui/components/Menu.svelte";
   import { openHostRemoteDesktop } from "#lib/hostRemoteDesktop.ts";
@@ -120,6 +123,8 @@
   let configuringCamera = $state<Vm | null>(null);
   /** The VM whose administrator access dialog is open. */
   let elevatingIn = $state<Vm | null>(null);
+  /** The VM whose stored administrator account is shown. */
+  let adminAccountOf = $state<Vm | null>(null);
   let creating = $state(false);
   /** The machine profile chosen in New VM, which hands over to the profile's own create dialog. */
   let creatingFrom = $state<MachineProfileSummary | null>(null);
@@ -236,6 +241,7 @@
     tuning = null;
     choosingMonitors = null;
     configuringCamera = null;
+    adminAccountOf = null;
     capturing = null;
     applyingProfile = null;
     applyingMachine = null;
@@ -320,12 +326,25 @@
     if (selectedKey === null || !vm.remoteDesktop.address) return;
     connectingVmId = vm.id;
     try {
-      const notice = await connectVm(selectedKey, vm.id, vm.remoteDesktop.address, vm.name);
-      toasts.show(`Opening Remote Desktop to ${vm.name}…`);
+      const key = selectedKey;
+      const outcome = await connectVm(key, vm.id, vm.remoteDesktop.address, vm.name);
+      if (outcome?.passwordRotated === false) {
+        // The VM refused the host's administrator account, so the host could not change the password. The session
+        // still opens with the last one, and the VM's row shows the warning until the account works again.
+        toasts.error(
+          `Opening Remote Desktop to ${vm.name} with your last password: the VM did not accept HyperHarbor's administrator account. ` +
+            "Choose Administrator account… in the VM's menu to fix it.",
+        );
+        void refreshVms(key);
+      } else {
+        toasts.show(`Opening Remote Desktop to ${vm.name}…`);
+      }
       // For example: camera sharing needs Windows 11, so only one VM at a time gets the camera.
-      if (notice) toasts.show(notice);
+      if (outcome?.notice) toasts.show(outcome.notice);
     } catch (error) {
       toasts.error(errorMessage(error));
+      // The row then shows why, and its menu where to fix it.
+      if (hasProblemCode(error, ProblemCodes.adminCredentialRejected) && selectedKey) void refreshVms(selectedKey);
     } finally {
       connectingVmId = null;
     }
@@ -741,6 +760,7 @@
             oncamera={(vm) => (configuringCamera = vm)}
             onguestadmin={hostHasGuestAdmin ? (vm) => (elevatingIn = vm) : undefined}
             onguestadminend={hostHasGuestAdmin ? endGuestAdmin : undefined}
+            onadmincredential={hostSupports(selectedHost, AdminCredentialApiVersion) ? (vm) => (adminAccountOf = vm) : undefined}
             {guestAdmin}
             onmenuopen={(vm) => pairedKey && hostHasGuestAdmin && guestAdminVmIds.includes(vm.id) && readGuestAdmin(pairedKey, vm.id)}
             oncapture={hostHasSetupProfiles ? (vm) => (capturing = vm) : undefined}
@@ -805,6 +825,16 @@
             vm={elevatingIn}
             onclose={() => (elevatingIn = null)}
             onchanged={() => pairedKey && elevatingIn && readGuestAdmin(pairedKey, elevatingIn.id)}
+          />
+        {/if}
+        {#if adminAccountOf}
+          <AdminCredentialDialog
+            host={selectedHost}
+            vm={adminAccountOf}
+            onclose={(changed) => {
+              adminAccountOf = null;
+              if (changed && selectedKey) refreshVms(selectedKey);
+            }}
           />
         {/if}
         {#if creating && hostConsolidated}

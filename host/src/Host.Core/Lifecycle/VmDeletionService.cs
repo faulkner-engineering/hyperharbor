@@ -33,6 +33,7 @@ public sealed class VmDeletionService
     private readonly Backup.BackupConfigStore? _backups;
     private readonly Profiles.VmConnectionDefaultsStore? _connectionDefaults;
     private readonly Provisioning.VmAccountPasswordStore? _accountPasswords;
+    private readonly Provisioning.VmAdminCredentialStatusStore? _adminStatus;
 
     public VmDeletionService(
         IVmInventory inventory,
@@ -46,8 +47,10 @@ public sealed class VmDeletionService
         GameAware.GameAwareStore? gameAware = null,
         Backup.BackupConfigStore? backups = null,
         Profiles.VmConnectionDefaultsStore? connectionDefaults = null,
-        Provisioning.VmAccountPasswordStore? accountPasswords = null)
+        Provisioning.VmAccountPasswordStore? accountPasswords = null,
+        Provisioning.VmAdminCredentialStatusStore? adminStatus = null)
     {
+        _adminStatus = adminStatus;
         _accountPasswords = accountPasswords;
         _connectionDefaults = connectionDefaults;
         _unattended = unattended;
@@ -262,6 +265,7 @@ public sealed class VmDeletionService
         Forget("Remote Desktop defaults", () => _connectionDefaults?.Remove(vmId));
         Forget("provisioned accounts", () => _provisioning?.Remove(vmId));
         Forget("account passwords", () => _accountPasswords?.RemoveVm(vmId));
+        Forget("administrator credential status", () => _adminStatus?.Remove(vmId));
         Forget("game-aware policy", () =>
         {
             if (_gameAware is not null && _gameAware.Load().VmPolicies.ContainsKey(key))

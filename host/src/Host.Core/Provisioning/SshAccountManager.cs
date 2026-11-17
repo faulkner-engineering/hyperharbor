@@ -63,6 +63,16 @@ public sealed class SshAccountManager : IGuestAccountManager
         return new PasswordChange(false, "Linux guests are reset.");
     }
 
+    /// <summary>
+    /// A run that succeeds proves SSH sign-in and sudo (or root). Accounts made by a Linux install do not expire, so
+    /// there is no date to report and nothing to turn off.
+    /// </summary>
+    public async Task<GuestAdministrator> CheckAdministratorAsync(GuestTarget target, GuestCredential admin, bool passwordNeverExpires, CancellationToken cancellationToken)
+    {
+        await RunAsync(target, admin, ["inspect", StripLocalPrefix(admin.UserName)], accountPassword: null, CommandTimeout, cancellationToken);
+        return new GuestAdministrator(true, null);
+    }
+
     // Administrator windows are for Windows guests; GuestAdminService refuses Linux VMs before calling these.
     public Task<GuestAdminAccountState> InspectAdminAsync(GuestTarget target, GuestCredential admin, string accountName, CancellationToken cancellationToken) =>
         throw AdminUnsupported();
