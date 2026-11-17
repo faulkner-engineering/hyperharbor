@@ -10,6 +10,12 @@ note anything that needs action, such as updating the host, a new elevation requ
 
 ## [Unreleased]
 
+## [0.3.0-beta.2] - 2026-11-17 (API 1.40.0)
+
+The second beta of 0.3.0 fixes Windows VMs that stopped working 42 days after HyperHarbor installed them, and makes a
+VM's administrator account something you can see and repair. Update the host and the client, then connect once to each
+Windows VM that HyperHarbor installed.
+
 ### Fixed
 - A Windows VM that HyperHarbor installed stopped working 42 days after its install: Connect and everything else that
   reaches into the VM failed with "The guest rejected the administrator credential". Windows had expired the password
